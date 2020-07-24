@@ -44,13 +44,13 @@ int main(int argc, char** argv)
   align::Aligner alignObj(parameters);
 
   std::chrono::duration<double> timeRefRead = skch::Time::now() - t0;
-  std::cout << "INFO, align::main, Time spent read the reference sequences: " << timeRefRead.count() << " sec" << std::endl;
+  std::cerr << "INFO, align::main, Time spent read the reference sequences: " << timeRefRead.count() << " sec" << std::endl;
 
   //Compute the alignments
   alignObj.compute();
 
   std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-  std::cout << "INFO, align::main, Time spent computing the aligment: " << timeAlign.count() << " sec" << std::endl;
+  std::cerr << "INFO, align::main, Time spent computing the aligment: " << timeAlign.count() << " sec" << std::endl;
 
-  std::cout << "INFO, align::main, alignment results saved in: " << parameters.samOutputFile << std::endl;
+  std::cerr << "INFO, align::main, alignment results saved in: " << parameters.samOutputFile << std::endl;
 }

@@ -125,7 +125,7 @@ namespace skch
           kseq_t *seq = kseq_init(fp);
 
 #ifdef DEBUG
-          std::cout << "INFO, skch::Map::mapQuery, mapping reads in " << fileName << std::endl;
+          std::cerr << "INFO, skch::Map::mapQuery, mapping reads in " << fileName << std::endl;
 #endif
 
           //size of sequence
@@ -142,7 +142,7 @@ namespace skch
             {
 
 #ifdef DEBUG
-              std::cout << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
+              std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
 #endif
 
               seqCounter++;
@@ -187,7 +187,7 @@ namespace skch
           reportReadMappings(allReadMappings, "", outstrm);
         }
 
-        std::cout << "INFO, skch::Map::mapQuery, [count of mapped reads, reads qualified for mapping, total input reads] = [" << totalReadsMapped << ", " << totalReadsPickedForMapping << ", " << seqCounter << "]" << std::endl;
+        std::cerr << "INFO, skch::Map::mapQuery, [count of mapped reads, reads qualified for mapping, total input reads] = [" << totalReadsMapped << ", " << totalReadsPickedForMapping << ", " << seqCounter << "]" << std::endl;
       }
 
       /**
@@ -374,7 +374,7 @@ namespace skch
           CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);
 
 #ifdef DEBUG
-          std::cout << "INFO, skch::Map:doL1Mapping, read id " << Q.seqCounter << ", minimizer count = " << Q.minimizerTableQuery.size() << "\n";
+          std::cerr << "INFO, skch::Map:doL1Mapping, read id " << Q.seqCounter << ", minimizer count = " << Q.minimizerTableQuery.size() << "\n";
 #endif
 
           ///2. Find the hits in the reference, pick 's' unique minimizers as seeds, 
@@ -417,7 +417,7 @@ namespace skch
           this->computeL1CandidateRegions(Q, seedHitsL1, minimumHits, l1Mappings);
 
 #ifdef DEBUG
-          std::cout << "INFO, skch::Map:doL1Mapping, read id " << Q.seqCounter << ", Count of L1 hits in the reference = " << seedHitsL1.size() << ", minimum hits required for a candidate = " << minimumHits << ", Count of L1 candidate regions = " << l1Mappings.size() << "\n";
+          std::cerr << "INFO, skch::Map:doL1Mapping, read id " << Q.seqCounter << ", Count of L1 hits in the reference = " << seedHitsL1.size() << ", minimum hits required for a candidate = " << minimumHits << ", Count of L1 candidate regions = " << l1Mappings.size() << "\n";
 #endif
 
         }
@@ -531,7 +531,7 @@ namespace skch
           }
 
 #ifdef DEBUG
-          std::cout << "INFO, skch::Map:doL2Mapping, read id " << Q.seqCounter << ", count of L1 candidates= " << l1Mappings.size() << ", count of L2 candidates= " << l2Mappings.size() << std::endl;
+          std::cerr << "INFO, skch::Map:doL2Mapping, read id " << Q.seqCounter << ", count of L1 candidates= " << l1Mappings.size() << ", count of L2 candidates= " << l2Mappings.size() << std::endl;
 #endif
         }
 

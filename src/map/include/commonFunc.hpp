@@ -171,7 +171,7 @@ namespace skch
         }
 
 #ifdef DEBUG
-        std::cout << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";
+        std::cerr << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";
 #endif
 
         delete [] seqRev;

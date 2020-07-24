@@ -65,13 +65,13 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
    */
   void printCmdOptions(align::Parameters &parameters)
   {
-    std::cout << ">>>>>>>>>>>>>>>>>>" << std::endl;
-    std::cout << "Reference = " << parameters.refSequences << std::endl;
-    std::cout << "Query = " << parameters.querySequences << std::endl;
-    std::cout << "Mapping file = " << parameters.mashmapPafFile << std::endl;
-    std::cout << "Edlib identity cut-off = " << parameters.percentageIdentity << "\%" << std::endl;
-    std::cout << "Alignment output file = " << parameters.samOutputFile << std::endl;
-    std::cout << ">>>>>>>>>>>>>>>>>>" << std::endl;
+    std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
+    std::cerr << "Reference = " << parameters.refSequences << std::endl;
+    std::cerr << "Query = " << parameters.querySequences << std::endl;
+    std::cerr << "Mapping file = " << parameters.mashmapPafFile << std::endl;
+    std::cerr << "Edlib identity cut-off = " << parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "Alignment output file = " << parameters.samOutputFile << std::endl;
+    std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
   }
 
   /**

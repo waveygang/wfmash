@@ -102,7 +102,7 @@ namespace align
         {
 
 #ifdef DEBUG
-          std::cout << "INFO, align::Aligner::getRefSequences, parsing reference sequences in file " << fileName << std::endl;
+          std::cerr << "INFO, align::Aligner::getRefSequences, parsing reference sequences in file " << fileName << std::endl;
 #endif
 
           //Open the file using kseq
@@ -244,7 +244,7 @@ namespace align
                   for(const auto &fileName : param.querySequences)
                   {
 #ifdef DEBUG
-                      std::cout << "INFO, align::Aligner::computeAlignments, parsing query sequences in file " << fileName << std::endl;
+                      std::cerr << "INFO, align::Aligner::computeAlignments, parsing query sequences in file " << fileName << std::endl;
 #endif
 
                       //Open the file using kseq
@@ -440,7 +440,7 @@ namespace align
       {
 
 #ifdef DEBUG
-        std::cout << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
+        std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
 #endif
 
         //Define reference substring for this mapping
@@ -483,7 +483,7 @@ namespace align
           editDistanceLimit = (int)((1 - param.percentageIdentity/100) * queryLen);
 
 #ifdef DEBUG
-        std::cout << "INFO, align::Aligner::doAlignment, edlib execution starting, query region length = " << queryLen
+        std::cerr << "INFO, align::Aligner::doAlignment, edlib execution starting, query region length = " << queryLen
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
@@ -495,14 +495,14 @@ namespace align
 #ifdef DEBUG
         if (result.status == EDLIB_STATUS_OK)
         {
-          std::cout << "INFO, align::Aligner::doAlignment, edlib execution status = OKAY" << std::endl;
-          std::cout << "INFO, align::Aligner::doAlignment, edlib execution finished, alignment length = " <<  result.alignmentLength << std::endl;
+          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution status = OKAY" << std::endl;
+          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution finished, alignment length = " <<  result.alignmentLength << std::endl;
         }
         else
-          std::cout << "INFO, align::Aligner::doAlignment, edlib execution status = FAILED" << std::endl;
+          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution status = FAILED" << std::endl;
 
         std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-        std::cout << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;
+        std::cerr << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;
 #endif
 
         std::stringstream output;

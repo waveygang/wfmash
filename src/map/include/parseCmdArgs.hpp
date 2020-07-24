@@ -140,18 +140,18 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cout << ">>>>>>>>>>>>>>>>>>" << std::endl;
-    std::cout << "Reference = " << parameters.refSequences << std::endl;
-    std::cout << "Query = " << parameters.querySequences << std::endl;
-    std::cout << "Kmer size = " << parameters.kmerSize << std::endl;
-    std::cout << "Window size = " << parameters.windowSize << std::endl;
-    std::cout << "Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cout << "Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
-    std::cout << "Percentage identity threshold = " << parameters.percentageIdentity << "\%" << std::endl;
-    std::cout << "Mapping output file = " << parameters.outFileName << std::endl;
-    std::cout << "Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
-    std::cout << "Execution threads  = " << parameters.threads << std::endl;
-    std::cout << ">>>>>>>>>>>>>>>>>>" << std::endl;
+    std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
+    std::cerr << "Reference = " << parameters.refSequences << std::endl;
+    std::cerr << "Query = " << parameters.querySequences << std::endl;
+    std::cerr << "Kmer size = " << parameters.kmerSize << std::endl;
+    std::cerr << "Window size = " << parameters.windowSize << std::endl;
+    std::cerr << "Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
+    std::cerr << "Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
+    std::cerr << "Percentage identity threshold = " << parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "Mapping output file = " << parameters.outFileName << std::endl;
+    std::cerr << "Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
+    std::cerr << "Execution threads  = " << parameters.threads << std::endl;
+    std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
   }
 
   /**
