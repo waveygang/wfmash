@@ -145,7 +145,7 @@ namespace skch
                     {
                         totalReadsPickedForMapping++;
                         //Dispatch input to thread
-                        threadPool.runWhenThreadAvailable(new InputSeqContainer(seq.c_str(), seq_name.c_str(), len, seqCounter));
+                        threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
 
                         //Collect output if available
                         while ( threadPool.outputAvailable() )

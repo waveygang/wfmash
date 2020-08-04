@@ -2,6 +2,8 @@
 
 #include <string>
 #include <mutex>
+#include <cstdio>
+#include <dirent.h>
 
 namespace yeet {
 
@@ -11,6 +13,23 @@ namespace temp_file {
 std::recursive_mutex monitor;
 
 std::string temp_dir;
+
+std::string get_dir() {
+    std::lock_guard<recursive_mutex> lock(monitor);
+
+    // Get the default temp dir from environment variables.
+    if (temp_dir.empty()) {
+        const char* system_temp_dir = nullptr;
+        for(const char* var_name : {"TMPDIR", "TMP", "TEMP", "TEMPDIR", "USERPROFILE"}) {
+            if (system_temp_dir == nullptr) {
+                system_temp_dir = getenv(var_name);
+            }
+        }
+        temp_dir = (system_temp_dir == nullptr ? "/tmp" : system_temp_dir);
+    }
+
+    return temp_dir;
+}
 
 /// Because the names are in a static object, we can delete them when
 /// std::exit() is called.
@@ -90,23 +109,6 @@ void set_dir(const std::string& new_temp_dir) {
     std::lock_guard<recursive_mutex> lock(monitor);
     
     temp_dir = new_temp_dir;
-}
-
-std::string get_dir() {
-    std::lock_guard<recursive_mutex> lock(monitor);
-
-    // Get the default temp dir from environment variables.
-    if (temp_dir.empty()) {
-        const char* system_temp_dir = nullptr;
-        for(const char* var_name : {"TMPDIR", "TMP", "TEMP", "TEMPDIR", "USERPROFILE"}) {
-            if (system_temp_dir == nullptr) {
-                system_temp_dir = getenv(var_name);
-            }
-        }
-        temp_dir = (system_temp_dir == nullptr ? "/tmp" : system_temp_dir);
-    }
-
-    return temp_dir;
 }
 
 }

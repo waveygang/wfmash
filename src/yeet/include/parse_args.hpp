@@ -5,6 +5,7 @@
 #include "map/include/map_parameters.hpp"
 #include "map/include/map_stats.hpp"
 #include "map/include/commonFunc.hpp"
+#include "map/include/parseCmdArgs.hpp"
 
 #include "align/include/align_parameters.hpp"
 
@@ -46,20 +47,20 @@ void parse_args(int argc,
         parser.ParseCLI(argc, argv);
     } catch (args::Help) {
         std::cout << parser;
-        return 0;
+        return; // 0;
     } catch (args::ParseError e) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
-        return 1;
+        return; // 1;
     }
     if (argc==1) {
         std::cout << parser;
-        return 1;
+        return; // 1;
     }
 
 
     if (target_sequence_file) {
-        map_parameters.refSequences.push_back(args::get(target_sequence_file))
+        map_parameters.refSequences.push_back(args::get(target_sequence_file));
     }
     if (target_sequence_file_list) {
         skch::parseFileList(args::get(target_sequence_file_list), map_parameters.refSequences);
@@ -117,7 +118,7 @@ void parse_args(int argc,
             exit(1);
         }
     } else {
-        parameters.percentageIdentity = 85;
+        map_parameters.percentageIdentity = 85;
     }
     
 
@@ -133,9 +134,11 @@ void parse_args(int argc,
 
     //Compute optimal window size
     map_parameters.windowSize = skch::Stat::recommendedWindowSize(skch::fixed::pval_cutoff,
-                                                                  parameters.kmerSize, parameters.alphabetSize,
-                                                                  parameters.percentageIdentity,
-                                                                  parameters.segLength, parameters.referenceSize);
+                                                                  map_parameters.kmerSize,
+                                                                  map_parameters.alphabetSize,
+                                                                  map_parameters.percentageIdentity,
+                                                                  map_parameters.segLength,
+                                                                  map_parameters.referenceSize);
 
 
     if (approx_mapping) {

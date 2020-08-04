@@ -149,13 +149,11 @@ namespace skch
      * @param[in] kseq_id   sequence id name
      * @param[in] len       length of sequence
      */
-    InputSeqContainer(const char * kseq_seq, const char * kseq_id, offset_t len, seqno_t seqcount)
-    {
-      this->seq = std::string{kseq_seq, std::size_t(len)};
-      this->seqName = std::string{kseq_id};
-      this->len = len;
-      this->seqCounter = seqcount; 
-    }
+      InputSeqContainer(const std::string& s, const std::string& id, seqno_t seqcount)
+          : seq(s)
+          , seqName(id)
+          , len(s.length())
+          , seqCounter(seqcount) { }
   };
 
   //Output type of map function

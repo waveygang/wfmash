@@ -14,13 +14,13 @@
 
 #include "map/include/map_parameters.hpp"
 #include "map/include/base_types.hpp"
-//#include "map/include/parseCmdArgs.hpp"
 #include "map/include/winSketch.hpp"
 #include "map/include/computeMap.hpp"
 
 #include "align/include/align_parameters.hpp"
-//#include "align/include/parseCmdArgs.hpp"
 #include "align/include/computeAlignments.hpp"
+
+#include "yeet/include/parse_args.hpp"
 
 //External includes
 #include "common/args.hxx"
@@ -85,6 +85,9 @@ int main(int argc, char** argv) {
 
     //sketching and mapping parameters
     skch::Parameters map_parameters;
+    align::Parameters align_parameters;
+    yeet::parse_args(argc, argv, map_parameters, align_parameters);
+
     //parameters.refSequences.push_back(ref);
 
     //skch::parseandSave(argc, argv, cmd, parameters);
@@ -109,7 +112,7 @@ int main(int argc, char** argv) {
 
 
     //Parse command line arguements   
-    align::Parameters align_parameters;        //sketching and mapping parameters
+
 
     //align::parseandSave(argc, argv, cmd, parameters);   
 
