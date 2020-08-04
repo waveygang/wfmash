@@ -17,9 +17,13 @@
 #Executables
 mashmap
 mashmap-align
+edyeet
 
 #Others
 autoParam
 Makefile
 configure
 *.cache
+*~
+\#*
+.\#*
