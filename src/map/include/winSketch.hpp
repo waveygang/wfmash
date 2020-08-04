@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <map>
 #include <cassert>
-#include <zlib.h>  
+//#include <zlib.h>  
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -21,12 +21,10 @@
 #include "map/include/ThreadPool.hpp"
 
 //External includes
-#include "common/kseq.h"
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
 #include "common/sparsehash/dense_hash_map"
-
-KSEQ_INIT(gzFile, gzread)
+#include "common/seqiter.hpp"
 
 namespace skch
 {
@@ -133,46 +131,35 @@ namespace skch
         std::cerr << "INFO, skch::Sketch::build, building minimizer index for " << fileName << std::endl;
 #endif
 
-          //Open the file using kseq
-          FILE *file = fopen(fileName.c_str(), "r");
-          gzFile fp = gzdopen(fileno(file), "r");
-          kseq_t *seq = kseq_init(fp);
+        seqiter::for_each_seq_in_file(
+            fileName,
+            [&](const std::string& seq_name,
+                const std::string& seq) {
+                // todo: offset_t is an 32-bit integer, which could cause problems
+                offset_t len = seq.length();
 
+                //Save the sequence name
+                metadata.push_back( ContigInfo{seq_name, len} );
 
-          //size of sequence
-          offset_t len;
-
-          while ((len = kseq_read(seq)) >= 0) 
-          {
-            //Save the sequence name
-            metadata.push_back( ContigInfo{seq->name.s, (offset_t)seq->seq.l} );
-
-            //Is the sequence too short?
-            if(len < param.windowSize || len < param.kmerSize)
-            {
+                //Is the sequence too short?
+                if(len < param.windowSize || len < param.kmerSize)
+                {
 #ifdef DEBUG
-              std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer and window size" << std::endl;
+                    std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer and window size" << std::endl;
 #endif
-              seqCounter++;
-              continue;  
-            }
-            else
-            {
-              threadPool.runWhenThreadAvailable(new InputSeqContainer(seq->seq.s, seq->name.s, len, seqCounter));
-
-              //Collect output if available
-              while ( threadPool.outputAvailable() )
-                this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
-            }
-
-            seqCounter++;
-          }
+                }
+                else
+                {
+                    threadPool.runWhenThreadAvailable(new InputSeqContainer(seq.c_str(), seq_name.c_str(), len, seqCounter));
+                    
+                    //Collect output if available
+                    while ( threadPool.outputAvailable() )
+                        this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                }
+                seqCounter++;
+            });
 
           sequencesByFileInfo.push_back(seqCounter);
-
-          kseq_destroy(seq);  
-          gzclose(fp); //close the file handler 
-          fclose(file);
         }
 
         //Collect remaining output objects

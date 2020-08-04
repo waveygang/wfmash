@@ -23,11 +23,9 @@
 #include "map/include/commonFunc.hpp"
 
 //External includes
-#include "common/kseq.h"
 #include "common/edlib.h"
 #include "common/atomic_queue/atomic_queue.h"
-
-KSEQ_INIT(gzFile, gzread)
+#include "common/seqiter.hpp"
 
 namespace align
 {
@@ -105,31 +103,19 @@ namespace align
           std::cerr << "INFO, align::Aligner::getRefSequences, parsing reference sequences in file " << fileName << std::endl;
 #endif
 
-          //Open the file using kseq
-          FILE *file = fopen(fileName.c_str(), "r");
-          gzFile fp = gzdopen(fileno(file), "r");
-          kseq_t *seq = kseq_init(fp);
+        seqiter::for_each_seq_in_file(
+            fileName,
+            [&](const std::string& seq_name,
+                const std::string& seq) {
+                // todo: offset_t is an 32-bit integer, which could cause problems
+                skch::offset_t len = seq.length();
 
+                skch::CommonFunc::makeUpperCase((char*)seq.c_str(), len);
 
-          //size of sequence
-          skch::offset_t len;
-
-          while ((len = kseq_read(seq)) >= 0) 
-          {
-             std::string seqId = seq->name.s;
-
-             skch::CommonFunc::makeUpperCase(seq->seq.s, len);
-             std::string sequence = seq->seq.s;
-
-             //seqId shouldn't already exist in our table
-             assert(this->refSequences.count(seqId) == 0);
-
-             refSequences.emplace(seqId, sequence);
-          }
-
-          kseq_destroy(seq);  
-          gzclose(fp); //close the file handler 
-          fclose(file);
+                //seqId shouldn't already exist in our table
+                assert(this->refSequences.count(seq_name) == 0);
+                refSequences.emplace(seq_name, seq);
+            });
         }
       }
 
@@ -247,75 +233,63 @@ namespace align
                       std::cerr << "INFO, align::Aligner::computeAlignments, parsing query sequences in file " << fileName << std::endl;
 #endif
 
-                      //Open the file using kseq
-                      FILE *file = fopen(fileName.c_str(), "r");
-                      gzFile fp = gzdopen(fileno(file), "r");
-                      kseq_t *seq = kseq_init(fp);
-
                       //Open mashmap output file
                       std::ifstream mappingListStream(param.mashmapPafFile);
                       std::string mappingRecordLine;
                       MappingBoundaryRow currentRecord;
 
-                      //size of sequence
-                      skch::offset_t len;
+                      seqiter::for_each_seq_in_file(
+                          fileName,
+                          [&](const std::string& qSeqId,
+                              const std::string& seq) {
+                              // todo: offset_t is an 32-bit integer, which could cause problems
+                              skch::offset_t len = seq.length();
 
-                      while ((len = kseq_read(seq)) >= 0) 
-                      {
-                          std::string qSeqId = seq->name.s;
+                              skch::CommonFunc::makeUpperCase((char*)seq.c_str(), len);
+                              // todo maybe this should change to some kind of unique pointer?
+                              // something where we can GC it when we're done aligning to it
+                              std::string qSequence = seq;
 
-                          skch::CommonFunc::makeUpperCase(seq->seq.s, len);
-                          // todo maybe this should change to some kind of unique pointer?
-                          // something where we can GC it when we're done aligning to it
-                          std::string qSequence = seq->seq.s;
+                              //Check if all mapping records are processed already
+                              if( !mappingListStream.eof() ) {
 
-                          //Check if all mapping records are processed already
-                          if( mappingListStream.eof() )
-                              break;
-
-                          //Read first record from mashmap output file during first iteration
-                          if(mappingRecordLine.empty())       
-                          {
-                              std::getline(mappingListStream, mappingRecordLine);
-                          }
-
-                          this->parseMashmapRow(mappingRecordLine, currentRecord);
-
-                          //Check if mapping query id matches current query sequence id
-                          if(currentRecord.qId != qSeqId)
-                          {
-                              //Continue to read the next query sequence
-                              continue;
-                          }
-                          else
-                          {
-                              auto q = new seq_record_t(currentRecord, mappingRecordLine, qSequence);
-                              seq_queue.push(q);
-                          }
-
-                          //Check if more mappings have same query sequence id
-                          while(std::getline(mappingListStream, mappingRecordLine))
-                          {
-                              this->parseMashmapRow(mappingRecordLine, currentRecord);
-
-                              if(currentRecord.qId != qSeqId)
-                              {
-                                  //Break the inner loop to read query sequence
-                                  break;
+                                  //Read first record from mashmap output file during first iteration
+                                  if(mappingRecordLine.empty())       
+                                  {
+                                      std::getline(mappingListStream, mappingRecordLine);
+                                  }
+                                  this->parseMashmapRow(mappingRecordLine, currentRecord);
+                              
+                                  //Check if mapping query id matches current query sequence id
+                                  if(currentRecord.qId == qSeqId)
+                                  {
+                                      //Continue to read the next query sequence
+                                      //continue;
+                                      auto q = new seq_record_t(currentRecord, mappingRecordLine, qSequence);
+                                      seq_queue.push(q);
+                                  
+                                      //Check if more mappings have same query sequence id
+                                      while(std::getline(mappingListStream, mappingRecordLine))
+                                      {
+                                          this->parseMashmapRow(mappingRecordLine, currentRecord);
+                                          
+                                          if(currentRecord.qId != qSeqId)
+                                          {
+                                              //Break the inner loop to read query sequence
+                                              break;
+                                          }
+                                          else
+                                          {
+                                              auto q = new seq_record_t(currentRecord, mappingRecordLine, qSequence);
+                                              seq_queue.push(q);
+                                          }
+                                      }
+                                  }
                               }
-                              else
-                              {
-                                  auto q = new seq_record_t(currentRecord, mappingRecordLine, qSequence);
-                                  seq_queue.push(q);
-                              }
-                          }
-                      }
-
+                          });
+                          
                       mappingListStream.close();
 
-                      kseq_destroy(seq);  
-                      gzclose(fp); //close the file handler 
-                      fclose(file);
                   }
                   reader_done.store(true);
               };

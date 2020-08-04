@@ -12,14 +12,18 @@ endif
 
 SOURCE_1=src/map/mash_map.cpp
 SOURCE_2=src/align/align.cpp
+SOURCE_3=src/yeet/yeet_main.cpp
 
-all : mashmap mashmap-align
+all : mashmap mashmap-align edyeet
 
 mashmap : src/map/* src/map/*/* src/common/* src/common/*/*
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_1) -o mashmap @mathlib@ -lstdc++ -lz -lm -lpthread 
 
 mashmap-align : src/align/* src/align/*/* src/common/* src/common/*/*
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_2) -o mashmap-align @mathlib@ -lstdc++ -lz -lm -lpthread 
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_2) -o mashmap-align @mathlib@ -lstdc++ -lz -lm -lpthread
+
+edyeet : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/*
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_3) -o edyeet @mathlib@ -lstdc++ -lz -lm -lpthread 
 
 install : mashmap mashmap-align
 	mkdir -p @prefix@/bin/
@@ -28,3 +32,4 @@ install : mashmap mashmap-align
 clean :
 	-rm -f mashmap
 	-rm -f mashmap-align
+	-rm -f edyeet

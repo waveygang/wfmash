@@ -27,6 +27,7 @@
 #include "map/include/filter.hpp"
 
 //External includes
+#include "common/seqiter.hpp"
 
 namespace skch
 {
@@ -119,53 +120,41 @@ namespace skch
 
         for(const auto &fileName : param.querySequences)
         {
-          //Open the file using kseq
-          FILE *file = fopen(fileName.c_str(), "r");
-          gzFile fp = gzdopen(fileno(file), "r");
-          kseq_t *seq = kseq_init(fp);
 
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map::mapQuery, mapping reads in " << fileName << std::endl;
+            std::cerr << "INFO, skch::Map::mapQuery, mapping reads in " << fileName << std::endl;
 #endif
 
-          //size of sequence
-          offset_t len;
+            seqiter::for_each_seq_in_file(
+                fileName,
+                [&](const std::string& seq_name,
+                    const std::string& seq) {
+                    // todo: offset_t is an 32-bit integer, which could cause problems
+                    offset_t len = seq.length();
 
-          while ((len = kseq_read(seq)) >= 0) 
-          {
-
-            if (param.filterMode == filter::ONETOONE)
-              qmetadata.push_back( ContigInfo{seq->name.s, (offset_t) seq->seq.l} );
-
-            //Is the read too short?
-            if(len < param.windowSize || len < param.kmerSize || len < param.segLength)
-            {
-
+                    if (param.filterMode == filter::ONETOONE)
+                        qmetadata.push_back( ContigInfo{seq_name, len} );
+                    //Is the read too short?
+                    if(len < param.windowSize || len < param.kmerSize || len < param.segLength)
+                    {
 #ifdef DEBUG
-              std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
+                        std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
 #endif
+                    }
+                    else 
+                    {
+                        totalReadsPickedForMapping++;
+                        //Dispatch input to thread
+                        threadPool.runWhenThreadAvailable(new InputSeqContainer(seq.c_str(), seq_name.c_str(), len, seqCounter));
 
-              seqCounter++;
-              continue;
-            }
-            else 
-            {
-              totalReadsPickedForMapping++;
+                        //Collect output if available
+                        while ( threadPool.outputAvailable() )
+                            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
+                    }
 
-              //Dispatch input to thread
-              threadPool.runWhenThreadAvailable(new InputSeqContainer(seq->seq.s, seq->name.s, len, seqCounter));
+                    seqCounter++;
+                }); //Finish reading query input file
 
-              //Collect output if available
-              while ( threadPool.outputAvailable() )
-                mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
-            }
-
-            seqCounter++;
-          } //Finish reading query input file
-
-          //Close the input file
-          kseq_destroy(seq);  
-          gzclose(fp);  
         }
 
         //Collect remaining output objects
