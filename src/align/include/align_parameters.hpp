@@ -20,7 +20,7 @@ namespace align
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string mashmapPafFile;                       //mashmap paf mapping file
-    std::string samOutputFile;                        //sam output file name
+    std::string pafOutputFile;                        //sam output file name
   };
 }
 

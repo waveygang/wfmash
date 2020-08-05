@@ -116,7 +116,6 @@ namespace skch
        * @details   compute and save minimizers from the reference sequence(s)
        *            assuming a fixed window size
        */
-#define DEBUG true
       void build()
       {
         //sequence counter while parsing file
@@ -138,7 +137,6 @@ namespace skch
                 const std::string& seq) {
                 // todo: offset_t is an 32-bit integer, which could cause problems
                 offset_t len = seq.length();
-                std::cerr << "on " << seq_name << std::endl;
 
                 //Save the sequence name
                 metadata.push_back( ContigInfo{seq_name, len} );

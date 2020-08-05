@@ -26,7 +26,7 @@ void for_each_seq_in_file(
     }
     if (input_is_fasta) {
         while (in.good()) {
-            std::string name = line.substr(1, line.find(" "));
+            std::string name = line.substr(1, line.find(" ")-1);
             std::string seq;
             while (std::getline(in, line)) {
                 if (line[0] == '>') {
@@ -40,7 +40,7 @@ void for_each_seq_in_file(
         }
     } else if (input_is_fastq) {
         while (in.good()) {
-            std::string name = line.substr(1, line.find(" "));
+            std::string name = line.substr(1, line.find(" ")-1);
             std::string seq;
             std::getline(in, seq); // sequence
             std::getline(in, line); // delimiter

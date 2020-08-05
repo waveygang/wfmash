@@ -52,5 +52,5 @@ int main(int argc, char** argv)
   std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
   std::cerr << "INFO, align::main, Time spent computing the aligment: " << timeAlign.count() << " sec" << std::endl;
 
-  std::cerr << "INFO, align::main, alignment results saved in: " << parameters.samOutputFile << std::endl;
+  std::cerr << "INFO, align::main, alignment results saved in: " << parameters.pafOutputFile << std::endl;
 }

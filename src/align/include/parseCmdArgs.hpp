@@ -70,7 +70,7 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
     std::cerr << "Query = " << parameters.querySequences << std::endl;
     std::cerr << "Mapping file = " << parameters.mashmapPafFile << std::endl;
     std::cerr << "Edlib identity cut-off = " << parameters.percentageIdentity << "\%" << std::endl;
-    std::cerr << "Alignment output file = " << parameters.samOutputFile << std::endl;
+    std::cerr << "Alignment output file = " << parameters.pafOutputFile << std::endl;
     std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
   }
 
@@ -173,11 +173,11 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
     if(cmd.foundOption("output"))
     {
       str << cmd.optionValue("output");
-      str >> parameters.samOutputFile;
+      str >> parameters.pafOutputFile;
       str.clear();
     }
     else
-      parameters.samOutputFile = "mashmap.out.paf";
+      parameters.pafOutputFile = "mashmap.out.paf";
 
     str.clear();
 

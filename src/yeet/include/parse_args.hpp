@@ -13,10 +13,16 @@
 
 namespace yeet {
 
+struct Parameters {
+    bool approx_mapping = false;
+    bool remapping = false;
+};
+
 void parse_args(int argc,
                 char** argv,
                 skch::Parameters& map_parameters,
-                align::Parameters& align_parameters) {
+                align::Parameters& align_parameters,
+                yeet::Parameters& yeet_parameters) {
 
     args::ArgumentParser parser("edyeet: base-accurate alignments using edlib and mashmap2");
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
@@ -47,33 +53,40 @@ void parse_args(int argc,
         parser.ParseCLI(argc, argv);
     } catch (args::Help) {
         std::cout << parser;
-        return; // 0;
+        exit(0);
+        //return; // 0;
     } catch (args::ParseError e) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
-        return; // 1;
+        exit(1);
+        //return; // 1;
     }
     if (argc==1) {
         std::cout << parser;
-        return; // 1;
+        exit(1);
+        //return; // 1;
     }
 
 
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
+        align_parameters.refSequences.push_back(args::get(target_sequence_file));
     }
     if (target_sequence_file_list) {
         skch::parseFileList(args::get(target_sequence_file_list), map_parameters.refSequences);
+        skch::parseFileList(args::get(target_sequence_file_list), align_parameters.refSequences);
     }
     map_parameters.referenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
     if (query_sequence_files) {
         for (auto& q : args::get(query_sequence_files)) {
             map_parameters.querySequences.push_back(q);
+            align_parameters.querySequences.push_back(q);
         }
     }
     if (query_sequence_file_list) {
         skch::parseFileList(args::get(query_sequence_file_list), map_parameters.querySequences);
+        skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
     
     map_parameters.alphabetSize = 4;
@@ -124,8 +137,10 @@ void parse_args(int argc,
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
+        align_parameters.threads = args::get(thread_count);
     } else {
         map_parameters.threads = 1;
+        align_parameters.threads = 1;
     }
 
     /*
@@ -143,15 +158,18 @@ void parse_args(int argc,
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
+        yeet_parameters.approx_mapping = true;
     } else {
+        yeet_parameters.approx_mapping = false;
         if (tmp_base) {
             map_parameters.outFileName = temp_file::create(args::get(tmp_base));
         } else {
             map_parameters.outFileName = temp_file::create();
         }
+        align_parameters.mashmapPafFile = map_parameters.outFileName;
+        align_parameters.pafOutputFile = "/dev/stdout";
     }
 
-    
     if (map_secondaries) {
         map_parameters.secondaryToKeep = args::get(map_secondaries);
     } else {

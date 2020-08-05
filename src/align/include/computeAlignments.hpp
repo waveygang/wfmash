@@ -229,6 +229,7 @@ namespace align
                   //Parse query sequences
                   for(const auto &fileName : param.querySequences)
                   {
+//#define DEBUG true
 #ifdef DEBUG
                       std::cerr << "INFO, align::Aligner::computeAlignments, parsing query sequences in file " << fileName << std::endl;
 #endif
@@ -248,13 +249,13 @@ namespace align
                               skch::CommonFunc::makeUpperCase((char*)seq.c_str(), len);
                               // todo maybe this should change to some kind of unique pointer?
                               // something where we can GC it when we're done aligning to it
-                              std::string qSequence = seq;
+                              //std::string qSequence = seq;
+                              //std::cerr << seq << std::endl;
 
                               //Check if all mapping records are processed already
                               if( !mappingListStream.eof() ) {
-
                                   //Read first record from mashmap output file during first iteration
-                                  if(mappingRecordLine.empty())       
+                                  if(mappingRecordLine.empty())
                                   {
                                       std::getline(mappingListStream, mappingRecordLine);
                                   }
@@ -265,7 +266,7 @@ namespace align
                                   {
                                       //Continue to read the next query sequence
                                       //continue;
-                                      auto q = new seq_record_t(currentRecord, mappingRecordLine, qSequence);
+                                      auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
                                       seq_queue.push(q);
                                   
                                       //Check if more mappings have same query sequence id
@@ -280,7 +281,7 @@ namespace align
                                           }
                                           else
                                           {
-                                              auto q = new seq_record_t(currentRecord, mappingRecordLine, qSequence);
+                                              auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
                                               seq_queue.push(q);
                                           }
                                       }
@@ -305,7 +306,7 @@ namespace align
               };
 
           // writer, picks output from queue and writes it to our output stream
-          std::ofstream outstrm(param.samOutputFile);
+          std::ofstream outstrm(param.pafOutputFile);
           auto writer_thread =
               [&](void) {
                   while (true) {
