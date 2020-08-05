@@ -1,6 +1,6 @@
-edyeet
+# edyeet
 
-========================================================================
+------------
 
 `edyeet` is a fork of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using [edlib](https://github.com/Martinsos/edlib).
 It completes an alignment module in MashMap and extends it to enable multithreaded operation.
