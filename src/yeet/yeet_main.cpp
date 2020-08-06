@@ -94,4 +94,5 @@ int main(int argc, char** argv) {
     std::cerr << "INFO, align::main, Time spent computing the aligment: " << timeAlign.count() << " sec" << std::endl;
 
     std::cerr << "INFO, align::main, alignment results saved in: " << align_parameters.pafOutputFile << std::endl;
+
 }

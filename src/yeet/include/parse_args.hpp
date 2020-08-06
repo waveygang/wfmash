@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unistd.h>
+
 #include "common/args.hxx"
 
 #include "map/include/map_parameters.hpp"
@@ -162,8 +164,12 @@ void parse_args(int argc,
     } else {
         yeet_parameters.approx_mapping = false;
         if (tmp_base) {
-            map_parameters.outFileName = temp_file::create(args::get(tmp_base));
+            temp_file::set_dir(args::get(tmp_base));
+            map_parameters.outFileName = temp_file::create();
         } else {
+            char* cwd = get_current_dir_name();
+            temp_file::set_dir(std::string(cwd));
+            free(cwd);
             map_parameters.outFileName = temp_file::create();
         }
         align_parameters.mashmapPafFile = map_parameters.outFileName;
@@ -181,9 +187,7 @@ void parse_args(int argc,
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
 
-    // set up alignment parameters
-
-    
+    temp_file::set_keep_temp(args::get(keep_temp_files));
 
 }
 
