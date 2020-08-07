@@ -453,6 +453,9 @@ namespace align
         else
           editDistanceLimit = (int)((1 - param.percentageIdentity/100) * queryLen);
 
+        if(param.bandwidth > 0)
+          editDistanceLimit = std::min(editDistanceLimit, param.bandwidth);
+
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, edlib execution starting, query region length = " << queryLen
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
