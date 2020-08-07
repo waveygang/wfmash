@@ -140,18 +140,16 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
-    std::cerr << "Reference = " << parameters.refSequences << std::endl;
-    std::cerr << "Query = " << parameters.querySequences << std::endl;
-    std::cerr << "Kmer size = " << parameters.kmerSize << std::endl;
-    std::cerr << "Window size = " << parameters.windowSize << std::endl;
-    std::cerr << "Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cerr << "Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
-    std::cerr << "Percentage identity threshold = " << parameters.percentageIdentity << "\%" << std::endl;
-    std::cerr << "Mapping output file = " << parameters.outFileName << std::endl;
-    std::cerr << "Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
-    std::cerr << "Execution threads  = " << parameters.threads << std::endl;
-    std::cerr << ">>>>>>>>>>>>>>>>>>" << std::endl;
+    std::cerr << "[edyeet::map] Reference = " << parameters.refSequences << std::endl;
+    std::cerr << "[edyeet::map] Query = " << parameters.querySequences << std::endl;
+    std::cerr << "[edyeet::map] Kmer size = " << parameters.kmerSize << std::endl;
+    std::cerr << "[edyeet::map] Window size = " << parameters.windowSize << std::endl;
+    std::cerr << "[edyeet::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
+    std::cerr << "[edyeet::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
+    std::cerr << "[edyeet::map] Percentage identity threshold = " << parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[edyeet::map] Mapping output file = " << parameters.outFileName << std::endl;
+    std::cerr << "[edyeet::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
+    std::cerr << "[edyeet::map] Execution threads  = " << parameters.threads << std::endl;
   }
 
   /**

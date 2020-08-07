@@ -7,7 +7,6 @@
 #include "map/include/map_parameters.hpp"
 #include "map/include/map_stats.hpp"
 #include "map/include/commonFunc.hpp"
-#include "map/include/parseCmdArgs.hpp"
 
 #include "align/include/align_parameters.hpp"
 
@@ -181,8 +180,6 @@ void parse_args(int argc,
     } else {
         map_parameters.secondaryToKeep = 0;
     }
-
-    skch::printCmdOptions(map_parameters);
 
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
