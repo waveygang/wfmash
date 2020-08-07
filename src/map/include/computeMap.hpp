@@ -198,6 +198,7 @@ namespace skch
           Q.seq = &(input->seq)[0u];
           Q.len = input->len;
           Q.seqCounter = input->seqCounter;
+          Q.seqName = input->seqName;
 
           MappingResultsVector_t l2Mappings;   
 
@@ -219,6 +220,7 @@ namespace skch
             Q.seq = &(input->seq)[0u] + i * param.segLength;
             Q.len = param.segLength;
             Q.seqCounter = input->seqCounter;
+            Q.seqName = input->seqName;
 
             MappingResultsVector_t l2Mappings;   
 
@@ -243,6 +245,7 @@ namespace skch
             Q.seq = &(input->seq)[0u] + input->len - param.segLength;
             Q.len = param.segLength;
             Q.seqCounter = input->seqCounter;
+            Q.seqName = input->seqName;
 
             MappingResultsVector_t l2Mappings;   
 
@@ -485,8 +488,9 @@ namespace skch
             float nucIdentity = 100 * (1 - mash_dist);
             float nucIdentityUpperBound = 100 * (1 - mash_dist_lower_bound);
 
-            //Report the alignment
-            if(nucIdentityUpperBound >= param.percentageIdentity)
+            //Report the alignment if it passes our identity threshold and, if we are in all-vs-all mode, it isn't a self-mapping
+            if(nucIdentityUpperBound >= param.percentageIdentity
+               && !(param.skipSelf && Q.seqName == this->refSketch.metadata[l2.seqId].name))
             {
               MappingResult res;
 

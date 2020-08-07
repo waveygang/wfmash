@@ -31,6 +31,7 @@ namespace skch
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
     bool split;                                       //Split read mapping (done if this is true)
+    bool skipSelf;                                    //skip self mappings
   };
 
 

@@ -39,6 +39,7 @@ void parse_args(int argc,
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::ValueFlag<std::string> map_filter_mode(parser, "MODE", "filter mode for map step, either 'map', 'one-to-one', or 'none' [default: map]", {'f', "map-filter-mode"});
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode [default: 0]", {'n', "n-secondary"});
+    args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -179,6 +180,12 @@ void parse_args(int argc,
         map_parameters.secondaryToKeep = args::get(map_secondaries);
     } else {
         map_parameters.secondaryToKeep = 0;
+    }
+
+    if (skip_self) {
+        map_parameters.skipSelf = true;
+    } else {
+        map_parameters.skipSelf = false;
     }
 
     //Check if files are valid
