@@ -422,18 +422,14 @@ namespace align
         const std::string &refId = currentRecord.refId;
         const char* refRegion = this->refSequences[refId].c_str();
         const auto& refSize = this->refSequences[refId].size();
-        //currentRecord.rStartPos = std::max((int64_t)0, (int64_t)currentRecord.rStartPos - 1000);
-        //currentRecord.rEndPos = std::min((int64_t)refSize, (int64_t)currentRecord.rEndPos + 1000);
         refRegion += currentRecord.rStartPos;
-        skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos + 1;
+        skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos;
         assert(refLen <= refSize);
 
         //Define query substring for this mapping
         const char* queryRegion = qSequence.c_str();  //initially point to beginning
         const auto& querySize = qSequence.size();
-        //currentRecord.qStartPos = std::max((int64_t)0, (int64_t)currentRecord.qStartPos - 1000);
-        //currentRecord.qEndPos = std::min((int64_t)querySize, (int64_t)currentRecord.qEndPos + 1000);
-        skch::offset_t queryLen = currentRecord.qEndPos - currentRecord.qStartPos + 1;
+        skch::offset_t queryLen = currentRecord.qEndPos - currentRecord.qStartPos;
         queryRegion += currentRecord.qStartPos;
 
         char* queryRegionStrand = new char[queryLen];
