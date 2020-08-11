@@ -525,7 +525,7 @@ namespace align
                    << "\t" << "ns:i:" << softclips
                    << "\t" << "ed:i:" << result.editDistance
                    << "\t" << "al:i:" << result.alignmentLength
-                   << "\t" << "se:f:" << result.editDistance * 1.0/result.alignmentLength
+                   << "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
                    << "\t" << "cg:Z:" << cigar
                    << "\n";
 
