@@ -32,6 +32,7 @@ namespace skch
     std::string outFileName;                          //output file name
     bool split;                                       //Split read mapping (done if this is true)
     bool skipSelf;                                    //skip self mappings
+    bool mergeMappings;                               //if we should merge consecutive segment mappings
   };
 
 

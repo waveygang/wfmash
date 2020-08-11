@@ -231,7 +231,7 @@ namespace skch
             std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){ 
                 e.queryLen = input->len;
                 e.queryStartPos = i * param.segLength;
-                e.queryEndPos = i * param.segLength + Q.len - 1;
+                e.queryEndPos = i * param.segLength + Q.len;
                 });
 
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
@@ -256,14 +256,16 @@ namespace skch
             std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){ 
                 e.queryLen = input->len;
                 e.queryStartPos = input->len - param.segLength;
-                e.queryEndPos = input->len - 1;
+                e.queryEndPos = input->len;
                 });
 
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
 
           //merge
-          mergeMappings(output->readMappings);
+          if (param.mergeMappings) {
+              mergeMappings(output->readMappings);
+          }
         }
 
         //filter mappings best over query sequence axis
