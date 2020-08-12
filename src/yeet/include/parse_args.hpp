@@ -41,7 +41,7 @@ void parse_args(int argc,
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode [default: 0]", {'n', "n-secondary"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
-    args::Flag no_merge_mappings(parser, "no-merge-map", "don't merge consecutive segment level mappings", {'M', "no-merge"});
+    args::Flag merge_mappings(parser, "merge-map", "merge consecutive segment-level mappings (can slow alignment phase)", {'M', "merge-mappings"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<float> align_pct_identity(parser, "%", "use this percent identity in the edlib step, if different than mashmap step [default: -p]", {'a', "align-pct-id"});
@@ -109,7 +109,7 @@ void parse_args(int argc,
     }
 
     map_parameters.split = !args::get(no_split);
-    map_parameters.mergeMappings = !args::get(no_merge_mappings);
+    map_parameters.mergeMappings = args::get(merge_mappings);
     
     if (kmer_size) {
         map_parameters.kmerSize = args::get(kmer_size);
