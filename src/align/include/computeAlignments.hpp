@@ -15,6 +15,7 @@
 #include <zlib.h>
 #include <cassert>
 #include <thread>
+#include <memory>
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -43,8 +44,8 @@ namespace align
   struct seq_record_t {
       MappingBoundaryRow currentRecord;
       std::string mappingRecordLine;
-      std::string qSequence;
-      seq_record_t(const MappingBoundaryRow& c, const std::string& r, const std::string& q)
+      std::shared_ptr<std::string> qSequence;
+      seq_record_t(const MappingBoundaryRow& c, const std::string& r, const shared_ptr<std::string>& q)
           : currentRecord(c)
           , mappingRecordLine(r)
           , qSequence(q)
@@ -242,11 +243,13 @@ namespace align
                       seqiter::for_each_seq_in_file(
                           fileName,
                           [&](const std::string& qSeqId,
-                              const std::string& seq) {
+                              const std::string& _seq) {
+                              // copy our input into a shared ptr
+                              std::shared_ptr<std::string> seq(new std::string(_seq));
                               // todo: offset_t is an 32-bit integer, which could cause problems
-                              skch::offset_t len = seq.length();
-
-                              skch::CommonFunc::makeUpperCase((char*)seq.c_str(), len);
+                              skch::offset_t len = seq->length();
+                              // upper-case our input
+                              skch::CommonFunc::makeUpperCase((char*)seq->c_str(), len);
                               // todo maybe this should change to some kind of unique pointer?
                               // something where we can GC it when we're done aligning to it
                               //std::string qSequence = seq;
@@ -411,7 +414,7 @@ namespace align
        * @param[in]   qSequence           query sequence
        * @param[in]   outstrm             output stream
        */
-      std::string doAlignment(MappingBoundaryRow &currentRecord, const std::string &mappingRecordLine, const std::string &qSequence)
+      std::string doAlignment(MappingBoundaryRow &currentRecord, const std::string &mappingRecordLine, const std::shared_ptr<std::string> &qSequence)
       {
 
 #ifdef DEBUG
@@ -427,12 +430,12 @@ namespace align
         assert(refLen <= refSize);
 
         //Define query substring for this mapping
-        const char* queryRegion = qSequence.c_str();  //initially point to beginning
-        const auto& querySize = qSequence.size();
+        const char* queryRegion = qSequence->c_str();  //initially point to beginning
+        const auto& querySize = qSequence->size();
         skch::offset_t queryLen = currentRecord.qEndPos - currentRecord.qStartPos;
         queryRegion += currentRecord.qStartPos;
 
-        char* queryRegionStrand = new char[queryLen];
+        char* queryRegionStrand = new char[queryLen+1];
 
         if(currentRecord.strand == skch::strnd::FWD) {
           strncpy(queryRegionStrand, queryRegion, queryLen);    //Copy the same string
