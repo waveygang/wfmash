@@ -137,9 +137,9 @@ namespace skch
                     //Is the read too short?
                     if(len < param.windowSize || len < param.kmerSize || len < param.segLength)
                     {
-#ifdef DEBUG
+//#ifdef DEBUG
                         std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
-#endif
+//#endif
                     }
                     else 
                     {

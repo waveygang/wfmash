@@ -119,23 +119,13 @@ void parse_args(int argc,
 
     if (segment_length) {
         map_parameters.segLength = args::get(segment_length);
-        if (map_parameters.segLength < 500) {
-            std::cerr << "[edyeet] ERROR, skch::parseandSave, minimum segment length is required to be >= 500 bp." << std::endl
+        if (map_parameters.segLength < 200) {
+            std::cerr << "[edyeet] ERROR, skch::parseandSave, minimum segment length is required to be >= 200 bp." << std::endl
                       << "[edyeet] This is because Mashmap is not designed for computing short local alignments." << std::endl;
             exit(1);
         }
     } else {
         map_parameters.segLength = 5000;
-    }
-
-    if (map_pct_identity) {
-        map_parameters.percentageIdentity = args::get(map_pct_identity);
-        if (map_parameters.percentageIdentity < 70) {
-            std::cerr << "[edyeet] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
-            exit(1);
-        }
-    } else {
-        map_parameters.percentageIdentity = 85;
     }
 
     if (map_pct_identity) {
