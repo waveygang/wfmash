@@ -5,11 +5,26 @@ It completes an alignment module in MashMap and extends it to enable multithread
 A single command-line interface simplfies usage.
 The [PAF](https://github.com/lh3/miniasm/blob/master/PAF.md) output format is harmonized and made equivalent to that in [minimap2](https://github.com/lh3/minimap2), and has been validated as input to [seqwish](https://github.com/ekg/seqwish).
 
+## process
+
+Each query sequence is broken into pieces defined by `-s[N], --segment-length=[N]`.
+These segments are then mapped using MashMap's sliding minhash mapping algorithm and subsequent filtering steps.
+To reduce memory, a temporary file is used to store initial mappings.
+Each mapping location is then used as a target for alignment using edlib.
+
+The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
+Approximate mapping (equivalent to `MashMap`) can be obtained with `-m, --approx-map`.
+
+Mapping merging is disabled by default, as aligning merged approximate mappings with edlib under reasonable identity bounds can generate very long runtimes.
+However, merging can be useful in some settings and is enabled with `-M, --merge-mappings`.
+
+Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
+The number of threads must be set manually, using `-t`, and defaults to 1.
+
 ## usage
 
-`edyeet`'s purpose is to accelerate the alignment step in variation graph induction.
+`edyeet` has been developed to accelerate the alignment step in variation graph induction (the first step in the `seqwish` / `smoothxg` pipeline).
 Suitable default settings are provided for this purpose.
-Mapping merging is disabled by default, as aligning merged approximate mappings with edlib under reasonable identity bounds can generate very long runtimes.
 
 Four parameters shape the length, number, and identity of the resulting mappings:
 
@@ -20,7 +35,6 @@ Four parameters shape the length, number, and identity of the resulting mappings
 
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set.
-The number of threads must be set manually, using `-t`, and defaults to 1.
 
 ## examples
 
