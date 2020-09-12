@@ -70,7 +70,7 @@ std::string create(const std::string& base,
     /*
     if (handler.parent_directory.empty()) {
         // Make a parent directory for our temp files
-        string tmpdirname_cpp = get_dir(); // + "/edyeet-XXXXXX";
+        string tmpdirname_cpp = get_dir(); // + "/wfmash-XXXXXX";
         char* tmpdirname = new char[tmpdirname_cpp.length() + 1];
         strcpy(tmpdirname, tmpdirname_cpp.c_str());
         auto got = mkdtemp(tmpdirname);
@@ -78,7 +78,7 @@ std::string create(const std::string& base,
             // Save the directory we got
             handler.parent_directory = got;
         } else {
-            cerr << "[edyeet]: couldn't create temp directory: " << tmpdirname << endl;
+            cerr << "[wfmash]: couldn't create temp directory: " << tmpdirname << endl;
             exit(1);
         }
         delete [] tmpdirname;
@@ -92,7 +92,7 @@ std::string create(const std::string& base,
         // we don't leave it open; we are assumed to open it again externally
         close(fd);
     } else {
-        cerr << "[edyeet]: couldn't create temp file on base "
+        cerr << "[wfmash]: couldn't create temp file on base "
              << base << " : " << tmpname << endl;
         exit(1);
     }
@@ -102,7 +102,7 @@ std::string create(const std::string& base,
 
 std::string create() {
     // No need to lock as we call this thing that locks
-    return create("edyeet-", ".paf");
+    return create("wfmash-", ".paf");
 }
 
 void remove(const std::string& filename) {

@@ -128,7 +128,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-        std::cerr << "[edyeet::skch::Sketch::build] building minimizer index for " << fileName << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::build] building minimizer index for " << fileName << std::endl;
 #endif
 
         seqiter::for_each_seq_in_file(
@@ -166,7 +166,7 @@ namespace skch
         while ( threadPool.running() )
           this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
 
-        std::cerr << "[edyeet::skch::Sketch::build] minimizers picked from reference = " << minimizerIndex.size() << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::build] minimizers picked from reference = " << minimizerIndex.size() << std::endl;
 
       }
 
@@ -211,7 +211,7 @@ namespace skch
               MinimizerMetaData{e.seqId, e.wpos, e.strand});
         }
 
-        std::cerr << "[edyeet::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
       }
 
       /**
@@ -226,7 +226,7 @@ namespace skch
         for(auto &e : this->minimizerPosLookupIndex)
           this->minimizerFreqHistogram[e.second.size()] += 1;
 
-        std::cerr << "[edyeet::skch::Sketch::computeFreqHist] Frequency histogram of minimizers = " <<  *this->minimizerFreqHistogram.begin() <<  " ... " << *this->minimizerFreqHistogram.rbegin() << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::computeFreqHist] Frequency histogram of minimizers = " <<  *this->minimizerFreqHistogram.begin() <<  " ... " << *this->minimizerFreqHistogram.rbegin() << std::endl;
 
         //2. Compute frequency threshold to ignore most frequent minimizers
 
@@ -256,9 +256,9 @@ namespace skch
         }
 
         if(this->freqThreshold != std::numeric_limits<int>::max())
-          std::cerr << "[edyeet::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold << "\%, ignore minimizers occurring >= " << this->freqThreshold << " times during lookup." << std::endl;
+          std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold << "\%, ignore minimizers occurring >= " << this->freqThreshold << " times during lookup." << std::endl;
         else
-          std::cerr << "[edyeet::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold << "\%, consider all minimizers during lookup." << std::endl;
+          std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold << "\%, consider all minimizers during lookup." << std::endl;
 
       }
 

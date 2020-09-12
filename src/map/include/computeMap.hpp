@@ -122,7 +122,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-            std::cerr << "[edyeet::skch::Map::mapQuery] mapping reads in " << fileName << std::endl;
+            std::cerr << "[wfmash::skch::Map::mapQuery] mapping reads in " << fileName << std::endl;
 #endif
 
             seqiter::for_each_seq_in_file(
@@ -176,7 +176,7 @@ namespace skch
           reportReadMappings(allReadMappings, "", outstrm);
         }
 
-        std::cerr << "[edyeet::skch::Map::mapQuery] [count of mapped reads, reads qualified for mapping, total input reads] = [" << totalReadsMapped << ", " << totalReadsPickedForMapping << ", " << seqCounter << "]" << std::endl;
+        std::cerr << "[wfmash::skch::Map::mapQuery] [count of mapped reads, reads qualified for mapping, total input reads] = [" << totalReadsMapped << ", " << totalReadsPickedForMapping << ", " << seqCounter << "]" << std::endl;
       }
 
       /**
@@ -368,7 +368,7 @@ namespace skch
           CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);
 
 #ifdef DEBUG
-          std::cerr << "[edyeet::skch::Map:doL1Mapping] read id " << Q.seqCounter << ", minimizer count = " << Q.minimizerTableQuery.size() << "\n";
+          std::cerr << "[wfmash::skch::Map:doL1Mapping] read id " << Q.seqCounter << ", minimizer count = " << Q.minimizerTableQuery.size() << "\n";
 #endif
 
           ///2. Find the hits in the reference, pick 's' unique minimizers as seeds, 
@@ -411,7 +411,7 @@ namespace skch
           this->computeL1CandidateRegions(Q, seedHitsL1, minimumHits, l1Mappings);
 
 #ifdef DEBUG
-          std::cerr << "[edyeet::skch::Map:doL1Mapping] read id " << Q.seqCounter << ", Count of L1 hits in the reference = " << seedHitsL1.size() << ", minimum hits required for a candidate = " << minimumHits << ", Count of L1 candidate regions = " << l1Mappings.size() << "\n";
+          std::cerr << "[wfmash::skch::Map:doL1Mapping] read id " << Q.seqCounter << ", Count of L1 hits in the reference = " << seedHitsL1.size() << ", minimum hits required for a candidate = " << minimumHits << ", Count of L1 candidate regions = " << l1Mappings.size() << "\n";
 #endif
 
         }
@@ -526,7 +526,7 @@ namespace skch
           }
 
 #ifdef DEBUG
-          std::cerr << "[edyeet::skch::Map:doL2Mapping] read id " << Q.seqCounter << ", count of L1 candidates= " << l1Mappings.size() << ", count of L2 candidates= " << l2Mappings.size() << std::endl;
+          std::cerr << "[wfmash::skch::Map:doL2Mapping] read id " << Q.seqCounter << ", count of L1 candidates= " << l1Mappings.size() << ", count of L2 candidates= " << l2Mappings.size() << std::endl;
 #endif
         }
 

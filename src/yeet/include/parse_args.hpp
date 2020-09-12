@@ -25,7 +25,7 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("edyeet: base-accurate alignments using edlib and mashmap2");
+    args::ArgumentParser parser("wfmash: base-accurate alignments using edlib and mashmap2");
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<uint64_t> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
@@ -101,7 +101,7 @@ void parse_args(int argc,
         else if (filter_input == "none") map_parameters.filterMode = skch::filter::NONE;
         else 
         {
-            std::cerr << "[edyeet] ERROR, skch::parseandSave, Invalid option given for filter_mode" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, Invalid option given for filter_mode" << std::endl;
             exit(1);
         }
     } else {
@@ -120,8 +120,8 @@ void parse_args(int argc,
     if (segment_length) {
         map_parameters.segLength = args::get(segment_length);
         if (map_parameters.segLength < 200) {
-            std::cerr << "[edyeet] ERROR, skch::parseandSave, minimum segment length is required to be >= 200 bp." << std::endl
-                      << "[edyeet] This is because Mashmap is not designed for computing short local alignments." << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 200 bp." << std::endl
+                      << "[wfmash] This is because Mashmap is not designed for computing short local alignments." << std::endl;
             exit(1);
         }
     } else {
@@ -131,7 +131,7 @@ void parse_args(int argc,
     if (map_pct_identity) {
         map_parameters.percentageIdentity = args::get(map_pct_identity);
         if (map_parameters.percentageIdentity < 70) {
-            std::cerr << "[edyeet] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
             exit(1);
         }
     } else {

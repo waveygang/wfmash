@@ -20,7 +20,7 @@ void for_each_seq_in_file(
     } else if (line[0] == '@') {
         input_is_fastq = true;
     } else {
-        std::cerr << "[edyeet::for_each_seq_in_file] unknown file format given to seqiter" << std::endl;
+        std::cerr << "[wfmash::for_each_seq_in_file] unknown file format given to seqiter" << std::endl;
         assert(false);
         exit(1);
     }

@@ -140,16 +140,16 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cerr << "[edyeet::map] Reference = " << parameters.refSequences << std::endl;
-    std::cerr << "[edyeet::map] Query = " << parameters.querySequences << std::endl;
-    std::cerr << "[edyeet::map] Kmer size = " << parameters.kmerSize << std::endl;
-    std::cerr << "[edyeet::map] Window size = " << parameters.windowSize << std::endl;
-    std::cerr << "[edyeet::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cerr << "[edyeet::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
-    std::cerr << "[edyeet::map] Percentage identity threshold = " << parameters.percentageIdentity << "\%" << std::endl;
-    std::cerr << "[edyeet::map] Mapping output file = " << parameters.outFileName << std::endl;
-    std::cerr << "[edyeet::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
-    std::cerr << "[edyeet::map] Execution threads  = " << parameters.threads << std::endl;
+    std::cerr << "[wfmash::map] Reference = " << parameters.refSequences << std::endl;
+    std::cerr << "[wfmash::map] Query = " << parameters.querySequences << std::endl;
+    std::cerr << "[wfmash::map] Kmer size = " << parameters.kmerSize << std::endl;
+    std::cerr << "[wfmash::map] Window size = " << parameters.windowSize << std::endl;
+    std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
+    std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
+    std::cerr << "[wfmash::map] Percentage identity threshold = " << parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[wfmash::map] Mapping output file = " << parameters.outFileName << std::endl;
+    std::cerr << "[wfmash::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
+    std::cerr << "[wfmash::map] Execution threads  = " << parameters.threads << std::endl;
   }
 
   /**

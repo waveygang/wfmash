@@ -12,14 +12,14 @@ endif
 
 SOURCE_1=src/yeet/yeet_main.cpp
 
-all : edyeet
+all : wfmash
 
-edyeet : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/*
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_1) -o edyeet @mathlib@ -lstdc++ -lz -lm -lpthread 
+wfmash : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/*
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread 
 
-install : edyeet
+install : wfmash
 	mkdir -p @prefix@/bin/
-	cp `pwd`/edyeet @prefix@/bin/
+	cp `pwd`/wfmash @prefix@/bin/
 
 clean :
-	-rm -f edyeet
+	-rm -f wfmash
