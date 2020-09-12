@@ -1,5 +1,7 @@
 # wfmash
 
+_A DNA sequence read mapper based on mash distances and the wavefront alignment algorithm._
+
 `wfmash` is a fork of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using the wavefront alignment algorithm [WFA](https://github.com/smarco/WFA).
 It completes an alignment module in MashMap and extends it to enable multithreaded operation.
 A single command-line interface simplfies usage.
