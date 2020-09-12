@@ -1,21 +1,21 @@
-CXXFLAGS += -O3 -DNDEBUG -g -std=c++14 -Wno-deprecated-declarations -Isrc -I @mathinc@
+CXXFLAGS += -O3 -DNDEBUG -g -std=c++14 -Wno-deprecated-declarations -Wno-literal-suffix -Isrc -I @mathinc@
 CPPFLAGS += @amcppflags@
 
 UNAME_S=$(shell uname -s)
 
 ifeq ($(UNAME_S),Darwin)
 	CXXFLAGS += -mmacosx-version-min=10.7 -stdlib=libc++
-else
-	CXXFLAGS += -include src/common/memcpyLink.h -Wl,--wrap=memcpy
-	CFLAGS += -include src/common/memcpyLink.h
 endif
 
 SOURCE_1=src/yeet/yeet_main.cpp
 
 all : wfmash
 
-wfmash : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/*
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread 
+src/common/WFA/build/libwfa.a : src/common/WFA/*/*c src/common/WFA/*/*h
+	cd src/common/WFA && $(MAKE)
+
+wfmash : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/* src/common/WFA/*/* src/common/WFA/build/libwfa.a
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Isrc/common/WFA -Lsrc/common/WFA/build $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwfa
 
 install : wfmash
 	mkdir -p @prefix@/bin/
@@ -23,3 +23,4 @@ install : wfmash
 
 clean :
 	-rm -f wfmash
+	-cd src/common/WFA && $(MAKE) clean

@@ -24,7 +24,9 @@
 #include "map/include/commonFunc.hpp"
 
 //External includes
-#include "common/edlib.h"
+extern "C" {
+#include "common/WFA/gap_affine/affine_wavefront_align.h"
+}
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
 
@@ -120,8 +122,7 @@ namespace align
         }
       }
 
-      char* alignmentToCigar(const unsigned char* const alignment,
-                             const int alignmentLength,
+      char* alignmentToCigar(const edit_cigar_t* const edit_cigar,
                              uint64_t& refAlignedLength,
                              uint64_t& qAlignedLength,
                              uint64_t& matches,
@@ -132,19 +133,18 @@ namespace align
 
           // Maps move code from alignment to char in cigar.
           //                        0    1    2    3
-          char moveCodeToChar[] = {'=', 'I', 'D', 'X'};
+          //char moveCodeToChar[] = {'=', 'I', 'D', 'X'};
 
           vector<char>* cigar = new vector<char>();
           char lastMove = 0;  // Char of last move. 0 if there was no previous move.
           int numOfSameMoves = 0;
-          for (int i = 0; i <= alignmentLength; i++) {
-              // if new sequence of same moves started
-              if (i == alignmentLength || (moveCodeToChar[alignment[i]] != lastMove && lastMove != 0)) {
+          for (int i = edit_cigar->begin_offset; i <= edit_cigar->end_offset; ++i) {
+              if (i == edit_cigar->end_offset || (edit_cigar->operations[i] != lastMove && lastMove != 0)) {
                   // calculate matches, mismatches, insertions, deletions
                   switch (lastMove) {
                   case 'I':
-                      // assume that starting and ending insertions are softclips
-                      if (i == alignmentLength || cigar->empty()) {
+                      // assume that startingn and ending insertions are softclips
+                      if (i == edit_cigar->end_offset || cigar->empty()) {
                           softclips += numOfSameMoves;
                       } else {
                           insertions += numOfSameMoves;
@@ -179,17 +179,19 @@ namespace align
                   // Write code of move to cigar string.
                   cigar->push_back(lastMove);
                   // If not at the end, start new sequence of moves.
-                  if (i < alignmentLength) {
+                  if (i < edit_cigar->end_offset) {
                       // Check if alignment has valid values.
+                      /*
                       if (alignment[i] > 3) {
                           delete cigar;
                           return 0;
                       }
+                      */
                       numOfSameMoves = 0;
                   }
               }
-              if (i < alignmentLength) {
-                  lastMove = moveCodeToChar[alignment[i]];
+              if (i < edit_cigar->end_offset) {
+                  lastMove = edit_cigar->operations[i];
                   numOfSameMoves++;
               }
           }
@@ -331,6 +333,15 @@ namespace align
               [&](uint64_t tid,
                   std::atomic<bool>& is_working) {
                   is_working.store(true);
+
+                  mm_allocator_t* const mm_allocator = mm_allocator_new(BUFFER_SIZE_8M);
+                  affine_penalties_t affine_penalties = {
+                      .match = 0,
+                      .mismatch = 4,
+                      .gap_opening = 6,
+                      .gap_extension = 2,
+                  };
+
                   while (true) {
                       seq_record_t* rec = nullptr;
                       if (!seq_queue.try_pop(rec)
@@ -341,7 +352,9 @@ namespace align
                               = new std::string(
                                   doAlignment(rec->currentRecord,
                                               rec->mappingRecordLine,
-                                              rec->qSequence));
+                                              rec->qSequence,
+                                              mm_allocator,
+                                              &affine_penalties));
                           if (paf_rec->size()) {
                               paf_queue.push(paf_rec);
                           } else {
@@ -414,7 +427,11 @@ namespace align
        * @param[in]   qSequence           query sequence
        * @param[in]   outstrm             output stream
        */
-      std::string doAlignment(MappingBoundaryRow &currentRecord, const std::string &mappingRecordLine, const std::shared_ptr<std::string> &qSequence)
+      std::string doAlignment(MappingBoundaryRow &currentRecord,
+                              const std::string &mappingRecordLine,
+                              const std::shared_ptr<std::string> &qSequence,
+                              mm_allocator_t* const mm_allocator,
+                              affine_penalties_t* affine_penalties)
       {
 
 #ifdef DEBUG
@@ -464,9 +481,20 @@ namespace align
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
-        EdlibAlignResult result = edlibAlign(
-            queryRegionStrand, queryLen, refRegion, refLen,
-            edlibNewAlignConfig(editDistanceLimit, EDLIB_MODE_HW, EDLIB_TASK_PATH, NULL, 0));
+        // Init Affine-WFA
+        /*
+        const int min_wavefront_length = 10;
+        const int max_distance_threshold = 1000;
+        affine_wavefronts_t* affine_wavefronts =
+            affine_wavefronts_new_reduced(
+                queryLen, refLen, &affine_penalties,
+                min_wavefront_length, max_distance_threshold, NULL, mm_allocator);
+        */
+        affine_wavefronts_t* affine_wavefronts = affine_wavefronts_new_complete(
+            queryLen, refLen, affine_penalties, NULL, mm_allocator);
+        // Align
+        affine_wavefronts_align(
+            affine_wavefronts, queryRegionStrand, queryLen, refRegion, refLen);
 
 
 #ifdef DEBUG
@@ -484,7 +512,7 @@ namespace align
 
         std::stringstream output;
         //Output to file
-        if (result.status == EDLIB_STATUS_OK && result.alignmentLength != 0) 
+        //if (result.status == EDLIB_STATUS_OK && result.alignmentLength != 0) 
         {
             uint64_t matches = 0;
             uint64_t mismatches = 0;
@@ -494,8 +522,7 @@ namespace align
             uint64_t refAlignedLength = 0;
             uint64_t qAlignedLength = 0;
 
-            char* cigar = alignmentToCigar(result.alignment,
-                                           result.alignmentLength,
+            char* cigar = alignmentToCigar(&affine_wavefronts->edit_cigar,
                                            refAlignedLength,
                                            qAlignedLength,
                                            matches,
@@ -504,7 +531,10 @@ namespace align
                                            deletions,
                                            softclips);
 
-            size_t alignmentRefPos = currentRecord.rStartPos + result.startLocations[0];
+            // todo, use starting deletions to determine reference start position
+            // and strip both starting and ending deletions
+
+            size_t alignmentRefPos = currentRecord.rStartPos; // WFA is global //  + result.startLocations[0];
             double total = refAlignedLength + (qAlignedLength - softclips);
             double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
 
@@ -526,16 +556,16 @@ namespace align
                    << "\t" << "ni:i:" << insertions
                    << "\t" << "nd:i:" << deletions
                    << "\t" << "ns:i:" << softclips
-                   << "\t" << "ed:i:" << result.editDistance
-                   << "\t" << "al:i:" << result.alignmentLength
-                   << "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
+                //<< "\t" << "ed:i:" << result.editDistance
+                //<< "\t" << "al:i:" << result.alignmentLength
+                //<< "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
                    << "\t" << "cg:Z:" << cigar
                    << "\n";
 
             free(cigar);
         }
 
-        edlibFreeAlignResult(result);
+        //edlibFreeAlignResult(result);
         delete [] queryRegionStrand;
 
         return output.str();

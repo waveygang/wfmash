@@ -25,7 +25,7 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash: base-accurate alignments using edlib and mashmap2");
+    args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm");
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<uint64_t> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
@@ -44,7 +44,7 @@ void parse_args(int argc,
     args::Flag merge_mappings(parser, "merge-map", "merge consecutive segment-level mappings (can slow alignment phase)", {'M', "merge-mappings"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "use this percent identity in the edlib step, if different than mashmap step [default: -p]", {'a', "align-pct-id"});
+    args::ValueFlag<float> align_pct_identity(parser, "%", "estimate a maximum wavefront score based on this percent identity [default: -p]", {'a', "align-pct-id"});
     args::ValueFlag<int> align_bandwidth(parser, "N", "maximum bandwidth for edlib alignment [default: 0 / computed from -p]", {'b', "align-bandwidth"});
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
