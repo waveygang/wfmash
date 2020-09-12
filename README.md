@@ -13,12 +13,12 @@ The [PAF](https://github.com/lh3/miniasm/blob/master/PAF.md) output format is ha
 Each query sequence is broken into pieces defined by `-s[N], --segment-length=[N]`.
 These segments are then mapped using MashMap's sliding minhash mapping algorithm and subsequent filtering steps.
 To reduce memory, a temporary file is used to store initial mappings.
-Each mapping location is then used as a target for alignment using edlib.
+Each mapping location is then used as a target for alignment using WFA.
 
 The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
 Approximate mapping (equivalent to `MashMap`) can be obtained with `-m, --approx-map`.
 
-Mapping merging is disabled by default, as aligning merged approximate mappings with edlib under reasonable identity bounds can generate very long runtimes.
+Mapping merging is disabled by default, as aligning merged approximate mappings with WFA under reasonable identity bounds can generate very long runtimes.
 However, merging can be useful in some settings and is enabled with `-M, --merge-mappings`.
 
 Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
