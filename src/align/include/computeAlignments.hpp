@@ -151,7 +151,7 @@ namespace align
                       }
                       qAlignedLength += numOfSameMoves;
                       break;
-                  case '=':
+                  case 'M':
                       matches += numOfSameMoves;
                       qAlignedLength += numOfSameMoves;
                       refAlignedLength += numOfSameMoves;
@@ -177,6 +177,7 @@ namespace align
                   }
                   reverse(cigar->end() - numDigits, cigar->end());
                   // Write code of move to cigar string.
+                  lastMove = lastMove == 'M' ? '=' : lastMove;
                   cigar->push_back(lastMove);
                   // If not at the end, start new sequence of moves.
                   if (i < edit_cigar->end_offset) {
@@ -365,6 +366,7 @@ namespace align
                           std::this_thread::sleep_for(100ns);
                       }
                   }
+                  mm_allocator_delete(mm_allocator);
                   is_working.store(false);
               };
 
@@ -463,7 +465,7 @@ namespace align
         assert(queryLen <= querySize);
 
         //Compute alignment
-        auto t0 = skch::Time::now();
+        //auto t0 = skch::Time::now();
 
         //for defining size of edlib's band during alignment
         int editDistanceLimit;
@@ -497,73 +499,69 @@ namespace align
             affine_wavefronts, queryRegionStrand, queryLen, refRegion, refLen);
 
 
-#ifdef DEBUG
-        if (result.status == EDLIB_STATUS_OK)
-        {
-          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution status = OKAY" << std::endl;
-          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution finished, alignment length = " <<  result.alignmentLength << std::endl;
-        }
-        else
-          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution status = FAILED" << std::endl;
-
-        std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-        std::cerr << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;
-#endif
+        //std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
+        //std::cerr << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;
 
         std::stringstream output;
         //Output to file
         //if (result.status == EDLIB_STATUS_OK && result.alignmentLength != 0) 
-        {
-            uint64_t matches = 0;
-            uint64_t mismatches = 0;
-            uint64_t insertions = 0;
-            uint64_t deletions = 0;
-            uint64_t softclips = 0;
-            uint64_t refAlignedLength = 0;
-            uint64_t qAlignedLength = 0;
+        uint64_t matches = 0;
+        uint64_t mismatches = 0;
+        uint64_t insertions = 0;
+        uint64_t deletions = 0;
+        uint64_t softclips = 0;
+        uint64_t refAlignedLength = 0;
+        uint64_t qAlignedLength = 0;
 
-            char* cigar = alignmentToCigar(&affine_wavefronts->edit_cigar,
-                                           refAlignedLength,
-                                           qAlignedLength,
-                                           matches,
-                                           mismatches,
-                                           insertions,
-                                           deletions,
-                                           softclips);
+        /*
+        edit_cigar_print_pretty(stderr,
+                                queryRegionStrand, queryLen,
+                                refRegion, refLen,
+                                &affine_wavefronts->edit_cigar,mm_allocator);
+        */
 
-            // todo, use starting deletions to determine reference start position
-            // and strip both starting and ending deletions
+        char* cigar = alignmentToCigar(&affine_wavefronts->edit_cigar,
+                                       refAlignedLength,
+                                       qAlignedLength,
+                                       matches,
+                                       mismatches,
+                                       insertions,
+                                       deletions,
+                                       softclips);
 
-            size_t alignmentRefPos = currentRecord.rStartPos; // WFA is global //  + result.startLocations[0];
-            double total = refAlignedLength + (qAlignedLength - softclips);
-            double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
+        // todo, use starting deletions to determine reference start position
+        // and strip both starting and ending deletions
 
-            output << currentRecord.qId
-                   << "\t" << querySize
-                   << "\t" << currentRecord.qStartPos
-                   << "\t" << currentRecord.qStartPos + qAlignedLength
-                   << "\t" << (currentRecord.strand == skch::strnd::FWD ? "+" : "-")
-                   << "\t" << refId
-                   << "\t" << refSize
-                   << "\t" << alignmentRefPos
-                   << "\t" << alignmentRefPos + refAlignedLength
-                   << "\t" << matches
-                   << "\t" << std::max(refAlignedLength, qAlignedLength)
-                   << "\t" << std::round(float2phred(1.0-identity))
-                   << "\t" << "id:f:" << identity
-                   << "\t" << "ma:i:" << matches
-                   << "\t" << "mm:i:" << mismatches
-                   << "\t" << "ni:i:" << insertions
-                   << "\t" << "nd:i:" << deletions
-                   << "\t" << "ns:i:" << softclips
-                //<< "\t" << "ed:i:" << result.editDistance
-                //<< "\t" << "al:i:" << result.alignmentLength
-                //<< "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
-                   << "\t" << "cg:Z:" << cigar
-                   << "\n";
+        size_t alignmentRefPos = currentRecord.rStartPos; // WFA is global //  + result.startLocations[0];
+        double total = refAlignedLength + (qAlignedLength - softclips);
+        double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
 
-            free(cigar);
-        }
+        output << currentRecord.qId
+               << "\t" << querySize
+               << "\t" << currentRecord.qStartPos
+               << "\t" << currentRecord.qStartPos + qAlignedLength
+               << "\t" << (currentRecord.strand == skch::strnd::FWD ? "+" : "-")
+               << "\t" << refId
+               << "\t" << refSize
+               << "\t" << alignmentRefPos
+               << "\t" << alignmentRefPos + refAlignedLength
+               << "\t" << matches
+               << "\t" << std::max(refAlignedLength, qAlignedLength)
+               << "\t" << std::round(float2phred(1.0-identity))
+               << "\t" << "id:f:" << identity
+               << "\t" << "ma:i:" << matches
+               << "\t" << "mm:i:" << mismatches
+               << "\t" << "ni:i:" << insertions
+               << "\t" << "nd:i:" << deletions
+               << "\t" << "ns:i:" << softclips
+            //<< "\t" << "ed:i:" << result.editDistance
+            //<< "\t" << "al:i:" << result.alignmentLength
+            //<< "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
+               << "\t" << "cg:Z:" << cigar
+               << "\n";
+
+        free(cigar);
+        affine_wavefronts_delete(affine_wavefronts);
 
         //edlibFreeAlignResult(result);
         delete [] queryRegionStrand;
