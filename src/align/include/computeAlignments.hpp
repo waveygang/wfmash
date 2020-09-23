@@ -478,12 +478,12 @@ namespace align
                 refLen, queryLen, affine_penalties, NULL, mm_allocator);
         } else {
             int wf_min = param.wf_min;
-            int wf_dist = (param.wf_dist > 0) ? param.wf_dist : (int)((1 - param.percentageIdentity/100) * queryLen);
+            int wf_diff = (param.wf_diff > 0) ? param.wf_diff : (int)((1 - param.percentageIdentity/100) * queryLen);
             // adaptive affine-WFA
             affine_wavefronts =
                 affine_wavefronts_new_reduced(
                     refLen, queryLen, affine_penalties,
-                    wf_min, wf_dist, NULL, mm_allocator);
+                    wf_min, wf_diff, NULL, mm_allocator);
         }
 
         // Align

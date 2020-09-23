@@ -44,10 +44,10 @@ void parse_args(int argc,
     args::Flag merge_mappings(parser, "merge-map", "merge consecutive segment-level mappings (can slow alignment phase)", {'M', "merge-mappings"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "estimate WF_dist based on this percent identity [default: -p]", {'a', "align-wf-id"});
+    args::ValueFlag<float> align_pct_identity(parser, "%", "estimate WF_diff based on this percent identity [default: -p]", {'a', "align-wf-id"});
     args::ValueFlag<float> align_min_identity(parser, "%", "minimum percent identity of an alignment to emit it [default: -p]", {'I', "align-min-id"});
     args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 10]", {'l', "wf-min"});
-    args::ValueFlag<int> wf_dist(parser, "N", "WF_dist: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: based on -a]", {'d', "wf-dist"});
+    args::ValueFlag<int> wf_diff(parser, "N", "WF_diff: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: based on -a]", {'d', "wf-diff"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
@@ -159,10 +159,10 @@ void parse_args(int argc,
         align_parameters.wf_min = 10;
     }
 
-    if (wf_dist) {
-        align_parameters.wf_dist = args::get(wf_dist);
+    if (wf_diff) {
+        align_parameters.wf_diff = args::get(wf_diff);
     } else {
-        align_parameters.wf_dist = 0;
+        align_parameters.wf_diff = 0;
     }
 
     if (thread_count) {

@@ -41,8 +41,8 @@ During all-to-all mapping, `-X` can additionally help us by removing self mappin
 
 Wavefront reduction is a form of adaptive banding implemented in WFA.
 To turn adaptive WFA off and evaluate the full set of wavefronts, set `-a` to 0.
-The `-a` setting is used to calculate the length that a diagonal in the wavefront can fall behind the furthest-reaching point in the wavefront.
-This is calculated as `(1 - align-wf-id) * segment_length`, and can be set explicitly with `-d`.
+The `-a` setting is used to calculate the length that a diagonal in the wavefront can fall behind the furthest-reaching point in the wavefront, (`WF_diff` in the terminology of the WFA paper).
+This is calculated as `(1 - align-wf-id) * segment_length`, and can be set explicitly at a fixed level with `-d`.
 
 ## examples
 

@@ -68,7 +68,8 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
     std::cerr << "[wfmash::align] Reference = " << parameters.refSequences << std::endl;
     std::cerr << "[wfmash::align] Query = " << parameters.querySequences << std::endl;
     std::cerr << "[wfmash::align] Mapping file = " << parameters.mashmapPafFile << std::endl;
-    std::cerr << "[wfmash::align] Edlib identity cut-off = " << parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[wfmash::align] Alignment identity bound = " << parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[wfmash::align] Alignment identity cutoff = " << parameters.min_identity << "\%" << std::endl;
     std::cerr << "[wfmash::align] Alignment output file = " << parameters.pafOutputFile << std::endl;
   }
 
