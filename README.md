@@ -34,10 +34,15 @@ Four parameters shape the length, number, identity, and alignment divergence of 
 * `-s[N], --segment-length=[N]` is the length of the mapped and aligned segment
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
 * `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment
-* `-a[N], --align-max-score=[N]` defines the maximum score per bp in the WFA _alignment_ step (higher is more divergent)
+* `-a[N], --align-wf-id=[N]` is a minimum identity metric used to bound the wavefront reduction during WFA _alignment_ step (higher is more divergent)
 
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set.
+
+Wavefront reduction is a form of adaptive banding implemented in WFA.
+To turn adaptive WFA off and evaluate the full set of wavefronts, set `-a` to 0.
+The `-a` setting is used to calculate the length that a diagonal in the wavefront can fall behind the furthest-reaching point in the wavefront.
+This is calculated as `(1 - align-wf-id) * segment_length`, and can be set explicitly with `-d`.
 
 ## examples
 

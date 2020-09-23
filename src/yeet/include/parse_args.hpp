@@ -44,8 +44,11 @@ void parse_args(int argc,
     args::Flag merge_mappings(parser, "merge-map", "merge consecutive segment-level mappings (can slow alignment phase)", {'M', "merge-mappings"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "estimate a maximum wavefront score based on this percent identity [default: -p]", {'a', "align-pct-id"});
-    args::ValueFlag<int> align_bandwidth(parser, "N", "maximum bandwidth for edlib alignment [default: 0 / computed from -p]", {'b', "align-bandwidth"});
+    args::ValueFlag<float> align_pct_identity(parser, "%", "estimate WF_dist based on this percent identity [default: -p]", {'a', "align-wf-id"});
+    args::ValueFlag<float> align_min_identity(parser, "%", "minimum percent identity of an alignment to emit it [default: -p]", {'I', "align-min-id"});
+    args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 10]", {'l', "wf-min"});
+    args::ValueFlag<int> wf_dist(parser, "N", "WF_dist: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: based on -a]", {'d', "wf-dist"});
+
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
     args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
@@ -144,10 +147,22 @@ void parse_args(int argc,
         align_parameters.percentageIdentity = map_parameters.percentageIdentity;
     }
 
-    if (align_bandwidth) {
-        align_parameters.bandwidth = args::get(align_bandwidth);
+    if (align_min_identity) {
+        align_parameters.min_identity = args::get(align_min_identity);
     } else {
-        align_parameters.bandwidth = 0;
+        align_parameters.min_identity = map_parameters.percentageIdentity;
+    }
+
+    if (wf_min) {
+        align_parameters.wf_min = args::get(wf_min);
+    } else {
+        align_parameters.wf_min = 10;
+    }
+
+    if (wf_dist) {
+        align_parameters.wf_dist = args::get(wf_dist);
+    } else {
+        align_parameters.wf_dist = 0;
     }
 
     if (thread_count) {

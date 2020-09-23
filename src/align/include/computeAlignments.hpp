@@ -433,8 +433,7 @@ namespace align
                               const std::string &mappingRecordLine,
                               const std::shared_ptr<std::string> &qSequence,
                               mm_allocator_t* const mm_allocator,
-                              affine_penalties_t* affine_penalties)
-      {
+                              affine_penalties_t* affine_penalties) {
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
@@ -467,36 +466,30 @@ namespace align
         //Compute alignment
         //auto t0 = skch::Time::now();
 
-        //for defining size of edlib's band during alignment
-        int editDistanceLimit;
-
-        if(param.percentageIdentity == 0)
-          editDistanceLimit = -1;   //not bounded
-        else
-          editDistanceLimit = (int)((1 - param.percentageIdentity/100) * queryLen);
-
-        if(param.bandwidth > 0)
-          editDistanceLimit = std::min(editDistanceLimit, param.bandwidth);
-
 #ifdef DEBUG
-        std::cerr << "INFO, align::Aligner::doAlignment, edlib execution starting, query region length = " << queryLen
+        std::cerr << "INFO, align::Aligner::doAlignment, WFA execution starting, query region length = " << queryLen
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
-        // Init Affine-WFA
-        /*
-        const int min_wavefront_length = 10;
-        const int max_distance_threshold = 1000;
-        affine_wavefronts_t* affine_wavefronts =
-            affine_wavefronts_new_reduced(
-                queryLen, refLen, &affine_penalties,
-                min_wavefront_length, max_distance_threshold, NULL, mm_allocator);
-        */
-        affine_wavefronts_t* affine_wavefronts = affine_wavefronts_new_complete(
-            queryLen, refLen, affine_penalties, NULL, mm_allocator);
+        affine_wavefronts_t* affine_wavefronts;
+        if (param.percentageIdentity == 0) {
+            // affine-WFA
+            affine_wavefronts = affine_wavefronts_new_complete(
+                refLen, queryLen, affine_penalties, NULL, mm_allocator);
+        } else {
+            int wf_min = param.wf_min;
+            int wf_dist = (param.wf_dist > 0) ? param.wf_dist : (int)((1 - param.percentageIdentity/100) * queryLen);
+            // adaptive affine-WFA
+            affine_wavefronts =
+                affine_wavefronts_new_reduced(
+                    refLen, queryLen, affine_penalties,
+                    wf_min, wf_dist, NULL, mm_allocator);
+        }
+
         // Align
         affine_wavefronts_align(
-            affine_wavefronts, queryRegionStrand, queryLen, refRegion, refLen);
+            affine_wavefronts, refRegion, refLen, queryRegionStrand, queryLen);
+
 
 
         //std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
@@ -536,29 +529,31 @@ namespace align
         double total = refAlignedLength + (qAlignedLength - softclips);
         double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
 
-        output << currentRecord.qId
-               << "\t" << querySize
-               << "\t" << currentRecord.qStartPos
-               << "\t" << currentRecord.qStartPos + qAlignedLength
-               << "\t" << (currentRecord.strand == skch::strnd::FWD ? "+" : "-")
-               << "\t" << refId
-               << "\t" << refSize
-               << "\t" << alignmentRefPos
-               << "\t" << alignmentRefPos + refAlignedLength
-               << "\t" << matches
-               << "\t" << std::max(refAlignedLength, qAlignedLength)
-               << "\t" << std::round(float2phred(1.0-identity))
-               << "\t" << "id:f:" << identity
-               << "\t" << "ma:i:" << matches
-               << "\t" << "mm:i:" << mismatches
-               << "\t" << "ni:i:" << insertions
-               << "\t" << "nd:i:" << deletions
-               << "\t" << "ns:i:" << softclips
-            //<< "\t" << "ed:i:" << result.editDistance
-            //<< "\t" << "al:i:" << result.alignmentLength
-            //<< "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
-               << "\t" << "cg:Z:" << cigar
-               << "\n";
+        if (identity * 100 > param.min_identity) {
+            output << currentRecord.qId
+                   << "\t" << querySize
+                   << "\t" << currentRecord.qStartPos
+                   << "\t" << currentRecord.qStartPos + qAlignedLength
+                   << "\t" << (currentRecord.strand == skch::strnd::FWD ? "+" : "-")
+                   << "\t" << refId
+                   << "\t" << refSize
+                   << "\t" << alignmentRefPos
+                   << "\t" << alignmentRefPos + refAlignedLength
+                   << "\t" << matches
+                   << "\t" << std::max(refAlignedLength, qAlignedLength)
+                   << "\t" << std::round(float2phred(1.0-identity))
+                   << "\t" << "id:f:" << identity
+                   << "\t" << "ma:i:" << matches
+                   << "\t" << "mm:i:" << mismatches
+                   << "\t" << "ni:i:" << insertions
+                   << "\t" << "nd:i:" << deletions
+                   << "\t" << "ns:i:" << softclips
+                //<< "\t" << "ed:i:" << result.editDistance
+                //<< "\t" << "al:i:" << result.alignmentLength
+                //<< "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
+                   << "\t" << "cg:Z:" << cigar
+                   << "\n";
+        }
 
         free(cigar);
         affine_wavefronts_delete(affine_wavefronts);
