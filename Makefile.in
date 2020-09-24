@@ -15,7 +15,7 @@ src/common/WFA/build/libwfa.a : src/common/WFA/*/*c src/common/WFA/*/*h
 	cd src/common/WFA && $(MAKE)
 
 wfmash : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/* src/common/WFA/*/* src/common/WFA/build/libwfa.a
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Isrc/common/WFA -Lsrc/common/WFA/build $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwfa
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Isrc/common/WFA src/common/WFA/build/*.o $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread
 
 install : wfmash
 	mkdir -p @prefix@/bin/
