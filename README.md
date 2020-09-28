@@ -29,20 +29,37 @@ The number of threads must be set manually, using `-t`, and defaults to 1.
 `wfmash` has been developed to accelerate the alignment step in variation graph induction (the first step in the `seqwish` / `smoothxg` pipeline).
 Suitable default settings are provided for this purpose.
 
-Four parameters shape the length, number, identity, and alignment divergence of the resulting mappings:
+Seven parameters shape the length, number, identity, and alignment divergence of the resulting mappings.
+
+### mapping settings
+
+The first three affect the structure of the mashmap2 mappings:
 
 * `-s[N], --segment-length=[N]` is the length of the mapped and aligned segment
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
 * `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment
-* `-a[N], --align-wf-id=[N]` is a minimum identity metric used to bound the wavefront reduction during WFA _alignment_ step (higher is more divergent)
 
-Together, these settings allow us to precisely define an alignment space to consider.
+### alignment settings
+
+The last four essential parameters control the WFA alignment process and filter its output.
+
+WF-min and WF-diff prune unlikely solutions from the set in consideration:
+
+* `-l[N], --wf-min=[N]` the number of wavefronts is required to trigger reduction
+* `-d[N], --wf-diff=[N]` prune wavefronts whose are more than WF-diff cells (on the diagonal) behind the max wavefront
+
+The exact WFA may be computed if desired, which requires more time and memory but is equivalent to affine Needleman-Wunsch.
+(Note that WFA already has adaptive features due to its formulation.)
+
+* `-e, --exact-wfa` compute the exact WFA, don't use adaptive wavefront reduction
+
+An alignment identity filter can be used to remove very low-quality alignments:
+
+* `-a[N], --align-wf-id=[N]` is a minimum identity metric used to filter alignments (defaults to `-p` if unset)
+
+### all-to-all mapping
+
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set.
-
-Wavefront reduction is a form of adaptive banding implemented in WFA.
-To turn adaptive WFA off and evaluate the full set of wavefronts, set `-a` to 0.
-The `-a` setting is used to calculate the length that a diagonal in the wavefront can fall behind the furthest-reaching point in the wavefront, (`WF_diff` in the terminology of the WFA paper).
-This is calculated as `(1 - align-wf-id) * segment_length`, and can be set explicitly at a fixed level with `-d`.
 
 ## examples
 
@@ -70,8 +87,8 @@ Follow [`INSTALL.txt`](INSTALL.txt) to compile and install wfmash.
 
 ## <a name=“publications”></a>publications
 
+- **Santiago Marco-Sola, Juan Carlos Moure, Miquel Moreto, and Antonio Espinosa** ["Fast gap-affine pairwise alignment using the wavefront algorithm"](https://doi.org/10.1093/bioinformatics/btaa777) *Bioinformatics*, 2020.
+
 - **Chirag Jain, Sergey Koren, Alexander Dilthey, Adam M. Phillippy, and Srinivas Aluru**. ["A Fast Adaptive Algorithm for Computing Whole-Genome Homology Maps"](https://doi.org/10.1093/bioinformatics/bty597). *Bioinformatics (ECCB issue)*, 2018.
 
 - **Chirag Jain, Alexander Dilthey, Sergey Koren, Srinivas Aluru, and Adam M. Phillippy**. ["A fast approximate algorithm for mapping long reads to large reference databases."](https://link.springer.com/chapter/10.1007/978-3-319-56970-3_5) In *International Conference on Research in Computational Molecular Biology*, Springer, Cham, 2017.
-
-- **Santiago Marco-Sola, Juan Carlos Moure, Miquel Moreto, and Antonio Espinosa** ["Fast gap-affine pairwise alignment using the wavefront algorithm"](https://doi.org/10.1093/bioinformatics/btaa777) *Bioinformatics*, 2020.

@@ -472,14 +472,14 @@ namespace align
 #endif
 
         affine_wavefronts_t* affine_wavefronts;
-        if (param.percentageIdentity == 0) {
-            // affine-WFA
+        if (param.exact_wfa) {
+            // exact affine WFA
             affine_wavefronts = affine_wavefronts_new_complete(
                 refLen, queryLen, affine_penalties, NULL, mm_allocator);
         } else {
             int wf_min = param.wf_min;
-            int wf_diff = (param.wf_diff > 0) ? param.wf_diff : (int)((1 - param.percentageIdentity/100) * queryLen);
-            // adaptive affine-WFA
+            int wf_diff = param.wf_diff;
+            // adaptive affine WFA
             affine_wavefronts =
                 affine_wavefronts_new_reduced(
                     refLen, queryLen, affine_penalties,
@@ -489,8 +489,6 @@ namespace align
         // Align
         affine_wavefronts_align(
             affine_wavefronts, refRegion, refLen, queryRegionStrand, queryLen);
-
-
 
         //std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
         //std::cerr << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;

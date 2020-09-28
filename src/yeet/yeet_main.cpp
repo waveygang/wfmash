@@ -34,53 +34,37 @@ int main(int argc, char** argv) {
      */
     unsetenv((char *)"MALLOC_ARENA_MAX");
 
-    // TODO:
-    // if PAF input is given, skip mapping step and supply it directly to aligner
-    // otherwise, if approximate mapping is requested, write map output directly to stdout
-    // if base-level mapping is requested, write approximate mapping to file, and supply this to alignment
-
-    // write map output into
-
-    //Setup command line options
-    //align::initCmdParser(cmd);
-    //Parse command line arguements   
-
-    //sketching and mapping parameters
+    // get our parameters from the command line
     skch::Parameters map_parameters;
     align::Parameters align_parameters;
     yeet::Parameters yeet_parameters;
     yeet::parse_args(argc, argv, map_parameters, align_parameters, yeet_parameters);
 
-    //parameters.refSequences.push_back(ref);
-
-    //skch::parseandSave(argc, argv, cmd, parameters);
-    skch::printCmdOptions(map_parameters);
-
     auto t0 = skch::Time::now();
 
-    //Build the sketch for reference
-    skch::Sketch referSketch(map_parameters);
+    if (!yeet_parameters.align_input_paf) {
+    
+        skch::printCmdOptions(map_parameters);
 
-    std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
-    std::cerr << "[wfmash::map] time spent computing the reference index: " << timeRefSketch.count() << " sec" << std::endl;
+        //Build the sketch for reference
+        skch::Sketch referSketch(map_parameters);
 
-    //Map the sequences in query file
-    t0 = skch::Time::now();
+        std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
+        std::cerr << "[wfmash::map] time spent computing the reference index: " << timeRefSketch.count() << " sec" << std::endl;
 
-    skch::Map mapper = skch::Map(map_parameters, referSketch);
+        //Map the sequences in query file
+        t0 = skch::Time::now();
 
-    std::chrono::duration<double> timeMapQuery = skch::Time::now() - t0;
-    std::cerr << "[wfmash::map] time spent mapping the query: " << timeMapQuery.count() << " sec" << std::endl;
+        skch::Map mapper = skch::Map(map_parameters, referSketch);
 
-    std::cerr << "[wfmash::map] mapping results saved in: " << map_parameters.outFileName << std::endl;
+        std::chrono::duration<double> timeMapQuery = skch::Time::now() - t0;
+        std::cerr << "[wfmash::map] time spent mapping the query: " << timeMapQuery.count() << " sec" << std::endl;
 
+        std::cerr << "[wfmash::map] mapping results saved in: " << map_parameters.outFileName << std::endl;
 
-    //Parse command line arguements   
-
-
-    //align::parseandSave(argc, argv, cmd, parameters);
-    if (yeet_parameters.approx_mapping) {
-        return 0;
+        if (yeet_parameters.approx_mapping) {
+            return 0;
+        }
     }
 
     align::printCmdOptions(align_parameters);

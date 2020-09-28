@@ -17,6 +17,7 @@ namespace yeet {
 struct Parameters {
     bool approx_mapping = false;
     bool remapping = false;
+    bool align_input_paf = false;
 };
 
 void parse_args(int argc,
@@ -46,8 +47,9 @@ void parse_args(int argc,
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<float> align_pct_identity(parser, "%", "estimate WF_diff based on this percent identity [default: -p]", {'a', "align-wf-id"});
     args::ValueFlag<float> align_min_identity(parser, "%", "minimum percent identity of an alignment to emit it [default: -p]", {'I', "align-min-id"});
-    args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 10]", {'l', "wf-min"});
-    args::ValueFlag<int> wf_diff(parser, "N", "WF_diff: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: based on -a]", {'d', "wf-diff"});
+    args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 100]", {'l', "wf-min"});
+    args::ValueFlag<int> wf_diff(parser, "N", "WF_diff: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: 50]", {'d', "wf-diff"});
+    args::Flag exact_wfa(parser, "N", "compute the exact WFA, don't use adaptive wavefront reduction", {'e', "exact-wfa"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
@@ -156,13 +158,19 @@ void parse_args(int argc,
     if (wf_min) {
         align_parameters.wf_min = args::get(wf_min);
     } else {
-        align_parameters.wf_min = 10;
+        align_parameters.wf_min = 100;
     }
 
     if (wf_diff) {
         align_parameters.wf_diff = args::get(wf_diff);
     } else {
-        align_parameters.wf_diff = 0;
+        align_parameters.wf_diff = 50;
+    }
+
+    if (exact_wfa) {
+        align_parameters.exact_wfa = true;
+    } else {
+        align_parameters.exact_wfa = false;
     }
 
     if (thread_count) {
@@ -186,7 +194,13 @@ void parse_args(int argc,
                                                                   map_parameters.referenceSize);
 
 
-    if (approx_mapping) {
+    if (align_input_paf) {
+        map_parameters.outFileName = "";
+        yeet_parameters.approx_mapping = false;
+        yeet_parameters.align_input_paf = true;
+        align_parameters.mashmapPafFile = args::get(align_input_paf);
+        align_parameters.pafOutputFile = "/dev/stdout";
+    } else if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
         yeet_parameters.approx_mapping = true;
     } else {
