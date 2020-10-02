@@ -45,8 +45,7 @@ void parse_args(int argc,
     args::Flag merge_mappings(parser, "merge-map", "merge consecutive segment-level mappings (can slow alignment phase)", {'M', "merge-mappings"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "estimate WF_diff based on this percent identity [default: -p]", {'a', "align-wf-id"});
-    args::ValueFlag<float> align_min_identity(parser, "%", "minimum percent identity of an alignment to emit it [default: -p]", {'I', "align-min-id"});
+    args::ValueFlag<float> align_pct_identity(parser, "%", "minimum percent identity of an alignment to emit it [default: -p]", {'a', "align-min-id"});
     args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 100]", {'l', "wf-min"});
     args::ValueFlag<int> wf_diff(parser, "N", "WF_diff: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: 50]", {'d', "wf-diff"});
     args::Flag exact_wfa(parser, "N", "compute the exact WFA, don't use adaptive wavefront reduction", {'e', "exact-wfa"});
@@ -144,13 +143,7 @@ void parse_args(int argc,
     }
 
     if (align_pct_identity) {
-        align_parameters.percentageIdentity = args::get(align_pct_identity);
-    } else {
-        align_parameters.percentageIdentity = map_parameters.percentageIdentity;
-    }
-
-    if (align_min_identity) {
-        align_parameters.min_identity = args::get(align_min_identity);
+        align_parameters.min_identity = args::get(align_pct_identity);
     } else {
         align_parameters.min_identity = map_parameters.percentageIdentity;
     }

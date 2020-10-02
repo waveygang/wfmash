@@ -14,7 +14,7 @@ namespace align {
    */
 struct Parameters {
     int threads;                                  //execution thread count
-    float percentageIdentity;                     //user defined threshold for good similarity
+    //float percentageIdentity;                     //user defined threshold for good similarity
     float min_identity;                           // drop alignments below this identity threshold
     int wf_min;                                   // minimum wavefront length to trigger WF_reduce wavefront pruning
     int wf_diff;                                  // max distance threshold that a wavefront may lag behind the best wavefront and not be removed
