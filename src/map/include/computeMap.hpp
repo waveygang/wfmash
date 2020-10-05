@@ -28,6 +28,7 @@
 
 //External includes
 #include "common/seqiter.hpp"
+#include "common/progress.hpp"
 
 namespace skch
 {
@@ -110,13 +111,29 @@ namespace skch
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
         seqno_t totalReadsMapped = 0;
-        seqno_t seqCounter = 0;     
+        seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
         MappingResultsVector_t allReadMappings;  //Aggregate mapping results for the complete run
 
         //Create the thread pool 
         ThreadPool<InputSeqContainer, MapModuleOutput> threadPool( [this](InputSeqContainer* e){return mapModule(e);}, param.threads);
+
+        // kind've expensive, but it can help people know how long we're going to take
+        // enable optionally?
+        uint64_t total_seqs = 0;
+        uint64_t total_seq_length = 0;
+        for(const auto &fileName : param.querySequences) {
+            seqiter::for_each_seq_in_file(
+                fileName,
+                [&](const std::string& seq_name,
+                    const std::string& seq) {
+                    ++total_seqs;
+                    total_seq_length += seq.size();
+                });
+        }
+
+        progress_meter::ProgressMeter progress(total_seq_length, "[edyeet::skch::Map::mapQuery] mapped");
 
         for(const auto &fileName : param.querySequences)
         {
@@ -151,7 +168,7 @@ namespace skch
                         while ( threadPool.outputAvailable() )
                             mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
                     }
-
+                    progress.increment(seq.size());
                     seqCounter++;
                 }); //Finish reading query input file
 
@@ -175,6 +192,8 @@ namespace skch
 
           reportReadMappings(allReadMappings, "", outstrm);
         }
+
+        progress.finish();
 
         std::cerr << "[edyeet::skch::Map::mapQuery] [count of mapped reads, reads qualified for mapping, total input reads] = [" << totalReadsMapped << ", " << totalReadsPickedForMapping << ", " << seqCounter << "]" << std::endl;
       }
