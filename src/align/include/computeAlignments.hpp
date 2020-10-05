@@ -29,6 +29,7 @@ extern "C" {
 }
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
+#include "common/progress.hpp"
 
 namespace align
 {
@@ -211,6 +212,46 @@ namespace align
       void computeAlignments()
       {
 
+          uint64_t total_seqs = 0;
+          uint64_t total_alignment_length = 0;
+          uint64_t total_paf_records = 0;
+          for(const auto &fileName : param.querySequences) {
+              std::ifstream mappingListStream(param.mashmapPafFile);
+              std::string mappingRecordLine;
+              MappingBoundaryRow currentRecord;
+              seqiter::for_each_seq_in_file(
+                  fileName,
+                  [&](const std::string& qSeqId,
+                      const std::string& _seq) {
+                      ++total_seqs;
+                      //total_seq_length += seq.size();
+                      if( !mappingListStream.eof() ) {
+                          if(mappingRecordLine.empty()) {
+                              std::getline(mappingListStream, mappingRecordLine);
+                          }
+                          this->parseMashmapRow(mappingRecordLine, currentRecord);
+                          if(currentRecord.qId == qSeqId) {
+                              //auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
+                              //seq_queue.push(q);
+                              total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                              ++total_paf_records;
+                              //Check if more mappings have same query sequence id
+                              while(std::getline(mappingListStream, mappingRecordLine)) {
+                                  this->parseMashmapRow(mappingRecordLine, currentRecord);
+                                  if(currentRecord.qId != qSeqId) {
+                                      break;
+                                  } else {
+                                      total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                                      ++total_paf_records;
+                                  }
+                              }
+                          }
+                      }
+                  });
+          }
+
+          progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
+
           // input atomic queue
           seq_atomic_queue_t seq_queue;
           // output atomic queue
@@ -356,6 +397,8 @@ namespace align
                                               rec->qSequence,
                                               mm_allocator,
                                               &affine_penalties));
+                          progress.increment(rec->currentRecord.qEndPos
+                                             - rec->currentRecord.qStartPos);
                           if (paf_rec->size()) {
                               paf_queue.push(paf_rec);
                           } else {
@@ -389,6 +432,11 @@ namespace align
           }
           // and finally the writer
           writer.join();
+
+          progress.finish();
+          std::cerr << "[wfmash::align::computeAlignments] "
+                    << "count of mapped reads = " << total_seqs
+                    << ", total aligned bp = " << total_alignment_length << std::endl;
 
       }
 
