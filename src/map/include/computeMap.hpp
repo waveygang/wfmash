@@ -195,7 +195,11 @@ namespace skch
 
         progress.finish();
 
-        std::cerr << "[edyeet::skch::Map::mapQuery] [count of mapped reads, reads qualified for mapping, total input reads] = [" << totalReadsMapped << ", " << totalReadsPickedForMapping << ", " << seqCounter << "]" << std::endl;
+        std::cerr << "[edyeet::skch::Map::mapQuery] "
+                  << "count of mapped reads = " << totalReadsMapped
+                  << ", reads qualified for mapping = " << totalReadsPickedForMapping
+                  << ", total input reads = " << seqCounter
+                  << ", total input bp = " << total_seq_length << std::endl;
       }
 
       /**
