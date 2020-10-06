@@ -133,7 +133,7 @@ namespace skch
                 });
         }
 
-        progress_meter::ProgressMeter progress(total_seq_length, "[edyeet::skch::Map::mapQuery] mapped");
+        progress_meter::ProgressMeter progress(total_seq_length, "[wfmash::skch::Map::mapQuery] mapped");
 
         for(const auto &fileName : param.querySequences)
         {
