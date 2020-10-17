@@ -489,6 +489,12 @@ namespace skch
           }
         }
 
+      // helper to get the prefix of a string
+      const std::string prefix(const std::string& s, const char c) {
+          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find(c)) << std::endl;
+          return s.substr(0, s.find(c));
+      }
+
       /**
        * @brief                                 Revise L1 candidate regions to more precise locations
        * @param[in]   Q                         query sequence information
@@ -515,7 +521,10 @@ namespace skch
 
             //Report the alignment if it passes our identity threshold and, if we are in all-vs-all mode, it isn't a self-mapping
             if(nucIdentityUpperBound >= param.percentageIdentity
-               && !(param.skipSelf && Q.seqName == this->refSketch.metadata[l2.seqId].name))
+               && !(param.skip_self && Q.seqName == this->refSketch.metadata[l2.seqId].name)
+               && !(param.skip_prefix
+                    && prefix(Q.seqName, param.prefix_delim)
+                    == prefix(this->refSketch.metadata[l2.seqId].name, param.prefix_delim)))
             {
               MappingResult res;
 
