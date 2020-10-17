@@ -10,12 +10,12 @@
 
 namespace skch
 {
-  /**
-   * @brief   configuration parameters for building sketch
-   *          expected to be initialized using command line arguments
-   */
-  struct Parameters
-  {
+/**
+ * @brief   configuration parameters for building sketch
+ *          expected to be initialized using command line arguments
+ */
+struct Parameters
+{
     int kmerSize;                                     //kmer size for sketching
     int windowSize;                                   //window size used for sketching 
     int segLength;                                    //For split mapping case, this represents the fragment length
@@ -31,26 +31,30 @@ namespace skch
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
     bool split;                                       //Split read mapping (done if this is true)
-    bool skipSelf;                                    //skip self mappings
+    bool skip_self;                                   // skip self mappings
+    bool skip_prefix;                                 // skip mappings to sequences with the same prefix
+    char prefix_delim;                                // the prefix delimiter
     bool mergeMappings;                               //if we should merge consecutive segment mappings
-  };
+};
 
 
-  /**
-   * @brief     Internal figures not exposed at the command line interface
-   */
-  namespace fixed
-  {
-    float pval_cutoff = 1e-03;                        //p-value cutoff for determining window size
+/**
+ * @brief     Internal figures not exposed at the command line interface
+ */
+namespace fixed
+{
 
-    float confidence_interval = 0.75;                 //Confidence interval to relax jaccard cutoff for mapping (0-1)
+float pval_cutoff = 1e-03;                        //p-value cutoff for determining window size
 
-    float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is 
-                                                      //considered good by filtering algorithm
+float confidence_interval = 0.75;                 //Confidence interval to relax jaccard cutoff for mapping (0-1)
 
-    int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best 
-                                                      //mappings, it doesn't mark them as best anymore
-  }
+float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is 
+//considered good by filtering algorithm
+
+int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best 
+//mappings, it doesn't mark them as best anymore
+
+}
 }
 
 #endif
