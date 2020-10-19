@@ -21,8 +21,7 @@ AR_FLAGS=-rsc
 ###############################################################################
 # Compile rules
 ###############################################################################
-SUBDIRS=benchmark \
-        edit \
+SUBDIRS=edit \
         gap_affine \
         gap_lineal \
         system \
@@ -33,7 +32,7 @@ LIB_WFA=$(FOLDER_BUILD)/libwfa.a
 all: CC_FLAGS+=-O3
 all: MODE=all
 all: setup
-all: $(SUBDIRS) tools $(LIB_WFA)
+all: $(SUBDIRS) $(LIB_WFA)
 
 tools: $(FOLDER_BUILD)/*.o
 
