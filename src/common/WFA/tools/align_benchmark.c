@@ -440,7 +440,7 @@ void parse_arguments(int argc,char** argv) {
     fprintf(stderr,"Option --algorithm is required \n");
     exit(1);
   }
-  if (parameters.input==NULL) {
+  if (strcmp(parameters.algorithm,"test")!=0 && parameters.input==NULL) {
     fprintf(stderr,"Option --input is required \n");
     exit(1);
   }
