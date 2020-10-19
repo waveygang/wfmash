@@ -21,24 +21,27 @@ AR_FLAGS=-rsc
 ###############################################################################
 # Compile rules
 ###############################################################################
-SUBDIRS=edit \
+SUBDIRS=benchmark \
+        edit \
         gap_affine \
         gap_lineal \
         system \
         utils
-
+       
 LIB_WFA=$(FOLDER_BUILD)/libwfa.a
 
 all: CC_FLAGS+=-O3
 all: MODE=all
 all: setup
-all: $(SUBDIRS) $(LIB_WFA)
+all: $(SUBDIRS) tools $(LIB_WFA)
+
+$(FOLDER_BUILD)/*.o: $(SUBDIRS)
 
 debug: setup
 debug: MODE=all
-debug: $(SUBDIRS) $(LIB_WFA)
+debug: $(SUBDIRS) tools $(LIB_WFA)
 
-$(LIB_WFA): .FORCE
+$(LIB_WFA): $(FOLDER_BUILD)/*.o
 	$(AR) $(AR_FLAGS) $(LIB_WFA) $(FOLDER_BUILD)/*.o 2> /dev/null
 
 setup:
@@ -46,14 +49,14 @@ setup:
 
 clean:
 	rm -rf $(FOLDER_BIN) $(FOLDER_BUILD)
-
+	
 ###############################################################################
 # Subdir rule
 ###############################################################################
 export
 $(SUBDIRS):
 	$(MAKE) --directory=$@ all
-
+	
 tools:
 	$(MAKE) --directory=$@ $(MODE)
 
