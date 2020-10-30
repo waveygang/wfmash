@@ -40,6 +40,7 @@ void parse_args(int argc,
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::ValueFlag<std::string> map_filter_mode(parser, "MODE", "filter mode for map step, either 'map', 'one-to-one', or 'none' [default: map]", {'f', "map-filter-mode"});
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
+    args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
@@ -216,6 +217,12 @@ void parse_args(int argc,
         map_parameters.secondaryToKeep = args::get(map_secondaries);
     } else {
         map_parameters.secondaryToKeep = 0;
+    }
+
+    if (map_short_secondaries) {
+        map_parameters.shortSecondaryToKeep = args::get(map_short_secondaries);
+    } else {
+        map_parameters.shortSecondaryToKeep = 0;
     }
 
     if (skip_self) {
