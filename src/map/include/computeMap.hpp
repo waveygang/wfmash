@@ -152,7 +152,7 @@ namespace skch
                     if (param.filterMode == filter::ONETOONE)
                         qmetadata.push_back( ContigInfo{seq_name, len} );
                     //Is the read too short?
-                    if(len < param.windowSize || len < param.kmerSize || len < param.segLength)
+                    if(len < param.windowSize || len < param.kmerSize)
                     {
 //#ifdef DEBUG
                         std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
@@ -215,7 +215,7 @@ namespace skch
         //save query sequence name
         output->qseqName = input->seqName;
 
-        if(! param.split)   
+        if(! param.split || input->len <= param.segLength)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -294,7 +294,10 @@ namespace skch
         //filter mappings best over query sequence axis
         if(param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)
         {
-            skch::Filter::query::filterMappings(output->readMappings, param.secondaryToKeep);
+            skch::Filter::query::filterMappings(output->readMappings,
+                                                (input->len < param.segLength ?
+                                                 param.shortSecondaryToKeep
+                                                 : param.secondaryToKeep));
         }
 
         //Make sure mapping boundary don't exceed sequence lengths

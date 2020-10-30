@@ -26,6 +26,7 @@ struct Parameters
     float percentageIdentity;                         //user defined threshold for good similarity
     int filterMode;                                   //filtering mode in mashmap
     int secondaryToKeep;                              //how many secondary alignments we keep
+    int shortSecondaryToKeep;                         //how many secondary alignments we keep for reads < segLength
     int threads;                                      //execution thread count
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
