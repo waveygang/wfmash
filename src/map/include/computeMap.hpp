@@ -29,6 +29,7 @@
 //External includes
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
+#include "common/filesystem.hpp"
 
 namespace skch
 {
@@ -124,13 +125,29 @@ namespace skch
         uint64_t total_seqs = 0;
         uint64_t total_seq_length = 0;
         for(const auto &fileName : param.querySequences) {
-            seqiter::for_each_seq_in_file(
-                fileName,
-                [&](const std::string& seq_name,
-                    const std::string& seq) {
+            // check if there is a .fai
+            std::string fai_name = fileName + ".fai";
+            if (fs::file_exists(fai_name)) {
+                // if so, process the .fai to determine our sequence length
+                std::string line;
+                std::ifstream in(fai_name.c_str());
+                while (std::getline(in, line)) {
                     ++total_seqs;
-                    total_seq_length += seq.size();
-                });
+                    auto p1 = line.find('\t');
+                    auto p2 = line.find('\t', p1);
+                    total_seq_length += std::stoi(line.substr(p1, p2));
+                }
+            } else {
+                // if not, warn that this is expensive
+                std::cerr << "[wfmash::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading file to sum sequence length (slow)" << std::endl;
+                seqiter::for_each_seq_in_file(
+                    fileName,
+                    [&](const std::string& seq_name,
+                        const std::string& seq) {
+                        ++total_seqs;
+                        total_seq_length += seq.size();
+                    });
+            }
         }
 
         progress_meter::ProgressMeter progress(total_seq_length, "[wfmash::skch::Map::mapQuery] mapped");

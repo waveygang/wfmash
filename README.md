@@ -81,6 +81,13 @@ Self-mapping of sequences:
 wfmash -X query.fa query.fa >aln.paf
 ```
 
+## sequence indexing
+
+`wfmash` provides a progress log that estimates time to completion.
+This depends on determining the total query sequence length.
+To prevent lags when starting a mapping process, users should apply `samtools index` to index query and target FASTA sequences.
+The `.fai` indexes are then used to quickly compute the sum of query lengths.
+
 ## installation
 
 Follow [`INSTALL.txt`](INSTALL.txt) to compile and install wfmash.
