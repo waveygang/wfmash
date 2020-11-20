@@ -14,8 +14,11 @@ SOURCE_1=src/yeet/yeet_main.cpp
 
 all : edyeet
 
-edyeet : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/*
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SOURCE_1) -o edyeet @mathlib@ -lstdc++ -lz -lm -lpthread 
+src/common/wflign/build/lib/libwflign.a : src/common/wflign/* src/common/wflign/src/*cpp src/common/wflign/src/*hpp
+	cd src/common/wflign && cmake -H. -Bbuild && cd build && $(MAKE)
+
+edyeet : src/yeet/* src/yeet/*/* src/align/* src/align/*/* src/common/* src/common/*/* src/common/wflign/build/lib/libwflign.a
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib/ $(SOURCE_1) -o edyeet @mathlib@ -lstdc++ -lz -lm -lpthread -lwflign
 
 install : edyeet
 	mkdir -p @prefix@/bin/

@@ -19,6 +19,9 @@ mashmap
 mashmap-align
 edyeet
 
+#build directories
+src/common/wflign/build
+
 #Others
 autoParam
 Makefile
