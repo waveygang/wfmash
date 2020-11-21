@@ -29,7 +29,6 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 #include "common/wflign/src/wflign.hpp"
-#include "common/dna.hpp"
 
 namespace align
 {
