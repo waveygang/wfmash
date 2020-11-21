@@ -28,6 +28,8 @@
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
+#include "common/wflign/src/wflign.hpp"
+#include "common/dna.hpp"
 
 namespace align
 {
@@ -496,94 +498,25 @@ namespace align
         //Compute alignment
         auto t0 = skch::Time::now();
 
-        //for defining size of edlib's band during alignment
-        int editDistanceLimit;
-
-        if(param.percentageIdentity == 0)
-          editDistanceLimit = -1;   //not bounded
-        else
-          editDistanceLimit = (int)((1 - param.percentageIdentity/100) * queryLen);
-
-        if(param.bandwidth > 0)
-          editDistanceLimit = std::min(editDistanceLimit, param.bandwidth);
-
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, edlib execution starting, query region length = " << queryLen
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
-        EdlibAlignResult result = edlibAlign(
-            queryRegionStrand, queryLen, refRegion, refLen,
-            edlibNewAlignConfig(editDistanceLimit, EDLIB_MODE_HW, EDLIB_TASK_PATH, NULL, 0));
-
-
-#ifdef DEBUG
-        if (result.status == EDLIB_STATUS_OK)
-        {
-          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution status = OKAY" << std::endl;
-          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution finished, alignment length = " <<  result.alignmentLength << std::endl;
-        }
-        else
-          std::cerr << "INFO, align::Aligner::doAlignment, edlib execution status = FAILED" << std::endl;
-
-        std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-        std::cerr << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;
-#endif
-
         std::stringstream output;
-        //Output to file
-        if (result.status == EDLIB_STATUS_OK && result.alignmentLength != 0) 
-        {
-            uint64_t matches = 0;
-            uint64_t mismatches = 0;
-            uint64_t insertions = 0;
-            uint64_t deletions = 0;
-            uint64_t softclips = 0;
-            uint64_t refAlignedLength = 0;
-            uint64_t qAlignedLength = 0;
+        const int segment_length = 1000;
+        const int min_wavefront_length = 100;
+        const int max_distance_threshold = 200;
+        wflign::wflign_affine_wavefront(
+            output,
+            currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
+            currentRecord.strand != skch::strnd::FWD,
+            refId, refRegion, refSize, currentRecord.rStartPos, refLen,
+            segment_length,
+            param.percentageIdentity / 100,
+            min_wavefront_length,
+            max_distance_threshold);
 
-            char* cigar = alignmentToCigar(result.alignment,
-                                           result.alignmentLength,
-                                           refAlignedLength,
-                                           qAlignedLength,
-                                           matches,
-                                           mismatches,
-                                           insertions,
-                                           deletions,
-                                           softclips);
-
-            size_t alignmentRefPos = currentRecord.rStartPos + result.startLocations[0];
-            double total = refAlignedLength + (qAlignedLength - softclips);
-            double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
-
-            output << currentRecord.qId
-                   << "\t" << querySize
-                   << "\t" << currentRecord.qStartPos
-                   << "\t" << currentRecord.qStartPos + qAlignedLength
-                   << "\t" << (currentRecord.strand == skch::strnd::FWD ? "+" : "-")
-                   << "\t" << refId
-                   << "\t" << refSize
-                   << "\t" << alignmentRefPos
-                   << "\t" << alignmentRefPos + refAlignedLength
-                   << "\t" << matches
-                   << "\t" << std::max(refAlignedLength, qAlignedLength)
-                   << "\t" << std::round(float2phred(1.0-identity))
-                   << "\t" << "id:f:" << identity
-                   << "\t" << "ma:i:" << matches
-                   << "\t" << "mm:i:" << mismatches
-                   << "\t" << "ni:i:" << insertions
-                   << "\t" << "nd:i:" << deletions
-                   << "\t" << "ns:i:" << softclips
-                   << "\t" << "ed:i:" << result.editDistance
-                   << "\t" << "al:i:" << result.alignmentLength
-                   << "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
-                   << "\t" << "cg:Z:" << cigar
-                   << "\n";
-
-            free(cigar);
-        }
-
-        edlibFreeAlignResult(result);
         delete [] queryRegionStrand;
 
         return output.str();

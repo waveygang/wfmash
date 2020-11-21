@@ -21,6 +21,7 @@ edyeet
 
 #build directories
 src/common/wflign/build
+build
 
 #Others
 autoParam

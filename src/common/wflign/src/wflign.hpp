@@ -21,10 +21,6 @@ struct alignment_t {
     int keep_query_length = 0;
     int skip_target_start = 0;
     int keep_target_length = 0;
-    const std::string* query_name;
-    uint64_t query_size;
-    const std::string* target_name;
-    uint64_t target_size;
     EdlibAlignResult result;
     ~alignment_t(void) {
         edlibFreeAlignResult(result);
@@ -36,47 +32,78 @@ inline uint64_t encode_pair(int v, int h) {
 }
 
 void wflign_full(
+    std::ostream& out,
     const std::string& query_name,
-    const std::string& query,
+    const char* query,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const uint64_t& query_length,
+    const bool& query_is_rev,
     const std::string& target_name,
-    const std::string& target,
-    const uint64_t& segment_length);
+    const char* target,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length,
+    const uint64_t& segment_length,
+    const float& min_identity);
 
 void wflign_wavefront(
+    std::ostream& out,
     const std::string& query_name,
-    const std::string& query,
+    const char* query,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const uint64_t& query_length,
+    const bool& query_is_rev,
     const std::string& target_name,
-    const std::string& target,
-    const uint64_t& segment_length);
+    const char* target,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length,
+    const uint64_t& segment_length,
+    const float& min_identity);
 
 void wflign_affine_wavefront(
+    std::ostream& out,
     const std::string& query_name,
-    const std::string& query,
+    const char* query,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const uint64_t& query_length,
+    const bool& query_is_rev,
     const std::string& target_name,
-    const std::string& target,
+    const char* target,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length,
     const uint64_t& segment_length,
     const float& min_identity,
-    const int& min_wavefront_length = 0, // with these set at 0 we do exact WFA
-    const int& max_distance_threshold = 0);
+    const int& min_wavefront_length, // with these set at 0 we do exact WFA
+    const int& max_distance_threshold);
 
 bool do_alignment(
     const std::string& query_name,
-    const std::string& query,
+    const char* query,
+    const uint64_t& query_length,
     const uint64_t& j,
     const std::string& target_name,
-    const std::string& target,
+    const char* target,
+    const uint64_t& target_length,
     const uint64_t& i,
     const uint64_t& segment_length,
     const uint64_t& step_size,
-    alignment_t& alignment);
-
-std::ostream& operator<<(
-    std::ostream& out,
-    const alignment_t& aln);
+    alignment_t& aln);
 
 void write_alignment(
     std::ostream& out,
     const alignment_t& aln,
+    const std::string& query_name,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const bool& query_is_rev,
+    const std::string& target_name,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
     const float& min_identity,
     const bool& with_endline = true);
 
