@@ -358,12 +358,15 @@ void write_alignment(
         size_t alignmentRefPos = aln.i + result.startLocations[0];
         double total = refAlignedLength + (qAlignedLength - softclips);
         double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
-
+        // convert our coordinates to be relative to forward strand (matching PAF standard)
+        uint64_t q_start = query_is_rev ?
+            query_total_length - (query_offset + aln.j + aln.skip_query_start + qAlignedLength)
+            : query_offset + aln.j + aln.skip_query_start;
         if (identity >= min_identity) {
             out << query_name
                 << "\t" << query_total_length
-                << "\t" << query_offset + aln.j + aln.skip_query_start
-                << "\t" << query_offset + aln.j + aln.skip_query_start + qAlignedLength
+                << "\t" << q_start
+                << "\t" << q_start + qAlignedLength
                 << "\t" << (query_is_rev ? "-" : "+")
                 << "\t" << target_name
                 << "\t" << target_total_length

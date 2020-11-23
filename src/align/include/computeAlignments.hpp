@@ -506,6 +506,10 @@ namespace align
         const int segment_length = 1000;
         const int min_wavefront_length = 100;
         const int max_distance_threshold = 200;
+        // todo
+        // 1) expose reduction parameters
+        // 2) toggle between wflign and regular alignment at some threshold (in wflign?)
+        // 3) we systematically fail to align the end of the alignment
         wflign::wflign_affine_wavefront(
             output,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,

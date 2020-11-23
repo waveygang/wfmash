@@ -8,6 +8,7 @@
 #include "wfa_edit_callback.hpp"
 #include "wflambda/gap_affine/affine_wavefront_align.hpp"
 #include "wflambda/gap_affine/affine_wavefront_backtrace.hpp"
+#include "dna.hpp"
 
 //#define WFLIGN_DEBUG true // for debugging messages
 
