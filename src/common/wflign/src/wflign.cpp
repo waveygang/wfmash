@@ -128,8 +128,8 @@ void wflign_affine_wavefront(
     uint64_t step_size = segment_length / steps_per_segment;
 
     // Pattern & Text
-    const int pattern_length = query_length / step_size - steps_per_segment;
-    const int text_length = target_length / step_size - steps_per_segment;
+    const int pattern_length = query_length / step_size;
+    const int text_length = target_length / step_size;
 
     // Allocate MM
     wflambda::mm_allocator_t* const mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -168,16 +168,20 @@ void wflign_affine_wavefront(
                     aligned = true;
                 } else  {
                     alignment_t* aln = new alignment_t();
+                    uint64_t query_begin = (v < pattern_length-1 ? v * step_size
+                                            : query_length - segment_length);
+                    uint64_t target_begin = (h < text_length-1 ? h * step_size
+                                             : target_length - segment_length);
                     aligned =
                         do_alignment(
                             query_name,
                             query,
                             query_length,
-                            v * step_size,
+                            query_begin,
                             target_name,
                             target,
                             target_length,
-                            h * step_size,
+                            target_begin,
                             segment_length,
                             step_size,
                             *aln);
@@ -223,50 +227,38 @@ void wflign_affine_wavefront(
     std::cerr << "[wflign::wflign_affine_wavefront] alignment score " << score << " for query: " << query_name << " target: " << target_name << std::endl;
 #endif
 
-    // todo: implement alignment identity based on hash of the input sequences and parameters
-    // and annotate each PAF record with it and the full alignment score
+    // todo: implement alignment identifier based on hash of the input, params, and commit
+    // annotate each PAF record with it and the full alignment score
 
-    auto x = trace.rbegin();
-
-    while (x != trace.rend()) {
-        // merge runs of alignments here
-        int last_i = (*x)->i;
-        int last_j = (*x)->j;
-        auto b = x;
-        auto e = x;
-        while (++e != trace.rend()) {
-            if ((*e)->i == last_i + step_size
-                && (*e)->j == last_j + step_size) {
-                // match state
-                last_i = (*e)->i;
-                last_j = (*e)->j;
-            } else {
-                break;
+    // Trim alignments that overlap in the query
+    if (trace.size()) {
+        int last_i = 0;
+        int last_j = 0;
+        for (auto x = trace.begin(); x != trace.end(); ++x) {
+            auto& curr = **x;
+            curr.keep_query_length = segment_length;
+        }
+        for (auto x = trace.rbegin()+1; x != trace.rend(); ++x) {
+            auto& curr = **x;
+            auto& last = **(x-1);
+            int ovlp_j = last.j + segment_length - curr.j;
+            if (ovlp_j > 0) {
+                int trim_last = ovlp_j / 2;
+                int trim_curr = ovlp_j - trim_last;
+                last.keep_query_length -= trim_last;
+                curr.keep_query_length -= trim_curr;
+                curr.skip_query_start += trim_curr;
             }
         }
-        // accumulate and emit
-        // remove overlapping regions of alignments by trimming them
-        // scheme: split the difference between alignments in a chain
-        auto trim = step_size / 2;
-        for (auto a = b; a != e; ++a) {
-            (*a)->keep_query_length = step_size;
-            if (a != b) {
-                (*a)->skip_query_start = trim;
-            } else {
-                (*a)->keep_query_length += trim;
-            }
-            if ((a+1) == e) {
-                (*a)->keep_query_length += trim;
-            }
-            // todo... compute the traceback outside of this output function,
-            // so we can get account of the length of things that are mapped
-            // we'll use that later to recurse into the unaligned bits and allow inversions
-            // and other funny things
-            write_alignment(out, **a, query_name, query_total_length, query_offset, query_is_rev, target_name, target_total_length, target_offset, min_identity);
+        for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
+            write_alignment(out, **x,
+                            query_name, query_total_length, query_offset,
+                            query_is_rev,
+                            target_name, target_total_length, target_offset,
+                            min_identity);
         }
-        x = e;
     }
-    
+
     // Free
     wflambda::affine_wavefronts_delete(affine_wavefronts);
     wflambda::mm_allocator_delete(mm_allocator);
