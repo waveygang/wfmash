@@ -28,10 +28,11 @@ Suitable default settings are provided for this purpose.
 
 Four parameters shape the length, number, and identity of the resulting mappings:
 
-* `-s[N], --segment-length=[N]` is the length of the mapped and aligned segment
+* `-s[N], --segment-length=[N]` is the length of the mapped and aligned segment (when `-N` is not set)
+* `-N, --no-split` avoids splitting queries into segments, and instead maps them in their full length
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
-* `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment
-* `-a[%], --align-pct-id=[%]` defines the minimum percentage identity allowed in the _alignment_ step
+* `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `segment-length` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
+* `-a[%], --align-pct-id=[%]` defines the minimum percentage identity alignment to report from the _alignment_step
 
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set.
