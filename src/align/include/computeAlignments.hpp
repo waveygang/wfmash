@@ -503,22 +503,17 @@ namespace align
 #endif
 
         std::stringstream output;
-        const int segment_length = 1000;
-        const int min_wavefront_length = 100;
-        const int max_distance_threshold = 200;
-        // todo
-        // 1) expose reduction parameters
-        // 2) toggle between wflign and regular alignment at some threshold (in wflign?)
-        // 3) we systematically fail to align the end of the alignment
+        // todo:
+        // - toggle between wflign and regular alignment at some threshold (in wflign?)
         wflign::wflign_affine_wavefront(
             output,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
-            segment_length,
+            param.wflambda_segment_length,
             param.percentageIdentity / 100,
-            min_wavefront_length,
-            max_distance_threshold);
+            param.wflambda_min_wavefront_length,
+            param.wflambda_max_distance_threshold);
 
         delete [] queryRegionStrand;
 

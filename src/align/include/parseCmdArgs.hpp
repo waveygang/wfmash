@@ -169,14 +169,6 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
     else
       parameters.threads = 1;
 
-    if(cmd.foundOption("bandwidth"))
-    {
-      str << cmd.optionValue("bandwidth");
-      str >> parameters.bandwidth;
-    }
-    else
-      parameters.bandwidth = 0;
-
     str.clear();
 
     if(cmd.foundOption("output"))
