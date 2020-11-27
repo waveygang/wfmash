@@ -40,3 +40,4 @@ target_link_libraries(edyeet
   wflambda
   z)
 
+install(TARGETS edyeet DESTINATION bin)
