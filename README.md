@@ -1,13 +1,11 @@
 # edyeet
 
-`edyeet` is a fork of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using [edlib](https://github.com/Martinsos/edlib).
-It completes an alignment module in MashMap and extends it to enable multithreaded operation.
-A single command-line interface simplfies usage.
-The [PAF](https://github.com/lh3/miniasm/blob/master/PAF.md) output format is harmonized and made equivalent to that in [minimap2](https://github.com/lh3/minimap2), and has been validated as input to [seqwish](https://github.com/ekg/seqwish).
+`edyeet` is a fork of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using [edlib](https://github.com/Martinsos/edlib), via the [`wflign`](https://github.com/ekg/wflign) tiled wavefront global alignment algorithm.
+It completes MashMap with a high-performance alignment module capable of computing base-level alignments for very large sequences.
 
 ## process
 
-Each query sequence is broken into pieces defined by `-s[N], --segment-length=[N]`.
+Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]`.
 These segments are then mapped using MashMap's sliding minhash mapping algorithm and subsequent filtering steps.
 To reduce memory, a temporary file is used to store initial mappings.
 Each mapping location is then used as a target for alignment using edlib.
@@ -35,7 +33,7 @@ Four parameters shape the length, number, and identity of the resulting mappings
 * `-a[%], --align-pct-id=[%]` defines the minimum percentage identity alignment to report from the _alignment_step
 
 Together, these settings allow us to precisely define an alignment space to consider.
-During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set.
+During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
 
 ## examples
 
