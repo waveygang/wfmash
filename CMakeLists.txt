@@ -32,6 +32,7 @@ target_include_directories(edyeet PRIVATE
 
 target_link_libraries(edyeet
   gsl
+  gslcblas
   m
   pthread
   libwflign_static
