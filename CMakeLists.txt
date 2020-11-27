@@ -18,6 +18,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 #add_subdirectory(src/common/wflambda/deps/edlib EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/wflign/deps/wflambda EXCLUDE_FROM_ALL)
+set(BUILD_TESTING false)
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
 add_executable(edyeet
