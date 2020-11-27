@@ -65,7 +65,14 @@ The `.fai` indexes are then used to quickly compute the sum of query lengths.
 
 ## installation
 
-Follow [`INSTALL.txt`](INSTALL.txt) to compile and install edyeet.
+The build is orchestrated with cmake:
+
+```
+cmake -H. -Bbuild && cmake --build build -- -j 16
+```
+
+The `edyeet` binary will be in `build/bin`.
+To clean up, just remove the build directory.
 
 ## <a name=“publications”></a>publications
 

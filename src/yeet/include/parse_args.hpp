@@ -47,7 +47,11 @@ void parse_args(int argc,
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<float> align_pct_identity(parser, "%", "use this percent identity in the edlib step, if different than mashmap step [default: -p]", {'a', "align-pct-id"});
-    args::ValueFlag<int> align_bandwidth(parser, "N", "maximum bandwidth for edlib alignment [default: 0 / computed from -p]", {'b', "align-bandwidth"});
+    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 1000]", {'W', "wflamda-segment"});
+    args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
+    args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
+    args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
+
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
     args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
@@ -146,10 +150,29 @@ void parse_args(int argc,
         align_parameters.percentageIdentity = map_parameters.percentageIdentity;
     }
 
-    if (align_bandwidth) {
-        align_parameters.bandwidth = args::get(align_bandwidth);
+    if (wflambda_segment_length) {
+        align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {
-        align_parameters.bandwidth = 0;
+        align_parameters.wflambda_segment_length = 1000;
+    }
+
+    if (wflambda_min_wavefront_length) {
+        align_parameters.wflambda_min_wavefront_length = args::get(wflambda_min_wavefront_length);
+    } else {
+        align_parameters.wflambda_min_wavefront_length = 100;
+    }
+
+    if (wflambda_max_distance_threshold) {
+        align_parameters.wflambda_max_distance_threshold = args::get(wflambda_max_distance_threshold);
+    } else {
+        align_parameters.wflambda_max_distance_threshold = 100000;
+    }
+    align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
+
+    if (exact_wflambda) {
+        // set exact computation of wflambda
+        align_parameters.wflambda_min_wavefront_length = 0;
+        align_parameters.wflambda_max_distance_threshold = 0;
     }
 
     if (thread_count) {

@@ -8,21 +8,23 @@
 
 #include <vector>
 
-namespace align
-{
+namespace align {
   /**
    * @brief   parameters for generating mashmap alignments
    */
-  struct Parameters
-  {
+
+struct Parameters {
     int threads;                                      //execution thread count
     float percentageIdentity;                         //user defined threshold for good similarity
-    int bandwidth;                                    //bandwidth cap for edlib
+    int wflambda_segment_length;                      //segment length for wflambda
+    int wflambda_min_wavefront_length;                //wavefront length to trigger reduction (how wide should it be)
+    int wflambda_max_distance_threshold;              //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string mashmapPafFile;                       //mashmap paf mapping file
     std::string pafOutputFile;                        //sam output file name
-  };
+};
+
 }
 
 #endif
