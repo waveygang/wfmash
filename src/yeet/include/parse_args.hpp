@@ -202,6 +202,7 @@ void parse_args(int argc,
     } else {
         yeet_parameters.approx_mapping = false;
         if (align_input_paf) {
+            yeet_parameters.remapping = true;
             align_parameters.mashmapPafFile = args::get(align_input_paf);
         } else {
             if (tmp_base) {
