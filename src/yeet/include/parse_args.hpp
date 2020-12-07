@@ -201,16 +201,20 @@ void parse_args(int argc,
         yeet_parameters.approx_mapping = true;
     } else {
         yeet_parameters.approx_mapping = false;
-        if (tmp_base) {
-            temp_file::set_dir(args::get(tmp_base));
-            map_parameters.outFileName = temp_file::create();
+        if (align_input_paf) {
+            align_parameters.mashmapPafFile = args::get(align_input_paf);
         } else {
-            char* cwd = get_current_dir_name();
-            temp_file::set_dir(std::string(cwd));
-            free(cwd);
-            map_parameters.outFileName = temp_file::create();
+            if (tmp_base) {
+                temp_file::set_dir(args::get(tmp_base));
+                map_parameters.outFileName = temp_file::create();
+            } else {
+                char* cwd = get_current_dir_name();
+                temp_file::set_dir(std::string(cwd));
+                free(cwd);
+                map_parameters.outFileName = temp_file::create();
+            }
+            align_parameters.mashmapPafFile = map_parameters.outFileName;
         }
-        align_parameters.mashmapPafFile = map_parameters.outFileName;
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 
