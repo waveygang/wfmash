@@ -182,8 +182,9 @@ namespace skch
                         threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
 
                         //Collect output if available
-                        while ( threadPool.outputAvailable() )
-                            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
+                        while ( threadPool.outputAvailable() ) {
+                            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
+                        }
                     }
                     progress.increment(seq.size());
                     seqCounter++;
@@ -193,7 +194,7 @@ namespace skch
 
         //Collect remaining output objects
         while ( threadPool.running() )
-          mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
+            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
 
         //Filter over reference axis and report the mappings
         if (param.filterMode == filter::ONETOONE)
@@ -229,8 +230,9 @@ namespace skch
       {
         MapModuleOutput* output = new MapModuleOutput();
 
-        //save query sequence name
+        //save query sequence name and length
         output->qseqName = input->seqName;
+        output->qseqLen = input->len;
 
         if(! param.split || input->len <= param.segLength)
         {
@@ -331,8 +333,11 @@ namespace skch
        * @param[in] outstrm           outstream stream object 
        */
       template <typename Vec>
-        void mapModuleHandleOutput(MapModuleOutput* output, Vec &allReadMappings, seqno_t &totalReadsMapped,
-            std::ofstream &outstrm)
+      void mapModuleHandleOutput(MapModuleOutput* output,
+                                 Vec &allReadMappings,
+                                 seqno_t &totalReadsMapped,
+                                 std::ofstream &outstrm,
+                                 progress_meter::ProgressMeter& progress)
         {
           if(output->readMappings.size() > 0)
             totalReadsMapped++;
@@ -347,6 +352,8 @@ namespace skch
             //Report mapping
             reportReadMappings(output->readMappings, output->qseqName, outstrm); 
           }
+
+          progress.increment(output->qseqLen);
 
           delete output;
         }

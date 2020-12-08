@@ -161,6 +161,7 @@ namespace skch
   {
     MappingResultsVector_t readMappings;  //read mapping coordinates
     std::string qseqName;                 //query sequence id
+    offset_t qseqLen;                     //query sequence length
 
     //Function to erase all output mappings
     void reset()

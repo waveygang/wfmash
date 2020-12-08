@@ -19,7 +19,7 @@ struct Parameters
     int kmerSize;                                     //kmer size for sketching
     int windowSize;                                   //window size used for sketching 
     int segLength;                                    //For split mapping case, this represents the fragment length
-                                                      //for noSplit, it represents minimum read length to map
+                                                      //for noSplit, it represents minimum read length to multimap
                                                       
     int alphabetSize;                                 //alphabet size
     uint64_t referenceSize;                           //Approximate reference size

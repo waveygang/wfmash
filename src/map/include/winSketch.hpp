@@ -142,7 +142,9 @@ namespace skch
                 metadata.push_back( ContigInfo{seq_name, len} );
 
                 //Is the sequence too short?
-                if(len < param.windowSize || len < param.kmerSize)
+                if(len < param.segLength * 2
+                   || len < param.windowSize
+                   || len < param.kmerSize)
                 {
 #ifdef DEBUG
                     std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer and window size" << std::endl;
