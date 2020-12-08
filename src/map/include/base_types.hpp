@@ -177,6 +177,7 @@ namespace skch
       char *seq;                          //query sequence pointer 
       seqno_t seqCounter;                 //query sequence counter
       offset_t len;                       //length of this query sequence
+      offset_t fullLen;                   //length of the full sequence it derives from
       int sketchSize;                     //sketch size
       std::string seqName;                //sequence name
       MinimizerVec minimizerTableQuery;   //Vector of minimizers in the query 

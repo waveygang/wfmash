@@ -239,6 +239,7 @@ namespace skch
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
           Q.len = input->len;
+          Q.fullLen = input->len;
           Q.seqCounter = input->seqCounter;
           Q.seqName = input->seqName;
 
@@ -261,6 +262,7 @@ namespace skch
             QueryMetaData <MinVec_Type> Q;
             Q.seq = &(input->seq)[0u] + i * param.segLength;
             Q.len = param.segLength;
+            Q.fullLen = input->len;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
 
@@ -546,12 +548,17 @@ namespace skch
             float nucIdentity = 100 * (1 - mash_dist);
             float nucIdentityUpperBound = 100 * (1 - mash_dist_lower_bound);
 
-            //Report the alignment if it passes our identity threshold and, if we are in all-vs-all mode, it isn't a self-mapping
+            //Report the alignment if it passes our identity threshold and,
+            // if we are in all-vs-all mode, it isn't a self-mapping,
+            // and if we are self-mapping, the query is shorter than the target
+            const auto& ref = this->refSketch.metadata[l2.seqId];
             if(nucIdentityUpperBound >= param.percentageIdentity
-               && !(param.skip_self && Q.seqName == this->refSketch.metadata[l2.seqId].name)
+               && !(param.skip_self && Q.seqName == ref.name)
                && !(param.skip_prefix
                     && prefix(Q.seqName, param.prefix_delim)
-                    == prefix(this->refSketch.metadata[l2.seqId].name, param.prefix_delim)))
+                    == prefix(ref.name, param.prefix_delim))
+               && !((param.skip_self || param.skip_prefix)
+                    && Q.fullLen > ref.len))
             {
               MappingResult res;
 
