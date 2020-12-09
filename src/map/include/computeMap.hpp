@@ -242,6 +242,28 @@ namespace skch
       }
 
       /**
+       * @brief               helper to main mapping function
+       * @details             filters mappings whose identity and query/ref length don't agree
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterFalseHighIdentity(MappingResultsVector_t &readMappings)
+      {
+          readMappings.erase(
+              std::remove_if(readMappings.begin(),
+                             readMappings.end(),
+                             [&](MappingResult &e){
+                                 int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
+                                 int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
+                                 uint64_t delta = std::abs(r_l - q_l);
+                                 float len_id_bound = 100 * (1.0 - (float)delta/(float)q_l);
+                                 return len_id_bound < param.percentageIdentity;
+                             }),
+              readMappings.end());
+      }
+
+
+      /**
        * @brief               main mapping function given an input read
        * @details             this function is run in parallel by multiple threads
        * @param[in]   input   input read details
@@ -347,6 +369,9 @@ namespace skch
 
         // remove self-mode don't-maps
         this->filterSelfingLongToShorts(output->readMappings);
+
+        // remove alignments where the ratio between query and target length is < our identity threshold
+        this->filterFalseHighIdentity(output->readMappings);
 
         //Make sure mapping boundary don't exceed sequence lengths
         this->mappingBoundarySanityCheck(input, output->readMappings);
@@ -600,6 +625,9 @@ namespace skch
                 res.nucIdentityUpperBound = nucIdentityUpperBound;
                 res.sketchSize = Q.sketchSize;
                 res.conservedSketches = l2.sharedSketchSize;
+                res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
+                res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
+
                 res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
                 //Compute additional statistics -> strand, reference compexity
@@ -830,7 +858,6 @@ namespace skch
 
               it->blockLength = std::max(it->refEndPos - it->refStartPos, it->queryEndPos - it->queryStartPos);
               it->approxMatches = std::round(it->nucIdentity * it->blockLength / 100.0);
-
             });
 
             //Mean identity of all mappings in the chain
@@ -925,6 +952,7 @@ namespace skch
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
                    << "\t" << "ni:i:" << e.nucIdentity;
+              //<< "\t" << "nu:i:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG
           outstrm << std::endl;
