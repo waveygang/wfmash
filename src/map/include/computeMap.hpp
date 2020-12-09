@@ -172,7 +172,11 @@ namespace skch
                     if(len < param.windowSize || len < param.kmerSize)
                     {
 //#ifdef DEBUG
-                        std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
+                        // TODO Should we somehow revert to < windowSize?
+                        std::cerr << "WARNING, skch::Map::mapQuery, read "
+                                  << seq_name << " of " << len << "bp "
+                                  << " is not long enough for mapping at window size "
+                                  << param.windowSize << std::endl;
 //#endif
                     }
                     else 
@@ -221,6 +225,23 @@ namespace skch
       }
 
       /**
+       * @brief               helper to main mapping function
+       * @details             filters long-to-short mappings if we're in an all-vs-all mode
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterSelfingLongToShorts(MappingResultsVector_t &readMappings)
+      {
+          if (param.skip_self || param.skip_prefix) {
+              readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){ return e.selfMapFilter == true; }),
+                  readMappings.end());
+          }
+      }
+
+      /**
        * @brief               main mapping function given an input read
        * @details             this function is run in parallel by multiple threads
        * @param[in]   input   input read details
@@ -234,7 +255,7 @@ namespace skch
         output->qseqName = input->seqName;
         output->qseqLen = input->len;
 
-        if(! param.split || input->len <= param.segLength)
+        if(! param.split || input->len <= 2 * param.segLength)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -248,7 +269,9 @@ namespace skch
           //Map this sequence
           mapSingleQueryFrag(Q, l2Mappings);
 
+          // save the output
           output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+
         }
         else  //Split read mapping
         {
@@ -278,6 +301,7 @@ namespace skch
                 e.queryEndPos = i * param.segLength + Q.len;
                 });
 
+            // save the output
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
 
@@ -306,7 +330,7 @@ namespace skch
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
 
-          //merge
+          // merge mappings
           if (param.mergeMappings) {
               mergeMappings(output->readMappings);
           }
@@ -320,6 +344,9 @@ namespace skch
                                                  param.shortSecondaryToKeep
                                                  : param.secondaryToKeep));
         }
+
+        // remove self-mode don't-maps
+        this->filterSelfingLongToShorts(output->readMappings);
 
         //Make sure mapping boundary don't exceed sequence lengths
         this->mappingBoundarySanityCheck(input, output->readMappings);
@@ -556,9 +583,7 @@ namespace skch
                && !(param.skip_self && Q.seqName == ref.name)
                && !(param.skip_prefix
                     && prefix(Q.seqName, param.prefix_delim)
-                    == prefix(ref.name, param.prefix_delim))
-               && !((param.skip_self || param.skip_prefix)
-                    && Q.fullLen > ref.len))
+                    == prefix(ref.name, param.prefix_delim)))
             {
               MappingResult res;
 
@@ -575,6 +600,7 @@ namespace skch
                 res.nucIdentityUpperBound = nucIdentityUpperBound;
                 res.sketchSize = Q.sketchSize;
                 res.conservedSketches = l2.sharedSketchSize;
+                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
                 //Compute additional statistics -> strand, reference compexity
                 {
