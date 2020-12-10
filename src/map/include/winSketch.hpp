@@ -142,8 +142,7 @@ namespace skch
                 metadata.push_back( ContigInfo{seq_name, len} );
 
                 //Is the sequence too short?
-                if(len < param.segLength * 2
-                   || len < param.windowSize
+                if(len < param.windowSize
                    || len < param.kmerSize)
                 {
 #ifdef DEBUG

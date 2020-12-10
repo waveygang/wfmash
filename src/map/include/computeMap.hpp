@@ -173,7 +173,8 @@ namespace skch
                     {
 //#ifdef DEBUG
                         // TODO Should we somehow revert to < windowSize?
-                        std::cerr << "WARNING, skch::Map::mapQuery, read "
+                        std::cerr << std::endl
+                                  << "WARNING, skch::Map::mapQuery, read "
                                   << seq_name << " of " << len << "bp "
                                   << " is not long enough for mapping at window size "
                                   << param.windowSize << std::endl;
