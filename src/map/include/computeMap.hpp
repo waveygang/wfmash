@@ -190,7 +190,7 @@ namespace skch
                             mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
                         }
                     }
-                    progress.increment(seq.size());
+                    progress.increment(seq.size()/2);
                     seqCounter++;
                 }); //Finish reading query input file
 
@@ -407,7 +407,7 @@ namespace skch
             reportReadMappings(output->readMappings, output->qseqName, outstrm); 
           }
 
-          progress.increment(output->qseqLen);
+          progress.increment(output->qseqLen/2 + (output->qseqLen % 2 != 0));
 
           delete output;
         }
