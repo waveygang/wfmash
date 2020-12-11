@@ -101,10 +101,12 @@ void write_alignment(
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
+    const uint64_t& query_length,
     const bool& query_is_rev,
     const std::string& target_name,
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
+    const uint64_t& target_length,
     const float& min_identity,
     const bool& with_endline = true);
 

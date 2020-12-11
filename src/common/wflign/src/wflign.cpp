@@ -23,17 +23,17 @@ void wflign_full(
         for (uint64_t j = 0; j < query_length - segment_length - 1; j += query_step) {
             alignment_t aln;
             do_alignment(query_name, query, query_length, j, target_name, target, target_length, i, segment_length, query_step, aln);
-            write_alignment(out, aln, query_name, query_total_length, query_offset, query_is_rev, target_name, target_total_length, target_offset, min_identity);
+            write_alignment(out, aln, query_name, query_total_length, query_offset, query_length, query_is_rev, target_name, target_total_length, target_offset, target_length, min_identity);
         }
         // do the last alignment in the row
         alignment_t aln;
         do_alignment(query_name, query, query_length, query_length-segment_length, target_name, target, target_length, i, segment_length, query_step, aln);
-        write_alignment(out, aln, query_name, query_total_length, query_offset, query_is_rev, target_name, target_total_length, target_offset, min_identity);
+        write_alignment(out, aln, query_name, query_total_length, query_offset, query_length, query_is_rev, target_name, target_total_length, target_offset, target_length, min_identity);
     }
     // do the last alignment in the final column
     alignment_t aln;
     do_alignment(query_name, query, query_length, query_length-segment_length, target_name, target, target_length, target_length-segment_length, segment_length, query_step, aln);
-    write_alignment(out, aln, query_name, query_total_length, query_offset, query_is_rev, target_name, target_total_length, target_offset, min_identity);
+    write_alignment(out, aln, query_name, query_total_length, query_offset, query_length, query_is_rev, target_name, target_total_length, target_offset, target_length, min_identity);
 }
 
 void wflign_wavefront(
@@ -110,7 +110,7 @@ void wflign_affine_wavefront(
     const std::string& query_name,
     const char* query,
     const uint64_t& query_total_length,
-    const uint64_t& query_offset,
+    const uint64_t& query_offset, // todo this is broken for reverse alignment reporting!!!!
     const uint64_t& query_length,
     const bool& query_is_rev,
     const std::string& target_name,
@@ -252,9 +252,9 @@ void wflign_affine_wavefront(
         }
         for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
             write_alignment(out, **x,
-                            query_name, query_total_length, query_offset,
+                            query_name, query_total_length, query_offset, query_length,
                             query_is_rev,
-                            target_name, target_total_length, target_offset,
+                            target_name, target_total_length, target_offset, target_length,
                             min_identity);
         }
     }
@@ -309,11 +309,13 @@ void write_alignment(
     const alignment_t& aln,
     const std::string& query_name,
     const uint64_t& query_total_length,
-    const uint64_t& query_offset,
+    const uint64_t& query_offset, // query offset on the forward strand
+    const uint64_t& query_length, // used to compute the coordinates for reversed alignments
     const bool& query_is_rev,
     const std::string& target_name,
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
+    const uint64_t& target_length, // unused
     const float& min_identity,
     const bool& with_endline) {
 //    bool aligned = false;
@@ -351,9 +353,12 @@ void write_alignment(
         double total = refAlignedLength + (qAlignedLength - softclips);
         double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
         // convert our coordinates to be relative to forward strand (matching PAF standard)
-        uint64_t q_start = query_is_rev ?
-            query_total_length - (query_offset + aln.j + aln.skip_query_start + qAlignedLength)
-            : query_offset + aln.j + aln.skip_query_start;
+        uint64_t q_start;
+        if (query_is_rev) {
+            q_start = query_offset + (query_length - (aln.j + aln.skip_query_start + qAlignedLength));
+        } else {
+            q_start = query_offset + aln.j + aln.skip_query_start;
+        }
         if (identity >= min_identity) {
             out << query_name
                 << "\t" << query_total_length
