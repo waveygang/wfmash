@@ -34,6 +34,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
     args::ValueFlag<uint64_t> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
+    args::ValueFlag<uint64_t> block_length_min(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length-min"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 85]", {'p', "map-pct-id"});
@@ -133,6 +134,12 @@ void parse_args(int argc,
         }
     } else {
         map_parameters.segLength = 5000;
+    }
+
+    if (block_length_min) {
+        map_parameters.block_length_min = args::get(block_length_min);
+    } else {
+        map_parameters.block_length_min = 3 * map_parameters.segLength;
     }
 
     if (map_pct_identity) {

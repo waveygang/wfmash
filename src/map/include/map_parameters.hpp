@@ -20,7 +20,7 @@ struct Parameters
     int windowSize;                                   //window size used for sketching 
     int segLength;                                    //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
-                                                      
+    int block_length_min;                             // minimum (potentially merged) block to keep if we aren't split
     int alphabetSize;                                 //alphabet size
     uint64_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity

@@ -227,6 +227,25 @@ namespace skch
 
       /**
        * @brief               helper to main mapping function
+       * @details             filters mappings shorter than our minimum block length
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterShortMappings(MappingResultsVector_t &readMappings)
+      {
+          if (param.split) {
+              readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){
+                                     return e.blockLength < param.block_length_min;
+                                 }),
+                  readMappings.end());
+          }
+      }
+
+      /**
+       * @brief               helper to main mapping function
        * @details             filters long-to-short mappings if we're in an all-vs-all mode
        * @param[in]   input   mappings
        * @return              void
@@ -367,6 +386,9 @@ namespace skch
                                                  param.shortSecondaryToKeep
                                                  : param.secondaryToKeep));
         }
+
+        // remove short merged mappings
+        this->filterShortMappings(output->readMappings);
 
         // remove self-mode don't-maps
         this->filterSelfingLongToShorts(output->readMappings);
