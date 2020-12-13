@@ -605,7 +605,8 @@ namespace skch
             // if we are in all-vs-all mode, it isn't a self-mapping,
             // and if we are self-mapping, the query is shorter than the target
             const auto& ref = this->refSketch.metadata[l2.seqId];
-            if(nucIdentityUpperBound >= param.percentageIdentity
+            if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity
+                || nucIdentity >= param.percentageIdentity)
                && !(param.skip_self && Q.seqName == ref.name)
                && !(param.skip_prefix
                     && prefix(Q.seqName, param.prefix_delim)

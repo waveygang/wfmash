@@ -36,6 +36,7 @@ struct Parameters
     bool skip_prefix;                                 // skip mappings to sequences with the same prefix
     char prefix_delim;                                // the prefix delimiter
     bool mergeMappings;                               //if we should merge consecutive segment mappings
+    bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
 };
 
 

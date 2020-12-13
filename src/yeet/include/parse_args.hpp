@@ -34,9 +34,10 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
     args::ValueFlag<uint64_t> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
+    args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 85]", {'p', "map-pct-id"});
-    args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
+    args::Flag keep_low_pct_identity(parser, "K", "keep mappings with estimated identity below our threshold", {'K', "keep-low-pct-id"});
     args::ValueFlag<std::string> map_filter_mode(parser, "MODE", "filter mode for map step, either 'map', 'one-to-one', or 'none' [default: map]", {'f', "map-filter-mode"});
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
     args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
@@ -142,6 +143,12 @@ void parse_args(int argc,
         }
     } else {
         map_parameters.percentageIdentity = 85;
+    }
+
+    if (keep_low_pct_identity) {
+        map_parameters.keep_low_pct_id = true;
+    } else {
+        map_parameters.keep_low_pct_id = false;
     }
 
     if (align_pct_identity) {
