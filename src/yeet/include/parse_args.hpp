@@ -48,7 +48,7 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "use this percent identity in the edlib step, if different than mashmap step [default: -p]", {'a', "align-pct-id"});
+    args::ValueFlag<float> align_pct_identity(parser, "%", "filter edlib alignments from wflign with less than this identity [default: 0]", {'a', "align-pct-id"});
     args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 1000]", {'W', "wflamda-segment"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
@@ -161,7 +161,7 @@ void parse_args(int argc,
     if (align_pct_identity) {
         align_parameters.percentageIdentity = args::get(align_pct_identity);
     } else {
-        align_parameters.percentageIdentity = map_parameters.percentageIdentity;
+        align_parameters.percentageIdentity = 0;
     }
 
     if (wflambda_segment_length) {
