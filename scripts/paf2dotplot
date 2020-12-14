@@ -818,7 +818,7 @@ sub WriteGP ($$)
     }
     else {
         $xrange = 0;
-        print GFILE "set bmargin 25\n";
+        print GFILE "set bmargin 20\n";
         print GFILE "set xtics rotate \( \\\n";
         foreach $xlabel ( sort { $rref->{$a}[0] <=> $rref->{$b}[0] } @refk ) {
             $xrange += $rref->{$xlabel}[1];
@@ -827,7 +827,6 @@ sub WriteGP ($$)
             print GFILE " \"$dir$xlabel\" $tic.0, \\\n";
         }
         print GFILE " \"\" $xrange.0 \\\n\)\n";
-        $xlabel = "REF";
     }
 
     #-- set tics, determine labels, ranges (qry)
@@ -850,7 +849,6 @@ sub WriteGP ($$)
             print GFILE " \"$dir$ylabel\" $tic.0, \\\n";
         }
         print GFILE " \"\" $yrange.0 \\\n\)\n";
-        $ylabel = "QRY";
     }
 
     #-- determine borders
