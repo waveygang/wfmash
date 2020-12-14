@@ -975,8 +975,8 @@ namespace skch
                    << "\t" << e.approxMatches
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
-                   << "\t" << "ni:i:" << e.nucIdentity;
-              //<< "\t" << "nu:i:" << e.nucIdentityUpperBound;
+                   << "\t" << "id:f:" << e.nucIdentity;
+              //<< "\t" << "nu:f:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG
           outstrm << std::endl;
