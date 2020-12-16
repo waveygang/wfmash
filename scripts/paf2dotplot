@@ -818,7 +818,7 @@ sub WriteGP ($$)
     }
     else {
         $xrange = 0;
-        print GFILE "set bmargin 20\n";
+        print GFILE "set bmargin 15\n";
         print GFILE "set xtics rotate \( \\\n";
         foreach $xlabel ( sort { $rref->{$a}[0] <=> $rref->{$b}[0] } @refk ) {
             $xrange += $rref->{$xlabel}[1];
