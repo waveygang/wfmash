@@ -31,6 +31,8 @@ extern "C" {
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 
+#include "common/wflign/src/wflign.hpp"
+
 namespace align
 {
 
@@ -375,15 +377,6 @@ namespace align
               [&](uint64_t tid,
                   std::atomic<bool>& is_working) {
                   is_working.store(true);
-
-                  mm_allocator_t* const mm_allocator = mm_allocator_new(BUFFER_SIZE_8M);
-                  affine_penalties_t affine_penalties = {
-                      .match = 0,
-                      .mismatch = 4,
-                      .gap_opening = 6,
-                      .gap_extension = 2,
-                  };
-
                   while (true) {
                       seq_record_t* rec = nullptr;
                       if (!seq_queue.try_pop(rec)
@@ -394,9 +387,7 @@ namespace align
                               = new std::string(
                                   doAlignment(rec->currentRecord,
                                               rec->mappingRecordLine,
-                                              rec->qSequence,
-                                              mm_allocator,
-                                              &affine_penalties));
+                                              rec->qSequence);
                           progress.increment(rec->currentRecord.qEndPos
                                              - rec->currentRecord.qStartPos);
                           if (paf_rec->size()) {
@@ -409,7 +400,6 @@ namespace align
                           std::this_thread::sleep_for(100ns);
                       }
                   }
-                  mm_allocator_delete(mm_allocator);
                   is_working.store(false);
               };
 
@@ -479,9 +469,7 @@ namespace align
        */
       std::string doAlignment(MappingBoundaryRow &currentRecord,
                               const std::string &mappingRecordLine,
-                              const std::shared_ptr<std::string> &qSequence,
-                              mm_allocator_t* const mm_allocator,
-                              affine_penalties_t* affine_penalties) {
+                              const std::shared_ptr<std::string> &qSequence) {
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
@@ -514,97 +502,26 @@ namespace align
         //Compute alignment
         //auto t0 = skch::Time::now();
 
+        auto t0 = skch::Time::now();
+
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, WFA execution starting, query region length = " << queryLen
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
-        affine_wavefronts_t* affine_wavefronts;
-        if (param.exact_wfa) {
-            // exact affine WFA
-            affine_wavefronts = affine_wavefronts_new_complete(
-                refLen, queryLen, affine_penalties, NULL, mm_allocator);
-        } else {
-            int wf_min = param.wf_min;
-            int wf_diff = param.wf_diff;
-            // adaptive affine WFA
-            affine_wavefronts =
-                affine_wavefronts_new_reduced(
-                    refLen, queryLen, affine_penalties,
-                    wf_min, wf_diff, NULL, mm_allocator);
-        }
-
-        // Align
-        affine_wavefronts_align(
-            affine_wavefronts, refRegion, refLen, queryRegionStrand, queryLen);
-
-        //std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-        //std::cerr << "INFO, align::Aligner::doAlignment, time spent= " << timeAlign.count()  << " sec" << std::endl;
-
         std::stringstream output;
-        //Output to file
-        //if (result.status == EDLIB_STATUS_OK && result.alignmentLength != 0) 
-        uint64_t matches = 0;
-        uint64_t mismatches = 0;
-        uint64_t insertions = 0;
-        uint64_t deletions = 0;
-        uint64_t softclips = 0;
-        uint64_t refAlignedLength = 0;
-        uint64_t qAlignedLength = 0;
+        // todo:
+        // - toggle between wflign and regular alignment at some threshold (in wflign?)
+        wflign::wflign_affine_wavefront(
+            output,
+            currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
+            currentRecord.strand != skch::strnd::FWD,
+            refId, refRegion, refSize, currentRecord.rStartPos, refLen,
+            param.wflambda_segment_length,
+            param.percentageIdentity / 100,
+            param.wflambda_min_wavefront_length,
+            param.wflambda_max_distance_threshold);
 
-        /*
-        edit_cigar_print_pretty(stderr,
-                                queryRegionStrand, queryLen,
-                                refRegion, refLen,
-                                &affine_wavefronts->edit_cigar,mm_allocator);
-        */
-
-        char* cigar = alignmentToCigar(&affine_wavefronts->edit_cigar,
-                                       refAlignedLength,
-                                       qAlignedLength,
-                                       matches,
-                                       mismatches,
-                                       insertions,
-                                       deletions,
-                                       softclips);
-
-        // todo, use starting deletions to determine reference start position
-        // and strip both starting and ending deletions
-
-        size_t alignmentRefPos = currentRecord.rStartPos; // WFA is global //  + result.startLocations[0];
-        double total = refAlignedLength + (qAlignedLength - softclips);
-        double identity = (double)(total - mismatches * 2 - insertions - deletions) / total;
-
-        if (identity * 100 > param.min_identity) {
-            output << currentRecord.qId
-                   << "\t" << querySize
-                   << "\t" << currentRecord.qStartPos
-                   << "\t" << currentRecord.qStartPos + qAlignedLength
-                   << "\t" << (currentRecord.strand == skch::strnd::FWD ? "+" : "-")
-                   << "\t" << refId
-                   << "\t" << refSize
-                   << "\t" << alignmentRefPos
-                   << "\t" << alignmentRefPos + refAlignedLength
-                   << "\t" << matches
-                   << "\t" << std::max(refAlignedLength, qAlignedLength)
-                   << "\t" << std::round(float2phred(1.0-identity))
-                   << "\t" << "id:f:" << identity
-                   << "\t" << "ma:i:" << matches
-                   << "\t" << "mm:i:" << mismatches
-                   << "\t" << "ni:i:" << insertions
-                   << "\t" << "nd:i:" << deletions
-                   << "\t" << "ns:i:" << softclips
-                //<< "\t" << "ed:i:" << result.editDistance
-                //<< "\t" << "al:i:" << result.alignmentLength
-                //<< "\t" << "se:f:" << result.editDistance / (double)result.alignmentLength
-                   << "\t" << "cg:Z:" << cigar
-                   << "\n";
-        }
-
-        free(cigar);
-        affine_wavefronts_delete(affine_wavefronts);
-
-        //edlibFreeAlignResult(result);
         delete [] queryRegionStrand;
 
         return output.str();
