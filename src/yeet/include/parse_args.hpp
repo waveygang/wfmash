@@ -168,12 +168,6 @@ void parse_args(int argc,
         align_parameters.min_identity = map_parameters.percentageIdentity;
     }
 
-    if (wf_min) {
-        align_parameters.wf_min = args::get(wf_min);
-    } else {
-        align_parameters.percentageIdentity = 0;
-    }
-
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {

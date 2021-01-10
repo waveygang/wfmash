@@ -24,9 +24,6 @@
 #include "map/include/commonFunc.hpp"
 
 //External includes
-extern "C" {
-#include "common/WFA/gap_affine/affine_wavefront_align.h"
-}
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
@@ -125,88 +122,6 @@ namespace align
         }
       }
 
-      char* alignmentToCigar(const edit_cigar_t* const edit_cigar,
-                             uint64_t& refAlignedLength,
-                             uint64_t& qAlignedLength,
-                             uint64_t& matches,
-                             uint64_t& mismatches,
-                             uint64_t& insertions,
-                             uint64_t& deletions,
-                             uint64_t& softclips) {
-
-          // Maps move code from alignment to char in cigar.
-          //                        0    1    2    3
-          //char moveCodeToChar[] = {'=', 'I', 'D', 'X'};
-
-          vector<char>* cigar = new vector<char>();
-          char lastMove = 0;  // Char of last move. 0 if there was no previous move.
-          int numOfSameMoves = 0;
-          for (int i = edit_cigar->begin_offset; i <= edit_cigar->end_offset; ++i) {
-              if (i == edit_cigar->end_offset || (edit_cigar->operations[i] != lastMove && lastMove != 0)) {
-                  // calculate matches, mismatches, insertions, deletions
-                  switch (lastMove) {
-                  case 'I':
-                      // assume that startingn and ending insertions are softclips
-                      if (i == edit_cigar->end_offset || cigar->empty()) {
-                          softclips += numOfSameMoves;
-                      } else {
-                          insertions += numOfSameMoves;
-                      }
-                      qAlignedLength += numOfSameMoves;
-                      break;
-                  case 'M':
-                      matches += numOfSameMoves;
-                      qAlignedLength += numOfSameMoves;
-                      refAlignedLength += numOfSameMoves;
-                      break;
-                  case 'X':
-                      mismatches += numOfSameMoves;
-                      qAlignedLength += numOfSameMoves;
-                      refAlignedLength += numOfSameMoves;
-                      break;
-                  case 'D':
-                      deletions += numOfSameMoves;
-                      refAlignedLength += numOfSameMoves;
-                      break;
-                  default:
-                      break;
-                  }
-                  
-                  // Write number of moves to cigar string.
-                  int numDigits = 0;
-                  for (; numOfSameMoves; numOfSameMoves /= 10) {
-                      cigar->push_back('0' + numOfSameMoves % 10);
-                      numDigits++;
-                  }
-                  reverse(cigar->end() - numDigits, cigar->end());
-                  // Write code of move to cigar string.
-                  lastMove = lastMove == 'M' ? '=' : lastMove;
-                  cigar->push_back(lastMove);
-                  // If not at the end, start new sequence of moves.
-                  if (i < edit_cigar->end_offset) {
-                      // Check if alignment has valid values.
-                      /*
-                      if (alignment[i] > 3) {
-                          delete cigar;
-                          return 0;
-                      }
-                      */
-                      numOfSameMoves = 0;
-                  }
-              }
-              if (i < edit_cigar->end_offset) {
-                  lastMove = edit_cigar->operations[i];
-                  numOfSameMoves++;
-              }
-          }
-          cigar->push_back(0);  // Null character termination.
-          char* cigar_ = (char*) malloc(cigar->size() * sizeof(char));
-          memcpy(cigar_, &(*cigar)[0], cigar->size() * sizeof(char));
-          delete cigar;
-
-          return cigar_;
-      }
-      
       /**
        * @brief                 parse query sequences and mashmap mappings
        *                        to compute sequence alignments
@@ -387,7 +302,7 @@ namespace align
                               = new std::string(
                                   doAlignment(rec->currentRecord,
                                               rec->mappingRecordLine,
-                                              rec->qSequence);
+                                              rec->qSequence));
                           progress.increment(rec->currentRecord.qEndPos
                                              - rec->currentRecord.qStartPos);
                           if (paf_rec->size()) {
@@ -518,7 +433,7 @@ namespace align
             currentRecord.strand != skch::strnd::FWD,
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
-            param.percentageIdentity / 100,
+            param.min_identity / 100,
             param.wflambda_min_wavefront_length,
             param.wflambda_max_distance_threshold);
 
