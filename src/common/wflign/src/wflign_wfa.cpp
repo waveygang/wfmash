@@ -311,21 +311,11 @@ bool do_alignment(
             segment_length,
             max_score);
 
-        int match_count = 0;
-        for (int q = affine_wavefronts->edit_cigar.begin_offset;
-             q != affine_wavefronts->edit_cigar.end_offset; ++q) {
-            match_count += affine_wavefronts->edit_cigar.operations[q] == 'M';
-        }
-
-        //aln.identity = std::min(1.0, (double)match_count / ((double)segment_length / 2));
-        aln.identity = (double)match_count / ((double)segment_length);
-        //std::cerr << "identity is " << aln.identity << " and score " << aln.score << std::endl;
-
         aln.j = j;
         aln.i = i;
         aln.mash_dist = mash_dist;
         // copy our edit cigar if we aligned
-        aln.ok = aln.score < max_score && aln.identity > min_identity;
+        aln.ok = aln.score < max_score;
         if (aln.ok) {
             wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
         }

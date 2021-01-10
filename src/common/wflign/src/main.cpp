@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
     uint64_t min_wavefront_length = wf_min ? args::get(wf_min) : 100;
     uint64_t step_size = segment_length / 2;
     uint64_t max_distance_threshold = wf_diff ? args::get(wf_diff) / step_size : 100000 / step_size;
-    float min_identity = min_pct_identity ? args::get(min_pct_identity) / 100 : 0.7;
+    float min_identity = min_pct_identity ? args::get(min_pct_identity) / 100 : 0;
 
     // exact WFA is triggered by setting the reduction parameters to 0
     if (args::get(exact_wflign)) {

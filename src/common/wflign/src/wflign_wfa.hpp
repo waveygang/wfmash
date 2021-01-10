@@ -25,7 +25,6 @@ struct alignment_t {
     bool ok = false;
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
-    double identity = 0;
     int skip_query_start = 0;
     int keep_query_length = 0;
     int skip_target_start = 0;

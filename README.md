@@ -13,10 +13,7 @@ To reduce memory, a temporary file is used to store initial mappings.
 Each mapping location is then used as a target for alignment using WFA.
 
 The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
-Approximate mapping (equivalent to `MashMap`) can be obtained with `-m, --approx-map`.
-
-Mapping merging is disabled by default, as aligning merged approximate mappings with WFA under reasonable identity bounds can generate very long runtimes.
-However, merging can be useful in some settings and is enabled with `-M, --merge-mappings`.
+Approximate mapping (equivalent to `MashMap2`) can be obtained with `-m, --approx-map`.
 
 Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
 The number of threads must be set manually, using `-t`, and defaults to 1.
@@ -36,24 +33,6 @@ The first three affect the structure of the mashmap2 mappings:
 * `-N, --no-split` avoids splitting queries into segments, and instead maps them in their full length
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
 * `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `segment-length` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
-
-### alignment settings
-
-The last four essential parameters control the WFA alignment process and filter its output.
-
-WF-min and WF-diff prune unlikely solutions from the set in consideration:
-
-* `-l[N], --wf-min=[N]` the number of wavefronts is required to trigger reduction
-* `-d[N], --wf-diff=[N]` prune wavefronts whose are more than WF-diff cells (on the diagonal) behind the max wavefront
-
-The exact WFA may be computed if desired, which requires more time and memory but is equivalent to affine Needleman-Wunsch.
-(Note that WFA already has adaptive features due to its formulation.)
-
-* `-e, --exact-wfa` compute the exact WFA, don't use adaptive wavefront reduction
-
-An alignment identity filter can be used to remove very low-quality alignments:
-
-* `-a[%], --align-pct-id=[%]` defines the minimum percentage identity alignment to report from the _alignment_step
 
 ### all-to-all mapping
 

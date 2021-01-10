@@ -49,10 +49,7 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    //args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 100]", {'l', "wf-min"});
-    //args::ValueFlag<int> wf_diff(parser, "N", "WF_diff: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: 50]", {'d', "wf-diff"});
-    //args::Flag exact_wfa(parser, "N", "compute the exact WFA, don't use adaptive wavefront reduction", {'e', "exact-wfa"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "filter WFA alignments from wflign with less than this identity [default: 0]", {'a', "align-pct-id"}); // todo
+    //args::ValueFlag<float> align_pct_identity(parser, "%", "filter WFA alignments from wflign with less than this identity [default: 70]", {'a', "align-pct-id"});
     args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 1000]", {'W', "wflamda-segment"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
@@ -162,11 +159,7 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
-    if (align_pct_identity) {
-        align_parameters.min_identity = args::get(align_pct_identity);
-    } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity;
-    }
+    align_parameters.min_identity = 0; // now unused
 
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
