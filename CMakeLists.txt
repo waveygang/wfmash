@@ -16,7 +16,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-#add_subdirectory(src/common/wflambda/deps/edlib EXCLUDE_FROM_ALL)
+#add_subdirectory(src/common/wflign/deps/WFA EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/wflign/deps/wflambda EXCLUDE_FROM_ALL)
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
@@ -28,6 +28,7 @@ target_include_directories(wfmash PRIVATE
   src/common/wflign/deps
   src/common/wflign/deps/wflambda
   src/common/wflign/deps/patchmap
+  src/common/wflign/deps/WFA
   src/common)
 
 target_link_libraries(wfmash
@@ -38,6 +39,7 @@ target_link_libraries(wfmash
   libwflign_static
   edlib
   wflambda
+  wfa
   z)
 
 install(TARGETS wfmash DESTINATION bin)

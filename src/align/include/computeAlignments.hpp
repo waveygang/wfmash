@@ -28,7 +28,7 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 
-#include "common/wflign/src/wflign.hpp"
+#include "common/wflign/src/wflign_wfa.hpp"
 
 namespace align
 {
@@ -415,8 +415,6 @@ namespace align
         assert(queryLen <= querySize);
 
         //Compute alignment
-        //auto t0 = skch::Time::now();
-
         auto t0 = skch::Time::now();
 
 #ifdef DEBUG
@@ -427,7 +425,7 @@ namespace align
         std::stringstream output;
         // todo:
         // - toggle between wflign and regular alignment at some threshold (in wflign?)
-        wflign::wflign_affine_wavefront(
+        wflign::wavefront::wflign_affine_wavefront(
             output,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
