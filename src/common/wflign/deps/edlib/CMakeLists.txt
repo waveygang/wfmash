@@ -76,14 +76,6 @@ if(EDLIB_BUILD_EXAMPLES)
   target_link_libraries(helloWorld edlib)
 endif()
 
-include(CTest)
-if (BUILD_TESTING)
-  add_executable(runTests test/runTests.cpp)
-  target_link_libraries(runTests edlib)
-
-  add_test(edlib_tests ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/runTests)
-endif()
-
 if(EDLIB_BUILD_UTILITIES)
   if(NOT WIN32) # If on windows, do not build binaries that do not support windows.
     add_executable(edlib-aligner apps/aligner/aligner.cpp)
