@@ -19,10 +19,11 @@ mashmap
 mashmap-align
 wfmash
 
+#build directories
+src/common/wflign/build
+build
+
 #Others
-autoParam
-Makefile
-configure
 *.cache
 *~
 \#*

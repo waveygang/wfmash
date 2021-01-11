@@ -112,7 +112,7 @@ namespace skch
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
         seqno_t totalReadsMapped = 0;
-        seqno_t seqCounter = 0;     
+        seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
         MappingResultsVector_t allReadMappings;  //Aggregate mapping results for the complete run
@@ -172,7 +172,12 @@ namespace skch
                     if(len < param.windowSize || len < param.kmerSize)
                     {
 //#ifdef DEBUG
-                        std::cerr << "WARNING, skch::Map::mapQuery, read is not long enough for mapping" << std::endl;
+                        // TODO Should we somehow revert to < windowSize?
+                        std::cerr << std::endl
+                                  << "WARNING, skch::Map::mapQuery, read "
+                                  << seq_name << " of " << len << "bp "
+                                  << " is not long enough for mapping at window size "
+                                  << param.windowSize << std::endl;
 //#endif
                     }
                     else 
@@ -182,10 +187,11 @@ namespace skch
                         threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
 
                         //Collect output if available
-                        while ( threadPool.outputAvailable() )
-                            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
+                        while ( threadPool.outputAvailable() ) {
+                            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
+                        }
                     }
-                    progress.increment(seq.size());
+                    progress.increment(seq.size()/2);
                     seqCounter++;
                 }); //Finish reading query input file
 
@@ -193,7 +199,7 @@ namespace skch
 
         //Collect remaining output objects
         while ( threadPool.running() )
-          mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm);
+            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
 
         //Filter over reference axis and report the mappings
         if (param.filterMode == filter::ONETOONE)
@@ -217,7 +223,66 @@ namespace skch
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
                   << ", total input reads = " << seqCounter
                   << ", total input bp = " << total_seq_length << std::endl;
+
       }
+
+      /**
+       * @brief               helper to main mapping function
+       * @details             filters mappings shorter than our minimum block length
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterShortMappings(MappingResultsVector_t &readMappings)
+      {
+          if (param.split) {
+              readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){
+                                     return e.blockLength < param.block_length_min;
+                                 }),
+                  readMappings.end());
+          }
+      }
+
+      /**
+       * @brief               helper to main mapping function
+       * @details             filters long-to-short mappings if we're in an all-vs-all mode
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterSelfingLongToShorts(MappingResultsVector_t &readMappings)
+      {
+          if (param.skip_self || param.skip_prefix) {
+              readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){ return e.selfMapFilter == true; }),
+                  readMappings.end());
+          }
+      }
+
+      /**
+       * @brief               helper to main mapping function
+       * @details             filters mappings whose identity and query/ref length don't agree
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterFalseHighIdentity(MappingResultsVector_t &readMappings)
+      {
+          readMappings.erase(
+              std::remove_if(readMappings.begin(),
+                             readMappings.end(),
+                             [&](MappingResult &e){
+                                 int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
+                                 int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
+                                 uint64_t delta = std::abs(r_l - q_l);
+                                 float len_id_bound = 100 * (1.0 - (float)delta/(float)q_l);
+                                 return len_id_bound < param.percentageIdentity;
+                             }),
+              readMappings.end());
+      }
+
 
       /**
        * @brief               main mapping function given an input read
@@ -229,14 +294,16 @@ namespace skch
       {
         MapModuleOutput* output = new MapModuleOutput();
 
-        //save query sequence name
+        //save query sequence name and length
         output->qseqName = input->seqName;
+        output->qseqLen = input->len;
 
-        if(! param.split || input->len <= param.segLength)
+        if(! param.split || input->len <= param.block_length_min * 2)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
           Q.len = input->len;
+          Q.fullLen = input->len;
           Q.seqCounter = input->seqCounter;
           Q.seqName = input->seqName;
 
@@ -245,7 +312,9 @@ namespace skch
           //Map this sequence
           mapSingleQueryFrag(Q, l2Mappings);
 
+          // save the output
           output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+
         }
         else  //Split read mapping
         {
@@ -259,6 +328,7 @@ namespace skch
             QueryMetaData <MinVec_Type> Q;
             Q.seq = &(input->seq)[0u] + i * param.segLength;
             Q.len = param.segLength;
+            Q.fullLen = input->len;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
 
@@ -274,6 +344,7 @@ namespace skch
                 e.queryEndPos = i * param.segLength + Q.len;
                 });
 
+            // save the output
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
 
@@ -302,7 +373,7 @@ namespace skch
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
 
-          //merge
+          // merge mappings
           if (param.mergeMappings) {
               mergeMappings(output->readMappings);
           }
@@ -316,6 +387,15 @@ namespace skch
                                                  param.shortSecondaryToKeep
                                                  : param.secondaryToKeep));
         }
+
+        // remove short merged mappings
+        this->filterShortMappings(output->readMappings);
+
+        // remove self-mode don't-maps
+        this->filterSelfingLongToShorts(output->readMappings);
+
+        // remove alignments where the ratio between query and target length is < our identity threshold
+        this->filterFalseHighIdentity(output->readMappings);
 
         //Make sure mapping boundary don't exceed sequence lengths
         this->mappingBoundarySanityCheck(input, output->readMappings);
@@ -331,8 +411,11 @@ namespace skch
        * @param[in] outstrm           outstream stream object 
        */
       template <typename Vec>
-        void mapModuleHandleOutput(MapModuleOutput* output, Vec &allReadMappings, seqno_t &totalReadsMapped,
-            std::ofstream &outstrm)
+      void mapModuleHandleOutput(MapModuleOutput* output,
+                                 Vec &allReadMappings,
+                                 seqno_t &totalReadsMapped,
+                                 std::ofstream &outstrm,
+                                 progress_meter::ProgressMeter& progress)
         {
           if(output->readMappings.size() > 0)
             totalReadsMapped++;
@@ -347,6 +430,8 @@ namespace skch
             //Report mapping
             reportReadMappings(output->readMappings, output->qseqName, outstrm); 
           }
+
+          progress.increment(output->qseqLen/2 + (output->qseqLen % 2 != 0));
 
           delete output;
         }
@@ -539,12 +624,16 @@ namespace skch
             float nucIdentity = 100 * (1 - mash_dist);
             float nucIdentityUpperBound = 100 * (1 - mash_dist_lower_bound);
 
-            //Report the alignment if it passes our identity threshold and, if we are in all-vs-all mode, it isn't a self-mapping
-            if(nucIdentityUpperBound >= param.percentageIdentity
-               && !(param.skip_self && Q.seqName == this->refSketch.metadata[l2.seqId].name)
+            //Report the alignment if it passes our identity threshold and,
+            // if we are in all-vs-all mode, it isn't a self-mapping,
+            // and if we are self-mapping, the query is shorter than the target
+            const auto& ref = this->refSketch.metadata[l2.seqId];
+            if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity
+                || nucIdentity >= param.percentageIdentity)
+               && !(param.skip_self && Q.seqName == ref.name)
                && !(param.skip_prefix
                     && prefix(Q.seqName, param.prefix_delim)
-                    == prefix(this->refSketch.metadata[l2.seqId].name, param.prefix_delim)))
+                    == prefix(ref.name, param.prefix_delim)))
             {
               MappingResult res;
 
@@ -561,6 +650,10 @@ namespace skch
                 res.nucIdentityUpperBound = nucIdentityUpperBound;
                 res.sketchSize = Q.sketchSize;
                 res.conservedSketches = l2.sharedSketchSize;
+                res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
+                res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
+
+                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
                 //Compute additional statistics -> strand, reference compexity
                 {
@@ -790,7 +883,6 @@ namespace skch
 
               it->blockLength = std::max(it->refEndPos - it->refStartPos, it->queryEndPos - it->queryStartPos);
               it->approxMatches = std::round(it->nucIdentity * it->blockLength / 100.0);
-
             });
 
             //Mean identity of all mappings in the chain
@@ -884,7 +976,8 @@ namespace skch
                    << "\t" << e.approxMatches
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
-                   << "\t" << "ni:i:" << e.nucIdentity;
+                   << "\t" << "id:f:" << e.nucIdentity;
+              //<< "\t" << "nu:f:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG
           outstrm << std::endl;

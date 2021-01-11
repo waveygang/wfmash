@@ -35,22 +35,25 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
     args::ValueFlag<uint64_t> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
-    args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
-    args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 85]", {'p', "map-pct-id"});
+    args::ValueFlag<uint64_t> block_length_min(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length-min"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
+    args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
+    args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
+    args::Flag keep_low_pct_identity(parser, "K", "keep mappings with estimated identity below our threshold", {'K', "keep-low-pct-id"});
     args::ValueFlag<std::string> map_filter_mode(parser, "MODE", "filter mode for map step, either 'map', 'one-to-one', or 'none' [default: map]", {'f', "map-filter-mode"});
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
     args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
-    args::Flag merge_mappings(parser, "merge-map", "merge consecutive segment-level mappings (can slow alignment phase)", {'M', "merge-mappings"});
+    args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<float> align_pct_identity(parser, "%", "minimum percent identity of an alignment to emit it [default: -p]", {'a', "align-min-id"});
-    args::ValueFlag<int> wf_min(parser, "N", "WF_min: minimum length of a wavefront to trigger reduction [default: 100]", {'l', "wf-min"});
-    args::ValueFlag<int> wf_diff(parser, "N", "WF_diff: maximum distance that a wavefront may be behind the best wavefront to not be reduced [default: 50]", {'d', "wf-diff"});
-    args::Flag exact_wfa(parser, "N", "compute the exact WFA, don't use adaptive wavefront reduction", {'e', "exact-wfa"});
+    //args::ValueFlag<float> align_pct_identity(parser, "%", "filter WFA alignments from wflign with less than this identity [default: 70]", {'a', "align-pct-id"});
+    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 1000]", {'W', "wflamda-segment"});
+    args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
+    args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
+    args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
@@ -115,7 +118,7 @@ void parse_args(int argc,
     }
 
     map_parameters.split = !args::get(no_split);
-    map_parameters.mergeMappings = args::get(merge_mappings);
+    map_parameters.mergeMappings = !args::get(no_merge);
     
     if (kmer_size) {
         map_parameters.kmerSize = args::get(kmer_size);
@@ -134,6 +137,12 @@ void parse_args(int argc,
         map_parameters.segLength = 5000;
     }
 
+    if (block_length_min) {
+        map_parameters.block_length_min = args::get(block_length_min);
+    } else {
+        map_parameters.block_length_min = 3 * map_parameters.segLength;
+    }
+
     if (map_pct_identity) {
         map_parameters.percentageIdentity = args::get(map_pct_identity);
         if (map_parameters.percentageIdentity < 70) {
@@ -141,31 +150,40 @@ void parse_args(int argc,
             exit(1);
         }
     } else {
-        map_parameters.percentageIdentity = 85;
+        map_parameters.percentageIdentity = 95;
     }
 
-    if (align_pct_identity) {
-        align_parameters.min_identity = args::get(align_pct_identity);
+    if (keep_low_pct_identity) {
+        map_parameters.keep_low_pct_id = true;
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity;
+        map_parameters.keep_low_pct_id = false;
     }
 
-    if (wf_min) {
-        align_parameters.wf_min = args::get(wf_min);
+    align_parameters.min_identity = 0; // now unused
+
+    if (wflambda_segment_length) {
+        align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {
-        align_parameters.wf_min = 100;
+        align_parameters.wflambda_segment_length = 1000;
     }
 
-    if (wf_diff) {
-        align_parameters.wf_diff = args::get(wf_diff);
+    if (wflambda_min_wavefront_length) {
+        align_parameters.wflambda_min_wavefront_length = args::get(wflambda_min_wavefront_length);
     } else {
-        align_parameters.wf_diff = 50;
+        align_parameters.wflambda_min_wavefront_length = 100;
     }
 
-    if (exact_wfa) {
-        align_parameters.exact_wfa = true;
+    if (wflambda_max_distance_threshold) {
+        align_parameters.wflambda_max_distance_threshold = args::get(wflambda_max_distance_threshold);
     } else {
-        align_parameters.exact_wfa = false;
+        align_parameters.wflambda_max_distance_threshold = 100000;
+    }
+    align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
+
+    if (exact_wflambda) {
+        // set exact computation of wflambda
+        align_parameters.wflambda_min_wavefront_length = 0;
+        align_parameters.wflambda_max_distance_threshold = 0;
     }
 
     if (thread_count) {
@@ -200,16 +218,21 @@ void parse_args(int argc,
         yeet_parameters.approx_mapping = true;
     } else {
         yeet_parameters.approx_mapping = false;
-        if (tmp_base) {
-            temp_file::set_dir(args::get(tmp_base));
-            map_parameters.outFileName = temp_file::create();
+        if (align_input_paf) {
+            yeet_parameters.remapping = true;
+            align_parameters.mashmapPafFile = args::get(align_input_paf);
         } else {
-            char* cwd = get_current_dir_name();
-            temp_file::set_dir(std::string(cwd));
-            free(cwd);
-            map_parameters.outFileName = temp_file::create();
+            if (tmp_base) {
+                temp_file::set_dir(args::get(tmp_base));
+                map_parameters.outFileName = temp_file::create();
+            } else {
+                char* cwd = get_current_dir_name();
+                temp_file::set_dir(std::string(cwd));
+                free(cwd);
+                map_parameters.outFileName = temp_file::create();
+            }
+            align_parameters.mashmapPafFile = map_parameters.outFileName;
         }
-        align_parameters.mashmapPafFile = map_parameters.outFileName;
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 

@@ -40,10 +40,11 @@ int main(int argc, char** argv) {
     yeet::Parameters yeet_parameters;
     yeet::parse_args(argc, argv, map_parameters, align_parameters, yeet_parameters);
 
+    //parameters.refSequences.push_back(ref);
     auto t0 = skch::Time::now();
 
-    if (!yeet_parameters.align_input_paf) {
-    
+    //skch::parseandSave(argc, argv, cmd, parameters);
+    if (!yeet_parameters.remapping) {
         skch::printCmdOptions(map_parameters);
 
         //Build the sketch for reference
@@ -59,7 +60,6 @@ int main(int argc, char** argv) {
 
         std::chrono::duration<double> timeMapQuery = skch::Time::now() - t0;
         std::cerr << "[wfmash::map] time spent mapping the query: " << timeMapQuery.count() << " sec" << std::endl;
-
         std::cerr << "[wfmash::map] mapping results saved in: " << map_parameters.outFileName << std::endl;
 
         if (yeet_parameters.approx_mapping) {
@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
     }
 
     align::printCmdOptions(align_parameters);
-    
+
     t0 = skch::Time::now();
 
     align::Aligner alignObj(align_parameters);

@@ -123,6 +123,7 @@ namespace skch
 
     offset_t splitMappingId;                            // To identify split mappings that are chained
     int discard;                                        // set to 1 for deletion
+    bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
 
     offset_t qlen() {                                   //length of this mapping on query axis 
       return queryEndPos - queryStartPos + 1;
@@ -161,6 +162,7 @@ namespace skch
   {
     MappingResultsVector_t readMappings;  //read mapping coordinates
     std::string qseqName;                 //query sequence id
+    offset_t qseqLen;                     //query sequence length
 
     //Function to erase all output mappings
     void reset()
@@ -176,6 +178,7 @@ namespace skch
       char *seq;                          //query sequence pointer 
       seqno_t seqCounter;                 //query sequence counter
       offset_t len;                       //length of this query sequence
+      offset_t fullLen;                   //length of the full sequence it derives from
       int sketchSize;                     //sketch size
       std::string seqName;                //sequence name
       MinimizerVec minimizerTableQuery;   //Vector of minimizers in the query 
