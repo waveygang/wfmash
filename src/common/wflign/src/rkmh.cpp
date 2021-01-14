@@ -43,30 +43,22 @@ inline void reverse_complement(const char *seq, char *ret, int len) {
  **/
 inline void calc_hashes_(const char *seq, const uint64_t &len,
                          const uint64_t &k, hash_t *&hashes, int numhashes) {
-    char *reverse = new char[k + 1];
+    char reverse[k + 1];
     uint32_t rhash[4];
     uint32_t fhash[4];
-    //hash_t tmp_fwd;
-    //hash_t tmp_rev;
-    //numhashes = (int) (len - k);
-    //hashes = new hash_t[numhashes];
     for (int i = 0; i < numhashes; ++i) {
         if (canonical(seq + i, k)) {
             reverse_complement(seq + i, reverse, k);
             MurmurHash3_x64_128(seq + i, k, 42, fhash);
             MurmurHash3_x64_128(reverse, k, 42, rhash);
-            //hash_t tmp_fwd = *((hash_t*) fhash);
-            //hash_t tmp_rev = *((hash_t*) rhash);
             hash_t tmp_fwd = static_cast<uint64_t>(fhash[0]) << 32 | fhash[1];
             hash_t tmp_rev = static_cast<uint64_t>(rhash[0]) << 32 | rhash[1];
-
             hashes[i] = (tmp_fwd < tmp_rev ? tmp_fwd : tmp_rev);
             //std::cerr << "hashes[" << i << "] = " << hashes[i] << std::endl;
         } else {
             hashes[i] = 0;
         }
     }
-    delete[] reverse;
 };
 
 /* Calculate all the hashes of the kmers length k of seq */

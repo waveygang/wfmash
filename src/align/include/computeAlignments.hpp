@@ -427,6 +427,7 @@ namespace align
         // - toggle between wflign and regular alignment at some threshold (in wflign?)
         wflign::wavefront::wflign_affine_wavefront(
             output,
+            true, // merge alignments
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
