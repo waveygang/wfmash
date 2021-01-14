@@ -3,6 +3,8 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include "WFA/edit/edit_cigar.hpp"
 //#include "WFA/gap_affine/affine_wavefront.hpp"
 #include "WFA/gap_affine/affine_wavefront_align.hpp"
@@ -22,16 +24,95 @@ namespace wavefront {
 struct alignment_t {
     int j = 0;
     int i = 0;
+    int length = 0;
     bool ok = false;
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
-    int skip_query_start = 0;
-    int keep_query_length = 0;
-    int skip_target_start = 0;
-    int keep_target_length = 0;
     wfa::edit_cigar_t edit_cigar;
+    void trim_front(int query_trim) {
+        // increment j and i appropriately
+        int trim_to_j = j + query_trim;
+        int x = edit_cigar.begin_offset;
+        while (x < edit_cigar.end_offset
+               && j < trim_to_j) {
+            switch (edit_cigar.operations[x++]) {
+            case 'M': case 'X': --length; ++j; ++i; break;
+            case 'I': --length; ++j; break;
+            case 'D': ++i; break;
+            default: break;
+            }
+        }
+        if (x == edit_cigar.end_offset) ok = false;
+        edit_cigar.begin_offset = x;
+    }
+    void trim_back(int query_trim) {
+        int x = edit_cigar.end_offset;
+        int q = 0;
+        while (x > edit_cigar.begin_offset
+               && q < query_trim) {
+            switch (edit_cigar.operations[--x]) {
+            case 'M': case 'X': --length; ++q; break;
+            case 'I': --length; ++q; break;
+            case 'D': break;
+            default: break;
+            }
+        }
+        if (x == edit_cigar.begin_offset) ok = false;
+        edit_cigar.end_offset = x;
+    }
     ~alignment_t(void) {
         free(edit_cigar.operations);
+    }
+};
+
+// link a position in a traceback matrix to its edit
+struct trace_pos_t {
+    int j = 0;
+    int i = 0;
+    wfa::edit_cigar_t* edit_cigar = nullptr;
+    int offset = 0;
+    bool incr(void) {
+        if (offset < edit_cigar->end_offset) {
+            switch (curr()) {
+            case 'M': case 'X': ++j; ++i; break;
+            case 'I': ++j; break;
+            case 'D': ++i; break;
+            default: break;
+            }
+            ++offset;
+            return true;
+        } else {
+            return false;
+        }
+    }
+    bool decr(void) {
+        if (offset > edit_cigar->begin_offset) {
+            --offset;
+            switch (curr()) {
+            case 'M': case 'X': --j; --i; break;
+            case 'I': --j; break;
+            case 'D': --i; break;
+            default: break;
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+    bool at_end(void) const {
+        return offset == edit_cigar->end_offset;
+    }
+    char curr(void) const {
+        assert(!at_end());
+        return edit_cigar->operations[offset];
+    }
+    bool equal(const trace_pos_t& other) const {
+        return j == other.j
+            && i == other.i
+            && curr() == 'M' && curr() == other.curr();
+    }
+    bool assigned(void) const {
+        return edit_cigar != nullptr;
     }
 };
 
@@ -45,6 +126,7 @@ inline uint64_t encode_pair(int v, int h) {
 
 void wflign_affine_wavefront(
     std::ostream& out,
+    const bool& merge_alignments,
     const std::string& query_name,
     const char* query,
     const uint64_t& query_total_length,
@@ -84,6 +166,25 @@ bool do_alignment(
     const float& min_identity,
     alignment_t& aln);
 
+void merge_alignments(
+    alignment_t& base,
+    const alignment_t& ext);
+
+void write_merged_alignment(
+    std::ostream& out,
+    const std::vector<alignment_t*> trace,
+    const std::string& query_name,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const uint64_t& query_length,
+    const bool& query_is_rev,
+    const std::string& target_name,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length,
+    const float& min_identity,
+    const bool& with_endline = true);
+
 void write_alignment(
     std::ostream& out,
     const alignment_t& aln,
@@ -101,10 +202,6 @@ void write_alignment(
 
 char* alignmentToCigar(
     const wfa::edit_cigar_t* const edit_cigar,
-    const int skip_query_start,
-    const int keep_query_length,
-    int& skipped_target_start,
-    int& kept_target_length,
     uint64_t& refAlignedLength,
     uint64_t& qAlignedLength,
     uint64_t& matches,

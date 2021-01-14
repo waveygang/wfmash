@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
     //args::Flag exact_wfa(parser, "N", "compute the exact WFA for base-level WFA, don't use adaptive wavefront reduction", {'E', "exact-wfa"});
     args::Flag align_edlib(parser, "N", "use edlib for base-level alignment", {'a', "edlib-align"});
     args::Flag revcomp_query(parser, "N", "align the reverse complement of the query", {'r', "revcomp-query"});
+    args::Flag no_merge(parser, "N", "don't merge the alignments into a single record (WFA only)", {'M', "no-merge"});
 
     // general parameters
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
@@ -73,6 +74,7 @@ int main(int argc, char** argv) {
     if (query_sequence_file_list) {
         parse_file_list(args::get(query_sequence_file_list), queries);
     }
+    bool merge_alignments = !args::get(no_merge);
 
     uint64_t segment_length = p_segment_length ? args::get(p_segment_length) : 1000;
     uint64_t min_wavefront_length = wf_min ? args::get(wf_min) : 100;
@@ -114,6 +116,7 @@ int main(int argc, char** argv) {
                             } else {
                                 wflign::wavefront::wflign_affine_wavefront(
                                     std::cout,
+                                    merge_alignments,
                                     qname, qstrand.c_str(), qstrand.size(), 0, qstrand.size(),
                                     revcomp,
                                     tname, tseq.c_str(), tseq.size(), 0, tseq.size(),
