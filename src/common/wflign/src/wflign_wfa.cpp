@@ -203,77 +203,79 @@ void wflign_affine_wavefront(
     // annotate each PAF record with it and the full alignment score
 
     // Trim alignments that overlap in the query
-    for (auto x = trace.rbegin()+1; x != trace.rend(); ++x) {
-        auto& curr = **x;
-        auto& last = **(x-1);
-        trace_pos_t last_pos = { last.j, last.i,
-                                 &last.edit_cigar,
-                                 last.edit_cigar.begin_offset };
-        trace_pos_t curr_pos = { curr.j, curr.i,
-                                 &curr.edit_cigar,
-                                 curr.edit_cigar.begin_offset };
+    if (!trace.empty()) {
+        for (auto x = trace.rbegin()+1; x != trace.rend(); ++x) {
+            auto& curr = **x;
+            auto& last = **(x-1);
+            trace_pos_t last_pos = { last.j, last.i,
+                                     &last.edit_cigar,
+                                     last.edit_cigar.begin_offset };
+            trace_pos_t curr_pos = { curr.j, curr.i,
+                                     &curr.edit_cigar,
+                                     curr.edit_cigar.begin_offset };
 
-        // trace the last alignment until we overlap the next
-        // to record our match
-        trace_pos_t match_pos;
+            // trace the last alignment until we overlap the next
+            // to record our match
+            trace_pos_t match_pos;
 
-        // walk until they are matched at the query position
-        while (!last_pos.at_end() && !curr_pos.at_end()) {
-            if (last_pos.equal(curr_pos)) {
-                // they equal and we can splice them at the first match
-                match_pos = last_pos;
-                break;
+            // walk until they are matched at the query position
+            while (!last_pos.at_end() && !curr_pos.at_end()) {
+                if (last_pos.equal(curr_pos)) {
+                    // they equal and we can splice them at the first match
+                    match_pos = last_pos;
+                    break;
+                }
+                if (last_pos.j == curr_pos.j) {
+                    last_pos.incr();
+                    curr_pos.incr();
+                } else if (last_pos.j < curr_pos.j) {
+                    last_pos.incr();
+                } else {
+                    curr_pos.incr();
+                }
             }
-            if (last_pos.j == curr_pos.j) {
-                last_pos.incr();
-                curr_pos.incr();
-            } else if (last_pos.j < curr_pos.j) {
-                last_pos.incr();
+
+            // if we matched, we'll be able to splice the alignments together
+            int trim_last=0, trim_curr=0;
+            if (match_pos.assigned()) {
+                // we'll use our match position to set up the trims
+                trim_last = (last.j + last.length) - match_pos.j;
+                trim_curr = match_pos.j - curr.j;
             } else {
-                curr_pos.incr();
+                // we want to remove any possible overlaps in query or target
+                // walk back last until we don't overlap in i or j
+                // recording the distance walked as an additional trim on last
+                while (last_pos.j > curr_pos.j && last_pos.decr());
+                while (last_pos.i > curr_pos.i && curr_pos.incr());
+                trim_last = (last.j + last.length) - last_pos.j;
+                trim_curr = curr_pos.j - curr.j;
+            }
+
+            // assign our cigar trim
+            if (trim_last > 0) {
+                last.trim_back(trim_last);
+            }
+            if (trim_curr > 0) {
+                curr.trim_front(trim_curr);
             }
         }
 
-        // if we matched, we'll be able to splice the alignments together
-        int trim_last=0, trim_curr=0;
-        if (match_pos.assigned()) {
-            // we'll use our match position to set up the trims
-            trim_last = (last.j + last.length) - match_pos.j;
-            trim_curr = match_pos.j - curr.j;
+        if (merge_alignments) {
+            // write a merged alignment
+            write_merged_alignment(out, trace,
+                                   query_name, query_total_length, query_offset, query_length,
+                                   query_is_rev,
+                                   target_name, target_total_length, target_offset, target_length,
+                                   min_identity);
         } else {
-            // we want to remove any possible overlaps in query or target
-            // walk back last until we don't overlap in i or j
-            // recording the distance walked as an additional trim on last
-            while (last_pos.j > curr_pos.j && last_pos.decr());
-            while (last_pos.i > curr_pos.i && curr_pos.incr());
-            trim_last = (last.j + last.length) - last_pos.j;
-            trim_curr = curr_pos.j - curr.j;
-        }
-
-        // assign our cigar trim
-        if (trim_last > 0) {
-            last.trim_back(trim_last);
-        }
-        if (trim_curr > 0) {
-            curr.trim_front(trim_curr);
-        }
-    }
-
-    if (merge_alignments) {
-        // write a merged alignment
-        write_merged_alignment(out, trace,
-                               query_name, query_total_length, query_offset, query_length,
-                               query_is_rev,
-                               target_name, target_total_length, target_offset, target_length,
-                               min_identity);
-    } else {
-        for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
-            //std::cerr << "on alignment" << std::endl;
-            write_alignment(out, **x,
-                            query_name, query_total_length, query_offset, query_length,
-                            query_is_rev,
-                            target_name, target_total_length, target_offset, target_length,
-                            min_identity);
+            for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
+                //std::cerr << "on alignment" << std::endl;
+                write_alignment(out, **x,
+                                query_name, query_total_length, query_offset, query_length,
+                                query_is_rev,
+                                target_name, target_total_length, target_offset, target_length,
+                                min_identity);
+            }
         }
     }
 
