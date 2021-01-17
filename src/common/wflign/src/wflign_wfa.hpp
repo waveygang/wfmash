@@ -24,37 +24,55 @@ namespace wavefront {
 struct alignment_t {
     int j = 0;
     int i = 0;
-    int length = 0;
+    int query_length = 0;
+    int target_length = 0;
     bool ok = false;
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
     wfa::edit_cigar_t edit_cigar;
     void trim_front(int query_trim) {
+        // this kills the alignment
+        if (query_trim >= query_length) {
+            ok = false;
+            return;
+        }
         // increment j and i appropriately
         int trim_to_j = j + query_trim;
         int x = edit_cigar.begin_offset;
         while (x < edit_cigar.end_offset
                && j < trim_to_j) {
             switch (edit_cigar.operations[x++]) {
-            case 'M': case 'X': --length; ++j; ++i; break;
-            case 'I': --length; ++j; break;
-            case 'D': ++i; break;
+            case 'M': case 'X': --query_length; --target_length; ++j; ++i; break;
+            case 'I': --query_length; ++j; break;
+            case 'D': --target_length; ++i; break;
             default: break;
+            }
+            if (target_length <= 0 || query_length <= 0) {
+                ok = false;
+                return;
             }
         }
         if (x == edit_cigar.end_offset) ok = false;
         edit_cigar.begin_offset = x;
     }
     void trim_back(int query_trim) {
+        if (query_trim >= query_length) {
+            ok = false;
+            return;
+        }
         int x = edit_cigar.end_offset;
         int q = 0;
         while (x > edit_cigar.begin_offset
                && q < query_trim) {
             switch (edit_cigar.operations[--x]) {
-            case 'M': case 'X': --length; ++q; break;
-            case 'I': --length; ++q; break;
-            case 'D': break;
+            case 'M': case 'X': --query_length; --target_length; ++q; break;
+            case 'I': --query_length; ++q; break;
+            case 'D': --target_length; break;
             default: break;
+            }
+            if (target_length <= 0 || query_length <= 0) {
+                ok = false;
+                return;
             }
         }
         if (x == edit_cigar.begin_offset) ok = false;
@@ -139,7 +157,6 @@ void wflign_affine_wavefront(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const uint64_t& segment_length,
-    const float& min_identity,
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold);
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
@@ -163,7 +180,6 @@ bool do_alignment(
     const int max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
-    const float& min_identity,
     alignment_t& aln);
 
 void merge_alignments(
@@ -182,7 +198,6 @@ void write_merged_alignment(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
-    const float& min_identity,
     const bool& with_endline = true);
 
 void write_alignment(
@@ -197,18 +212,19 @@ void write_alignment(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
-    const float& min_identity,
     const bool& with_endline = true);
+
 
 char* alignmentToCigar(
     const wfa::edit_cigar_t* const edit_cigar,
-    uint64_t& refAlignedLength,
-    uint64_t& qAlignedLength,
+    uint64_t& target_aligned_length,
+    uint64_t& query_aligned_length,
     uint64_t& matches,
     uint64_t& mismatches,
     uint64_t& insertions,
+    uint64_t& inserted_bp,
     uint64_t& deletions,
-    uint64_t& softclips);
+    uint64_t& deleted_bp);
 
 double float2phred(const double& prob);
 
