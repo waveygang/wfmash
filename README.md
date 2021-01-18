@@ -10,10 +10,10 @@ It completes MashMap with a high-performance alignment module capable of computi
 Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]`.
 These segments are then mapped using MashMap's sliding minhash mapping algorithm and subsequent filtering steps.
 To reduce memory, a temporary file is used to store initial mappings.
-Each mapping location is then used as a target for alignment using WFA.
+Each mapping location is then used as a target for alignment using the wavefront inception algorithm in `wflign`.
 
 The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
-Approximate mapping (equivalent to `MashMap2`) can be obtained with `-m, --approx-map`.
+Approximate mapping (equivalent to `MashMap2` with a block length filter) can be obtained with `-m, --approx-map`.
 
 Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
 The number of threads must be set manually, using `-t`, and defaults to 1.
@@ -27,12 +27,13 @@ Seven parameters shape the length, number, identity, and alignment divergence of
 
 ### mapping settings
 
-The first three affect the structure of the mashmap2 mappings:
+These parameters affect the structure of the alignments:
 
-* `-s[N], --segment-length=[N]` is the length of the mapped and aligned segment (when `-N` is not set)
+* `-s[N], --segment-length=[N]` is the length of the mapping seed (when `-N` is not set), consecutive segment mappings are merged and the merged mapping is aligned
+* `-l[N], --block-length-min=[N]` defines a minimum length filter on our merged mappings
 * `-N, --no-split` avoids splitting queries into segments, and instead maps them in their full length
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
-* `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `segment-length` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
+* `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length-min` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
 
 ### all-to-all mapping
 
