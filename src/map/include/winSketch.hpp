@@ -221,46 +221,47 @@ namespace skch
        */
       void computeFreqHist()
       {
+          if (!minimizerPosLookupIndex.empty()) {
+              //1. Compute histogram
 
-        //1. Compute histogram
+              for (auto &e : this->minimizerPosLookupIndex)
+                  this->minimizerFreqHistogram[e.second.size()] += 1;
 
-        for(auto &e : this->minimizerPosLookupIndex)
-          this->minimizerFreqHistogram[e.second.size()] += 1;
+              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] Frequency histogram of minimizers = "
+                        << *this->minimizerFreqHistogram.begin() << " ... " << *this->minimizerFreqHistogram.rbegin()
+                        << std::endl;
 
-        std::cerr << "[wfmash::skch::Sketch::computeFreqHist] Frequency histogram of minimizers = " <<  *this->minimizerFreqHistogram.begin() <<  " ... " << *this->minimizerFreqHistogram.rbegin() << std::endl;
+              //2. Compute frequency threshold to ignore most frequent minimizers
 
-        //2. Compute frequency threshold to ignore most frequent minimizers
+              int64_t totalUniqueMinimizers = this->minimizerPosLookupIndex.size();
+              int64_t minimizerToIgnore = totalUniqueMinimizers * percentageThreshold / 100;
 
-        int64_t totalUniqueMinimizers = this->minimizerPosLookupIndex.size();
-        int64_t minimizerToIgnore = totalUniqueMinimizers * percentageThreshold / 100;
+              int64_t sum = 0;
 
-        int64_t sum = 0;
+              //Iterate from highest frequent minimizers
+              for (auto it = this->minimizerFreqHistogram.rbegin(); it != this->minimizerFreqHistogram.rend(); it++) {
+                  sum += it->second; //add frequency
+                  if (sum < minimizerToIgnore) {
+                      this->freqThreshold = it->first;
+                      //continue
+                  } else if (sum == minimizerToIgnore) {
+                      this->freqThreshold = it->first;
+                      break;
+                  } else {
+                      break;
+                  }
+              }
 
-        //Iterate from highest frequent minimizers
-        for(auto it = this->minimizerFreqHistogram.rbegin(); it != this->minimizerFreqHistogram.rend(); it++)
-        {
-          sum += it->second; //add frequency
-          if(sum < minimizerToIgnore)
-          {
-            this->freqThreshold = it->first;
-            //continue
+              if (this->freqThreshold != std::numeric_limits<int>::max())
+                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold
+                            << "\%, ignore minimizers occurring >= " << this->freqThreshold << " times during lookup."
+                            << std::endl;
+              else
+                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold
+                            << "\%, consider all minimizers during lookup." << std::endl;
+          } else {
+              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] No minimizers." << std::endl;
           }
-          else if(sum == minimizerToIgnore)
-          {
-            this->freqThreshold = it->first;
-            break;
-          }
-          else
-          {
-            break;
-          }
-        }
-
-        if(this->freqThreshold != std::numeric_limits<int>::max())
-          std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold << "\%, ignore minimizers occurring >= " << this->freqThreshold << " times during lookup." << std::endl;
-        else
-          std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold << "\%, consider all minimizers during lookup." << std::endl;
-
       }
 
       public:
