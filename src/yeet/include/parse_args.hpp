@@ -159,10 +159,10 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
-    if (keep_low_map_pct_identity) {
+    if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity;
+        align_parameters.min_identity = map_parameters.percentageIdentity / 100.0;
     }
 
     if (wflambda_segment_length) {
