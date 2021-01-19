@@ -434,6 +434,7 @@ namespace align
             currentRecord.strand != skch::strnd::FWD,
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
+            param.min_identity,
             param.wflambda_min_wavefront_length,
             param.wflambda_max_distance_threshold);
 

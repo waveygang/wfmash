@@ -157,6 +157,7 @@ void wflign_affine_wavefront(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const uint64_t& segment_length,
+    const float& min_identity,
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold);
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
@@ -198,6 +199,7 @@ void write_merged_alignment(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
+    const float& min_identity,
     const bool& with_endline = true);
 
 void write_alignment(
@@ -212,6 +214,7 @@ void write_alignment(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
+    const float& min_identity,
     const bool& with_endline = true);
 
 

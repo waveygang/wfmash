@@ -19,6 +19,7 @@ void wflign_affine_wavefront(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const uint64_t& segment_length,
+    const float& min_identity,
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold) {
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
@@ -267,14 +268,16 @@ void wflign_affine_wavefront(
             write_merged_alignment(out, trace,
                                    query_name, query_total_length, query_offset, query_length,
                                    query_is_rev,
-                                   target_name, target_total_length, target_offset, target_length);
+                                   target_name, target_total_length, target_offset, target_length,
+                                   min_identity);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 //std::cerr << "on alignment" << std::endl;
                 write_alignment(out, **x,
                                 query_name, query_total_length, query_offset, query_length,
                                 query_is_rev,
-                                target_name, target_total_length, target_offset, target_length);
+                                target_name, target_total_length, target_offset, target_length,
+                                min_identity);
             }
         }
     }
@@ -388,6 +391,7 @@ void write_merged_alignment(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
+    const float& min_identity,
     const bool& with_endline) {
 
     if (trace.empty()) {
@@ -484,59 +488,64 @@ void write_merged_alignment(
     double block_identity = (double)matches
         / (matches + mismatches + inserted_bp + deleted_bp);
 
-    out << query_name
-        << "\t" << query_total_length
-        << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
-        << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
-        << "\t" << (query_is_rev ? "-" : "+")
-        << "\t" << target_name
-        << "\t" << target_total_length
-        << "\t" << target_offset + target_start
-        << "\t" << target_offset + target_end
-        << "\t" << matches
-        << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
-        << "\t" << std::round(float2phred(1.0-block_identity))
-        << "\t" << "as:i:" << total_score
-        << "\t" << "gi:f:" << gap_compressed_identity
-        << "\t" << "bi:f:" << block_identity
-        << "\t" << "md:f:" << mash_dist_sum / trace.size()
-        << "\t" << "ma:i:" << matches
-        << "\t" << "mm:i:" << mismatches
-        << "\t" << "ni:i:" << insertions
-        << "\t" << "ii:i:" << inserted_bp
-        << "\t" << "nd:i:" << deletions
-        << "\t" << "dd:i:" << deleted_bp
-        << "\t" << "cg:Z:";
-    ///for (auto* c : cigarv) { out << c; }
-    // cigar op merging
-    char last_op = '\0';
-    int last_len = 0;
-    for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
-        char* c = *_c;
-        int l = 0;
-        int x = 0;
-        while (c[x] != '\0') {
-            while (isdigit(c[x])) ++x;
-            char op = c[x];
-            int len;
-            std::from_chars(c+l, c+x, len);
-            l = ++x;
-            if (last_len) {
-                if (last_op == op) {
-                    len += last_len;
-                } else {
-                    out << last_len << last_op;
+    if (gap_compressed_identity >= min_identity) {
+        out << query_name
+            << "\t" << query_total_length
+            << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
+            << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
+            << "\t" << (query_is_rev ? "-" : "+")
+            << "\t" << target_name
+            << "\t" << target_total_length
+            << "\t" << target_offset + target_start
+            << "\t" << target_offset + target_end
+            << "\t" << matches
+            << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
+            << "\t" << std::round(float2phred(1.0-block_identity))
+            << "\t" << "as:i:" << total_score
+            << "\t" << "gi:f:" << gap_compressed_identity
+            << "\t" << "bi:f:" << block_identity
+            << "\t" << "md:f:" << mash_dist_sum / trace.size()
+            << "\t" << "ma:i:" << matches
+            << "\t" << "mm:i:" << mismatches
+            << "\t" << "ni:i:" << insertions
+            << "\t" << "ii:i:" << inserted_bp
+            << "\t" << "nd:i:" << deletions
+            << "\t" << "dd:i:" << deleted_bp
+            << "\t" << "cg:Z:";
+        ///for (auto* c : cigarv) { out << c; }
+        // cigar op merging
+        char last_op = '\0';
+        int last_len = 0;
+        for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
+            char* c = *_c;
+            int l = 0;
+            int x = 0;
+            while (c[x] != '\0') {
+                while (isdigit(c[x])) ++x;
+                char op = c[x];
+                int len;
+                std::from_chars(c+l, c+x, len);
+                l = ++x;
+                if (last_len) {
+                    if (last_op == op) {
+                        len += last_len;
+                    } else {
+                        out << last_len << last_op;
+                    }
                 }
+                last_op = op;
+                last_len = len;
             }
-            last_op = op;
-            last_len = len;
         }
+        if (last_len) {
+            out << last_len << last_op;
+        }
+        out << "\n";
+    }
+    // always clean up
+    for (auto *c : cigarv) {
         free(c);
     }
-    if (last_len) {
-        out << last_len << last_op;
-    }
-    out << "\n";
 }
 
 void write_alignment(
@@ -551,6 +560,7 @@ void write_alignment(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length, // unused
+    const float& min_identity,
     const bool& with_endline) {
 //    bool aligned = false;
     //Output to file
@@ -589,37 +599,40 @@ void write_alignment(
         double block_identity = (double)matches
             / (matches + mismatches + inserted_bp + deleted_bp);
         // convert our coordinates to be relative to forward strand (matching PAF standard)
-        uint64_t q_start;
-        if (query_is_rev) {
-            q_start = query_offset + (query_length - (aln.j + qAlignedLength));
-        } else {
-            q_start = query_offset + aln.j;
-        }
-        out << query_name
-            << "\t" << query_total_length
-            << "\t" << q_start
-            << "\t" << q_start + qAlignedLength
-            << "\t" << (query_is_rev ? "-" : "+")
-            << "\t" << target_name
-            << "\t" << target_total_length
-            << "\t" << target_offset + alignmentRefPos
-            << "\t" << target_offset + alignmentRefPos + refAlignedLength
-            << "\t" << matches
-            << "\t" << std::max(refAlignedLength, qAlignedLength)
-            << "\t" << std::round(float2phred(1.0-block_identity))
-            << "\t" << "as:i:" << aln.score
-            << "\t" << "gi:f:" << gap_compressed_identity
-            << "\t" << "bi:f:" << block_identity
-            << "\t" << "md:f:" << aln.mash_dist
-            << "\t" << "ma:i:" << matches
-            << "\t" << "mm:i:" << mismatches
-            << "\t" << "ni:i:" << insertions
-            << "\t" << "bi:i:" << inserted_bp
-            << "\t" << "nd:i:" << deletions
-            << "\t" << "bd:i:" << deleted_bp
-            << "\t" << "cg:Z:" << cigar;
-        if (with_endline) {
-            out << std::endl;
+
+        if (gap_compressed_identity >= min_identity) {
+            uint64_t q_start;
+            if (query_is_rev) {
+                q_start = query_offset + (query_length - (aln.j + qAlignedLength));
+            } else {
+                q_start = query_offset + aln.j;
+            }
+            out << query_name
+                << "\t" << query_total_length
+                << "\t" << q_start
+                << "\t" << q_start + qAlignedLength
+                << "\t" << (query_is_rev ? "-" : "+")
+                << "\t" << target_name
+                << "\t" << target_total_length
+                << "\t" << target_offset + alignmentRefPos
+                << "\t" << target_offset + alignmentRefPos + refAlignedLength
+                << "\t" << matches
+                << "\t" << std::max(refAlignedLength, qAlignedLength)
+                << "\t" << std::round(float2phred(1.0-block_identity))
+                << "\t" << "as:i:" << aln.score
+                << "\t" << "gi:f:" << gap_compressed_identity
+                << "\t" << "bi:f:" << block_identity
+                << "\t" << "md:f:" << aln.mash_dist
+                << "\t" << "ma:i:" << matches
+                << "\t" << "mm:i:" << mismatches
+                << "\t" << "ni:i:" << insertions
+                << "\t" << "bi:i:" << inserted_bp
+                << "\t" << "nd:i:" << deletions
+                << "\t" << "bd:i:" << deleted_bp
+                << "\t" << "cg:Z:" << cigar;
+            if (with_endline) {
+                out << std::endl;
+            }
         }
         free(cigar);
     }

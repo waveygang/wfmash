@@ -277,7 +277,7 @@ namespace skch
                                  int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
-                                 float len_id_bound = 100 * (1.0 - (float)delta/(float)q_l);
+                                 float len_id_bound = (1.0 - (float)delta/(float)q_l);
                                  return len_id_bound < param.percentageIdentity;
                              }),
               readMappings.end());
@@ -621,8 +621,8 @@ namespace skch
             //Compute lower bound to mash distance within 90% confidence interval
             float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
 
-            float nucIdentity = 100 * (1 - mash_dist);
-            float nucIdentityUpperBound = 100 * (1 - mash_dist_lower_bound);
+            float nucIdentity = (1 - mash_dist);
+            float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
 
             //Report the alignment if it passes our identity threshold and,
             // if we are in all-vs-all mode, it isn't a self-mapping,
@@ -961,7 +961,7 @@ namespace skch
         {
           assert(e.refSeqId < this->refSketch.metadata.size());
 
-          float fakeMapQ = std::round(-10.0 * std::log10(1-(e.nucIdentity/100)));
+          float fakeMapQ = std::round(-10.0 * std::log10(1-(e.nucIdentity)));
           if (std::isinf(fakeMapQ)) fakeMapQ = 255;
 
           outstrm  << (param.filterMode == filter::ONETOONE ? qmetadata[e.querySeqId].name : queryName)
@@ -976,7 +976,7 @@ namespace skch
                    << "\t" << e.approxMatches
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
-                   << "\t" << "id:f:" << e.nucIdentity;
+                   << "\t" << "id:f:" << e.nucIdentity * 100.0;
               //<< "\t" << "nu:f:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG
