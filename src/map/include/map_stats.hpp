@@ -114,13 +114,13 @@ namespace skch
      * @brief                 Estimate minimum number of shared sketches to achieve the desired identity
      * @param[in] s           sketch size
      * @param[in] k           kmer size
-     * @param[in] identity    percentage identity [0-100]
+     * @param[in] identity    percentage identity [0-1]
      * @return                minimum count of hits
      */
     inline int estimateMinimumHits(int s, int k, float perc_identity)
     {
       //Compute the estimate
-      float mash_dist = 1.0 - perc_identity/100.0;
+      float mash_dist = 1.0 - perc_identity;
       float jaccard = md2j(mash_dist, k);
 
       //function to convert jaccard to min hits
@@ -136,7 +136,7 @@ namespace skch
      *                        Upper bound is computed using the 90% confidence interval
      * @param[in] s           sketch size
      * @param[in] k           kmer size
-     * @param[in] identity    percentage identity [0-100]
+     * @param[in] identity    percentage identity [0-1]
      * @return                count of min. shared minimizers
      */
     inline int estimateMinimumHitsRelaxed(int s, int k, float perc_identity)
@@ -154,7 +154,7 @@ namespace skch
         float d_lower = md_lower_bound(d, s, k, skch::fixed::confidence_interval);
 
         //Upper bound identity
-        float id_upper = 100.0 * (1.0 - d_lower);
+        float id_upper = 1.0 - d_lower;
 
         //Check if it satisfies the criteria
         if(id_upper >= perc_identity)
