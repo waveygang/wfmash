@@ -39,7 +39,8 @@ void parse_args(int argc,
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
-    args::Flag keep_low_pct_identity(parser, "K", "keep mappings with estimated identity below our threshold", {'K', "keep-low-pct-id"});
+    args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
+    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
     args::ValueFlag<std::string> map_filter_mode(parser, "MODE", "filter mode for map step, either 'map', 'one-to-one', or 'none' [default: map]", {'f', "map-filter-mode"});
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
     args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
@@ -49,7 +50,6 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    //args::ValueFlag<float> align_pct_identity(parser, "%", "filter WFA alignments from wflign with less than this identity [default: 70]", {'a', "align-pct-id"});
     args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 200]", {'W', "wflamda-segment"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
@@ -153,13 +153,17 @@ void parse_args(int argc,
         map_parameters.percentageIdentity = 95;
     }
 
-    if (keep_low_pct_identity) {
+    if (keep_low_map_pct_identity) {
         map_parameters.keep_low_pct_id = true;
     } else {
         map_parameters.keep_low_pct_id = false;
     }
 
-    align_parameters.min_identity = 0; // now unused
+    if (keep_low_map_pct_identity) {
+        align_parameters.min_identity = 0; // now unused
+    } else {
+        align_parameters.min_identity = map_parameters.percentageIdentity;
+    }
 
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
