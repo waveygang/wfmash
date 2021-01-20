@@ -144,7 +144,7 @@ void parse_args(int argc,
     }
 
     if (map_pct_identity) {
-        if (map_parameters.percentageIdentity < 70) {
+        if (args::get(map_pct_identity) < 70) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
             exit(1);
         }
