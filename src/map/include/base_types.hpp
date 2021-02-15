@@ -1,6 +1,6 @@
 /**
  * @file    base_types.hpp
- * @brief   Critical type defintions for mapping algorithm
+ * @brief   Critical type definitions for mapping algorithm
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 

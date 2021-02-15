@@ -34,7 +34,7 @@ int main(int argc, char** argv)
   //Setup command line options
   align::initCmdParser(cmd);
 
-  //Parse command line arguements   
+  //Parse command line arguments
   align::Parameters parameters;        //sketching and mapping parameters
 
   align::parseandSave(argc, argv, cmd, parameters);   
@@ -50,7 +50,7 @@ int main(int argc, char** argv)
   alignObj.compute();
 
   std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-  std::cerr << "INFO, align::main, Time spent computing the aligment: " << timeAlign.count() << " sec" << std::endl;
+  std::cerr << "INFO, align::main, Time spent computing the alignment: " << timeAlign.count() << " sec" << std::endl;
 
   std::cerr << "INFO, align::main, alignment results saved in: " << parameters.pafOutputFile << std::endl;
 }
