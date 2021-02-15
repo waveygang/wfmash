@@ -1,6 +1,6 @@
 /**
  * @file    filter.hpp
- * @brief   implments the routines to filter mappings
+ * @brief   implements the routines to filter mappings
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 

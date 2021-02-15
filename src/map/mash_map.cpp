@@ -32,7 +32,7 @@ int main(int argc, char** argv)
   //Setup command line options
   skch::initCmdParser(cmd);
 
-  //Parse command line arguements   
+  //Parse command line arguments
   skch::Parameters parameters;        //sketching and mapping parameters
 
   skch::parseandSave(argc, argv, cmd, parameters);   

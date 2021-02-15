@@ -1,6 +1,6 @@
 /**
  * @file    computeMap.hpp
- * @brief   implments the sequence mapping logic
+ * @brief   implements the sequence mapping logic
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 

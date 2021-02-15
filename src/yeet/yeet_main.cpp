@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     alignObj.compute();
 
     std::chrono::duration<double> timeAlign = skch::Time::now() - t0;
-    std::cerr << "[wfmash::align] time spent computing the aligment: " << timeAlign.count() << " sec" << std::endl;
+    std::cerr << "[wfmash::align] time spent computing the alignment: " << timeAlign.count() << " sec" << std::endl;
 
     std::cerr << "[wfmash::align] alignment results saved in: " << align_parameters.pafOutputFile << std::endl;
 

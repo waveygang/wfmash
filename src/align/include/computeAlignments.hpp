@@ -85,7 +85,7 @@ namespace align
       }
 
       /**
-       * @brief                 compute aligments
+       * @brief                 compute alignments
        */
       void compute()
       {
