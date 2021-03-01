@@ -234,15 +234,13 @@ namespace skch
        */
       void filterShortMappings(MappingResultsVector_t &readMappings)
       {
-          if (param.split) {
-              readMappings.erase(
-                  std::remove_if(readMappings.begin(),
-                                 readMappings.end(),
-                                 [&](MappingResult &e){
-                                     return e.blockLength < param.block_length_min;
-                                 }),
-                  readMappings.end());
-          }
+          readMappings.erase(
+              std::remove_if(readMappings.begin(),
+                             readMappings.end(),
+                             [&](MappingResult &e){
+                                 return e.blockLength < param.block_length_min;
+                             }),
+              readMappings.end());
       }
 
       /**
@@ -297,6 +295,7 @@ namespace skch
         //save query sequence name and length
         output->qseqName = input->seqName;
         output->qseqLen = input->len;
+        bool split_mapping = true;
 
         if(! param.split || input->len <= param.block_length_min * 2)
         {
@@ -315,6 +314,8 @@ namespace skch
           // save the output
           output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
 
+          // indicate that we mapped full length
+          split_mapping = false;
         }
         else  //Split read mapping
         {
@@ -388,8 +389,10 @@ namespace skch
                                                  : param.secondaryToKeep));
         }
 
-        // remove short merged mappings
-        this->filterShortMappings(output->readMappings);
+        // remove short merged mappings when we are mapping split
+        if (split_mapping) {
+            this->filterShortMappings(output->readMappings);
+        }
 
         // remove self-mode don't-maps
         this->filterSelfingLongToShorts(output->readMappings);
