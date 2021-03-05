@@ -297,7 +297,7 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
 
-        if(! param.split || input->len <= param.block_length_min * 2)
+        if(! param.split || input->len < param.segLength || input->len <= param.block_length_min * 2)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -390,7 +390,7 @@ namespace skch
         }
 
         // remove short merged mappings when we are mapping split
-        if (split_mapping) {
+        if (split_mapping && param.mergeMappings) {
             this->filterShortMappings(output->readMappings);
         }
 
