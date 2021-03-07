@@ -662,7 +662,7 @@ namespace skch
                 res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
                 res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
 
-                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len * 1.618033988);
+                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
                 //Compute additional statistics -> strand, reference compexity
                 {
