@@ -42,9 +42,9 @@ void wflign_affine_wavefront(
     // Set penalties
     wflambda::affine_penalties_t wflambda_affine_penalties = {
         .match = 0,
-        .mismatch = 4,
-        .gap_opening = 6,
-        .gap_extension = 2,
+        .mismatch = 7,
+        .gap_opening = 11,
+        .gap_extension = 1,
     };
     // Init Affine wflambda
     wflambda::affine_wavefronts_t* affine_wavefronts;
@@ -71,11 +71,11 @@ void wflign_affine_wavefront(
     wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
     wfa::affine_penalties_t wfa_affine_penalties = {
         .match = 0,
-        .mismatch = 4,
-        .gap_opening = 6,
+        .mismatch = 7,
+        .gap_opening = 11,
         .gap_extension = 1,
     };
-    const uint64_t minhash_kmer_size = 19;
+    const uint64_t minhash_kmer_size = 13;
     int v_max = 0;
     int h_max = 0;
 
@@ -321,22 +321,22 @@ bool do_alignment(
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
-        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/10);
+        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/20);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
-        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/10);
+        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/20);
     }
 
     // first check if our mash dist is inbounds
     double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
     //std::cerr << "mash_dist = " << mash_dist << std::endl;
 
-    int max_score = segment_length * 0.8;
+    int max_score = segment_length;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.9) {
+    if (mash_dist > 0.5) {
         // if it isn't, return false
         aln.score = max_score;
         aln.ok = false;
