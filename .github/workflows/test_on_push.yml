@@ -23,15 +23,21 @@ jobs:
 
       - name: Init and update submodules
         run: git submodule update --init --recursive
+
       - name: Build wfmash
         run: sed -i 's/CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcx16 -march=native -g/CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -mcx16 -march=native -g -fsanitize=address/g' CMakeLists.txt && sed -i 's/CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcx16 -march=native -g/CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -mcx16 -march=native -g -fsanitize=address/g' CMakeLists.txt && cmake -H. -Bbuild && cmake --build build -- -j 2
+
       - name: Run a test with a subset of the LPA dataset (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz > LPA.subset.paf && head LPA.subset.paf
       - name: Run a test with a subset of the LPA dataset (SAM output)
-        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -N -a > LPA.subset.sam && samtools view LPA.subset.sam -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam
+        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -N -a | samtools view -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam && samtools view LPA.subset.bam | head
       - name: Run a test with a subset of the LPA dataset, setting a lower identity threshold (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -p 90 > LPA.subset.p90.paf && head LPA.subset.p90.paf
+
+      - name: Run a test aligning short reads (500 bps) to a reference (SAM output)
+      - run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reference.fa.gz data/reads.500bps.fa.gz -N -a | samtools view -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head
+
       - name: Run a test with two chr20 sequences (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/chm13#chr20_36805939-36807738.fa.gz data/chm13#chr20_36805939-36807738.fa.gz > chr20.paf && head chr20.paf
       - name: Run a test with two chr20 sequences (SAM output)
-        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/chm13#chr20_36805939-36807738.fa.gz data/chm13#chr20_36805939-36807738.fa.gz -N -a > chr20.sam && samtools view chr20.sam -bS | samtools sort > chr20.bam && samtools index chr20.bam
+        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/chm13#chr20_36805939-36807738.fa.gz data/chm13#chr20_36805939-36807738.fa.gz -N -a | samtools view -bS | samtools sort > chr20.bam && samtools index chr20.bam && samtools view chr20.bam | head
