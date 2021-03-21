@@ -56,7 +56,7 @@ void parse_args(int argc,
     args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
 
     // format parameters
-    args::Flag sam_format(parser, "", "output in the SAM format (PAF by default)", {'a', "sam-format"});
+    args::Flag sam_format(parser, "N", "output in the SAM format (PAF by default)", {'a', "sam-format"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});

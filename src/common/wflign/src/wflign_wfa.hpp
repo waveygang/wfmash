@@ -192,7 +192,7 @@ void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*> trace,
     const bool paf_format_else_sam,
-    const std::string& query,
+    const char* query,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,

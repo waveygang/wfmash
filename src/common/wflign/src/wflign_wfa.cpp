@@ -386,7 +386,7 @@ void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*> trace,
     const bool paf_format_else_sam,
-    const std::string& query,
+    const char* query,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
@@ -590,11 +590,14 @@ void write_merged_alignment(
             out << "\t" << "*"                              // Reference name of the mate/next read
                 << "\t" << "0"                              // Position of the mate/next read
                 << "\t" << "0"                              // observed Template LENgth
+                << "\t";
 
                 // segment SEQuence
-                << "\t" << query.substr (query_start_pos,query_end_pos - query_start_pos)
+                for (uint64_t p = 0; p < query_total_length; ++p) {
+                    out << query[p];
+                }
 
-                << "\t" << "*"                              // ASCII of Phred-scaled base QUALity+33
+            out << "\t" << "*"                              // ASCII of Phred-scaled base QUALity+33
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
