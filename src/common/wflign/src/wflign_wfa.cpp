@@ -592,10 +592,10 @@ void write_merged_alignment(
                 << "\t" << "0"                              // observed Template LENgth
                 << "\t";
 
-                // segment SEQuence
-                for (uint64_t p = 0; p < query_total_length; ++p) {
-                    out << query[p];
-                }
+            // segment SEQuence
+            for (uint64_t p = query_start_pos; p < query_end_pos; ++p) {
+                out << query[p];
+            }
 
             out << "\t" << "*"                              // ASCII of Phred-scaled base QUALity+33
                 << "\t" << "as:i:" << total_score
