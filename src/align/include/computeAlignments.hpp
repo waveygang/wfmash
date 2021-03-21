@@ -272,7 +272,8 @@ namespace align
               };
 
           // writer, picks output from queue and writes it to our output stream
-          std::ofstream outstrm(param.pafOutputFile);
+          std::ofstream outstrm(param.pafOutputFile, ios::app);
+
           auto writer_thread =
               [&](void) {
                   while (true) {
