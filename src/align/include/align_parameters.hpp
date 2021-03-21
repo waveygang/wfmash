@@ -3,7 +3,7 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef ALIGN_PARAMETERS_HPP 
+#ifndef ALIGN_PARAMETERS_HPP
 #define ALIGN_PARAMETERS_HPP
 
 #include <vector>
@@ -28,6 +28,8 @@ struct Parameters {
     std::vector<std::string> querySequences;      //query sequence(s)
     std::string mashmapPafFile;                   //mashmap paf mapping file
     std::string pafOutputFile;                    //sam output file name
+
+    bool sam_format;                              //Emit the output in SAM format (PAF default)
 };
 
 }

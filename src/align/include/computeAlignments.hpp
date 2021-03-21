@@ -430,6 +430,7 @@ namespace align
         wflign::wavefront::wflign_affine_wavefront(
             output,
             true, // merge alignments
+            !param.sam_format,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,

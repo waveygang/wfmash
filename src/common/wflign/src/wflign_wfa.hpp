@@ -145,6 +145,7 @@ inline uint64_t encode_pair(int v, int h) {
 void wflign_affine_wavefront(
     std::ostream& out,
     const bool& merge_alignments,
+    const bool& paf_format_else_sam,
     const std::string& query_name,
     const char* query,
     const uint64_t& query_total_length,
@@ -190,6 +191,8 @@ void merge_alignments(
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*> trace,
+    const bool paf_format_else_sam,
+    const std::string& query,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,

@@ -55,6 +55,9 @@ void parse_args(int argc,
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
     args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
 
+    // format parameters
+    args::Flag sam_format(parser, "", "output in the SAM format (PAF by default)", {'a', "sam-format"});
+
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
     args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
@@ -117,9 +120,16 @@ void parse_args(int argc,
         map_parameters.filterMode = skch::filter::MAP;
     }
 
+    align_parameters.sam_format = args::get(sam_format);
     map_parameters.split = !args::get(no_split);
+
+    if (align_parameters.sam_format && map_parameters.split) {
+        std::cerr << "[wfmash] ERROR, skch::parseandSave, Disable splitting of input sequences (with -N) in order to enable the SAM format" << std::endl;
+        exit(1);
+    }
+
     map_parameters.mergeMappings = !args::get(no_merge);
-    
+
     if (kmer_size) {
         map_parameters.kmerSize = args::get(kmer_size);
     } else {

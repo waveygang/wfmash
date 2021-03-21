@@ -7,6 +7,7 @@ namespace wavefront {
 void wflign_affine_wavefront(
     std::ostream& out,
     const bool& merge_alignments,
+    const bool& paf_format_else_sam,
     const std::string& query_name,
     const char* query,
     const uint64_t& query_total_length,
@@ -266,6 +267,8 @@ void wflign_affine_wavefront(
         if (merge_alignments) {
             // write a merged alignment
             write_merged_alignment(out, trace,
+                                   paf_format_else_sam,
+                                   query,
                                    query_name, query_total_length, query_offset, query_length,
                                    query_is_rev,
                                    target_name, target_total_length, target_offset, target_length,
@@ -382,6 +385,8 @@ bool do_alignment(
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*> trace,
+    const bool paf_format_else_sam,
+    const std::string& query,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
@@ -489,58 +494,119 @@ void write_merged_alignment(
         / (matches + mismatches + inserted_bp + deleted_bp);
 
     if (gap_compressed_identity >= min_identity) {
-        out << query_name
-            << "\t" << query_total_length
-            << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
-            << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
-            << "\t" << (query_is_rev ? "-" : "+")
-            << "\t" << target_name
-            << "\t" << target_total_length
-            << "\t" << target_offset + target_start
-            << "\t" << target_offset + target_end
-            << "\t" << matches
-            << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
-            << "\t" << std::round(float2phred(1.0-block_identity))
-            << "\t" << "as:i:" << total_score
-            << "\t" << "gi:f:" << gap_compressed_identity
-            << "\t" << "bi:f:" << block_identity
-            << "\t" << "md:f:" << mash_dist_sum / trace.size()
-            << "\t" << "ma:i:" << matches
-            << "\t" << "mm:i:" << mismatches
-            << "\t" << "ni:i:" << insertions
-            << "\t" << "ii:i:" << inserted_bp
-            << "\t" << "nd:i:" << deletions
-            << "\t" << "dd:i:" << deleted_bp
-            << "\t" << "cg:Z:";
-        ///for (auto* c : cigarv) { out << c; }
-        // cigar op merging
-        char last_op = '\0';
-        int last_len = 0;
-        for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
-            char* c = *_c;
-            int l = 0;
-            int x = 0;
-            while (c[x] != '\0') {
-                while (isdigit(c[x])) ++x;
-                char op = c[x];
-                int len;
-                std::from_chars(c+l, c+x, len);
-                l = ++x;
-                if (last_len) {
-                    if (last_op == op) {
-                        len += last_len;
-                    } else {
-                        out << last_len << last_op;
+        if (paf_format_else_sam) {
+            out << query_name
+                << "\t" << query_total_length
+                << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
+                << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
+                << "\t" << (query_is_rev ? "-" : "+")
+                << "\t" << target_name
+                << "\t" << target_total_length
+                << "\t" << target_offset + target_start
+                << "\t" << target_offset + target_end
+                << "\t" << matches
+                << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
+                << "\t" << std::round(float2phred(1.0-block_identity))
+                << "\t" << "as:i:" << total_score
+                << "\t" << "gi:f:" << gap_compressed_identity
+                << "\t" << "bi:f:" << block_identity
+                << "\t" << "md:f:" << mash_dist_sum / trace.size()
+                << "\t" << "ma:i:" << matches
+                << "\t" << "mm:i:" << mismatches
+                << "\t" << "ni:i:" << insertions
+                << "\t" << "ii:i:" << inserted_bp
+                << "\t" << "nd:i:" << deletions
+                << "\t" << "dd:i:" << deleted_bp
+                << "\t" << "cg:Z:";
+            ///for (auto* c : cigarv) { out << c; }
+            // cigar op merging
+            char last_op = '\0';
+            int last_len = 0;
+            for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
+                char* c = *_c;
+                int l = 0;
+                int x = 0;
+                while (c[x] != '\0') {
+                    while (isdigit(c[x])) ++x;
+                    char op = c[x];
+                    int len;
+                    std::from_chars(c+l, c+x, len);
+                    l = ++x;
+                    if (last_len) {
+                        if (last_op == op) {
+                            len += last_len;
+                        } else {
+                            out << last_len << last_op;
+                        }
                     }
+                    last_op = op;
+                    last_len = len;
                 }
-                last_op = op;
-                last_len = len;
             }
+            if (last_len) {
+                out << last_len << last_op;
+            }
+            out << "\n";
+        } else {
+            uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
+            uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
+
+            out << query_name                               // Query template NAME
+                << "\t" << (query_is_rev ? "16" : "0")      // bitwise FLAG
+                << "\t" << target_name                      // Reference sequence NAME
+                << "\t" << target_offset + target_start + 1 // 1-based leftmost mapping POSition
+                << "\t" << "255"                            // MAPping Quality
+                << "\t";
+
+            ///for (auto* c : cigarv) { out << c; }
+            // cigar op merging
+            char last_op = '\0';
+            int last_len = 0;
+            for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
+                char* c = *_c;
+                int l = 0;
+                int x = 0;
+                while (c[x] != '\0') {
+                    while (isdigit(c[x])) ++x;
+                    char op = c[x];
+                    int len;
+                    std::from_chars(c+l, c+x, len);
+                    l = ++x;
+                    if (last_len) {
+                        if (last_op == op) {
+                            len += last_len;
+                        } else {
+                            out << last_len << last_op;
+                        }
+                    }
+                    last_op = op;
+                    last_len = len;
+                }
+            }
+            if (last_len) {
+                out << last_len << last_op;
+            }
+
+            out << "\t" << "*"                              // Reference name of the mate/next read
+                << "\t" << "0"                              // Position of the mate/next read
+                << "\t" << "0"                              // observed Template LENgth
+
+                // segment SEQuence
+                << "\t" << query.substr (query_start_pos,query_end_pos - query_start_pos)
+
+                << "\t" << "*"                              // ASCII of Phred-scaled base QUALity+33
+                << "\t" << "as:i:" << total_score
+                << "\t" << "gi:f:" << gap_compressed_identity
+                << "\t" << "bi:f:" << block_identity
+                << "\t" << "md:f:" << mash_dist_sum / trace.size()
+                << "\t" << "ma:i:" << matches
+                << "\t" << "mm:i:" << mismatches
+                << "\t" << "ni:i:" << insertions
+                << "\t" << "ii:i:" << inserted_bp
+                << "\t" << "nd:i:" << deletions
+                << "\t" << "dd:i:" << deleted_bp
+                << "\n";
         }
-        if (last_len) {
-            out << last_len << last_op;
-        }
-        out << "\n";
     }
     // always clean up
     for (auto *c : cigarv) {
