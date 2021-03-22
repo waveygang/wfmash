@@ -551,13 +551,12 @@ void write_merged_alignment(
             uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
             uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
 
-            out << query_name                               // Query template NAME
-                << "\t" << (query_is_rev ? "16" : "0")      // bitwise FLAG
-                << "\t" << target_name                      // Reference sequence NAME
-                << "\t" << target_offset + target_start + 1 // 1-based leftmost mapping POSition
-                << "\t" << "255"                            // MAPping Quality
+            out << query_name                                                   // Query template NAME
+                << "\t" << (query_is_rev ? "16" : "0")                          // bitwise FLAG
+                << "\t" << target_name                                          // Reference sequence NAME
+                << "\t" << target_offset + target_start + 1                     // 1-based leftmost mapping POSition
+                << "\t" << std::round(float2phred(1.0-block_identity))  // MAPping Quality
                 << "\t";
-
 
 
             ///for (auto* c : cigarv) { out << c; }
@@ -609,9 +608,9 @@ void write_merged_alignment(
                 }
             }
 
-            out << "\t" << "*"                              // Reference name of the mate/next read
-                << "\t" << "0"                              // Position of the mate/next read
-                << "\t" << "0"                              // observed Template LENgth
+            out << "\t" << "*"                                                  // Reference name of the mate/next read
+                << "\t" << "0"                                                  // Position of the mate/next read
+                << "\t" << "0"                                                  // observed Template LENgth
                 << "\t";
 
 
@@ -620,7 +619,7 @@ void write_merged_alignment(
                 out << query[p];
             }
 
-            out << "\t" << "*"                              // ASCII of Phred-scaled base QUALity+33
+            out << "\t" << "*"                                                  // ASCII of Phred-scaled base QUALity+33
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
