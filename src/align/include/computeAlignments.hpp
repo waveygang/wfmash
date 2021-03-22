@@ -272,7 +272,8 @@ namespace align
               };
 
           // writer, picks output from queue and writes it to our output stream
-          std::ofstream outstrm(param.pafOutputFile);
+          std::ofstream outstrm(param.pafOutputFile, ios::app);
+
           auto writer_thread =
               [&](void) {
                   while (true) {
@@ -430,6 +431,7 @@ namespace align
         wflign::wavefront::wflign_affine_wavefront(
             output,
             true, // merge alignments
+            !param.sam_format,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,

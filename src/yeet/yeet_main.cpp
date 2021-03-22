@@ -65,6 +65,15 @@ int main(int argc, char** argv) {
         if (yeet_parameters.approx_mapping) {
             return 0;
         }
+
+        if (align_parameters.sam_format) {
+            std::ofstream outstrm(align_parameters.pafOutputFile);
+            for (auto& x : referSketch.metadata){
+                outstrm << "@SQ\tSN:" << x.name << "\tLN:" << x.len << "\n";
+            }
+            outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
+            outstrm.close();
+        }
     }
 
     align::printCmdOptions(align_parameters);
