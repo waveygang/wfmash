@@ -551,15 +551,26 @@ void write_merged_alignment(
             uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
             uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
 
-            out << query_name                               // Query template NAME
-                << "\t" << (query_is_rev ? "16" : "0")      // bitwise FLAG
-                << "\t" << target_name                      // Reference sequence NAME
-                << "\t" << target_offset + target_start + 1 // 1-based leftmost mapping POSition
-                << "\t" << "255"                            // MAPping Quality
+            out << query_name                                                   // Query template NAME
+                << "\t" << (query_is_rev ? "16" : "0")                          // bitwise FLAG
+                << "\t" << target_name                                          // Reference sequence NAME
+                << "\t" << target_offset + target_start + 1                     // 1-based leftmost mapping POSition
+                << "\t" << std::round(float2phred(1.0-block_identity))  // MAPping Quality
                 << "\t";
+
 
             ///for (auto* c : cigarv) { out << c; }
             // cigar op merging
+            if (query_is_rev) {
+                if (query_length > query_end_pos) {
+                    out << (query_length - query_end_pos) << "S";
+                }
+            } else {
+                if (query_start_pos > 0) {
+                    out << query_start_pos << "S";
+                }
+            }
+
             char last_op = '\0';
             int last_len = 0;
             for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
@@ -587,17 +598,28 @@ void write_merged_alignment(
                 out << last_len << last_op;
             }
 
-            out << "\t" << "*"                              // Reference name of the mate/next read
-                << "\t" << "0"                              // Position of the mate/next read
-                << "\t" << "0"                              // observed Template LENgth
+            if (query_is_rev) {
+                if (query_start_pos > 0) {
+                    out << query_start_pos << "S";
+                }
+            } else {
+                if (query_length > query_end_pos) {
+                    out << (query_length - query_end_pos) << "S";
+                }
+            }
+
+            out << "\t" << "*"                                                  // Reference name of the mate/next read
+                << "\t" << "0"                                                  // Position of the mate/next read
+                << "\t" << "0"                                                  // observed Template LENgth
                 << "\t";
 
+
             // segment SEQuence
-            for (uint64_t p = query_start_pos; p < query_end_pos; ++p) {
+            for (uint64_t p = 0; p < query_length; ++p) {
                 out << query[p];
             }
 
-            out << "\t" << "*"                              // ASCII of Phred-scaled base QUALity+33
+            out << "\t" << "*"                                                  // ASCII of Phred-scaled base QUALity+33
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
