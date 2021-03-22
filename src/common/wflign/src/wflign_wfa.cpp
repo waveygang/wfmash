@@ -558,8 +558,20 @@ void write_merged_alignment(
                 << "\t" << "255"                            // MAPping Quality
                 << "\t";
 
+
+
             ///for (auto* c : cigarv) { out << c; }
             // cigar op merging
+            if (query_is_rev) {
+                if (query_length > query_end_pos) {
+                    out << (query_length - query_end_pos) << "S";
+                }
+            } else {
+                if (query_start_pos > 0) {
+                    out << query_start_pos << "S";
+                }
+            }
+
             char last_op = '\0';
             int last_len = 0;
             for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
@@ -587,13 +599,24 @@ void write_merged_alignment(
                 out << last_len << last_op;
             }
 
+            if (query_is_rev) {
+                if (query_start_pos > 0) {
+                    out << query_start_pos << "S";
+                }
+            } else {
+                if (query_length > query_end_pos) {
+                    out << (query_length - query_end_pos) << "S";
+                }
+            }
+
             out << "\t" << "*"                              // Reference name of the mate/next read
                 << "\t" << "0"                              // Position of the mate/next read
                 << "\t" << "0"                              // observed Template LENgth
                 << "\t";
 
+
             // segment SEQuence
-            for (uint64_t p = query_start_pos; p < query_end_pos; ++p) {
+            for (uint64_t p = 0; p < query_length; ++p) {
                 out << query[p];
             }
 
