@@ -529,8 +529,7 @@ void write_merged_alignment(
             // cigar op merging
             char last_op = '\0';
             int last_len = 0;
-            for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
-                char* c = *_c;
+            for (auto c : cigarv) {
                 int l = 0;
                 int x = 0;
                 while (c[x] != '\0') {
@@ -580,8 +579,7 @@ void write_merged_alignment(
 
             char last_op = '\0';
             int last_len = 0;
-            for (auto _c = cigarv.begin(); _c != cigarv.end(); ++_c) {
-                char* c = *_c;
+            for (auto c : cigarv) {
                 int l = 0;
                 int x = 0;
                 while (c[x] != '\0') {
