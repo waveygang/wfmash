@@ -391,7 +391,7 @@ bool do_alignment(
 
 void write_merged_alignment(
     std::ostream& out,
-    const std::vector<alignment_t*> trace,
+    const std::vector<alignment_t*>& trace,
     const bool paf_format_else_sam,
     const char* query,
     const std::string& query_name,
