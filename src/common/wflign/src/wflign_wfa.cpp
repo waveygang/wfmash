@@ -27,8 +27,8 @@ void wflign_affine_wavefront(
     //const int& wfa_max_distance_threshold) {
 
     // set up our implicit matrix
-    uint64_t steps_per_segment = 2;
-    uint64_t step_size = segment_length / steps_per_segment;
+    const uint64_t steps_per_segment = 2;
+    const uint64_t step_size = segment_length / steps_per_segment;
 
     // Pattern & Text
     const int pattern_length = query_length / step_size;
@@ -84,10 +84,8 @@ void wflign_affine_wavefront(
         [&](const int& v,
             const int& h) {
             bool aligned = false;
-            uint64_t k = encode_pair(v, h);
-            if (v >= 0 && h >= 0
-                && v < pattern_length
-                && h < text_length) {
+            if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
+                uint64_t k = encode_pair(v, h);
                 auto f = alignments.find(k);
                 if (f != alignments.end()) {
                     aligned = true;
@@ -488,12 +486,13 @@ void write_merged_alignment(
         }
     }
 
-    // gap-compressed identity
-    double gap_compressed_identity = (double)matches
-        / (matches + mismatches + insertions + deletions);
 
-    double block_identity = (double)matches
-        / (matches + mismatches + inserted_bp + deleted_bp);
+    const uint64_t edit_distance = mismatches + insertions + deletions;
+
+    // gap-compressed identity
+    const double gap_compressed_identity = (double)matches / (matches + edit_distance);
+
+    const double block_identity = (double)matches / (matches + edit_distance);
 
     if (gap_compressed_identity >= min_identity) {
         if (paf_format_else_sam) {
@@ -620,7 +619,8 @@ void write_merged_alignment(
             }
 
             out << "\t" << "*"                                                  // ASCII of Phred-scaled base QUALity+33
-                << "\t" << "as:i:" << total_score
+                << "\t" << "NM:i:" << edit_distance
+                << "\t" << "AS:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
                 << "\t" << "md:f:" << mash_dist_sum / trace.size()
