@@ -13,6 +13,7 @@
 #include "wflambda/gap_affine/affine_wavefront_align.hpp"
 #include "wflambda/gap_affine/affine_wavefront_backtrace.hpp"
 #include "dna.hpp"
+#include "edlib.h"
 #include "rkmh.hpp"
 
 //#define WFLIGN_DEBUG true // for debugging messages
@@ -28,7 +29,7 @@ struct alignment_t {
     int target_length = 0;
     bool ok = false;
     int score = std::numeric_limits<int>::max();
-    double mash_dist = 1;
+    double dist = 1;
     wfa::edit_cigar_t edit_cigar;
     void trim_front(int query_trim) {
         // this kills the alignment
@@ -161,18 +162,14 @@ void wflign_affine_wavefront(
     const float& min_identity,
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold);
-    //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
-    //const int& wfa_max_distance_threshold);
 
 bool do_alignment(
     const std::string& query_name,
     const char* query,
-    std::vector<rkmh::hash_t>*& query_sketches,
     const uint64_t& query_length,
     const uint64_t& j,
     const std::string& target_name,
     const char* target,
-    std::vector<rkmh::hash_t>*& target_sketches,
     const uint64_t& target_length,
     const uint64_t& i,
     const uint64_t& segment_length,

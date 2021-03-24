@@ -211,7 +211,9 @@ void affine_wavefronts_extend_mwavefront_compute(
       ++(offsets[k]);
 //#define AFFINE_LAMBDA_WAVEFRONT_SHOW
 #ifdef AFFINE_LAMBDA_WAVEFRONT_SHOW
-      std::cerr << v-1 << "\t" << h-1 << "\t" << score << "\t" << "aligned" << std::endl;
+      if (v-1 >= 0 && h-1 >= 0 && v-1 < pattern_length && h-1 < pattern_length) {
+          std::cerr << v-1 << "\t" << h-1 << "\t" << score << "\t" << "aligned" << std::endl;
+      }
 #endif
     }
 #ifdef AFFINE_LAMBDA_WAVEFRONT_SHOW

@@ -62,12 +62,6 @@ void wflign_affine_wavefront(
     // save computed alignments in a pair-indexed patchmap
     whash::patchmap<uint64_t,alignment_t*> alignments;
 
-    // allocate vectors to store our sketches
-    std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length, nullptr);
-    std::vector<std::vector<rkmh::hash_t>*> target_sketches(text_length, nullptr);
-
-    //std::cerr << "v" << "\t" << "h" << "\t" << "score" << "\t" << "aligned" << std::endl;
-
     // setup affine WFA
     wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
     wfa::affine_penalties_t wfa_affine_penalties = {
@@ -101,12 +95,10 @@ void wflign_affine_wavefront(
                         do_alignment(
                             query_name,
                             query,
-                            query_sketches[v],
                             query_length,
                             query_begin,
                             target_name,
                             target,
-                            target_sketches[h],
                             target_length,
                             target_begin,
                             segment_length,
@@ -122,27 +114,6 @@ void wflign_affine_wavefront(
                         alignments[k] = aln;
                     } else {
                         delete aln;
-                    }
-                    // cleanup old sketches
-                    if (v > v_max) {
-                        v_max = v;
-                        if (v >= wflambda_max_distance_threshold) {
-                            auto& s = query_sketches[v - wflambda_max_distance_threshold];
-                            if (s != nullptr) {
-                                delete s;
-                                s = nullptr;
-                            }
-                        }
-                    }
-                    if (h > h_max) {
-                        h_max = h;
-                        if (h >= wflambda_max_distance_threshold) {
-                            auto& s = target_sketches[h - wflambda_max_distance_threshold];
-                            if (s != nullptr) {
-                                delete s;
-                                s = nullptr;
-                            }
-                        }
                     }
                 }
             } else if (h < 0 || v < 0) {
@@ -189,20 +160,6 @@ void wflign_affine_wavefront(
 
     std::cerr << "[wflign::wflign_affine_wavefront] alignment score " << score << " for query: " << query_name << " target: " << target_name << std::endl;
 #endif
-
-    // clean up sketches
-    for (auto& s : query_sketches) {
-        if (s != nullptr) {
-            delete s;
-            s = nullptr;
-        }
-    }
-    for (auto& s : target_sketches) {
-        if (s != nullptr) {
-            delete s;
-            s = nullptr;
-        }
-    }
 
     // clean up our WFA allocator
     wfa::mm_allocator_delete(wfa_mm_allocator);
@@ -309,12 +266,10 @@ void wflign_affine_wavefront(
 bool do_alignment(
     const std::string& query_name,
     const char* query,
-    std::vector<rkmh::hash_t>*& query_sketch,
     const uint64_t& query_length,
     const uint64_t& j,
     const std::string& target_name,
     const char* target,
-    std::vector<rkmh::hash_t>*& target_sketch,
     const uint64_t& target_length,
     const uint64_t& i,
     const uint64_t& segment_length,
@@ -329,26 +284,32 @@ bool do_alignment(
     aln.query_length = segment_length;
     aln.target_length = segment_length;
 
-    // first make the sketches if we haven't yet
-    if (query_sketch == nullptr) {
-        query_sketch = new std::vector<rkmh::hash_t>();
-        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/20);
-    }
-    if (target_sketch == nullptr) {
-        target_sketch = new std::vector<rkmh::hash_t>();
-        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/20);
-    }
+    // use edlib to get the distance between the sequences
+    double edlib_dist = -1;
+    EdlibAlignResult result = edlibAlign(
+        query, segment_length, target, segment_length,
+        edlibNewAlignConfig(
+            -1,
+            EDLIB_MODE_NW,
+            EDLIB_TASK_DISTANCE, NULL, 0)
+        );
 
-    // first check if our mash dist is inbounds
-    double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    if (result.status == EDLIB_STATUS_OK && result.editDistance >= 0) {
+        edlib_dist = result.editDistance;
+    } else {
+        edlib_dist = -1;
+    }
+    edlibFreeAlignResult(result);
 
     int max_score = segment_length;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.5) {
+    if (edlib_dist < 0) {
         // if it isn't, return false
+        //std::cerr << "unaligned??" << std::endl;
         aln.score = max_score;
+        aln.dist = 1;
         aln.ok = false;
         return false;
     } else {
@@ -376,7 +337,7 @@ bool do_alignment(
 
         aln.j = j;
         aln.i = i;
-        aln.mash_dist = mash_dist;
+        aln.dist = edlib_dist / segment_length;
         // copy our edit cigar if we aligned
         aln.ok = aln.score < max_score;
         if (aln.ok) {
@@ -431,7 +392,7 @@ void write_merged_alignment(
     uint64_t target_end = 0;
     uint64_t total_score = 0;
 
-    double mash_dist_sum = 0;
+    double dist_sum = 0;
     uint64_t ok_alns = 0;
 
     uint64_t l = 0;
@@ -461,7 +422,7 @@ void write_merged_alignment(
                                            deletions,
                                            deleted_bp);
 
-            mash_dist_sum += aln.mash_dist;
+            dist_sum += aln.dist;
             total_query_aligned_length += query_aligned_length;
             total_target_aligned_length += target_aligned_length;
 
@@ -517,7 +478,7 @@ void write_merged_alignment(
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
-                << "\t" << "md:f:" << mash_dist_sum / trace.size()
+                << "\t" << "md:f:" << dist_sum / trace.size()
                 << "\t" << "ma:i:" << matches
                 << "\t" << "mm:i:" << mismatches
                 << "\t" << "ni:i:" << insertions
@@ -630,7 +591,7 @@ void write_merged_alignment(
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
-                << "\t" << "md:f:" << mash_dist_sum / trace.size()
+                << "\t" << "md:f:" << dist_sum / trace.size()
                 << "\t" << "ma:i:" << matches
                 << "\t" << "mm:i:" << mismatches
                 << "\t" << "ni:i:" << insertions
@@ -720,7 +681,7 @@ void write_alignment(
                 << "\t" << "as:i:" << aln.score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
-                << "\t" << "md:f:" << aln.mash_dist
+                << "\t" << "dz:f:" << aln.dist
                 << "\t" << "ma:i:" << matches
                 << "\t" << "mm:i:" << mismatches
                 << "\t" << "ni:i:" << insertions
