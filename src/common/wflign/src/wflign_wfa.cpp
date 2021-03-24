@@ -35,8 +35,8 @@ void wflign_affine_wavefront(
     const int text_length = target_length / step_size;
 
     // use exact WFA locally
-    const int wfa_min_wavefront_length = 0;
-    const int wfa_max_distance_threshold = 0;
+    const int wfa_min_wavefront_length = segment_length / 4;
+    const int wfa_max_distance_threshold = segment_length / 4;
 
     // Allocate MM
     wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -346,7 +346,7 @@ bool do_alignment(
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.5) {
+    if (mash_dist > 0.618034) {
         // if it isn't, return false
         aln.score = max_score;
         aln.ok = false;

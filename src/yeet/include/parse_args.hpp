@@ -50,7 +50,7 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 200]", {'W', "wflamda-segment"});
+    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 400]", {'W', "wflamda-segment"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
     args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
@@ -178,7 +178,7 @@ void parse_args(int argc,
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {
-        align_parameters.wflambda_segment_length = 200;
+        align_parameters.wflambda_segment_length = 400;
     }
 
     if (wflambda_min_wavefront_length) {
