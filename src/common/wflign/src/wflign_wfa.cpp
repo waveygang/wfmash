@@ -145,6 +145,8 @@ void wflign_affine_wavefront(
                         }
                     }
                 }
+            } else if (h < 0 || v < 0) {
+                aligned = true;
             }
             return aligned;
         };
@@ -156,13 +158,19 @@ void wflign_affine_wavefront(
     
     auto trace_match =
         [&](const int& v, const int& h) {
-            uint64_t k = encode_pair(v, h);
-            auto f = alignments.find(k);
-            if (f != alignments.end()) {
-                trace.push_back(f->second);
-                return true;
-            } else {
+            if (v < 0 || h < 0) {
                 return false;
+            } else if (v > pattern_length || h > text_length) {
+                return false;
+            } else {
+                uint64_t k = encode_pair(v, h);
+                auto f = alignments.find(k);
+                if (f != alignments.end()) {
+                    trace.push_back(f->second);
+                    return true;
+                } else {
+                    return false;
+                }
             }
         };
 
@@ -333,7 +341,6 @@ bool do_alignment(
 
     // first check if our mash dist is inbounds
     double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
-    //std::cerr << "mash_dist = " << mash_dist << std::endl;
 
     int max_score = segment_length;
 
