@@ -624,12 +624,12 @@ void write_merged_alignment(
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
                 << "\t" << "md:f:" << mash_dist_sum / trace.size()
-                << "\t" << "ma:i:" << matches
-                << "\t" << "mm:i:" << mismatches
-                << "\t" << "ni:i:" << insertions
-                << "\t" << "ii:i:" << inserted_bp
-                << "\t" << "nd:i:" << deletions
-                << "\t" << "dd:i:" << deleted_bp
+                //<< "\t" << "ma:i:" << matches
+                //<< "\t" << "mm:i:" << mismatches
+                //<< "\t" << "ni:i:" << insertions
+                //<< "\t" << "ii:i:" << inserted_bp
+                //<< "\t" << "nd:i:" << deletions
+                //<< "\t" << "dd:i:" << deleted_bp
                 << "\n";
         }
     }
