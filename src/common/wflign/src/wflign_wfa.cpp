@@ -96,7 +96,7 @@ void wflign_affine_wavefront(
                                             : query_length - segment_length);
                     uint64_t target_begin = (h < text_length-1 ? h * step_size
                                              : target_length - segment_length);
-                    alignment_t* aln = new alignment_t();
+                    auto* aln = new alignment_t();
                     aligned =
                         do_alignment(
                             query_name,
@@ -128,20 +128,18 @@ void wflign_affine_wavefront(
                         v_max = v;
                         if (v >= wflambda_max_distance_threshold) {
                             auto& s = query_sketches[v - wflambda_max_distance_threshold];
-                            if (s != nullptr) {
-                                delete s;
-                                s = nullptr;
-                            }
+                            // The C++ language guarantees that delete p will do nothing if p is equal to NULL
+                            delete s;
+                            s = nullptr;
                         }
                     }
                     if (h > h_max) {
                         h_max = h;
                         if (h >= wflambda_max_distance_threshold) {
                             auto& s = target_sketches[h - wflambda_max_distance_threshold];
-                            if (s != nullptr) {
-                                delete s;
-                                s = nullptr;
-                            }
+                            // The C++ language guarantees that delete p will do nothing if p is equal to NULL
+                            delete s;
+                            s = nullptr;
                         }
                     }
                 }
@@ -191,17 +189,14 @@ void wflign_affine_wavefront(
 #endif
 
     // clean up sketches
+    // The C++ language guarantees that delete p will do nothing if p is equal to NULL
     for (auto& s : query_sketches) {
-        if (s != nullptr) {
-            delete s;
-            s = nullptr;
-        }
+        delete s;
+        s = nullptr;
     }
     for (auto& s : target_sketches) {
-        if (s != nullptr) {
-            delete s;
-            s = nullptr;
-        }
+        delete s;
+        s = nullptr;
     }
 
     // clean up our WFA allocator
@@ -748,7 +743,7 @@ char* alignmentToCigar(
     // the edit cigar contains a character string of ops
     // here we compress them into the standard cigar representation
 
-    std::vector<char>* cigar = new std::vector<char>();
+    auto* cigar = new std::vector<char>();
     char lastMove = 0;  // Char of last move. 0 if there was no previous move.
     int numOfSameMoves = 0;
     int start_idx = edit_cigar->begin_offset;

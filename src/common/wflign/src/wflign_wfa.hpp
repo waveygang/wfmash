@@ -29,7 +29,7 @@ struct alignment_t {
     bool ok = false;
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
-    wfa::edit_cigar_t edit_cigar;
+    wfa::edit_cigar_t edit_cigar{};
     void trim_front(int query_trim) {
         // this kills the alignment
         if (query_trim >= query_length) {
@@ -78,7 +78,7 @@ struct alignment_t {
         if (x == edit_cigar.begin_offset) ok = false;
         edit_cigar.end_offset = x;
     }
-    ~alignment_t(void) {
+    ~alignment_t() {
         free(edit_cigar.operations);
     }
 };
@@ -89,7 +89,7 @@ struct trace_pos_t {
     int i = 0;
     wfa::edit_cigar_t* edit_cigar = nullptr;
     int offset = 0;
-    bool incr(void) {
+    bool incr() {
         if (offset < edit_cigar->end_offset) {
             switch (curr()) {
             case 'M': case 'X': ++j; ++i; break;
@@ -103,7 +103,7 @@ struct trace_pos_t {
             return false;
         }
     }
-    bool decr(void) {
+    bool decr() {
         if (offset > edit_cigar->begin_offset) {
             --offset;
             switch (curr()) {
@@ -117,10 +117,10 @@ struct trace_pos_t {
             return false;
         }
     }
-    bool at_end(void) const {
+    bool at_end() const {
         return offset == edit_cigar->end_offset;
     }
-    char curr(void) const {
+    char curr() const {
         assert(!at_end());
         return edit_cigar->operations[offset];
     }
@@ -129,7 +129,7 @@ struct trace_pos_t {
             && i == other.i
             && curr() == 'M' && curr() == other.curr();
     }
-    bool assigned(void) const {
+    bool assigned() const {
         return edit_cigar != nullptr;
     }
 };
@@ -190,7 +190,7 @@ void merge_alignments(
 
 void write_merged_alignment(
     std::ostream& out,
-    const std::vector<alignment_t*> trace,
+    const std::vector<alignment_t*>& trace,
     const bool paf_format_else_sam,
     const char* query,
     const std::string& query_name,
