@@ -424,7 +424,7 @@ void write_merged_alignment(
     uint64_t target_end = 0;
     uint64_t total_score = 0;
 
-    double mash_dist_sum = 0;
+    //double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
 
     uint64_t l = 0;
@@ -454,7 +454,7 @@ void write_merged_alignment(
                                            deletions,
                                            deleted_bp);
 
-            mash_dist_sum += aln.mash_dist;
+            //mash_dist_sum += aln.mash_dist;
             total_query_aligned_length += query_aligned_length;
             total_target_aligned_length += target_aligned_length;
 
@@ -492,7 +492,7 @@ void write_merged_alignment(
     // gap-compressed identity
     const double gap_compressed_identity = (double)matches / (matches + edit_distance);
 
-    const double block_identity = (double)matches / (matches + edit_distance);
+    //const double block_identity = (double)matches / (matches + edit_distance);
 
     if (gap_compressed_identity >= min_identity) {
         if (paf_format_else_sam) {
@@ -507,17 +507,17 @@ void write_merged_alignment(
                 << "\t" << target_offset + target_end
                 << "\t" << matches
                 << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
-                << "\t" << std::round(float2phred(1.0-block_identity))
+                << "\t" << std::round(float2phred(1.0-gap_compressed_identity))
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
-                << "\t" << "bi:f:" << block_identity
-                << "\t" << "md:f:" << mash_dist_sum / trace.size()
-                << "\t" << "ma:i:" << matches
-                << "\t" << "mm:i:" << mismatches
-                << "\t" << "ni:i:" << insertions
-                << "\t" << "ii:i:" << inserted_bp
-                << "\t" << "nd:i:" << deletions
-                << "\t" << "dd:i:" << deleted_bp
+                //<< "\t" << "bi:f:" << block_identity
+                //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
+                //<< "\t" << "ma:i:" << matches
+                //<< "\t" << "mm:i:" << mismatches
+                //<< "\t" << "ni:i:" << insertions
+                //<< "\t" << "ii:i:" << inserted_bp
+                //<< "\t" << "nd:i:" << deletions
+                //<< "\t" << "dd:i:" << deleted_bp
                 << "\t" << "cg:Z:";
             ///for (auto* c : cigarv) { out << c; }
             // cigar op merging
@@ -555,7 +555,7 @@ void write_merged_alignment(
                 << "\t" << (query_is_rev ? "16" : "0")                          // bitwise FLAG
                 << "\t" << target_name                                          // Reference sequence NAME
                 << "\t" << target_offset + target_start + 1                     // 1-based leftmost mapping POSition
-                << "\t" << std::round(float2phred(1.0-block_identity))  // MAPping Quality
+                << "\t" << std::round(float2phred(1.0-gap_compressed_identity))  // MAPping Quality
                 << "\t";
 
 
@@ -622,8 +622,8 @@ void write_merged_alignment(
                 << "\t" << "NM:i:" << edit_distance
                 << "\t" << "AS:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
-                << "\t" << "bi:f:" << block_identity
-                << "\t" << "md:f:" << mash_dist_sum / trace.size()
+                //<< "\t" << "bi:f:" << block_identity
+                //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
                 //<< "\t" << "ni:i:" << insertions
