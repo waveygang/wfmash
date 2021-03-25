@@ -34,9 +34,9 @@ void wflign_affine_wavefront(
     const int pattern_length = query_length / step_size;
     const int text_length = target_length / step_size;
 
-    // use exact WFA locally
-    const int wfa_min_wavefront_length = 0;
-    const int wfa_max_distance_threshold = 0;
+    // use reduced WFA locally
+    const int wfa_min_wavefront_length = segment_length / 4;
+    const int wfa_max_distance_threshold = segment_length / 4;
 
     // Allocate MM
     wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -51,12 +51,12 @@ void wflign_affine_wavefront(
     wflambda::affine_wavefronts_t* affine_wavefronts;
     if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
         affine_wavefronts = wflambda::affine_wavefronts_new_reduced(
-            pattern_length, text_length, &wflambda_affine_penalties,
+            pattern_length+1, text_length+1, &wflambda_affine_penalties,
             wflambda_min_wavefront_length, wflambda_max_distance_threshold,
             NULL, wflambda_mm_allocator);
     } else {
         affine_wavefronts = wflambda::affine_wavefronts_new_complete(
-            pattern_length, text_length, &wflambda_affine_penalties, NULL, wflambda_mm_allocator);
+            pattern_length+1, text_length+1, &wflambda_affine_penalties, NULL, wflambda_mm_allocator);
     }
 
     // save computed alignments in a pair-indexed patchmap
@@ -80,13 +80,11 @@ void wflign_affine_wavefront(
     int v_max = 0;
     int h_max = 0;
 
-    auto extend_match =
-        [&](const int& v,
-            const int& h) {
+    auto extend_match = [&](const int& v, const int& h) {
             bool aligned = false;
             if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
                 uint64_t k = encode_pair(v, h);
-                auto f = alignments.find(k);
+                auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
                 if (f != alignments.end()) {
                     aligned = true;
                 } else  {
@@ -141,7 +139,7 @@ void wflign_affine_wavefront(
                         }
                     }
                 }
-            } else if (h < 0 || v < 0) {
+            } else if (h < 0 || v < 0) { //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
                 aligned = true;
             }
             return aligned;
@@ -151,24 +149,16 @@ void wflign_affine_wavefront(
     // then trim the cigars of successive mappings
     //
     std::vector<alignment_t*> trace;
-    
-    auto trace_match =
-        [&](const int& v, const int& h) {
-            if (v < 0 || h < 0) {
-                return false;
-            } else if (v > pattern_length || h > text_length) {
-                return false;
-            } else {
-                uint64_t k = encode_pair(v, h);
-                auto f = alignments.find(k);
-                if (f != alignments.end()) {
-                    trace.push_back(f->second);
-                    return true;
-                } else {
-                    return false;
-                }
-            }
-        };
+
+    auto trace_match = [&](const int& v, const int& h) {
+        if (v < 0 || h < 0 || v > pattern_length || h > text_length) {
+            return false;
+        } else {
+            uint64_t k = encode_pair(v, h);
+            trace.push_back(alignments[k]);
+            return true;
+        }
+    };
 
     // Align
     wflambda::affine_wavefronts_align(
@@ -339,7 +329,7 @@ bool do_alignment(
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.5) {
+    if (mash_dist > 0.618034) {
         // if it isn't, return false
         aln.score = max_score;
         aln.ok = false;

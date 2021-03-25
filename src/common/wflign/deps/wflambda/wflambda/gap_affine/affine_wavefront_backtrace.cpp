@@ -242,10 +242,10 @@ void affine_wavefronts_backtrace_matches__check(
     const int v = AFFINE_LAMBDA_WAVEFRONT_V(k,offset);
     const int h = AFFINE_LAMBDA_WAVEFRONT_H(k,offset);
     if (!valid_location) { // Check inside table
-      fprintf(stderr,"Backtrace error: Match outside DP-Table\n");
+      fprintf(stderr,"[wflambda] Backtrace error: Match outside DP-Table\n");
       exit(1);
     } else if (!lambda(v-1, h-1)) { // Check match
-      fprintf(stderr,"Backtrace error: Not a match traceback\n");
+      fprintf(stderr,"[wflambda] Backtrace error: Not a match traceback\n");
       exit(1);
     }
     // Set Match
