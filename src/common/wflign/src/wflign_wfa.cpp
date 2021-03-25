@@ -333,9 +333,9 @@ bool do_alignment(
     }
 
     // first check if our mash dist is inbounds
-    double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    const double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    int max_score = segment_length;
+    const int max_score = segment_length;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
@@ -399,10 +399,6 @@ void write_merged_alignment(
     const float& min_identity,
     const bool& with_endline) {
 
-    if (trace.empty()) {
-        return;
-    }
-
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
     // finally emitting it
@@ -427,7 +423,6 @@ void write_merged_alignment(
     //double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
 
-    uint64_t l = 0;
     for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
         auto& aln = **x;
 
@@ -461,7 +456,7 @@ void write_merged_alignment(
             // add the delta in ref and query from the last alignment
             if (query_end && aln.j > query_end) {
                 ++insertions;
-                int len = aln.j - query_end;
+                const int len = aln.j - query_end;
                 inserted_bp += len;
                 std::string x = std::to_string(len) + "I";
                 char* c = (char*) malloc(x.size() + 1);
@@ -471,7 +466,7 @@ void write_merged_alignment(
             }
             if (target_end && aln.i > target_end) {
                 ++deletions;
-                int len = aln.i - target_end;
+                const int len = aln.i - target_end;
                 deleted_bp += len;
                 std::string x = std::to_string(len) + "D";
                 char* c = (char*) malloc(x.size() + 1);
