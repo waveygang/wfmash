@@ -685,10 +685,8 @@ void write_alignment(
 
         size_t alignmentRefPos = aln.i;
         //double identity = (double)matches / (matches + mismatches + insertions + deletions);
-        double gap_compressed_identity = (double)matches
-            / (matches + mismatches + insertions + deletions);
-        double block_identity = (double)matches
-            / (matches + mismatches + inserted_bp + deleted_bp);
+        double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
+        //double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
         // convert our coordinates to be relative to forward strand (matching PAF standard)
 
         if (gap_compressed_identity >= min_identity) {
@@ -709,17 +707,17 @@ void write_alignment(
                 << "\t" << target_offset + alignmentRefPos + refAlignedLength
                 << "\t" << matches
                 << "\t" << std::max(refAlignedLength, qAlignedLength)
-                << "\t" << std::round(float2phred(1.0-block_identity))
+                << "\t" << std::round(float2phred(1.0-gap_compressed_identity))
                 << "\t" << "as:i:" << aln.score
                 << "\t" << "gi:f:" << gap_compressed_identity
-                << "\t" << "bi:f:" << block_identity
-                << "\t" << "md:f:" << aln.mash_dist
-                << "\t" << "ma:i:" << matches
-                << "\t" << "mm:i:" << mismatches
-                << "\t" << "ni:i:" << insertions
-                << "\t" << "bi:i:" << inserted_bp
-                << "\t" << "nd:i:" << deletions
-                << "\t" << "bd:i:" << deleted_bp
+                //<< "\t" << "bi:f:" << block_identity
+                //<< "\t" << "md:f:" << aln.mash_dist
+                //<< "\t" << "ma:i:" << matches
+                //<< "\t" << "mm:i:" << mismatches
+                //<< "\t" << "ni:i:" << insertions
+                //<< "\t" << "bi:i:" << inserted_bp
+                //<< "\t" << "nd:i:" << deletions
+                //<< "\t" << "bd:i:" << deleted_bp
                 << "\t" << "cg:Z:" << cigar;
             if (with_endline) {
                 out << std::endl;
@@ -746,11 +744,9 @@ char* alignmentToCigar(
     auto* cigar = new std::vector<char>();
     char lastMove = 0;  // Char of last move. 0 if there was no previous move.
     int numOfSameMoves = 0;
-    int start_idx = edit_cigar->begin_offset;
-    int end_idx = edit_cigar->end_offset;
-    if (end_idx == start_idx) {
-        end_idx = edit_cigar->end_offset;
-    }
+    const int start_idx = edit_cigar->begin_offset;
+    const int end_idx = edit_cigar->end_offset;
+
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int i = start_idx; i <= end_idx; i++) {
         // if new sequence of same moves started
