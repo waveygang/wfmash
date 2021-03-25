@@ -51,12 +51,12 @@ void wflign_affine_wavefront(
     wflambda::affine_wavefronts_t* affine_wavefronts;
     if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
         affine_wavefronts = wflambda::affine_wavefronts_new_reduced(
-            pattern_length, text_length, &wflambda_affine_penalties,
+            pattern_length+1, text_length+1, &wflambda_affine_penalties,
             wflambda_min_wavefront_length, wflambda_max_distance_threshold,
             NULL, wflambda_mm_allocator);
     } else {
         affine_wavefronts = wflambda::affine_wavefronts_new_complete(
-            pattern_length, text_length, &wflambda_affine_penalties, NULL, wflambda_mm_allocator);
+            pattern_length+1, text_length+1, &wflambda_affine_penalties, NULL, wflambda_mm_allocator);
     }
 
     // save computed alignments in a pair-indexed patchmap
