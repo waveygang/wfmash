@@ -34,7 +34,7 @@ void wflign_affine_wavefront(
     const int pattern_length = query_length / step_size;
     const int text_length = target_length / step_size;
 
-    // use exact WFA locally
+    // use reduced WFA locally
     const int wfa_min_wavefront_length = segment_length / 4;
     const int wfa_max_distance_threshold = segment_length / 4;
 
