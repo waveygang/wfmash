@@ -35,8 +35,8 @@ void wflign_affine_wavefront(
     const int text_length = target_length / step_size;
 
     // use reduced WFA locally
-    const int wfa_min_wavefront_length = segment_length / 4;
-    const int wfa_max_distance_threshold = segment_length / 4;
+    const int wfa_min_wavefront_length = segment_length / 16;
+    const int wfa_max_distance_threshold = segment_length / 8;
 
     // Allocate MM
     wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -315,11 +315,11 @@ bool do_alignment(
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
-        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/20);
+        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/8);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
-        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/20);
+        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/8);
     }
 
     // first check if our mash dist is inbounds
@@ -329,7 +329,7 @@ bool do_alignment(
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.618034) {
+    if (mash_dist > 0.9) {// 0.618034) {
         // if it isn't, return false
         aln.score = max_score;
         aln.ok = false;

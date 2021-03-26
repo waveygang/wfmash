@@ -50,7 +50,7 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 400]", {'W', "wflamda-segment"});
+    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
     args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
@@ -138,8 +138,8 @@ void parse_args(int argc,
 
     if (segment_length) {
         map_parameters.segLength = args::get(segment_length);
-        if (map_parameters.segLength < 200) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 200 bp." << std::endl
+        if (map_parameters.segLength < 100) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 100 bp." << std::endl
                       << "[wfmash] This is because Mashmap is not designed for computing short local alignments." << std::endl;
             exit(1);
         }
@@ -178,7 +178,7 @@ void parse_args(int argc,
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {
-        align_parameters.wflambda_segment_length = 400;
+        align_parameters.wflambda_segment_length = 256;
     }
 
     if (wflambda_min_wavefront_length) {
