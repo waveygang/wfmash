@@ -30,6 +30,13 @@ struct alignment_t {
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
     wfa::edit_cigar_t edit_cigar{};
+    void display(void) {
+        std::cerr << j << " " << i << " " << query_length << " " << target_length << " " << ok << std::endl;
+        for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
+            std::cerr << edit_cigar.operations[x++];
+        }
+        std::cerr << std::endl;
+    }
     void trim_front(int query_trim) {
         // this kills the alignment
         if (query_trim >= query_length) {
@@ -51,6 +58,9 @@ struct alignment_t {
                 ok = false;
                 return;
             }
+        }
+        while (x < edit_cigar.end_offset && edit_cigar.operations[x] == 'D') {
+            ++x; --target_length; ++i;
         }
         if (x == edit_cigar.end_offset) ok = false;
         edit_cigar.begin_offset = x;
@@ -74,6 +84,9 @@ struct alignment_t {
                 ok = false;
                 return;
             }
+        }
+        while (x >= edit_cigar.begin_offset && edit_cigar.operations[x-1] == 'D') {
+            --x; --target_length;
         }
         if (x == edit_cigar.begin_offset) ok = false;
         edit_cigar.end_offset = x;
@@ -105,13 +118,13 @@ struct trace_pos_t {
     }
     bool decr() {
         if (offset > edit_cigar->begin_offset) {
-            --offset;
             switch (curr()) {
             case 'M': case 'X': --j; --i; break;
             case 'I': --j; break;
             case 'D': --i; break;
             default: break;
             }
+            --offset;
             return true;
         } else {
             return false;

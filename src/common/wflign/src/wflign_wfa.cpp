@@ -198,6 +198,13 @@ void wflign_affine_wavefront(
         for (auto x = trace.rbegin()+1; x != trace.rend(); ++x) {
             auto& curr = **x;
             auto& last = **(x-1);
+            /*
+            std::cerr << "splicing" << std::endl;
+            std::cerr << "curr = ";
+            curr.display();
+            std::cerr << "last = ";
+            last.display();
+            */
             trace_pos_t last_pos = { last.j, last.i,
                                      &last.edit_cigar,
                                      last.edit_cigar.begin_offset };
@@ -236,10 +243,16 @@ void wflign_affine_wavefront(
                 // we want to remove any possible overlaps in query or target
                 // walk back last until we don't overlap in i or j
                 // recording the distance walked as an additional trim on last
-                while (last_pos.j > curr_pos.j && last_pos.decr());
-                while (last_pos.j > curr_pos.j && curr_pos.incr());
-                while (last_pos.i > curr_pos.i && last_pos.decr());
-                while (last_pos.i > curr_pos.i && curr_pos.incr());
+                bool flip = false;
+                while (last_pos.j > curr_pos.j
+                       || last_pos.i > curr_pos.i) {
+                    if (flip) {
+                        last_pos.decr();
+                    } else {
+                        curr_pos.incr();
+                    }
+                    flip ^= true;
+                }
                 trim_last = (last.j + last.query_length) - last_pos.j + 1;
                 trim_curr = curr_pos.j - curr.j + 1;
                 assert(last_pos.j <= curr_pos.j);
@@ -253,6 +266,14 @@ void wflign_affine_wavefront(
             if (trim_curr > 0) {
                 curr.trim_front(trim_curr);
             }
+            /*
+            std::cerr << "spliced" << std::endl;
+            std::cerr << "curr = ";
+            curr.display();
+            std::cerr << "last = ";
+            last.display();
+            std::cerr << std::endl;
+            */
         }
 
         if (merge_alignments) {
