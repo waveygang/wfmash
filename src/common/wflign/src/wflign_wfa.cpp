@@ -168,6 +168,7 @@ void wflign_affine_wavefront(
         pattern_length,
         text_length);
 
+//#define WFLIGN_DEBUG
 #ifdef WFLIGN_DEBUG
     // get alignment score
     const int score = wflambda::edit_cigar_score_gap_affine(
@@ -195,6 +196,14 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
+//#define VALIDATE_WFA_WFLIGN
+#ifdef VALIDATE_WFA_WFLIGN
+        if (!trace.front()->validate(query, target)) {
+            std::cerr << "first traceback is wrong" << std::endl;
+            trace.front()->display();
+            assert(false);
+        }
+#endif
         for (auto x = trace.rbegin()+1; x != trace.rend(); ++x) {
             auto& curr = **x;
             auto& last = **(x-1);
@@ -205,6 +214,13 @@ void wflign_affine_wavefront(
             std::cerr << "last = ";
             last.display();
             */
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!curr.validate(query, target)) {
+                std::cerr << "curr traceback is wrong before trimming @ " << curr.j << " " << curr.i << std::endl;
+                curr.display();
+                assert(false);
+            }
+#endif
             trace_pos_t last_pos = { last.j, last.i,
                                      &last.edit_cigar,
                                      last.edit_cigar.begin_offset };
@@ -262,9 +278,24 @@ void wflign_affine_wavefront(
             // assign our cigar trim
             if (trim_last > 0) {
                 last.trim_back(trim_last);
+#ifdef VALIDATE_WFA_WFLIGN
+                if (!last.validate(query, target)) {
+                    std::cerr << "traceback is wrong after last trimming @ " << last.j << " " << last.i << std::endl;
+                    last.display();
+                    assert(false);
+                }
+#endif
             }
+
             if (trim_curr > 0) {
                 curr.trim_front(trim_curr);
+#ifdef VALIDATE_WFA_WFLIGN
+                if (!curr.validate(query, target)) {
+                    std::cerr << "traceback is wrong after curr trimming @ " << curr.j << " " << curr.i << std::endl;
+                    curr.display();
+                    assert(false);
+                }
+#endif
             }
             /*
             std::cerr << "spliced" << std::endl;
@@ -283,6 +314,7 @@ void wflign_affine_wavefront(
                                    query,
                                    query_name, query_total_length, query_offset, query_length,
                                    query_is_rev,
+                                   target,
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity);
         } else {
@@ -384,13 +416,115 @@ bool do_alignment(
         // copy our edit cigar if we aligned
         aln.ok = aln.score < max_score;
         if (aln.ok) {
+            // correct X/M errors in the cigar
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, aln.j, aln.i)) {
+                std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
+                unpack_display_cigar(affine_wavefronts->edit_cigar, query, target, aln.j, aln.i);
+                std::cerr << ">query" << std::endl << std::string(query+j, segment_length) << std::endl;
+                std::cerr << ">target" << std::endl << std::string(target+i, segment_length) << std::endl;
+                assert(false);
+            }
+#endif
             wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, aln.j, aln.i)) {
+                std::cerr << "cigar failure after cigar copy in alignment " << aln.j << " " << aln.i << std::endl;
+                assert(false);
+            }
+#endif
         }
         // cleanup wavefronts to keep memory low
         affine_wavefronts_delete(affine_wavefronts);
 
         return aln.ok;
     }
+}
+
+bool validate_cigar(
+    const wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    uint64_t j, uint64_t i) {
+    // check that our cigar matches where it claims it does
+    const int start_idx = cigar.begin_offset;
+    const int end_idx = cigar.end_offset;
+    //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+    for (int c = start_idx; c < end_idx; c++) {
+        // if new sequence of same moves started
+        switch (cigar.operations[c]) {
+        case 'M':
+            // check that we match
+            if (query[j] != target[i]) {
+                std::cerr << "mismatch @ " << j << " " << i << " " << query[j] << " " << target[i] << std::endl;
+                return false;
+            }
+            ++j; ++i;
+            break;
+        case 'X':
+            ++j; ++i;
+            break;
+        case 'I':
+            ++j;
+            break;
+        case 'D':
+            ++i;
+            break;
+        default:
+            break;
+        }
+    }
+    return true;
+}
+
+bool unpack_display_cigar(
+    const wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    uint64_t j, uint64_t i) {
+    // check that our cigar matches where it claims it does
+    const int start_idx = cigar.begin_offset;
+    const int end_idx = cigar.end_offset;
+    //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+    for (int c = start_idx; c < end_idx; c++) {
+        // if new sequence of same moves started
+        switch (cigar.operations[c]) {
+        case 'M':
+            // check that we match
+            std::cerr << "M" << " "
+                      << j << " " << i << " "
+                      << "q:" << query[j] << " "
+                      << "t:" << target[i] << " "
+                      << (query[j] == target[i] ? " " : "👾")
+                      << std::endl;
+            ++j; ++i;
+            break;
+        case 'X':
+            std::cerr << "X" << " "
+                      << j << " " << i << " "
+                      << "q:" << query[j] << " "
+                      << "t:" << target[i] << " "
+                      << (query[j] != target[i] ? " " : "👾")
+                      << std::endl;
+            ++j; ++i;
+            break;
+        case 'I':
+            std::cerr << "I" << " "
+                      << j << " " << i << " "
+                      << "q:" << query[j] << " "
+                      << "t:" << "|" << " " << std::endl;
+            ++j;
+            break;
+        case 'D':
+            std::cerr << "D" << " "
+                      << j << " " << i << " "
+                      << "q:" << "|" << " "
+                      << "t:" << target[i] << " " << std::endl;
+            ++i;
+            break;
+        default:
+            break;
+        }
+    }
+    return true;
 }
 
 void write_merged_alignment(
@@ -403,6 +537,7 @@ void write_merged_alignment(
     const uint64_t& query_offset,
     const uint64_t& query_length,
     const bool& query_is_rev,
+    const char* target,
     const std::string& target_name,
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
@@ -450,6 +585,13 @@ void write_merged_alignment(
 
             //std::cerr << "trace " << aln.j << " " << aln.i << std::endl;
 
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!validate_cigar(aln.edit_cigar, query, target, aln.j, aln.i)) {
+                std::cerr << "cigar failure at trace " << aln.j << " " << aln.i << std::endl;
+                assert(false);
+            }
+#endif
+
             char* cigar = alignmentToCigar(&aln.edit_cigar,
                                            target_aligned_length,
                                            query_aligned_length,
@@ -459,6 +601,8 @@ void write_merged_alignment(
                                            inserted_bp,
                                            deletions,
                                            deleted_bp);
+            // check the cigar!
+            
 
             //mash_dist_sum += aln.mash_dist;
             total_query_aligned_length += query_aligned_length;
@@ -491,7 +635,6 @@ void write_merged_alignment(
             total_score += aln.score;
         }
     }
-
 
     const uint64_t edit_distance = mismatches + insertions + deletions;
 

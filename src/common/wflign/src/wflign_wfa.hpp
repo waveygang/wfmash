@@ -21,6 +21,16 @@ namespace wflign {
 
 namespace wavefront {
 
+bool validate_cigar(
+    const wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    uint64_t j, uint64_t i);
+
+bool unpack_display_cigar(
+    const wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    uint64_t j, uint64_t i);
+
 struct alignment_t {
     int j = 0;
     int i = 0;
@@ -36,6 +46,9 @@ struct alignment_t {
             std::cerr << edit_cigar.operations[x++];
         }
         std::cerr << std::endl;
+    }
+    bool validate(const char* query, const char* target) {
+        return validate_cigar(edit_cigar, query, target, j, i);
     }
     void trim_front(int query_trim) {
         // this kills the alignment
@@ -211,6 +224,7 @@ void write_merged_alignment(
     const uint64_t& query_offset,
     const uint64_t& query_length,
     const bool& query_is_rev,
+    const char* target,
     const std::string& target_name,
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
