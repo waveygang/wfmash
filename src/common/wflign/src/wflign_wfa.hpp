@@ -118,13 +118,13 @@ struct trace_pos_t {
     }
     bool decr() {
         if (offset > edit_cigar->begin_offset) {
+            --offset;
             switch (curr()) {
             case 'M': case 'X': --j; --i; break;
             case 'I': --j; break;
             case 'D': --i; break;
             default: break;
             }
-            --offset;
             return true;
         } else {
             return false;
