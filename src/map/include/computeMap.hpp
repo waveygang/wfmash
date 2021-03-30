@@ -605,8 +605,8 @@ namespace skch
 
       // helper to get the prefix of a string
       const std::string prefix(const std::string& s, const char c) {
-          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find(c)) << std::endl;
-          return s.substr(0, s.find(c));
+          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find_last_of(c)) << std::endl;
+          return s.substr(0, s.find_last_of(c));
       }
 
       /**
@@ -632,6 +632,8 @@ namespace skch
 
             float nucIdentity = (1 - mash_dist);
             float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
+
+
 
             //Report the alignment if it passes our identity threshold and,
             // if we are in all-vs-all mode, it isn't a self-mapping,
