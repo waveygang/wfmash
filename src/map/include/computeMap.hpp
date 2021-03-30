@@ -639,9 +639,6 @@ namespace skch
             // if we are in all-vs-all mode, it isn't a self-mapping,
             // and if we are self-mapping, the query is shorter than the target
             const auto& ref = this->refSketch.metadata[l2.seqId];
-              std::cerr << " AAAA " << ref.name << " - " << prefix(ref.name, param.prefix_delim) << std::endl;
-              std::cerr << " AAAA " << Q.seqName << " - " << prefix(Q.seqName, param.prefix_delim) << std::endl;
-              std::cerr << " AAAA " << (prefix(Q.seqName, param.prefix_delim)  == prefix(ref.name, param.prefix_delim)) << std::endl;
             if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity
                 || nucIdentity >= param.percentageIdentity)
                && !(param.skip_self && Q.seqName == ref.name)
