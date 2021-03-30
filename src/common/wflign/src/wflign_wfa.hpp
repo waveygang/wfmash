@@ -173,6 +173,14 @@ void wflign_edit_cigar_copy(
     wfa::edit_cigar_t* const edit_cigar_dst,
     wfa::edit_cigar_t* const edit_cigar_src);
 
+/*
+void edlib_to_wflign_edit_cigar_copy(
+    wfa::edit_cigar_t* const edit_cigar_dst,
+    char* const edlib_cigar_src,
+    const uint64_t& edit_distance,
+    const uint64_t& edlib_cigar_len);
+*/
+
 inline uint64_t encode_pair(int v, int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
@@ -226,9 +234,19 @@ void do_wfa_patch_alignment(
     const char* target,
     const uint64_t& i,
     const uint64_t& target_length,
+    const int min_wavefront_length,
+    const int max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
+
+EdlibAlignResult do_edlib_patch_alignment(
+    const char* query,
+    const uint64_t& j,
+    const uint64_t& query_length,
+    const char* target,
+    const uint64_t& i,
+    const uint64_t& target_length);
 
 void merge_alignments(
     alignment_t& base,
@@ -284,10 +302,6 @@ char* wfa_alignment_to_cigar(
 char* edlib_alignment_to_cigar(
     const unsigned char* const alignment,
     const int alignment_length,
-    const int skip_query_start,
-    const int keep_query_length,
-    int& skipped_target_start,
-    int& kept_target_length,
     uint64_t& target_aligned_length,
     uint64_t& query_aligned_length,
     uint64_t& matches,
