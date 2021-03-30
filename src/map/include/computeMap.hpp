@@ -605,8 +605,8 @@ namespace skch
 
       // helper to get the prefix of a string
       const std::string prefix(const std::string& s, const char c) {
-          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find(c)) << std::endl;
-          return s.substr(0, s.find(c));
+          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find_last_of(c)) << std::endl;
+          return s.substr(0, s.find_last_of(c));
       }
 
       /**
@@ -633,10 +633,15 @@ namespace skch
             float nucIdentity = (1 - mash_dist);
             float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
 
+
+
             //Report the alignment if it passes our identity threshold and,
             // if we are in all-vs-all mode, it isn't a self-mapping,
             // and if we are self-mapping, the query is shorter than the target
             const auto& ref = this->refSketch.metadata[l2.seqId];
+              std::cerr << " AAAA " << ref.name << " - " << prefix(ref.name, param.prefix_delim) << std::endl;
+              std::cerr << " AAAA " << Q.seqName << " - " << prefix(Q.seqName, param.prefix_delim) << std::endl;
+              std::cerr << " AAAA " << (prefix(Q.seqName, param.prefix_delim)  == prefix(ref.name, param.prefix_delim)) << std::endl;
             if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity
                 || nucIdentity >= param.percentageIdentity)
                && !(param.skip_self && Q.seqName == ref.name)
