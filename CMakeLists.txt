@@ -46,3 +46,6 @@ target_link_libraries(wfmash
   z)
 
 install(TARGETS wfmash DESTINATION bin)
+
+#set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Release)

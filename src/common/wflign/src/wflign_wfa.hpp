@@ -9,6 +9,7 @@
 //#include "WFA/gap_affine/affine_wavefront.hpp"
 #include "WFA/gap_affine/affine_wavefront_align.hpp"
 #include "patchmap.hpp"
+#include "edlib.h"
 //#include "wfa_edit_callback.hpp"
 #include "wflambda/gap_affine/affine_wavefront_align.hpp"
 #include "wflambda/gap_affine/affine_wavefront_backtrace.hpp"
@@ -21,6 +22,24 @@ namespace wflign {
 
 namespace wavefront {
 
+bool hack_cigar(
+    wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    const uint64_t& query_aln_len, const uint64_t& target_aln_len,
+    uint64_t j, uint64_t i);
+
+bool validate_cigar(
+    const wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    const uint64_t& query_aln_len, const uint64_t& target_aln_len,
+    uint64_t j, uint64_t i);
+
+bool unpack_display_cigar(
+    const wfa::edit_cigar_t& cigar,
+    const char* query, const char* target,
+    const uint64_t& query_aln_len, const uint64_t& target_aln_len,
+    uint64_t j, uint64_t i);
+
 struct alignment_t {
     int j = 0;
     int i = 0;
@@ -30,6 +49,16 @@ struct alignment_t {
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
     wfa::edit_cigar_t edit_cigar{};
+    void display(void) {
+        std::cerr << j << " " << i << " " << query_length << " " << target_length << " " << ok << std::endl;
+        for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
+            std::cerr << edit_cigar.operations[x++];
+        }
+        std::cerr << std::endl;
+    }
+    bool validate(const char* query, const char* target) {
+        return validate_cigar(edit_cigar, query, target, query_length, target_length, j, i);
+    }
     void trim_front(int query_trim) {
         // this kills the alignment
         if (query_trim >= query_length) {
@@ -51,6 +80,9 @@ struct alignment_t {
                 ok = false;
                 return;
             }
+        }
+        while (x < edit_cigar.end_offset && edit_cigar.operations[x] == 'D') {
+            ++x; --target_length; ++i;
         }
         if (x == edit_cigar.end_offset) ok = false;
         edit_cigar.begin_offset = x;
@@ -74,6 +106,9 @@ struct alignment_t {
                 ok = false;
                 return;
             }
+        }
+        while (x >= edit_cigar.begin_offset && edit_cigar.operations[x-1] == 'D') {
+            --x; --target_length;
         }
         if (x == edit_cigar.begin_offset) ok = false;
         edit_cigar.end_offset = x;
@@ -138,6 +173,14 @@ void wflign_edit_cigar_copy(
     wfa::edit_cigar_t* const edit_cigar_dst,
     wfa::edit_cigar_t* const edit_cigar_src);
 
+/*
+void edlib_to_wflign_edit_cigar_copy(
+    wfa::edit_cigar_t* const edit_cigar_dst,
+    char* const edlib_cigar_src,
+    const uint64_t& edit_distance,
+    const uint64_t& edlib_cigar_len);
+*/
+
 inline uint64_t encode_pair(int v, int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
@@ -164,7 +207,7 @@ void wflign_affine_wavefront(
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold);
 
-bool do_alignment(
+bool do_wfa_segment_alignment(
     const std::string& query_name,
     const char* query,
     std::vector<rkmh::hash_t>*& query_sketches,
@@ -184,6 +227,27 @@ bool do_alignment(
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
 
+void do_wfa_patch_alignment(
+    const char* query,
+    const uint64_t& j,
+    const uint64_t& query_length,
+    const char* target,
+    const uint64_t& i,
+    const uint64_t& target_length,
+    const int min_wavefront_length,
+    const int max_distance_threshold,
+    wfa::mm_allocator_t* const mm_allocator,
+    wfa::affine_penalties_t* const affine_penalties,
+    alignment_t& aln);
+
+EdlibAlignResult do_edlib_patch_alignment(
+    const char* query,
+    const uint64_t& j,
+    const uint64_t& query_length,
+    const char* target,
+    const uint64_t& i,
+    const uint64_t& target_length);
+
 void merge_alignments(
     alignment_t& base,
     const alignment_t& ext);
@@ -191,6 +255,8 @@ void merge_alignments(
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*>& trace,
+    wfa::mm_allocator_t* const mm_allocator,
+    wfa::affine_penalties_t* const affine_penalties,
     const bool paf_format_else_sam,
     const char* query,
     const std::string& query_name,
@@ -198,11 +264,13 @@ void write_merged_alignment(
     const uint64_t& query_offset,
     const uint64_t& query_length,
     const bool& query_is_rev,
+    const char* target,
     const std::string& target_name,
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
+    const uint64_t& dropout_rescue_max,
     const bool& with_endline = true);
 
 void write_alignment(
@@ -221,8 +289,20 @@ void write_alignment(
     const bool& with_endline = true);
 
 
-char* alignmentToCigar(
+char* wfa_alignment_to_cigar(
     const wfa::edit_cigar_t* const edit_cigar,
+    uint64_t& target_aligned_length,
+    uint64_t& query_aligned_length,
+    uint64_t& matches,
+    uint64_t& mismatches,
+    uint64_t& insertions,
+    uint64_t& inserted_bp,
+    uint64_t& deletions,
+    uint64_t& deleted_bp);
+
+char* edlib_alignment_to_cigar(
+    const unsigned char* const alignment,
+    const int alignment_length,
     uint64_t& target_aligned_length,
     uint64_t& query_aligned_length,
     uint64_t& matches,
