@@ -313,7 +313,8 @@ void wflign_affine_wavefront(
                                    query_is_rev,
                                    target,
                                    target_name, target_total_length, target_offset, target_length,
-                                   min_identity);
+                                   min_identity,
+                                   segment_length * 32);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 //std::cerr << "on alignment" << std::endl;
@@ -475,16 +476,14 @@ void do_wfa_patch_alignment(
     aln.query_length = query_length;
     aln.target_length = target_length;
 
-    int max_score = std::max(query_length, target_length);
-    aln.score = wfa::affine_wavefronts_align_bounded(
+    aln.score = wfa::affine_wavefronts_align(
         affine_wavefronts,
         target+i,
         target_length,
         query+j,
-        query_length,
-        max_score);
+        query_length);
 
-    aln.ok = aln.score < max_score;
+    aln.ok = true;
     if (aln.ok) {
 
         // correct X/M errors in the cigar
@@ -712,6 +711,7 @@ void write_merged_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
+    const uint64_t& dropout_rescue_max,
     const bool& with_endline) {
 
     // we need to get the start position in the query and target
@@ -775,18 +775,17 @@ void write_merged_alignment(
             //mash_dist_sum += aln.mash_dist;
 
             // add the delta in ref and query from the last alignment
-            const uint64_t rescue_max = 10000;
             const uint64_t min_wfa_length = 16;
             const uint64_t min_edlib_length = 0;
-            const int min_wf_length = 16;
-            const int max_dist_threshold = 32;
+            const int min_wf_length = 8;
+            const int max_dist_threshold = 128;
             uint64_t patch_target_aligned_length = 0;
             uint64_t patch_query_aligned_length = 0;
             int query_delta = aln.j - query_end;
             int target_delta = aln.i - target_end;
             if (query_end &&
                 query_delta > 0 && target_delta > 0 &&
-                query_delta < rescue_max && target_delta < rescue_max) {
+                query_delta < dropout_rescue_max && target_delta < dropout_rescue_max) {
                 char* patch_cigar = nullptr;
                 if (query_delta > min_wfa_length && target_delta > min_wfa_length) {
                     alignment_t patch_aln;

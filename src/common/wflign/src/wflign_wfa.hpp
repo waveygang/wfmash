@@ -270,6 +270,7 @@ void write_merged_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
+    const uint64_t& dropout_rescue_max,
     const bool& with_endline = true);
 
 void write_alignment(
