@@ -380,8 +380,8 @@ namespace skch
           }
         }
 
-        // remove short merged mappings when we are mapping split
-        if (split_mapping && param.mergeMappings) {
+        // remove short merged mappings when we are applying merging
+        if (param.mergeMappings) {
             //filter mappings best over query sequence axis
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                 skch::Filter::query::filterMappings(output->readMappings,
