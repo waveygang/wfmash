@@ -23,8 +23,9 @@
 //External includes
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
-#include "common/sparsehash/dense_hash_map"
+//#include "common/sparsehash/dense_hash_map"
 #include "common/seqiter.hpp"
+#include "common/robin_hood.h"
 
 namespace skch
 {
@@ -79,7 +80,8 @@ namespace skch
        * [minimizer #2] -> [pos1, pos2...]
        * ...
        */
-      using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+        //google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+        using MI_Map_t = robin_hood::unordered_map<MinimizerMapKeyType, MinimizerMapValueType>; 
       MI_Map_t minimizerPosLookupIndex;
 
       private:
@@ -203,7 +205,7 @@ namespace skch
       void index()
       {
         //Parse all the minimizers and push into the map
-        minimizerPosLookupIndex.set_empty_key(0);
+        //minimizerPosLookupIndex.set_empty_key(0);
 
         for(auto &e : minimizerIndex)
         {
