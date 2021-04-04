@@ -1,7 +1,16 @@
 # wfmash
-/usr/bin/time -v wfmash chr8_0001.ref chr8_0001.fastq -t 16 -Na > chr8_0001.sam && samtools view chr8_0001.sam -bS | samtools sort > chr8_0001.bam && samtools index chr8_0001.bam
-/usr/bin/time -v wfmash chr8_0001.ref chr8_0001.fastq -t 16 -Na -s 1000 > chr8_0001.s1000.sam && samtools view chr8_0001.s1000.sam -bS | samtools sort > chr8_0001.s1000.bam && samtools index chr8_0001.s1000.bam
-/usr/bin/time -v wfmash chr8_0001.ref chr8_0001.fastq -t 16 -Na -s 500 > chr8_0001.s500.sam && samtools view chr8_0001.s500.sam -bS | samtools sort > chr8_0001.s500.bam && samtools index chr8_0001.s500.bam
+threads=16
+
+prefix=chr8.18_22kbps
+/usr/bin/time -v wfmash chr8.fa $prefix.fa -t $threads -Na -s 5000 >$prefix.sam && samtools view $prefix.s5000.sam -bS -@ $threads | samtools sort -@ $threads >$prefix.s5000.bam && samtools index $prefix.s5000.bam && samtools coverage $prefix.s5000.bam
+/usr/bin/time -v wfmash chr8.fa $prefix.fa -t $threads -Na -s 500 >$prefix.s500.sam && samtools view $prefix.s500.sam -bS -@ $threads | samtools sort -@ $threads >$prefix.s500.bam && samtools index $prefix.s500.bam && samtools coverage $prefix.s500.bam
+
+prefix=chr8_1Mbps_0001
+/usr/bin/time -v wfmash chr8.fa $prefix.fa -t $threads -Na -s 50000 >$prefix.s50000.sam && samtools view $prefix.s50000.sam -bS -@ $threads | samtools sort -@ $threads >$prefix.s50000.bam && samtools index $prefix.s50000.bam && samtools coverage $prefix.s50000.bam
 
 # minimap2
-/usr/bin/time -v minimap2 chr8_0001.ref chr8_0001.fastq -t 16 -ca > chr8_0001.mp2.sam && samtools view chr8_0001.mp2.sam -bS | samtools sort > chr8_0001.mp2.bam && samtools index chr8_0001.mp2.bam
+prefix=chr8.18_22kbps
+/usr/bin/time -v minimap2 chr8.fa $prefix.fa -t $threads -ca >$prefix.mp2.sam && samtools view $prefix.mp2.sam -bS -@ $threads | samtools sort -@ $threads >$prefix.mp2.bam && samtools index $prefix.mp2.bam
+
+prefix=chr8_1Mbps_0001
+/usr/bin/time -v minimap2 chr8.fa $prefix.fa -t $threads -ca >$prefix.mp2.sam && samtools view $prefix.mp2.sam -bS -@ $threads | samtools sort -@ $threads >$prefix.mp2.bam && samtools index $prefix.mp2.bam
