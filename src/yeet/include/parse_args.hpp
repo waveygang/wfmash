@@ -36,6 +36,7 @@ void parse_args(int argc,
     // mashmap arguments
     args::ValueFlag<uint64_t> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
     args::ValueFlag<uint64_t> block_length_min(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length-min"});
+    args::ValueFlag<uint64_t> merge_skip_max(parser, "N", "merge mappings that skip up to this length of the reference or query [default: 5*segment-length]", {'j', "merge-skip-max"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
@@ -151,6 +152,12 @@ void parse_args(int argc,
         map_parameters.block_length_min = args::get(block_length_min);
     } else {
         map_parameters.block_length_min = 3 * map_parameters.segLength;
+    }
+
+    if (merge_skip_max) {
+        map_parameters.merge_skip_max = args::get(merge_skip_max);
+    } else {
+        map_parameters.merge_skip_max = 5 * map_parameters.segLength;
     }
 
     if (map_pct_identity) {
