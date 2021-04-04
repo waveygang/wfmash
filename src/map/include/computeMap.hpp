@@ -380,6 +380,13 @@ namespace skch
           }
         }
 
+        std::sort(output->readMappings.begin(), output->readMappings.end(),
+                  [](const MappingResult& a,
+                     const MappingResult& b) {
+                      return a.nucIdentity > b.nucIdentity;
+                  });
+
+
         // remove short merged mappings when we are applying merging
         if (param.mergeMappings) {
             //filter mappings best over query sequence axis
