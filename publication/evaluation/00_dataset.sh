@@ -3,6 +3,7 @@ wget -c https://s3.amazonaws.com/nanopore-human-wgs/chm13/assemblies/chm13.draft
 
 # Extract the chr8
 gunzip chm13.draft_v1.0.fasta.gz
+samtools faidx chm13.draft_v1.0.fasta
 samtools faidx chm13.draft_v1.0.fasta $(grep chr8 chm13.draft_v1.0.fasta.fai | cut -f 1) > chr8.fa
 
 # Simulate [18000, 22000] kbps reads
