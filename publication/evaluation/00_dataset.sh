@@ -1,4 +1,6 @@
-# Downlaod the T2T assembly
+#!/bin/bash
+
+# Download the T2T assembly
 wget -c https://s3.amazonaws.com/nanopore-human-wgs/chm13/assemblies/chm13.draft_v1.0.fasta.gz
 
 # Extract the chr8
