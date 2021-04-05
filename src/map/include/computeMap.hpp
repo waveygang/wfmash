@@ -380,31 +380,17 @@ namespace skch
           }
         }
 
-        std::sort(output->readMappings.begin(), output->readMappings.end(),
-                  [](const MappingResult& a,
-                     const MappingResult& b) {
-                      return a.nucIdentity > b.nucIdentity;
-                  });
+        //filter mappings best over query sequence axis
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+            skch::Filter::query::filterMappings(output->readMappings,
+                                                (input->len < param.segLength ?
+                                                 param.shortSecondaryToKeep
+                                                 : param.secondaryToKeep));
+        }
 
-
-        // remove short merged mappings when we are applying merging
-        if (param.mergeMappings) {
-            //filter mappings best over query sequence axis
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings,
-                                                    (input->len < param.segLength ?
-                                                     param.shortSecondaryToKeep
-                                                     : param.secondaryToKeep));
-            }
+        // remove short merged mappings when we are merging
+        if (split_mapping) {
             this->filterShortMappings(output->readMappings);
-        } else {
-            // apply trivial indexed filtering
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterUnmergedMappings(output->readMappings,
-                                                            (input->len < param.segLength ?
-                                                             param.shortSecondaryToKeep
-                                                             : param.secondaryToKeep));
-            }
         }
 
         // remove self-mode don't-maps
