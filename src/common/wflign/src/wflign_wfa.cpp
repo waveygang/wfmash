@@ -1069,7 +1069,38 @@ void write_merged_alignment(
                     }
                 }
                 if (last_len) {
-                    out << last_len << last_op;
+                    //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+
+                    if (last_op == '=') {
+                        l_MD += last_len;
+                        q_off += last_len;
+                        t_off += last_len;
+                    }else if (last_op == 'X') {
+                        if (l_MD > 0) {
+                            out << l_MD;
+                            l_MD = 0;
+                        }
+
+                        for (uint64_t ii = 0; ii < last_len; ++ii) {
+                            out << target[t_off + ii];
+                        }
+
+                        q_off += last_len;
+                        t_off += last_len;
+                    }else if (last_op == 'I') {
+                        q_off += last_len;
+                    }else if (last_op == 'D') {
+                        if (l_MD > 0) {
+                            out << l_MD;
+                            l_MD = 0;
+                        }
+
+                        out << "^";
+                        for (uint64_t ii = 0; ii < last_len; ++ii) {
+                            out << target[t_off + ii];
+                        }
+                        t_off += last_len;
+                    }
                 }
 
                 out << "\n";
