@@ -908,7 +908,7 @@ void write_merged_alignment(
                 while (c[x] != '\0') {
                     while (isdigit(c[x])) ++x;
                     char op = c[x];
-                    int len;
+                    int len = 0;
                     std::from_chars(c+l, c+x, len);
                     l = ++x;
                     if (last_len) {
@@ -937,7 +937,6 @@ void write_merged_alignment(
                 << "\t" << std::round(float2phred(1.0-gap_compressed_identity))  // MAPping Quality
                 << "\t";
 
-
             ///for (auto* c : cigarv) { out << c; }
             // cigar op merging
             if (query_is_rev) {
@@ -958,7 +957,7 @@ void write_merged_alignment(
                 while (c[x] != '\0') {
                     while (isdigit(c[x])) ++x;
                     char op = c[x];
-                    int len;
+                    int len = 0;
                     std::from_chars(c+l, c+x, len);
                     l = ++x;
                     if (last_len) {
