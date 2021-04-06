@@ -32,7 +32,14 @@ make
 ~/git/SURVIVOR/Debug/SURVIVOR simSV chr8.fasta parameter_file 0 1 alternate
 
 # Call SVs
-# todo
+wget https://github.com/fritzsedlazeck/Sniffles/archive/master.tar.gz -O Sniffles.tar.gz
+tar xzvf Sniffles.tar.gz
+cd Sniffles-master/
+mkdir -p build/
+cd build/
+cmake ..
+make
+
 
 # Evaluate the call set
 ~/git/SURVIVOR/Debug/SURVIVOR eval SV.vcf truth.bed 50 results
