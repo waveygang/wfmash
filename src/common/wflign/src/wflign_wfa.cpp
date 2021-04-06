@@ -1012,7 +1012,7 @@ void write_merged_alignment(
 
             bool write_md_tag = true;
             if (write_md_tag) {
-                out << "\t" << "md:Z:";
+                out << "\t" << "MD:Z:";
 
                 char last_op = '\0';
                 int last_len = 0;
