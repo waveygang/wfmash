@@ -1037,13 +1037,9 @@ void write_merged_alignment(
                                     q_off += last_len;
                                     t_off += last_len;
                                 }else if (last_op == 'X') {
-                                    if (l_MD > 0) {
-                                        out << l_MD;
-                                        l_MD = 0;
-                                    }
-
                                     for (uint64_t ii = 0; ii < last_len; ++ii) {
-                                        out << target[t_off + ii];
+                                        out << l_MD << target[t_off + ii];
+                                        l_MD = 0;
                                     }
 
                                     q_off += last_len;
@@ -1051,15 +1047,12 @@ void write_merged_alignment(
                                 }else if (last_op == 'I') {
                                     q_off += last_len;
                                 }else if (last_op == 'D') {
-                                    if (l_MD > 0) {
-                                        out << l_MD;
-                                        l_MD = 0;
-                                    }
-
-                                    out << "^";
+                                    out << l_MD << "^";
                                     for (uint64_t ii = 0; ii < last_len; ++ii) {
                                         out << target[t_off + ii];
                                     }
+
+                                    l_MD = 0;
                                     t_off += last_len;
                                 }
                             }
@@ -1076,13 +1069,9 @@ void write_merged_alignment(
                         q_off += last_len;
                         t_off += last_len;
                     }else if (last_op == 'X') {
-                        if (l_MD > 0) {
-                            out << l_MD;
-                            l_MD = 0;
-                        }
-
                         for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << target[t_off + ii];
+                            out << l_MD << target[t_off + ii];
+                            l_MD = 0;
                         }
 
                         q_off += last_len;
@@ -1090,15 +1079,12 @@ void write_merged_alignment(
                     }else if (last_op == 'I') {
                         q_off += last_len;
                     }else if (last_op == 'D') {
-                        if (l_MD > 0) {
-                            out << l_MD;
-                            l_MD = 0;
-                        }
-
-                        out << "^";
+                        out << l_MD << "^";
                         for (uint64_t ii = 0; ii < last_len; ++ii) {
                             out << target[t_off + ii];
                         }
+
+                        l_MD = 0;
                         t_off += last_len;
                     }
                 }
