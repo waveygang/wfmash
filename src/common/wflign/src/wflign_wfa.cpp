@@ -1008,7 +1008,72 @@ void write_merged_alignment(
                 //<< "\t" << "ii:i:" << inserted_bp
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
-                << "\n";
+                << "";
+
+            bool write_md_tag = true;
+            if (write_md_tag) {
+                out << "\t" << "md:Z:";
+
+                char last_op = '\0';
+                int last_len = 0;
+                int q_off = 0, t_off = 0, l_MD = 0;
+                for (auto c : cigarv) {
+                    int l = 0;
+                    int x = 0;
+                    while (c[x] != '\0') {
+                        while (isdigit(c[x])) ++x;
+                        char op = c[x];
+                        int len = 0;
+                        std::from_chars(c+l, c+x, len);
+                        l = ++x;
+                        if (last_len) {
+                            if (last_op == op) {
+                                len += last_len;
+                            } else {
+                                //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+
+                                if (last_op == '=') {
+                                    l_MD += last_len;
+                                    q_off += last_len;
+                                    t_off += last_len;
+                                }else if (last_op == 'X') {
+                                    if (l_MD > 0) {
+                                        out << l_MD;
+                                        l_MD = 0;
+                                    }
+
+                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
+                                        out << target[t_off + ii];
+                                    }
+
+                                    q_off += last_len;
+                                    t_off += last_len;
+                                }else if (last_op == 'I') {
+                                    q_off += last_len;
+                                }else if (last_op == 'D') {
+                                    if (l_MD > 0) {
+                                        out << l_MD;
+                                        l_MD = 0;
+                                    }
+
+                                    out << "^";
+                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
+                                        out << target[t_off + ii];
+                                    }
+                                    t_off += last_len;
+                                }
+                            }
+                        }
+                        last_op = op;
+                        last_len = len;
+                    }
+                }
+                if (last_len) {
+                    out << last_len << last_op;
+                }
+
+                out << "\n";
+            }
         }
     }
     // always clean up
