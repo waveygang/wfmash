@@ -835,8 +835,6 @@ namespace skch
             it->splitMappingId = std::distance(readMappings.begin(), it);
           }
 
-          int frag_skip_max = param.merge_skip_max / param.segLength;
-
           //Start the procedure to identify the chains
           for(auto it = readMappings.begin(); it != readMappings.end(); it++)
           {
@@ -848,14 +846,13 @@ namespace skch
               auto thisMappingFragno = std::ceil(it2->queryStartPos * 1.0/ param.segLength);
 
               //If this mapping is too far from current mapping being evaluated, stop finding a merge
-              if(it2->refSeqId != it->refSeqId || it2->refStartPos - it->refEndPos > param.merge_skip_max)
+              if(it2->refSeqId != it->refSeqId || it2->refStartPos - it->refEndPos > 2 * param.segLength)
                 break;
 
               //If the next mapping is within range, check if it is consecutive query fragment and strand matches
               if( it2->strand == it->strand
-                  && (it2->strand == strnd::FWD ?
-                      thisMappingFragno <= currMappingFragno + frag_skip_max
-                      : thisMappingFragno >= currMappingFragno - frag_skip_max)) {
+                  && thisMappingFragno == currMappingFragno + (it->strand == strnd::FWD ? 1 : -1) )
+              {
                 it2->splitMappingId = it->splitMappingId;   //merge
                 continue;
               }
