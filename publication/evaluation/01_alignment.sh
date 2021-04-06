@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Exit when any command fails
 set -eo pipefail
 
