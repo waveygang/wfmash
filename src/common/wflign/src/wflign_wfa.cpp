@@ -927,6 +927,88 @@ void write_merged_alignment(
             if (last_len) {
                 out << last_len << last_op;
             }
+
+            if (emit_md_tag) {
+                out << "\t" << "MD:Z:";
+
+                char last_op = '\0';
+                int last_len = 0;
+                int q_off = 0, t_off = 0, l_MD = 0;
+                for (auto c : cigarv) {
+                    int l = 0;
+                    int x = 0;
+                    while (c[x] != '\0') {
+                        while (isdigit(c[x])) ++x;
+                        char op = c[x];
+                        int len = 0;
+                        std::from_chars(c+l, c+x, len);
+                        l = ++x;
+                        if (last_len) {
+                            if (last_op == op) {
+                                len += last_len;
+                            } else {
+                                //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+
+                                if (last_op == '=') {
+                                    l_MD += last_len;
+                                    q_off += last_len;
+                                    t_off += last_len;
+                                }else if (last_op == 'X') {
+                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
+                                        out << l_MD << target[t_off + ii];
+                                        l_MD = 0;
+                                    }
+
+                                    q_off += last_len;
+                                    t_off += last_len;
+                                }else if (last_op == 'I') {
+                                    q_off += last_len;
+                                }else if (last_op == 'D') {
+                                    out << l_MD << "^";
+                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
+                                        out << target[t_off + ii];
+                                    }
+
+                                    l_MD = 0;
+                                    t_off += last_len;
+                                }
+                            }
+                        }
+                        last_op = op;
+                        last_len = len;
+                    }
+                }
+                if (last_len) {
+                    //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+
+                    if (last_op == '=') {
+                        l_MD += last_len;
+                        q_off += last_len;
+                        t_off += last_len;
+                    }else if (last_op == 'X') {
+                        for (uint64_t ii = 0; ii < last_len; ++ii) {
+                            out << l_MD << target[t_off + ii];
+                            l_MD = 0;
+                        }
+
+                        q_off += last_len;
+                        t_off += last_len;
+                    }else if (last_op == 'I') {
+                        q_off += last_len;
+                    }else if (last_op == 'D') {
+                        out << l_MD << "^";
+                        for (uint64_t ii = 0; ii < last_len; ++ii) {
+                            out << target[t_off + ii];
+                        }
+
+                        l_MD = 0;
+                        t_off += last_len;
+                    }
+                }
+
+                out << "\n";
+            }
+
             out << "\n";
         } else {
             uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
