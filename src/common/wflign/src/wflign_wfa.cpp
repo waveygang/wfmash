@@ -791,6 +791,7 @@ void write_merged_alignment(
                 char* patch_cigar = nullptr;
                 if (query_delta > min_wfa_length && target_delta > min_wfa_length) {
                     alignment_t patch_aln;
+                    //std::cerr << "do_wfa_patch_alignment" << std::endl;
                     do_wfa_patch_alignment(
                         query, query_end, query_delta,
                         target, target_end, target_delta,
@@ -813,8 +814,9 @@ void write_merged_alignment(
                         assert(false);
                     }
 #endif
-                    // destroy the alig
+                    // destroy the align
                 } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
+                    //std::cerr << "do_edlib_patch_alignment" << std::endl;
                     auto result = do_edlib_patch_alignment(
                         query, query_end, query_delta,
                         target, target_end, target_delta);
@@ -868,7 +870,7 @@ void write_merged_alignment(
         }
     }
 
-    const uint64_t edit_distance = mismatches + insertions + deletions;
+    const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
 
     // gap-compressed identity
     const double gap_compressed_identity = (double)matches / (matches + edit_distance);
@@ -1241,6 +1243,7 @@ char* wfa_alignment_to_cigar(
         }
     }
     cigar->push_back(0);  // Null character termination.
+
     char* cigar_ = (char*) malloc(cigar->size() * sizeof(char));
     std::memcpy(cigar_, &(*cigar)[0], cigar->size() * sizeof(char));
     delete cigar;
