@@ -7,6 +7,7 @@ namespace wavefront {
 void wflign_affine_wavefront(
     std::ostream& out,
     const bool& merge_alignments,
+    const bool& emit_md_tag,
     const bool& paf_format_else_sam,
     const std::string& query_name,
     const char* query,
@@ -307,7 +308,7 @@ void wflign_affine_wavefront(
         if (merge_alignments) {
             // write a merged alignment
             write_merged_alignment(out, trace, wfa_mm_allocator, &wfa_affine_penalties,
-                                   paf_format_else_sam,
+                                   emit_md_tag, paf_format_else_sam,
                                    query,
                                    query_name, query_total_length, query_offset, query_length,
                                    query_is_rev,
@@ -698,6 +699,7 @@ void write_merged_alignment(
     const std::vector<alignment_t*>& trace,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
+    const bool emit_md_tag,
     const bool paf_format_else_sam,
     const char* query,
     const std::string& query_name,
@@ -1010,8 +1012,7 @@ void write_merged_alignment(
                 //<< "\t" << "dd:i:" << deleted_bp
                 << "";
 
-            bool write_md_tag = true;
-            if (write_md_tag) {
+            if (emit_md_tag) {
                 out << "\t" << "MD:Z:";
 
                 char last_op = '\0';

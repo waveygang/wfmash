@@ -29,6 +29,7 @@ struct Parameters {
     std::string mashmapPafFile;                   //mashmap paf mapping file
     std::string pafOutputFile;                    //sam output file name
 
+    bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
 };
 

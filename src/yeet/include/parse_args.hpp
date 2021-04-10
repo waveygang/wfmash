@@ -56,6 +56,7 @@ void parse_args(int argc,
     args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
 
     // format parameters
+    args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
     args::Flag sam_format(parser, "N", "output in the SAM format (PAF by default)", {'a', "sam-format"});
 
     // general parameters
@@ -120,6 +121,7 @@ void parse_args(int argc,
         map_parameters.filterMode = skch::filter::MAP;
     }
 
+    align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     map_parameters.split = !args::get(no_split);
 
