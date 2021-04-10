@@ -458,7 +458,7 @@ void do_wfa_patch_alignment(
     alignment_t& aln) {
 
     //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
-    
+
     wfa::affine_wavefronts_t* affine_wavefronts;
     if (min_wavefront_length || max_distance_threshold) {
         // adaptive affine WFA setup
@@ -875,6 +875,115 @@ void write_merged_alignment(
 
     //const double block_identity = (double)matches / (matches + edit_distance);
 
+    auto write_cigar_string = [&](std::ostream& out, const std::vector<char *>& cigarv) {
+        ///for (auto* c : cigarv) { out << c; }
+        // cigar op merging
+        char last_op = '\0';
+        int last_len = 0;
+        for (auto c : cigarv) {
+            int l = 0;
+            int x = 0;
+            while (c[x] != '\0') {
+                while (isdigit(c[x])) ++x;
+                char op = c[x];
+                int len = 0;
+                std::from_chars(c+l, c+x, len);
+                l = ++x;
+                if (last_len) {
+                    if (last_op == op) {
+                        len += last_len;
+                    } else {
+                        out << last_len << last_op;
+                    }
+                }
+                last_op = op;
+                last_len = len;
+            }
+        }
+        if (last_len) {
+            out << last_len << last_op;
+        }
+    };
+
+    auto write_tag_and_md_string = [&](std::ostream& out, const std::vector<char *>& cigarv) {
+        out << "MD:Z:";
+
+        char last_op = '\0';
+        int last_len = 0;
+        int q_off = 0, t_off = 0, l_MD = 0;
+        for (auto c : cigarv) {
+            int l = 0;
+            int x = 0;
+            while (c[x] != '\0') {
+                while (isdigit(c[x])) ++x;
+                char op = c[x];
+                int len = 0;
+                std::from_chars(c+l, c+x, len);
+                l = ++x;
+                if (last_len) {
+                    if (last_op == op) {
+                        len += last_len;
+                    } else {
+                        //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+
+                        if (last_op == '=') {
+                            l_MD += last_len;
+                            q_off += last_len;
+                            t_off += last_len;
+                        }else if (last_op == 'X') {
+                            for (uint64_t ii = 0; ii < last_len; ++ii) {
+                                out << l_MD << target[t_off + ii];
+                                l_MD = 0;
+                            }
+
+                            q_off += last_len;
+                            t_off += last_len;
+                        }else if (last_op == 'I') {
+                            q_off += last_len;
+                        }else if (last_op == 'D') {
+                            out << l_MD << "^";
+                            for (uint64_t ii = 0; ii < last_len; ++ii) {
+                                out << target[t_off + ii];
+                            }
+
+                            l_MD = 0;
+                            t_off += last_len;
+                        }
+                    }
+                }
+                last_op = op;
+                last_len = len;
+            }
+        }
+        if (last_len) {
+            //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+
+            if (last_op == '=') {
+                l_MD += last_len;
+                q_off += last_len;
+                t_off += last_len;
+            }else if (last_op == 'X') {
+                for (uint64_t ii = 0; ii < last_len; ++ii) {
+                    out << l_MD << target[t_off + ii];
+                    l_MD = 0;
+                }
+
+                q_off += last_len;
+                t_off += last_len;
+            }else if (last_op == 'I') {
+                q_off += last_len;
+            }else if (last_op == 'D') {
+                out << l_MD << "^";
+                for (uint64_t ii = 0; ii < last_len; ++ii) {
+                    out << target[t_off + ii];
+                }
+
+                l_MD = 0;
+                t_off += last_len;
+            }
+        }
+    };
+
     if (gap_compressed_identity >= min_identity) {
         if (paf_format_else_sam) {
             out << query_name
@@ -900,116 +1009,16 @@ void write_merged_alignment(
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
                 << "\t" << "cg:Z:";
-            ///for (auto* c : cigarv) { out << c; }
-            // cigar op merging
-            char last_op = '\0';
-            int last_len = 0;
-            for (auto c : cigarv) {
-                int l = 0;
-                int x = 0;
-                while (c[x] != '\0') {
-                    while (isdigit(c[x])) ++x;
-                    char op = c[x];
-                    int len = 0;
-                    std::from_chars(c+l, c+x, len);
-                    l = ++x;
-                    if (last_len) {
-                        if (last_op == op) {
-                            len += last_len;
-                        } else {
-                            out << last_len << last_op;
-                        }
-                    }
-                    last_op = op;
-                    last_len = len;
-                }
-            }
-            if (last_len) {
-                out << last_len << last_op;
-            }
 
-            if (emit_md_tag) {
-                out << "\t" << "MD:Z:";
+                write_cigar_string(out, cigarv);
 
-                char last_op = '\0';
-                int last_len = 0;
-                int q_off = 0, t_off = 0, l_MD = 0;
-                for (auto c : cigarv) {
-                    int l = 0;
-                    int x = 0;
-                    while (c[x] != '\0') {
-                        while (isdigit(c[x])) ++x;
-                        char op = c[x];
-                        int len = 0;
-                        std::from_chars(c+l, c+x, len);
-                        l = ++x;
-                        if (last_len) {
-                            if (last_op == op) {
-                                len += last_len;
-                            } else {
-                                //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
+                if (emit_md_tag) {
+                    out << "\t";
 
-                                if (last_op == '=') {
-                                    l_MD += last_len;
-                                    q_off += last_len;
-                                    t_off += last_len;
-                                }else if (last_op == 'X') {
-                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
-                                        out << l_MD << target[t_off + ii];
-                                        l_MD = 0;
-                                    }
-
-                                    q_off += last_len;
-                                    t_off += last_len;
-                                }else if (last_op == 'I') {
-                                    q_off += last_len;
-                                }else if (last_op == 'D') {
-                                    out << l_MD << "^";
-                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
-                                        out << target[t_off + ii];
-                                    }
-
-                                    l_MD = 0;
-                                    t_off += last_len;
-                                }
-                            }
-                        }
-                        last_op = op;
-                        last_len = len;
-                    }
-                }
-                if (last_len) {
-                    //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
-
-                    if (last_op == '=') {
-                        l_MD += last_len;
-                        q_off += last_len;
-                        t_off += last_len;
-                    }else if (last_op == 'X') {
-                        for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << l_MD << target[t_off + ii];
-                            l_MD = 0;
-                        }
-
-                        q_off += last_len;
-                        t_off += last_len;
-                    }else if (last_op == 'I') {
-                        q_off += last_len;
-                    }else if (last_op == 'D') {
-                        out << l_MD << "^";
-                        for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << target[t_off + ii];
-                        }
-
-                        l_MD = 0;
-                        t_off += last_len;
-                    }
+                    write_tag_and_md_string(out, cigarv);
                 }
 
                 out << "\n";
-            }
-
-            out << "\n";
         } else {
             uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
             uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
@@ -1033,31 +1042,7 @@ void write_merged_alignment(
                 }
             }
 
-            char last_op = '\0';
-            int last_len = 0;
-            for (auto c : cigarv) {
-                int l = 0;
-                int x = 0;
-                while (c[x] != '\0') {
-                    while (isdigit(c[x])) ++x;
-                    char op = c[x];
-                    int len = 0;
-                    std::from_chars(c+l, c+x, len);
-                    l = ++x;
-                    if (last_len) {
-                        if (last_op == op) {
-                            len += last_len;
-                        } else {
-                            out << last_len << last_op;
-                        }
-                    }
-                    last_op = op;
-                    last_len = len;
-                }
-            }
-            if (last_len) {
-                out << last_len << last_op;
-            }
+            write_cigar_string(out, cigarv);
 
             if (query_is_rev) {
                 if (query_start_pos > 0) {
@@ -1095,85 +1080,12 @@ void write_merged_alignment(
                 << "";
 
             if (emit_md_tag) {
-                out << "\t" << "MD:Z:";
+                out << "\t";
 
-                char last_op = '\0';
-                int last_len = 0;
-                int q_off = 0, t_off = 0, l_MD = 0;
-                for (auto c : cigarv) {
-                    int l = 0;
-                    int x = 0;
-                    while (c[x] != '\0') {
-                        while (isdigit(c[x])) ++x;
-                        char op = c[x];
-                        int len = 0;
-                        std::from_chars(c+l, c+x, len);
-                        l = ++x;
-                        if (last_len) {
-                            if (last_op == op) {
-                                len += last_len;
-                            } else {
-                                //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
-
-                                if (last_op == '=') {
-                                    l_MD += last_len;
-                                    q_off += last_len;
-                                    t_off += last_len;
-                                }else if (last_op == 'X') {
-                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
-                                        out << l_MD << target[t_off + ii];
-                                        l_MD = 0;
-                                    }
-
-                                    q_off += last_len;
-                                    t_off += last_len;
-                                }else if (last_op == 'I') {
-                                    q_off += last_len;
-                                }else if (last_op == 'D') {
-                                    out << l_MD << "^";
-                                    for (uint64_t ii = 0; ii < last_len; ++ii) {
-                                        out << target[t_off + ii];
-                                    }
-
-                                    l_MD = 0;
-                                    t_off += last_len;
-                                }
-                            }
-                        }
-                        last_op = op;
-                        last_len = len;
-                    }
-                }
-                if (last_len) {
-                    //std::cerr << q_off << " - " << t_off << "   " << last_len << last_op << std::endl;
-
-                    if (last_op == '=') {
-                        l_MD += last_len;
-                        q_off += last_len;
-                        t_off += last_len;
-                    }else if (last_op == 'X') {
-                        for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << l_MD << target[t_off + ii];
-                            l_MD = 0;
-                        }
-
-                        q_off += last_len;
-                        t_off += last_len;
-                    }else if (last_op == 'I') {
-                        q_off += last_len;
-                    }else if (last_op == 'D') {
-                        out << l_MD << "^";
-                        for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << target[t_off + ii];
-                        }
-
-                        l_MD = 0;
-                        t_off += last_len;
-                    }
-                }
-
-                out << "\n";
+                write_tag_and_md_string(out, cigarv);
             }
+
+            out << "\n";
         }
     }
     // always clean up
