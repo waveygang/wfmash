@@ -17,7 +17,7 @@ namespace skch
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
-    int windowSize;                                   //window size used for sketching 
+    int windowSize;                                   //window size used for sketching
     int segLength;                                    //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
     int block_length_min;                             // minimum (potentially merged) block to keep if we aren't split
@@ -32,11 +32,14 @@ struct Parameters
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
     bool split;                                       //Split read mapping (done if this is true)
-    bool skip_self;                                   // skip self mappings
-    bool skip_prefix;                                 // skip mappings to sequences with the same prefix
-    char prefix_delim;                                // the prefix delimiter
+    bool skip_self;                                   //skip self mappings
+    bool skip_prefix;                                 //skip mappings to sequences with the same prefix
+    char prefix_delim;                                //the prefix delimiter
     bool mergeMappings;                               //if we should merge consecutive segment mappings
     bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
+
+    float pval_cutoff;                                //p-value cutoff for determining window size
+    float confidence_interval;                        //Confidence interval to relax jaccard cutoff for mapping (0-1)
 };
 
 
@@ -46,11 +49,7 @@ struct Parameters
 namespace fixed
 {
 
-float pval_cutoff = 1e-03;                        //p-value cutoff for determining window size
-
-float confidence_interval = 0.75;                 //Confidence interval to relax jaccard cutoff for mapping (0-1)
-
-float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is 
+float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
 //considered good by filtering algorithm
 
 int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best 
