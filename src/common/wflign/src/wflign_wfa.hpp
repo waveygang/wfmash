@@ -258,8 +258,8 @@ void write_merged_alignment(
     const std::vector<alignment_t*>& trace,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
-    const bool emit_md_tag,
-    const bool paf_format_else_sam,
+    const bool& emit_md_tag,
+    const bool& paf_format_else_sam,
     const char* query,
     const std::string& query_name,
     const uint64_t& query_total_length,
@@ -273,7 +273,7 @@ void write_merged_alignment(
     const uint64_t& target_length,
     const float& min_identity,
     const uint64_t& dropout_rescue_max,
-    const uint64_t& elapsed_time_wflambda_ms,
+    const long& elapsed_time_wflambda_ms,
     const bool& with_endline = true);
 
 void write_alignment(
