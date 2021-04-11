@@ -49,8 +49,8 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<float> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-03]", {'w', "p-value-window-size"});
-    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.75]", {'c', "confidende-interval"});
+    args::ValueFlag<float> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-06]", {'w', "p-value-window-size"});
+    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidende-interval"});
 
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -175,9 +175,9 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
-    if (pval_cutoff) {
-        map_parameters.pval_cutoff = pval_cutoff ? args::get(pval_cutoff) : 1e-03;
-    }
+
+    map_parameters.pval_cutoff = pval_cutoff ? args::get(pval_cutoff) : 1e-06;
+
     if (confidence_interval) {
         float ci = args::get(confidence_interval);
 
@@ -187,7 +187,7 @@ void parse_args(int argc,
         }
         map_parameters.confidence_interval = ci;
     } else {
-        map_parameters.confidence_interval = 0.75;
+        map_parameters.confidence_interval = 0.95;
     }
 
     if (keep_low_align_pct_identity) {
