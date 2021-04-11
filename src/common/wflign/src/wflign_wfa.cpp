@@ -1,3 +1,4 @@
+#include <chrono>
 #include "wflign_wfa.hpp"
 
 namespace wflign {
@@ -161,6 +162,8 @@ void wflign_affine_wavefront(
         }
     };
 
+    auto start_time = std::chrono::steady_clock::now();
+
     // Align
     wflambda::affine_wavefronts_align(
         affine_wavefronts,
@@ -168,6 +171,8 @@ void wflign_affine_wavefront(
         trace_match,
         pattern_length,
         text_length);
+
+    long elapsed_time_wflambda_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
 //#define WFLIGN_DEBUG
 #ifdef WFLIGN_DEBUG
@@ -315,7 +320,8 @@ void wflign_affine_wavefront(
                                    target,
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
-                                   segment_length * 32);
+                                   segment_length * 32,
+                                   elapsed_time_wflambda_ms);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 //std::cerr << "on alignment" << std::endl;
@@ -714,6 +720,7 @@ void write_merged_alignment(
     const uint64_t& target_length,
     const float& min_identity,
     const uint64_t& dropout_rescue_max,
+    const uint64_t& elapsed_time_wflambda_ms,
     const bool& with_endline) {
 
     // we need to get the start position in the query and target
@@ -739,6 +746,8 @@ void write_merged_alignment(
 
     //double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
+
+    auto start_time = std::chrono::steady_clock::now();
 
     for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
         auto& aln = **x;
@@ -978,6 +987,10 @@ void write_merged_alignment(
     };
     //std::cerr << "target_offset: " << target_offset << " -- target_start: " << target_start << std::endl;
     if (gap_compressed_identity >= min_identity) {
+        long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
+
+        const std::string timings = "wt:i:" + std::to_string(elapsed_time_wflambda_ms) + "\tpt:i:" + std::to_string(elapsed_time_patching_ms);
+
         if (paf_format_else_sam) {
             out << query_name
                 << "\t" << query_total_length
@@ -1011,7 +1024,7 @@ void write_merged_alignment(
                     write_tag_and_md_string(out, cigarv, target_start);
                 }
 
-                out << "\n";
+                out << "\t" << timings << "\n";
         } else {
             uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
             uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
@@ -1074,7 +1087,7 @@ void write_merged_alignment(
                 write_tag_and_md_string(out, cigarv, target_start);
             }
 
-            out << "\n";
+            out << "\t" << timings << "\n";
         }
     }
     // always clean up

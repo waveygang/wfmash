@@ -418,7 +418,8 @@ namespace align
         assert(queryLen <= querySize);
 
         //Compute alignment
-        auto t0 = skch::Time::now();
+
+        //auto t0 = skch::Time::now();
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, WFA execution starting, query region length = " << queryLen
