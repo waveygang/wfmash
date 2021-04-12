@@ -536,7 +536,7 @@ namespace skch
             }
           }
 
-          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity);
+          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, param.confidence_interval);
 
           this->computeL1CandidateRegions(Q, seedHitsL1, minimumHits, l1Mappings);
 
@@ -621,7 +621,7 @@ namespace skch
             float mash_dist = Stat::j2md(1.0 * l2.sharedSketchSize/Q.sketchSize, param.kmerSize);
 
             //Compute lower bound to mash distance within 90% confidence interval
-            float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
+            float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, param.confidence_interval);
 
             float nucIdentity = (1 - mash_dist);
             float nucIdentityUpperBound = (1 - mash_dist_lower_bound);

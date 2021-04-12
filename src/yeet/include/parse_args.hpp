@@ -48,6 +48,10 @@ void parse_args(int argc,
     args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
+
+    args::ValueFlag<float> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-06]", {'w', "p-value-window-size"});
+    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidende-interval"});
+
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
@@ -171,6 +175,21 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
+
+    map_parameters.pval_cutoff = pval_cutoff ? args::get(pval_cutoff) : 1e-06;
+
+    if (confidence_interval) {
+        float ci = args::get(confidence_interval);
+
+        if (ci > 1 ) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, confidence_interval must be between 0 and 1." << std::endl;
+            exit(1);
+        }
+        map_parameters.confidence_interval = ci;
+    } else {
+        map_parameters.confidence_interval = 0.95;
+    }
+
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
@@ -215,7 +234,8 @@ void parse_args(int argc,
      */
 
     //Compute optimal window size
-    map_parameters.windowSize = skch::Stat::recommendedWindowSize(skch::fixed::pval_cutoff,
+    map_parameters.windowSize = skch::Stat::recommendedWindowSize(map_parameters.pval_cutoff,
+                                                                  map_parameters.confidence_interval,
                                                                   map_parameters.kmerSize,
                                                                   map_parameters.alphabetSize,
                                                                   map_parameters.percentageIdentity,
