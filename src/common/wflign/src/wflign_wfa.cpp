@@ -888,9 +888,11 @@ void write_merged_alignment(
 
     // gap-compressed identity
     const double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
+
     const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
+
     // identity over the full block
-    const double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
+    const double block_identity = (double)matches / (matches + edit_distance);
 
     auto write_cigar_string = [&](std::ostream& out, const std::vector<char *>& cigarv) {
         ///for (auto* c : cigarv) { out << c; }
@@ -1009,7 +1011,7 @@ void write_merged_alignment(
                 << "\t" << target_offset + target_end
                 << "\t" << matches
                 << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
-                << "\t" << std::round(float2phred(1.0-gap_compressed_identity))
+                << "\t" << std::round(float2phred(1.0-block_identity))
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
@@ -1039,7 +1041,7 @@ void write_merged_alignment(
                 << "\t" << (query_is_rev ? "16" : "0")                          // bitwise FLAG
                 << "\t" << target_name                                          // Reference sequence NAME
                 << "\t" << target_offset + target_start + 1                     // 1-based leftmost mapping POSition
-                << "\t" << std::round(float2phred(1.0-gap_compressed_identity))  // MAPping Quality
+                << "\t" << std::round(float2phred(1.0-block_identity))          // MAPping Quality
                 << "\t";
 
             // CIGAR
@@ -1149,7 +1151,7 @@ void write_alignment(
         size_t alignmentRefPos = aln.i;
         //double identity = (double)matches / (matches + mismatches + insertions + deletions);
         double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
-        //double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
+        double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
         // convert our coordinates to be relative to forward strand (matching PAF standard)
 
         if (gap_compressed_identity >= min_identity) {
@@ -1170,7 +1172,7 @@ void write_alignment(
                 << "\t" << target_offset + alignmentRefPos + refAlignedLength
                 << "\t" << matches
                 << "\t" << std::max(refAlignedLength, qAlignedLength)
-                << "\t" << std::round(float2phred(1.0-gap_compressed_identity))
+                << "\t" << std::round(float2phred(1.0-block_identity))
                 << "\t" << "as:i:" << aln.score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 //<< "\t" << "bi:f:" << block_identity
