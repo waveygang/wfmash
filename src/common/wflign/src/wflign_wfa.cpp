@@ -589,6 +589,13 @@ bool hack_cigar(
     return ok;
 }
 
+/*
+wfa::edit_cigar_t filter_short_matches(
+    const wfa::edit_cigar_t& cigar) {
+// todo
+}
+*/
+
 bool validate_cigar(
     const wfa::edit_cigar_t& cigar,
     const char* query, const char* target,
@@ -879,12 +886,11 @@ void write_merged_alignment(
         }
     }
 
-    const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
-
     // gap-compressed identity
-    const double gap_compressed_identity = (double)matches / (matches + edit_distance);
-
-    //const double block_identity = (double)matches / (matches + edit_distance);
+    const double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
+    const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
+    // identity over the full block
+    const double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
 
     auto write_cigar_string = [&](std::ostream& out, const std::vector<char *>& cigarv) {
         ///for (auto* c : cigarv) { out << c; }
@@ -1006,7 +1012,7 @@ void write_merged_alignment(
                 << "\t" << std::round(float2phred(1.0-gap_compressed_identity))
                 << "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
-                //<< "\t" << "bi:f:" << block_identity
+                << "\t" << "bi:f:" << block_identity
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
@@ -1071,7 +1077,7 @@ void write_merged_alignment(
                 << "\t" << "NM:i:" << edit_distance
                 << "\t" << "AS:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
-                //<< "\t" << "bi:f:" << block_identity
+                << "\t" << "bi:f:" << block_identity
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
