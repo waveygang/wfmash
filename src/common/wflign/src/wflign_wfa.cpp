@@ -1175,7 +1175,7 @@ void write_alignment(
                 << "\t" << std::round(float2phred(1.0-block_identity))
                 << "\t" << "as:i:" << aln.score
                 << "\t" << "gi:f:" << gap_compressed_identity
-                //<< "\t" << "bi:f:" << block_identity
+                << "\t" << "bi:f:" << block_identity
                 //<< "\t" << "md:f:" << aln.mash_dist
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
