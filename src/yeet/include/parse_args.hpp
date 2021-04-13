@@ -50,7 +50,7 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
     args::ValueFlag<float> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-06]", {'w', "p-value-window-size"});
-    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidende-interval"});
+    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidence-interval"});
 
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
