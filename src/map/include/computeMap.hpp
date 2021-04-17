@@ -976,7 +976,7 @@ namespace skch
                    << "\t" << this->refSketch.metadata[e.refSeqId].name
                    << "\t" << this->refSketch.metadata[e.refSeqId].len
                    << "\t" << e.refStartPos 
-                   << "\t" << e.refEndPos + 1
+                   << "\t" << e.refEndPos
                    << "\t" << e.approxMatches
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
