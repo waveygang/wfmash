@@ -176,7 +176,7 @@ void parse_args(int argc,
     }
 
 
-    map_parameters.pval_cutoff = pval_cutoff ? args::get(pval_cutoff) : 1e-06;
+    map_parameters.pval_cutoff = pval_cutoff ? args::get(pval_cutoff) : 1e-30;
 
     if (confidence_interval) {
         float ci = args::get(confidence_interval);
