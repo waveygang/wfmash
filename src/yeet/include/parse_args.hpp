@@ -49,7 +49,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<float> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-06]", {'w', "p-value-window-size"});
+    args::ValueFlag<float> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-30]", {'w', "p-value-window-size"});
     args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidence-interval"});
 
     // align parameters
