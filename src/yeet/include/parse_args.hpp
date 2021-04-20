@@ -238,14 +238,7 @@ void parse_args(int argc,
                                                                   map_parameters.segLength,
                                                                   map_parameters.referenceSize);
 
-
-    if (align_input_paf) {
-        map_parameters.outFileName = "";
-        yeet_parameters.approx_mapping = false;
-        yeet_parameters.align_input_paf = true;
-        align_parameters.mashmapPafFile = args::get(align_input_paf);
-        align_parameters.pafOutputFile = "/dev/stdout";
-    } else if (approx_mapping) {
+    if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
         yeet_parameters.approx_mapping = true;
     } else {
