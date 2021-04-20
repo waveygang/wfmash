@@ -204,7 +204,10 @@ namespace skch
         //Filter over reference axis and report the mappings
         if (param.filterMode == filter::ONETOONE)
         {
-          skch::Filter::ref::filterMappings(allReadMappings, this->refSketch);
+          skch::Filter::ref::filterMappings(allReadMappings, this->refSketch,
+                                            param.secondaryToKeep
+                                           // (input->len < param.segLength ? param.shortSecondaryToKeep : param.secondaryToKeep)
+                                            );
 
           //Re-sort mappings by input order of query sequences
           //This order may be needed for any post analysis of output
