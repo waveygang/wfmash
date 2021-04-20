@@ -939,6 +939,7 @@ void write_merged_alignment(
                                 tracev.push_back(moveCodeToChar[result.alignment[i]]);
                             }
                         }
+                        edlibFreeAlignResult(result);
                     }
                 }
                 // add in stuff if we didn't align
