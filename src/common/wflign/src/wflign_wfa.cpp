@@ -822,7 +822,7 @@ void write_merged_alignment(
             for (uint64_t i = 0; i < rawv.size(); ) {
                 if (rawv[i] == 'M') {
                     uint64_t j = i;
-                    while (j < rawv.size() && rawv[++j] == 'M') { }
+                    while (++j < rawv.size() && rawv[j] == 'M') { }
                     if (j-i < erode_k) {
                         while (i < j) {
                             erodev.push_back('D');
