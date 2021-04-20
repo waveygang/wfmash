@@ -320,7 +320,7 @@ void wflign_affine_wavefront(
                                    target,
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
-                                   segment_length * 32,
+                                   segment_length * 128,
                                    elapsed_time_wflambda_ms);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -733,8 +733,8 @@ void write_merged_alignment(
     // patching parameters
     const uint64_t min_wfa_length = 16;
     const uint64_t min_edlib_length = 0;
-    const int min_wf_length = 8;
-    const int max_dist_threshold = 128;
+    const int min_wf_length = 16;
+    const int max_dist_threshold = 512;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -896,7 +896,7 @@ void write_merged_alignment(
                 bool got_alignment = false;
                 if (last_match_query > -1 && last_match_target > -1 &&
                     query_delta > 0 && target_delta > 0 &&
-                    query_delta < dropout_rescue_max && target_delta < dropout_rescue_max) {
+                    (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
 
                     uint64_t patch_target_aligned_length = 0;
                     uint64_t patch_query_aligned_length = 0;
