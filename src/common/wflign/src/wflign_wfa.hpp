@@ -173,6 +173,10 @@ void wflign_edit_cigar_copy(
     wfa::edit_cigar_t* const edit_cigar_dst,
     wfa::edit_cigar_t* const edit_cigar_src);
 
+void copy_wfa_alignment_into_trace(
+    const wfa::edit_cigar_t* const edit_cigar,
+    std::vector<char>& trace);
+
 /*
 void edlib_to_wflign_edit_cigar_copy(
     wfa::edit_cigar_t* const edit_cigar_dst,
@@ -291,6 +295,16 @@ void write_alignment(
     const float& min_identity,
     const bool& with_endline = true);
 
+char* alignment_to_cigar(
+    const std::vector<char>& edit_cigar,
+    uint64_t& target_aligned_length,
+    uint64_t& query_aligned_length,
+    uint64_t& matches,
+    uint64_t& mismatches,
+    uint64_t& insertions,
+    uint64_t& inserted_bp,
+    uint64_t& deletions,
+    uint64_t& deleted_bp);
 
 char* wfa_alignment_to_cigar(
     const wfa::edit_cigar_t* const edit_cigar,
@@ -316,6 +330,8 @@ char* edlib_alignment_to_cigar(
     uint64_t& deleted_bp);
 
 double float2phred(const double& prob);
+
+void sort_indels(std::vector<char>& v);
 
 }
 
