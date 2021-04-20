@@ -284,14 +284,17 @@ namespace skch
          * @param[in/out]   L             container with mappings
          */
         template <typename Type>
-          inline void markGood(Type &L)
+          inline void markGood(Type &L, int secondaryToKeep)
           {
             //first segment in the set order
             auto beg = L.begin();
 
+            // count how many secondary alignments we keep
+            int kept = 0;
+
             for(auto it = L.begin(); it != L.end(); it++)
             {
-              if(this->greater_score(*beg, *it) || vec[*it].discard == 0) 
+              if((this->greater_score(*beg, *it) || vec[*it].discard == 0) && ++kept > secondaryToKeep)
                 break;
 
               vec[*it].discard = 0;
@@ -325,7 +328,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch)
+        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, int secondaryToKeep)
         {
           if(readMappings.size() <= 1)
             return;
@@ -376,7 +379,7 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst);
+            obj.markGood(bst, secondaryToKeep);
 
             it = it2;
           }
