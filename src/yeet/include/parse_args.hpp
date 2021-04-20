@@ -41,7 +41,7 @@ void parse_args(int argc,
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
     args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
     args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
-    args::ValueFlag<std::string> map_filter_mode(parser, "MODE", "filter mode for map step, either 'map', 'one-to-one', or 'none' [default: 'one-to-one']", {'f', "map-filter-mode"});
+    args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
     args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
@@ -111,18 +111,14 @@ void parse_args(int argc,
     
     map_parameters.alphabetSize = 4;
 
-    if (map_filter_mode) {
-        auto& filter_input = args::get(map_filter_mode);
-        if (filter_input == "map") map_parameters.filterMode = skch::filter::MAP;
-        else if (filter_input == "one-to-one") map_parameters.filterMode = skch::filter::ONETOONE;
-        else if (filter_input == "none") map_parameters.filterMode = skch::filter::NONE;
-        else 
-        {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, Invalid option given for filter_mode" << std::endl;
-            exit(1);
-        }
+    if (no_filter) {
+        map_parameters.filterMode = skch::filter::NONE;
     } else {
-        map_parameters.filterMode = skch::filter::ONETOONE;
+        if (skip_self || skip_prefix) {
+            map_parameters.filterMode = skch::filter::ONETOONE;
+        } else {
+            map_parameters.filterMode = skch::filter::MAP;
+        }
     }
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
