@@ -544,7 +544,7 @@ bool hack_cigar(
     bool ok = true;
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
-        if (j >= j_max && i >= i_max) {
+        if (j >= j_max || i >= i_max) {
             cigar.end_offset = c;
             ok = false;
             break;
