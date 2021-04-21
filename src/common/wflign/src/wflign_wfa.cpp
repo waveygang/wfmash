@@ -28,6 +28,11 @@ void wflign_affine_wavefront(
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold) {
 
+    if (query_offset + query_length > query_total_length
+        || target_offset + target_length > target_total_length) {
+        return;
+    }
+
     // set up our implicit matrix
     const uint64_t steps_per_segment = 2;
     const uint64_t step_size = segment_length / steps_per_segment;
