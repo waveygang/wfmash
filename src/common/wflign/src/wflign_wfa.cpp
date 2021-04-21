@@ -482,15 +482,20 @@ void do_wfa_patch_alignment(
     aln.query_length = query_length;
     aln.target_length = target_length;
 
-    aln.score = wfa::affine_wavefronts_align(
+    const int max_score = (target_length + query_length) * 2;
+
+    aln.score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
         target+i,
         target_length,
         query+j,
-        query_length);
+        query_length,
+        max_score);
 
-    aln.ok = true;
+    aln.ok = aln.score < max_score;
     if (aln.ok) {
+        // correct X/M errors in the cigar
+        hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i)) {
             std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
