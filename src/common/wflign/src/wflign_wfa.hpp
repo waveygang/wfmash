@@ -257,7 +257,8 @@ EdlibAlignResult do_edlib_patch_alignment(
     const uint64_t& query_length,
     const char* target,
     const uint64_t& i,
-    const uint64_t& target_length);
+    const uint64_t& target_length,
+    const EdlibAlignMode align_mode);
 
 void merge_alignments(
     alignment_t& base,
