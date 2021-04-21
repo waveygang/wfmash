@@ -36,9 +36,10 @@ void wflign_affine_wavefront(
     const int pattern_length = query_length / step_size;
     const int text_length = target_length / step_size;
 
-    // use reduced WFA locally
-    const int wfa_min_wavefront_length = segment_length / 16;
-    const int wfa_max_distance_threshold = segment_length / 8;
+    // uncomment to use reduced WFA locally
+    // currently not supported due to issues with traceback when applying WF-reduction on small problems
+    const int wfa_min_wavefront_length = 0; //segment_length / 16;
+    const int wfa_max_distance_threshold = 0; //segment_length / 8;
 
     // Allocate MM
     wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -390,7 +391,7 @@ bool do_wfa_segment_alignment(
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.9) {// 0.618034) {
+    if (mash_dist > 0.618034) {
         // if it isn't, return false
         aln.score = max_score;
         aln.ok = false;
@@ -424,8 +425,6 @@ bool do_wfa_segment_alignment(
         // copy our edit cigar if we aligned
         aln.ok = aln.score < max_score;
         if (aln.ok) {
-            // correct X/M errors in the cigar
-            hack_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i);
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
                 std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
@@ -492,9 +491,6 @@ void do_wfa_patch_alignment(
 
     aln.ok = true;
     if (aln.ok) {
-
-        // correct X/M errors in the cigar
-        hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i)) {
             std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
@@ -571,8 +567,9 @@ bool hack_cigar(
             ++j; ++i;
             break;
         case 'X':
-            if (query[j] == target[i]) {
+            if (j < j_max && i < i_max && query[j] == target[i]) {
                 cigar.operations[c] = 'M';
+                ok = false;
             }
             ++j; ++i;
             break;
@@ -734,7 +731,7 @@ void write_merged_alignment(
     const uint64_t min_wfa_length = 16;
     const uint64_t min_edlib_length = 0;
     const int min_wf_length = 16;
-    const int max_dist_threshold = 512;
+    const int max_dist_threshold = 128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -868,7 +865,9 @@ void write_merged_alignment(
                               << "t: " << target[target_pos] << std::endl;
                     */
                     if (query[query_pos] != target[target_pos]) {
-                        std::cerr << "garbage trace" << std::endl;
+                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback for "
+                                  << query_name << " " << query_offset << " "
+                                  << target_name << " " << target_offset << std::endl;
                         exit(1);
                     }
                 }
