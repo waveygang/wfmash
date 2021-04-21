@@ -1028,8 +1028,10 @@ void write_merged_alignment(
 
                 if (query_delta > 0) {
                     // there is a piece of query
-                    auto target_delta_x = (target_pos + target_delta + query_delta < target_total_length ?
-                                    target_delta + query_delta : target_pos + target_delta + query_delta - target_total_length);
+                    auto target_delta_x = target_delta +
+                            (target_pos + target_delta + query_delta < target_total_length ?
+                                    query_delta :
+                                    target_total_length - (target_pos + target_delta));
 
                     auto result = do_edlib_patch_alignment(
                             query, query_pos, query_delta,
