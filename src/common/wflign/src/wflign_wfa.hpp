@@ -34,6 +34,12 @@ bool validate_cigar(
     const uint64_t& query_aln_len, const uint64_t& target_aln_len,
     uint64_t j, uint64_t i);
 
+bool validate_trace(
+    const std::vector<char>& tracev,
+    const char* query, const char* target,
+    const uint64_t& query_aln_len, const uint64_t& target_aln_len,
+    uint64_t j, uint64_t i);
+
 bool unpack_display_cigar(
     const wfa::edit_cigar_t& cigar,
     const char* query, const char* target,

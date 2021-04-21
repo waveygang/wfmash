@@ -205,7 +205,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-//#define VALIDATE_WFA_WFLIGN
+#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -650,6 +650,53 @@ bool validate_cigar(
     return ok;
 }
 
+bool validate_trace(
+    const std::vector<char>& tracev,
+    const char* query, const char* target,
+    const uint64_t& query_aln_len, const uint64_t& target_aln_len,
+    uint64_t j, uint64_t i) {
+    // check that our cigar matches where it claims it does
+    const int start_idx = 0;
+    const int end_idx = tracev.size();
+    uint64_t j_max = j + query_aln_len;
+    uint64_t i_max = i + target_aln_len;
+    bool ok = true;
+    //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+    for (int c = start_idx; c < end_idx; c++) {
+        // if new sequence of same moves started
+        switch (tracev[c]) {
+        case 'M':
+            // check that we match
+            if (query[j] != target[i]) {
+                std::cerr << "mismatch @ " << j << " " << i << " " << query[j] << " " << target[i] << std::endl;
+                ok = false;
+            }
+            if (j >= j_max) {
+                std::cerr << "query out of bounds @ " << j << " " << i << " " << query[j] << " " << target[i] << std::endl;
+                ok = false;
+            }
+            if (i >= i_max) {
+                std::cerr << "target out of bounds @ " << j << " " << i << " " << query[j] << " " << target[i] << std::endl;
+                ok = false;
+            }
+            ++j; ++i;
+            break;
+        case 'X':
+            ++j; ++i;
+            break;
+        case 'I':
+            ++j;
+            break;
+        case 'D':
+            ++i;
+            break;
+        default:
+            break;
+        }
+    }
+    return ok;
+}
+
 bool unpack_display_cigar(
     const wfa::edit_cigar_t& cigar,
     const char* query, const char* target,
@@ -874,8 +921,14 @@ void write_merged_alignment(
                     std::cerr << "q: " << query[query_pos] << " "
                               << "t: " << target[target_pos] << std::endl;
                     */
+                    if (query_pos >= query_length || target_pos >= target_length) {
+                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (out of bounds) for "
+                                  << query_name << " " << query_offset << " "
+                                  << target_name << " " << target_offset << std::endl;
+                        exit(1);
+                    }
                     if (query[query_pos] != target[target_pos]) {
-                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback for "
+                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (match/mismatch confusion) for "
                                   << query_name << " " << query_offset << " "
                                   << target_name << " " << target_offset << std::endl;
                         exit(1);
@@ -996,6 +1049,21 @@ void write_merged_alignment(
         std::cerr << c;
     }
     std::cerr << std::endl;
+#endif
+
+#ifdef VALIDATE_WFA_WFLIGN
+    if (!validate_trace(tracev, query, target, query_length, target_length, query_start, target_start)) {
+        std::cerr << "cigar failure at alignment "
+                  << "\t" << query_total_length
+                  << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
+                  << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
+                  << "\t" << (query_is_rev ? "-" : "+")
+                  << "\t" << target_name
+                  << "\t" << target_total_length
+                  << "\t" << target_offset + target_start
+                  << "\t" << target_offset + target_end << std::endl;
+        exit(1);
+    }
 #endif
 
     // convert trace to cigar, get correct start and end coordinates
