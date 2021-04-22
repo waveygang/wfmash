@@ -159,30 +159,32 @@ void affine_wavefronts_extend_mwavefront_compute_packed(
     const int v = AFFINE_WAVEFRONT_V(k,offset);
     const int h = AFFINE_WAVEFRONT_H(k,offset);
     // Fetch pattern/text blocks
-    uint64_t* pattern_blocks = (uint64_t*)(pattern+v);
-    uint64_t* text_blocks = (uint64_t*)(text+h);
-    uint64_t pattern_block = *pattern_blocks;
-    uint64_t text_block = *text_blocks;
-    // Compare 64-bits blocks
-    uint64_t cmp = pattern_block ^ text_block;
-    while (__builtin_expect(!cmp,0)) {
-      // Increment offset (full block)
-      offsets[k] += 8;
-      // Next blocks
-      ++pattern_blocks;
-      ++text_blocks;
-      // Fetch
-      pattern_block = *pattern_blocks;
-      text_block = *text_blocks;
-      // Compare
-      cmp = pattern_block ^ text_block;
-      WAVEFRONT_STATS_COUNTER_ADD(affine_wavefronts,wf_extend_inner_loop,1); // STATS
+    if (v < pattern_length && h < text_length) {
+      uint64_t* pattern_blocks = (uint64_t*)(pattern+v);
+      uint64_t* text_blocks = (uint64_t*)(text+h);
+      uint64_t pattern_block = *pattern_blocks;
+      uint64_t text_block = *text_blocks;
+      // Compare 64-bits blocks
+      uint64_t cmp = pattern_block ^ text_block;
+      while (__builtin_expect(!cmp,0)) {
+        // Increment offset (full block)
+        offsets[k] += 8;
+        // Next blocks
+        ++pattern_blocks;
+        ++text_blocks;
+        // Fetch
+        pattern_block = *pattern_blocks;
+        text_block = *text_blocks;
+        // Compare
+        cmp = pattern_block ^ text_block;
+        WAVEFRONT_STATS_COUNTER_ADD(affine_wavefronts,wf_extend_inner_loop,1); // STATS
+      }
+      // Count equal characters
+      const int equal_right_bits = __builtin_ctzl(cmp);
+      const int equal_chars = DIV_FLOOR(equal_right_bits,8);
+      // Increment offset
+      offsets[k] += equal_chars;
     }
-    // Count equal characters
-    const int equal_right_bits = __builtin_ctzl(cmp);
-    const int equal_chars = DIV_FLOOR(equal_right_bits,8);
-    // Increment offset
-    offsets[k] += equal_chars;
   }
   // DEBUG
   affine_wavefronts_extend_mwavefront_epiloge(
