@@ -1315,7 +1315,7 @@ void write_merged_alignment(
                 << "\t" << matches
                 << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
                 << "\t" << std::round(float2phred(1.0-block_identity))
-                << "\t" << "as:i:" << total_score
+                //<< "\t" << "as:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
@@ -1378,7 +1378,7 @@ void write_merged_alignment(
 
             out << "\t" << "*"                                                  // ASCII of Phred-scaled base QUALity+33
                 << "\t" << "NM:i:" << edit_distance
-                << "\t" << "AS:i:" << total_score
+                //<< "\t" << "AS:i:" << total_score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
