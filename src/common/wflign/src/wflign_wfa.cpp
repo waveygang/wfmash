@@ -1038,7 +1038,22 @@ void write_merged_alignment(
                                 && result.editDistance >= 0) {
                                 got_alignment = true;
 
-                                std::vector<char> headv;
+                               for (int i = *result.endLocations + 1; i < target_delta; ++i) {
+                                   tracev.push_back('D');
+                               }
+
+                                // copy it into the trace
+                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
+                                auto& end_idx = result.alignmentLength;
+                                for (int i = end_idx - 1; i >= 0; --i) {
+                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
+                                }
+
+                                for (int i = 0; i < *result.startLocations; ++i) {
+                                    tracev.push_back('D');
+                                }
+
+                                /*std::vector<char> headv;
                                 char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                                 auto& end_idx = result.alignmentLength;
                                 for (int i = 0; i < end_idx; ++i) {
@@ -1066,7 +1081,7 @@ void write_merged_alignment(
                                 std::reverse(headv.begin(), headv.end());
                                 for (auto& c : headv) {
                                     tracev.push_back(c);
-                                }
+                                }*/
                             }
                             edlibFreeAlignResult(result);
                         }
