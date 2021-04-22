@@ -933,7 +933,7 @@ void write_merged_alignment(
                     std::cerr << "q: " << query[query_pos] << " "
                               << "t: " << target[target_pos] << std::endl;
                     */
-                    if (query_pos >= query_length || target_pos >= target_length) {
+                    if (query_pos >= query_length || target_pos >= target_length_mut) {
                         std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (out of bounds) for "
                                   << query_name << " " << query_offset << " "
                                   << target_name << " " << target_offset << std::endl;
@@ -1104,7 +1104,8 @@ void write_merged_alignment(
                         && result.editDistance >= 0) {
                         got_alignment = true;
 
-                        if (target_pos + target_delta_x > target_length) {
+                        if (target_pos + target_delta_x > target_length_mut) {
+                            target_end += (target_pos + target_delta_x - target_length_mut);
                             target_length_mut = target_pos + target_delta_x;
                         }
 
