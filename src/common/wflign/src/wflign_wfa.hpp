@@ -304,6 +304,8 @@ void write_alignment(
 
 char* alignment_to_cigar(
     const std::vector<char>& edit_cigar,
+    const uint64_t& start_idx,
+    const uint64_t& end_idx,
     uint64_t& target_aligned_length,
     uint64_t& query_aligned_length,
     uint64_t& matches,

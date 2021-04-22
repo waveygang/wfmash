@@ -1178,9 +1178,32 @@ void write_merged_alignment(
         exit(1);
     }
 #endif
+    // trim deletions at start and end of tracev
+    uint64_t trim_del_first = 0;
+    uint64_t trim_del_last = 0;
+    {
+        // 1.) sort initial ins/del to put del < ins
+        auto first_non_indel = tracev.begin();
+        while (first_non_indel != tracev.end()
+               && (*first_non_indel == 'D' || *first_non_indel == 'I')) { ++first_non_indel; }
+        std::sort(tracev.begin(), first_non_indel, [](char a, char b) { return a < b; });
+        // 2.) find first non-D in tracev --> tracev_begin
+        //   a.) add to target_start this count
+        auto first_non_del = tracev.begin();
+        while (first_non_del != tracev.end() && *first_non_del == 'D') { ++first_non_del; }
+        trim_del_first = std::distance(tracev.begin(), first_non_del);
+        target_start += trim_del_first;
+        // 3.) count D's at end of tracev --> tracev_end
+        //   b.) subtract from target_end this count
+        auto last_non_del = tracev.rbegin();
+        while (last_non_del != tracev.rend() && *last_non_del == 'D') { ++last_non_del; }
+        trim_del_last = std::distance(tracev.rbegin(), last_non_del);
+        target_end -= trim_del_last;
+    }
 
     // convert trace to cigar, get correct start and end coordinates
     char* cigarv = alignment_to_cigar(tracev,
+                                      trim_del_first, tracev.size()-trim_del_last,
                                       total_target_aligned_length,
                                       total_query_aligned_length,
                                       matches,
@@ -1462,6 +1485,8 @@ void write_alignment(
 
 char* alignment_to_cigar(
     const std::vector<char>& edit_cigar,
+    const uint64_t& start_idx,
+    const uint64_t& end_idx,
     uint64_t& target_aligned_length,
     uint64_t& query_aligned_length,
     uint64_t& matches,
@@ -1477,8 +1502,6 @@ char* alignment_to_cigar(
     auto* cigar = new std::vector<char>();
     char lastMove = 0;  // Char of last move. 0 if there was no previous move.
     int numOfSameMoves = 0;
-    const int start_idx = 0;
-    const int end_idx = edit_cigar.size();
 
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int i = start_idx; i <= end_idx; i++) {
