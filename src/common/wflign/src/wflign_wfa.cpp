@@ -762,6 +762,14 @@ bool unpack_display_cigar(
     return true;
 }
 
+void _reverse(const char* src, char* dest, uint64_t length)
+{
+    for (uint64_t i = 0; i < length; ++i)
+    {
+        dest[length - i - 1] = src[i];
+    }
+}
+
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*>& trace,
@@ -960,8 +968,7 @@ void write_merged_alignment(
             // if it's long enough, patch it
             if (q != erodev.end()) {
                 bool got_alignment = false;
-                if (last_match_query > -1 && last_match_target > -1 &&
-                    query_delta > 0 && target_delta > 0 &&
+                if (query_delta > 0 && target_delta > 0 &&
                     (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
 #ifdef WFLIGN_DEBUG
                     std::cerr << "[wflign::wflign_affine_wavefront] patching in "
@@ -973,7 +980,12 @@ void write_merged_alignment(
                     uint64_t patch_query_aligned_length = 0;
                     //int query_delta = aln.j - query_end;
                     //int target_delta = aln.i - target_end;
-                    if (query_delta > min_wfa_length && target_delta > min_wfa_length) {
+                    if (
+                            // WFA is only global
+                            last_match_query > -1 && last_match_target > -1 &&
+
+                            query_delta > min_wfa_length && target_delta > min_wfa_length)
+                    {
                         alignment_t patch_aln;
                         do_wfa_patch_alignment(
                             query, query_pos, query_delta,
@@ -990,22 +1002,71 @@ void write_merged_alignment(
                             }
                         }
                     } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
-                        auto result = do_edlib_patch_alignment(
-                            query, query_pos, query_delta,
-                            target, target_pos, target_delta,
-                            EDLIB_MODE_NW);
-                        if (result.status == EDLIB_STATUS_OK
-                            && result.alignmentLength != 0
-                            && result.editDistance >= 0) {
-                            got_alignment = true;
-                            // copy it into the trace
-                            char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                            auto& end_idx = result.alignmentLength;
-                            for (int i = 0; i < end_idx; i++) {
-                                tracev.push_back(moveCodeToChar[result.alignment[i]]);
+                        if (last_match_query > -1 && last_match_target > -1) {
+                            // Global mode
+
+                            auto result = do_edlib_patch_alignment(
+                                    query, query_pos, query_delta,
+                                    target, target_pos, target_delta,EDLIB_MODE_NW);
+                            if (result.status == EDLIB_STATUS_OK
+                                && result.alignmentLength != 0
+                                && result.editDistance >= 0) {
+                                got_alignment = true;
+                                // copy it into the trace
+                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
+                                auto& end_idx = result.alignmentLength;
+                                for (int i = 0; i < end_idx; ++i) {
+                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
+                                }
                             }
+                            edlibFreeAlignResult(result);
+                        } else {
+                            // Semi-global mode for patching the heads
+
+                            char* query_rev = (char*)malloc(query_delta+1);
+                            _reverse(query + query_pos, query_rev, query_delta);
+                            query_rev[query_delta] = 0;
+
+                            char* target_rev = (char*)malloc(target_delta+1);
+                            _reverse(target + target_pos, target_rev, target_delta);
+                            target_rev[target_delta] = 0;
+
+//                            for (int i = 0; i < query_delta; ++i) {
+//                                std::cerr << query_rev[i];
+//                            }
+//                            std::cerr << std::endl;
+//                            for (int i = 0; i < target_delta; ++i) {
+//                                std::cerr << target_rev[i];
+//                            }
+//                            std::cerr << std::endl;
+
+                            auto result = do_edlib_patch_alignment(
+                                    query_rev, 0, query_delta,
+                                    target_rev, 0, target_delta,EDLIB_MODE_SHW);
+                            if (result.status == EDLIB_STATUS_OK
+                                && result.alignmentLength != 0
+                                && result.editDistance >= 0) {
+                                got_alignment = true;
+
+                                for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
+                                    tracev.push_back('D');
+                                }
+
+                                // copy it into the trace
+                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
+                                auto& end_idx = result.alignmentLength;
+                                for (int i = end_idx - 1; i >= 0; --i) {
+                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
+                                }
+
+                                for (int i = 0; i < *result.startLocations; ++i) {
+                                    tracev.push_back('D');
+                                }
+                            }
+                            edlibFreeAlignResult(result);
+                            free(query_rev);
+                            free(target_rev);
                         }
-                        edlibFreeAlignResult(result);
                     }
                 }
                 // add in stuff if we didn't align
@@ -1049,13 +1110,12 @@ void write_merged_alignment(
 
                         target_delta = target_delta_x;
 
-                        // copy it into the trace
-                        char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-
                         for (int i = 0; i < *result.startLocations; ++i) {
                             tracev.push_back('D');
                         }
 
+                        // copy it into the trace
+                        char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                         auto& end_idx = result.alignmentLength;
                         for (int i = 0; i < end_idx; ++i) {
                             tracev.push_back(moveCodeToChar[result.alignment[i]]);
