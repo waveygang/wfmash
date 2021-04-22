@@ -473,13 +473,13 @@ void do_wfa_patch_alignment(
     if (min_wavefront_length || max_distance_threshold) {
         // adaptive affine WFA setup
         affine_wavefronts = affine_wavefronts_new_reduced(
-            target_length * 2, query_length * 2, affine_penalties,
+            target_length, query_length, affine_penalties,
             min_wavefront_length, max_distance_threshold,
             NULL, mm_allocator);
     } else {
         // exact WFA
         affine_wavefronts = affine_wavefronts_new_complete(
-            target_length * 2, query_length * 2, affine_penalties, NULL, mm_allocator);
+            target_length, query_length, affine_penalties, NULL, mm_allocator);
     }
 
     aln.j = j;
