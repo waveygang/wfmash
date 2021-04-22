@@ -205,7 +205,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-//#define VALIDATE_WFA_WFLIGN
+#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -762,14 +762,6 @@ bool unpack_display_cigar(
     return true;
 }
 
-void _reverse(const char* src, char* dest, uint64_t length)
-{
-    for (uint64_t i = 0; i < length; ++i)
-    {
-        dest[length - i - 1] = src[i];
-    }
-}
-
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*>& trace,
@@ -1023,13 +1015,11 @@ void write_merged_alignment(
                         } else {
                             // Semi-global mode for patching the heads
 
-                            char* query_rev = (char*)malloc(query_delta+1);
-                            _reverse(query + query_pos, query_rev, query_delta);
-                            query_rev[query_delta] = 0;
+                            std::string query_rev(query + query_pos, query_delta);
+                            std::reverse(query_rev.begin(), query_rev.end());
 
-                            char* target_rev = (char*)malloc(target_delta+1);
-                            _reverse(target + target_pos, target_rev, target_delta);
-                            target_rev[target_delta] = 0;
+                            std::string target_rev(target + target_pos, target_delta);
+                            std::reverse(target_rev.begin(), target_rev.end());
 
 //                            for (int i = 0; i < query_delta; ++i) {
 //                                std::cerr << query_rev[i];
@@ -1041,16 +1031,18 @@ void write_merged_alignment(
 //                            std::cerr << std::endl;
 
                             auto result = do_edlib_patch_alignment(
-                                    query_rev, 0, query_delta,
-                                    target_rev, 0, target_delta,EDLIB_MODE_SHW);
+                                query_rev.c_str(), 0, query_rev.size(),
+                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_NW);
                             if (result.status == EDLIB_STATUS_OK
                                 && result.alignmentLength != 0
                                 && result.editDistance >= 0) {
                                 got_alignment = true;
 
+                                /*
                                 for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
                                     tracev.push_back('D');
                                 }
+                                */
 
                                 // copy it into the trace
                                 char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
@@ -1059,13 +1051,13 @@ void write_merged_alignment(
                                     tracev.push_back(moveCodeToChar[result.alignment[i]]);
                                 }
 
-                                for (int i = 0; i < *result.startLocations; ++i) {
+                                /*
+                                for (int i = 0; i < *result.endLocations; ++i) {
                                     tracev.push_back('D');
                                 }
+                                */
                             }
                             edlibFreeAlignResult(result);
-                            free(query_rev);
-                            free(target_rev);
                         }
                     }
                 }
@@ -1166,7 +1158,7 @@ void write_merged_alignment(
 
 #ifdef VALIDATE_WFA_WFLIGN
     if (!validate_trace(tracev, query, target, query_length, target_length_mut, query_start, target_start)) {
-        std::cerr << "cigar failure at alignment "
+        std::cerr << "cigar failure at alignment (before head/tail del trimming) "
                   << "\t" << query_total_length
                   << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
                   << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
@@ -1200,6 +1192,23 @@ void write_merged_alignment(
         trim_del_last = std::distance(tracev.rbegin(), last_non_del);
         target_end -= trim_del_last;
     }
+
+    /*
+#ifdef VALIDATE_WFA_WFLIGN
+    if (!validate_trace(tracev, query, target, query_length, target_length_mut, query_start, target_start)) {
+        std::cerr << "cigar failure at alignment (after head/tail del trimming) "
+                  << "\t" << query_total_length
+                  << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
+                  << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
+                  << "\t" << (query_is_rev ? "-" : "+")
+                  << "\t" << target_name
+                  << "\t" << target_total_length
+                  << "\t" << target_offset + target_start
+                  << "\t" << target_offset + target_end << std::endl;
+        exit(1);
+    }
+#endif
+    */
 
     // convert trace to cigar, get correct start and end coordinates
     char* cigarv = alignment_to_cigar(tracev,
