@@ -1032,30 +1032,41 @@ void write_merged_alignment(
 
                             auto result = do_edlib_patch_alignment(
                                 query_rev.c_str(), 0, query_rev.size(),
-                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_NW);
+                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
                             if (result.status == EDLIB_STATUS_OK
                                 && result.alignmentLength != 0
                                 && result.editDistance >= 0) {
                                 got_alignment = true;
 
-                                /*
-                                for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
-                                    tracev.push_back('D');
-                                }
-                                */
-
-                                // copy it into the trace
+                                std::vector<char> headv;
                                 char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                                 auto& end_idx = result.alignmentLength;
-                                for (int i = end_idx - 1; i >= 0; --i) {
-                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
+                                for (int i = 0; i < end_idx; ++i) {
+                                    headv.push_back(moveCodeToChar[result.alignment[i]]);
                                 }
-
-                                /*
-                                for (int i = 0; i < *result.endLocations; ++i) {
-                                    tracev.push_back('D');
+                                // now add the tail stuff
+                                // count the ref distance
+                                uint64_t qlen = 0;
+                                uint64_t tlen = 0;
+                                for (auto& c : headv) {
+                                    switch (c) {
+                                    case 'M': case 'X':
+                                        ++qlen; ++tlen; break;
+                                    case 'I': ++qlen; break;
+                                    case 'D': ++tlen; break;
+                                    default: break;
+                                    }
                                 }
-                                */
+                                while (tlen++ < target_delta) {
+                                    headv.push_back('D');
+                                }
+                                while (qlen++ < query_delta) {
+                                    headv.push_back('I');
+                                }
+                                std::reverse(headv.begin(), headv.end());
+                                for (auto& c : headv) {
+                                    tracev.push_back(c);
+                                }
                             }
                             edlibFreeAlignResult(result);
                         }
