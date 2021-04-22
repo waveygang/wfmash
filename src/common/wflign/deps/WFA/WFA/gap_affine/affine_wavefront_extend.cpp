@@ -159,7 +159,8 @@ void affine_wavefronts_extend_mwavefront_compute_packed(
     const int v = AFFINE_WAVEFRONT_V(k,offset);
     const int h = AFFINE_WAVEFRONT_H(k,offset);
     // Fetch pattern/text blocks
-    if (v < pattern_length && h < text_length) {
+    if (v >= 0 && h >= 0 &&
+        v < pattern_length && h < text_length) {
       uint64_t* pattern_blocks = (uint64_t*)(pattern+v);
       uint64_t* text_blocks = (uint64_t*)(text+h);
       uint64_t pattern_block = *pattern_blocks;
@@ -208,8 +209,11 @@ void affine_wavefronts_extend_mwavefront_compute(
     const awf_offset_t offset = offsets[k];
     int v = AFFINE_WAVEFRONT_V(k,offset);
     int h = AFFINE_WAVEFRONT_H(k,offset);
-    while (pattern[v++]==text[h++]) {
-      ++(offsets[k]);
+    if (v >= 0 && h >= 0 &&
+        v < pattern_length && h < text_length) {
+        while (pattern[v++]==text[h++]) {
+            ++(offsets[k]);
+        }
     }
   }
   // DEBUG
