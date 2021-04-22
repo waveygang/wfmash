@@ -41,6 +41,9 @@ void wflign_affine_wavefront(
     const int pattern_length = query_length / step_size;
     const int text_length = target_length / step_size;
 
+    // patching bound
+    const uint64_t max_patch_length = segment_length * 32;
+
     // uncomment to use reduced WFA locally
     // currently not supported due to issues with traceback when applying WF-reduction on small problems
     const int wfa_min_wavefront_length = 0; //segment_length / 16;
@@ -205,7 +208,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -326,7 +329,7 @@ void wflign_affine_wavefront(
                                    target,
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
-                                   segment_length * 128,
+                                   max_patch_length,
                                    elapsed_time_wflambda_ms);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -1052,36 +1055,6 @@ void write_merged_alignment(
                                 for (int i = 0; i < *result.startLocations; ++i) {
                                     tracev.push_back('D');
                                 }
-
-                                /*std::vector<char> headv;
-                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                                auto& end_idx = result.alignmentLength;
-                                for (int i = 0; i < end_idx; ++i) {
-                                    headv.push_back(moveCodeToChar[result.alignment[i]]);
-                                }
-                                // now add the tail stuff
-                                // count the ref distance
-                                uint64_t qlen = 0;
-                                uint64_t tlen = 0;
-                                for (auto& c : headv) {
-                                    switch (c) {
-                                    case 'M': case 'X':
-                                        ++qlen; ++tlen; break;
-                                    case 'I': ++qlen; break;
-                                    case 'D': ++tlen; break;
-                                    default: break;
-                                    }
-                                }
-                                while (tlen++ < target_delta) {
-                                    headv.push_back('D');
-                                }
-                                while (qlen++ < query_delta) {
-                                    headv.push_back('I');
-                                }
-                                std::reverse(headv.begin(), headv.end());
-                                for (auto& c : headv) {
-                                    tracev.push_back(c);
-                                }*/
                             }
                             edlibFreeAlignResult(result);
                         }
