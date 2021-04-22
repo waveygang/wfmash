@@ -205,7 +205,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -468,6 +468,7 @@ void do_wfa_patch_alignment(
     alignment_t& aln) {
 
     //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
+    wfa::mm_allocator_clear(mm_allocator);
 
     wfa::affine_wavefronts_t* affine_wavefronts;
     if (min_wavefront_length || max_distance_threshold) {
@@ -971,6 +972,12 @@ void write_merged_alignment(
                         alignment_t patch_aln;
 #ifdef WFLIGN_DEBUG
                         std::cerr << "do_wfa_patch_alignment" << std::endl;
+#endif
+#ifdef WFLIGN_SHOW_PATCH
+                        std::cerr << "[wflign::wflign_affine_wavefront] patching in "
+                                  << query_name << " " << query_offset << " @ " << query_pos
+                                  << target_name << " " << target_offset << " @ " << target_pos
+                                  << std::endl;
 #endif
                         do_wfa_patch_alignment(
                             query, query_pos, query_delta,
