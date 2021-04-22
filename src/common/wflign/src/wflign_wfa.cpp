@@ -792,6 +792,7 @@ void write_merged_alignment(
     const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
     const int max_dist_threshold = 512;
+    const uint64_t max_edlib_tail_length = 2000;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1025,7 +1026,7 @@ void write_merged_alignment(
 
                 bool got_alignment = false;
 
-                if (query_delta > 0) {
+                if (query_delta > 0 && query_delta <= max_edlib_tail_length) {
                     // there is a piece of query
                     auto target_delta_x = target_delta +
                             (target_pos + target_delta + query_delta < target_total_length ?
