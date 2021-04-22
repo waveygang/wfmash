@@ -34,6 +34,12 @@ bool validate_cigar(
     const uint64_t& query_aln_len, const uint64_t& target_aln_len,
     uint64_t j, uint64_t i);
 
+bool validate_trace(
+    const std::vector<char>& tracev,
+    const char* query, const char* target,
+    const uint64_t& query_aln_len, const uint64_t& target_aln_len,
+    uint64_t j, uint64_t i);
+
 bool unpack_display_cigar(
     const wfa::edit_cigar_t& cigar,
     const char* query, const char* target,
@@ -173,6 +179,10 @@ void wflign_edit_cigar_copy(
     wfa::edit_cigar_t* const edit_cigar_dst,
     wfa::edit_cigar_t* const edit_cigar_src);
 
+void copy_wfa_alignment_into_trace(
+    const wfa::edit_cigar_t* const edit_cigar,
+    std::vector<char>& trace);
+
 /*
 void edlib_to_wflign_edit_cigar_copy(
     wfa::edit_cigar_t* const edit_cigar_dst,
@@ -247,7 +257,8 @@ EdlibAlignResult do_edlib_patch_alignment(
     const uint64_t& query_length,
     const char* target,
     const uint64_t& i,
-    const uint64_t& target_length);
+    const uint64_t& target_length,
+    const EdlibAlignMode align_mode);
 
 void merge_alignments(
     alignment_t& base,
@@ -291,6 +302,18 @@ void write_alignment(
     const float& min_identity,
     const bool& with_endline = true);
 
+char* alignment_to_cigar(
+    const std::vector<char>& edit_cigar,
+    const uint64_t& start_idx,
+    const uint64_t& end_idx,
+    uint64_t& target_aligned_length,
+    uint64_t& query_aligned_length,
+    uint64_t& matches,
+    uint64_t& mismatches,
+    uint64_t& insertions,
+    uint64_t& inserted_bp,
+    uint64_t& deletions,
+    uint64_t& deleted_bp);
 
 char* wfa_alignment_to_cigar(
     const wfa::edit_cigar_t* const edit_cigar,
@@ -316,6 +339,8 @@ char* edlib_alignment_to_cigar(
     uint64_t& deleted_bp);
 
 double float2phred(const double& prob);
+
+void sort_indels(std::vector<char>& v);
 
 }
 
