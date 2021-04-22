@@ -468,19 +468,18 @@ void do_wfa_patch_alignment(
     alignment_t& aln) {
 
     //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
-    wfa::mm_allocator_clear(mm_allocator);
 
     wfa::affine_wavefronts_t* affine_wavefronts;
     if (min_wavefront_length || max_distance_threshold) {
         // adaptive affine WFA setup
         affine_wavefronts = affine_wavefronts_new_reduced(
-            target_length, query_length, affine_penalties,
+            target_length * 2, query_length * 2, affine_penalties,
             min_wavefront_length, max_distance_threshold,
             NULL, mm_allocator);
     } else {
         // exact WFA
         affine_wavefronts = affine_wavefronts_new_complete(
-            target_length, query_length, affine_penalties, NULL, mm_allocator);
+            target_length * 2, query_length * 2, affine_penalties, NULL, mm_allocator);
     }
 
     aln.j = j;
@@ -791,8 +790,8 @@ void write_merged_alignment(
     // patching parameters
     const uint64_t min_wfa_length = 16;
     const uint64_t min_edlib_length = 0;
-    const int min_wf_length = 16;
-    const int max_dist_threshold = 128;
+    const int min_wf_length = 64;
+    const int max_dist_threshold = 512;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -963,22 +962,18 @@ void write_merged_alignment(
                 if (last_match_query > -1 && last_match_target > -1 &&
                     query_delta > 0 && target_delta > 0 &&
                     (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
-
+#ifdef WFLIGN_DEBUG
+                    std::cerr << "[wflign::wflign_affine_wavefront] patching in "
+                              << query_name << " " << query_offset << " @ " << query_pos
+                              << target_name << " " << target_offset << " @ " << target_pos
+                              << std::endl;
+#endif
                     uint64_t patch_target_aligned_length = 0;
                     uint64_t patch_query_aligned_length = 0;
                     //int query_delta = aln.j - query_end;
                     //int target_delta = aln.i - target_end;
                     if (query_delta > min_wfa_length && target_delta > min_wfa_length) {
                         alignment_t patch_aln;
-#ifdef WFLIGN_DEBUG
-                        std::cerr << "do_wfa_patch_alignment" << std::endl;
-#endif
-#ifdef WFLIGN_SHOW_PATCH
-                        std::cerr << "[wflign::wflign_affine_wavefront] patching in "
-                                  << query_name << " " << query_offset << " @ " << query_pos
-                                  << target_name << " " << target_offset << " @ " << target_pos
-                                  << std::endl;
-#endif
                         do_wfa_patch_alignment(
                             query, query_pos, query_delta,
                             target, target_pos, target_delta,
@@ -994,9 +989,6 @@ void write_merged_alignment(
                             }
                         }
                     } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
-#ifdef WFLIGN_DEBUG
-                        std::cerr << "do_edlib_patch_alignment" << std::endl;
-#endif
                         auto result = do_edlib_patch_alignment(
                             query, query_pos, query_delta,
                             target, target_pos, target_delta,
