@@ -20,7 +20,7 @@ jobs:
           libgsl-dev
           zlib1g-dev
           samtools
-          libjemalloc2
+          libjemalloc-dev
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
