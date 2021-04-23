@@ -530,7 +530,8 @@ void do_wfa_patch_alignment(
     }
     // cleanup wavefronts to keep memory low
     affine_wavefronts_delete(affine_wavefronts);
-
+    // cleanup allocator to keep memory low
+    wfa::mm_allocator_clear(mm_allocator);
 }
 
 EdlibAlignResult do_edlib_patch_alignment(
@@ -807,7 +808,7 @@ void write_merged_alignment(
     const uint64_t min_wfa_length = 16;
     const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
-    const int max_dist_threshold = 128;
+    const int max_dist_threshold = 256;
     const uint64_t max_edlib_tail_length = 2000;
 
     // we need to get the start position in the query and target
