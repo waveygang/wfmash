@@ -112,9 +112,10 @@ namespace align
                 const std::string& seq) {
                 // todo: offset_t is an 32-bit integer, which could cause problems
                 skch::offset_t len = seq.length();
-
+                // upper-case our input
                 skch::CommonFunc::makeUpperCase((char*)seq.c_str(), len);
-
+                // and make sure it's canonical DNA (for WFA)
+                skch::CommonFunc::makeValidDNA((char*)seq.c_str(), len);
                 //seqId shouldn't already exist in our table
                 assert(this->refSequences.count(seq_name) == 0);
                 refSequences.emplace(seq_name, seq);
@@ -213,6 +214,8 @@ namespace align
                               skch::offset_t len = seq->length();
                               // upper-case our input
                               skch::CommonFunc::makeUpperCase((char*)seq->c_str(), len);
+                              // and make sure it's canonical DNA (for WFA)
+                              skch::CommonFunc::makeValidDNA((char*)seq->c_str(), len);
                               // todo maybe this should change to some kind of unique pointer?
                               // something where we can GC it when we're done aligning to it
                               //std::string qSequence = seq;
@@ -230,11 +233,10 @@ namespace align
                                   //Check if mapping query id matches current query sequence id
                                   if(currentRecord.qId == qSeqId)
                                   {
-                                      //Continue to read the next query sequence
-                                      //continue;
+                                      //Queue up this query record
                                       auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
                                       seq_queue.push(q);
-                                  
+
                                       //Check if more mappings have same query sequence id
                                       while(std::getline(mappingListStream, mappingRecordLine))
                                       {
