@@ -73,6 +73,8 @@ The `.fai` indexes are then used to quickly compute the sum of query lengths.
 The build is orchestrated with cmake:
 
 ```
+sudo apt install libjemalloc-dev
+
 cmake -H. -Bbuild && cmake --build build -- -j 16
 ```
 
