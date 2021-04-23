@@ -52,6 +52,7 @@ struct alignment_t {
     int query_length = 0;
     int target_length = 0;
     bool ok = false;
+    bool keep = false;
     int score = std::numeric_limits<int>::max();
     double mash_dist = 1;
     wfa::edit_cigar_t edit_cigar{};

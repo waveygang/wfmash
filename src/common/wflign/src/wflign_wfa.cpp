@@ -13,7 +13,7 @@ void wflign_affine_wavefront(
     const std::string& query_name,
     const char* query,
     const uint64_t& query_total_length,
-    const uint64_t& query_offset, // todo this is broken for reverse alignment reporting!!!!
+    const uint64_t& query_offset,
     const uint64_t& query_length,
     const bool& query_is_rev,
     const std::string& target_name,
@@ -42,7 +42,7 @@ void wflign_affine_wavefront(
     const int text_length = target_length / step_size;
 
     // patching bound
-    const uint64_t max_patch_length = segment_length * 32;
+    const uint64_t max_patch_length = segment_length * 128;
 
     // uncomment to use reduced WFA locally
     // currently not supported due to issues with traceback when applying WF-reduction on small problems
@@ -87,7 +87,7 @@ void wflign_affine_wavefront(
         .gap_opening = 11,
         .gap_extension = 1,
     };
-    const uint64_t minhash_kmer_size = 13;
+    const uint64_t minhash_kmer_size = 17;
     int v_max = 0;
     int h_max = 0;
 
@@ -166,7 +166,9 @@ void wflign_affine_wavefront(
             return false;
         } else {
             uint64_t k = encode_pair(v, h);
-            trace.push_back(alignments[k]);
+            auto* aln = alignments[k];
+            aln->keep = true;
+            trace.push_back(aln);
             return true;
         }
     };
@@ -180,6 +182,13 @@ void wflign_affine_wavefront(
         trace_match,
         pattern_length,
         text_length);
+
+    for (const auto& p : alignments) {
+        if (!p.second->keep) {
+            delete p.second;
+            p.second = nullptr;
+        }
+    }
 
     long elapsed_time_wflambda_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
@@ -349,9 +358,13 @@ void wflign_affine_wavefront(
     // Free
     wflambda::affine_wavefronts_delete(affine_wavefronts);
     wflambda::mm_allocator_delete(wflambda_mm_allocator);
+    /*
     for (const auto& p : alignments) {
-        delete p.second;
+        if (p.second != nullptr) {
+            delete p.second;
+        }
     }
+    */
 }
 
 // accumulate alignment objects
@@ -385,11 +398,11 @@ bool do_wfa_segment_alignment(
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
-        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/8);
+        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/16);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
-        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/8);
+        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/16);
     }
 
     // first check if our mash dist is inbounds
@@ -517,7 +530,8 @@ void do_wfa_patch_alignment(
     }
     // cleanup wavefronts to keep memory low
     affine_wavefronts_delete(affine_wavefronts);
-
+    // cleanup allocator to keep memory low
+    wfa::mm_allocator_clear(mm_allocator);
 }
 
 EdlibAlignResult do_edlib_patch_alignment(
@@ -794,7 +808,7 @@ void write_merged_alignment(
     const uint64_t min_wfa_length = 16;
     const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
-    const int max_dist_threshold = 512;
+    const int max_dist_threshold = 256;
     const uint64_t max_edlib_tail_length = 2000;
 
     // we need to get the start position in the query and target
@@ -875,6 +889,8 @@ void write_merged_alignment(
                     query_end = aln.j + query_aligned_length;
                     target_end = aln.i + target_aligned_length;
                 }
+                // clean up
+                delete *x;
             }
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] eroding traceback at k=" << erode_k << std::endl;
@@ -964,6 +980,7 @@ void write_merged_alignment(
             if (q != erodev.end()) {
                 bool got_alignment = false;
                 if (query_delta > 0 && target_delta > 0 &&
+                    (query_delta < dropout_rescue_max * 4 && target_delta < dropout_rescue_max * 4) &&
                     (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
 #ifdef WFLIGN_DEBUG
                     std::cerr << "[wflign::wflign_affine_wavefront] patching in "
