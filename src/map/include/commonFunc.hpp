@@ -19,6 +19,8 @@
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
 
+#include "common/wflign/src/rkmh.hpp"
+
 namespace skch
 {
   /**
@@ -67,6 +69,19 @@ namespace skch
           seq[i] -= 32;
         }
       }
+    }
+
+    /**
+     * @brief               convert non-canonical DNA bases to N
+     * @param[in]   seq     pointer to input sequence
+     * @param[in]   len     length of input sequence
+     */
+    inline void makeValidDNA(char* seq, offset_t len) {
+        for ( int i = 0; i < len; i++ ) {
+            if (rkmh::valid_dna[seq[i]]) {
+                seq[i] = 'N';
+            }
+        }
     }
 
     /**
