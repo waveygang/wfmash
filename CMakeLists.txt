@@ -43,9 +43,10 @@ target_link_libraries(wfmash
   edlib
   wflambda
   wfa
+  jemalloc
   z)
 
 install(TARGETS wfmash DESTINATION bin)
 
 #set(CMAKE_BUILD_TYPE Debug)
-#set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Release)
