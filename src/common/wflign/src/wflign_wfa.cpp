@@ -939,24 +939,33 @@ void write_merged_alignment(
         // get to the first match ... we'll not yet try to patch the alignment tips
         while (q != erodev.end()) {
             while (q != erodev.end() && (*q == 'M' || *q == 'X')) {
+                /*
+                std::cerr << "q: " << query[query_pos] << " "
+                << "t: " << target[target_pos - target_pointer_shift] << std::endl;
+                */
+                if (query_pos >= query_length || target_pos >= target_length_mut) {
+                    std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (out of bounds) for "
+                              << query_name << " " << query_offset << " "
+                              << target_name << " " << target_offset << std::endl;
+                    exit(1);
+                }
+
                 if (*q == 'M') {
-                    /*
-                    std::cerr << "q: " << query[query_pos] << " "
-                              << "t: " << target[target_pos - target_pointer_shift] << std::endl;
-                    */
-                    if (query_pos >= query_length || target_pos >= target_length_mut) {
-                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (out of bounds) for "
+                    if (query[query_pos] != target[target_pos - target_pointer_shift]) {
+                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (M, but there is a mismatch) for "
                                   << query_name << " " << query_offset << " "
                                   << target_name << " " << target_offset << std::endl;
                         exit(1);
                     }
-                    if (query[query_pos] != target[target_pos - target_pointer_shift]) {
-                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (match/mismatch confusion) for "
+                } else {
+                    if (query[query_pos] == target[target_pos - target_pointer_shift]) {
+                        std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (X, but there is a match) for "
                                   << query_name << " " << query_offset << " "
                                   << target_name << " " << target_offset << std::endl;
                         exit(1);
                     }
                 }
+
                 tracev.push_back(*q);
                 last_match_query = query_pos;
                 last_match_target = target_pos;
