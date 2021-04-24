@@ -800,6 +800,8 @@ void write_merged_alignment(
     const long& elapsed_time_wflambda_ms,
     const bool& with_endline) {
 
+    int64_t target_pointer_shift = 0;
+
     uint64_t target_length_mut = target_length;
 
     // patching parameters
@@ -940,7 +942,7 @@ void write_merged_alignment(
                 if (*q == 'M') {
                     /*
                     std::cerr << "q: " << query[query_pos] << " "
-                              << "t: " << target[target_pos] << std::endl;
+                              << "t: " << target[target_pos - target_pointer_shift] << std::endl;
                     */
                     if (query_pos >= query_length || target_pos >= target_length_mut) {
                         std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (out of bounds) for "
@@ -948,7 +950,7 @@ void write_merged_alignment(
                                   << target_name << " " << target_offset << std::endl;
                         exit(1);
                     }
-                    if (query[query_pos] != target[target_pos]) {
+                    if (query[query_pos] != target[target_pos - target_pointer_shift]) {
                         std::cerr << "[wflign::wflign_affine_wavefront] corrupted traceback (match/mismatch confusion) for "
                                   << query_name << " " << query_offset << " "
                                   << target_name << " " << target_offset << std::endl;
@@ -977,47 +979,45 @@ void write_merged_alignment(
             // if it's long enough, patch it
             if (q != erodev.end()) {
                 bool got_alignment = false;
-                if (query_delta > 0 && target_delta > 0 &&
-                    (query_delta < dropout_rescue_max * 4 && target_delta < dropout_rescue_max * 4) &&
-                    (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
+
+                if (last_match_query > -1 && last_match_target > -1) {
+                    if (query_delta > 0 && target_delta > 0 &&
+                        (query_delta < dropout_rescue_max * 4 && target_delta < dropout_rescue_max * 4) &&
+                        (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
 #ifdef WFLIGN_DEBUG
-                    std::cerr << "[wflign::wflign_affine_wavefront] patching in "
+                        std::cerr << "[wflign::wflign_affine_wavefront] patching in "
                               << query_name << " " << query_offset << " @ " << query_pos
                               << target_name << " " << target_offset << " @ " << target_pos
                               << std::endl;
 #endif
-                    uint64_t patch_target_aligned_length = 0;
-                    uint64_t patch_query_aligned_length = 0;
-                    //int query_delta = aln.j - query_end;
-                    //int target_delta = aln.i - target_end;
-                    if (
+                        uint64_t patch_target_aligned_length = 0;
+                        uint64_t patch_query_aligned_length = 0;
+                        //int query_delta = aln.j - query_end;
+                        //int target_delta = aln.i - target_end;
+                        if (
                             // WFA is only global
-                            last_match_query > -1 && last_match_target > -1 &&
-
-                            query_delta > min_wfa_length && target_delta > min_wfa_length)
-                    {
-                        alignment_t patch_aln;
-                        do_wfa_patch_alignment(
-                            query, query_pos, query_delta,
-                            target, target_pos, target_delta,
-                            min_wf_length, max_dist_threshold,
-                            mm_allocator, affine_penalties, patch_aln);
-                        if (patch_aln.ok) {
-                            //std::cerr << "got an ok patch aln" << std::endl;
-                            got_alignment = true;
-                            const int start_idx = patch_aln.edit_cigar.begin_offset;
-                            const int end_idx = patch_aln.edit_cigar.end_offset;
-                            for (int i = start_idx; i < end_idx; i++) {
-                                tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                                query_delta > min_wfa_length && target_delta > min_wfa_length
+                                ){
+                            alignment_t patch_aln;
+                            do_wfa_patch_alignment(
+                                    query, query_pos, query_delta,
+                                    target - target_pointer_shift, target_pos, target_delta,
+                                    min_wf_length, max_dist_threshold,
+                                    mm_allocator, affine_penalties, patch_aln);
+                            if (patch_aln.ok) {
+                                //std::cerr << "got an ok patch aln" << std::endl;
+                                got_alignment = true;
+                                const int start_idx = patch_aln.edit_cigar.begin_offset;
+                                const int end_idx = patch_aln.edit_cigar.end_offset;
+                                for (int i = start_idx; i < end_idx; i++) {
+                                    tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                                }
                             }
-                        }
-                    } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
-                        if (last_match_query > -1 && last_match_target > -1) {
+                        } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
                             // Global mode
-
                             auto result = do_edlib_patch_alignment(
                                     query, query_pos, query_delta,
-                                    target, target_pos, target_delta,EDLIB_MODE_NW);
+                                    target - target_pointer_shift, target_pos, target_delta,EDLIB_MODE_NW);
                             if (result.status == EDLIB_STATUS_OK
                                 && result.alignmentLength != 0
                                 && result.editDistance >= 0) {
@@ -1030,51 +1030,97 @@ void write_merged_alignment(
                                 }
                             }
                             edlibFreeAlignResult(result);
-                        } else {
-                            // Semi-global mode for patching the heads
-
-                            std::string query_rev(query + query_pos, query_delta);
-                            std::reverse(query_rev.begin(), query_rev.end());
-
-                            std::string target_rev(target + target_pos, target_delta);
-                            std::reverse(target_rev.begin(), target_rev.end());
-
-//                            for (int i = 0; i < query_delta; ++i) {
-//                                std::cerr << query_rev[i];
-//                            }
-//                            std::cerr << std::endl;
-//                            for (int i = 0; i < target_delta; ++i) {
-//                                std::cerr << target_rev[i];
-//                            }
-//                            std::cerr << std::endl;
-
-                            auto result = do_edlib_patch_alignment(
-                                query_rev.c_str(), 0, query_rev.size(),
-                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
-                            if (result.status == EDLIB_STATUS_OK
-                                && result.alignmentLength != 0
-                                && result.editDistance >= 0) {
-                                got_alignment = true;
-
-                               for (int i = *result.endLocations + 1; i < target_delta; ++i) {
-                                   tracev.push_back('D');
-                               }
-
-                                // copy it into the trace
-                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                                auto& end_idx = result.alignmentLength;
-                                for (int i = end_idx - 1; i >= 0; --i) {
-                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
-                                }
-
-                                for (int i = 0; i < *result.startLocations; ++i) {
-                                    tracev.push_back('D');
-                                }
-                            }
-                            edlibFreeAlignResult(result);
                         }
                     }
+                } else if (query_delta > 0) {
+                    // Semi-global mode for patching the heads
+
+                    uint64_t pos_to_ask = query_delta + target_delta;
+
+                    uint64_t pos_to_shift = 0;
+                    uint64_t target_pos_x, target_start_x;
+                    // todo: should we check if there are insertions at the beginning?
+                    if (target_pos >= pos_to_ask) {
+                        // Easy, we don't have to manage 'negative' indexes for the target array
+                        pos_to_shift = pos_to_ask;
+
+                        target_pos_x = target_pos - pos_to_shift;
+                        target_start_x = target_start;
+                    } else {
+                        target_pos_x = 0;
+                        target_start_x = 0;
+
+                        int64_t positions_to_get = pos_to_ask - target_pos;
+
+                        if (positions_to_get > 0) {
+                            // Manage negative indexes
+                            if (target_offset >= positions_to_get) {
+                                target_pointer_shift = positions_to_get;
+
+                                pos_to_shift = pos_to_ask; // we can get all the positions we need
+                            } else {
+                                // We can't get all the positions we need
+                                target_pointer_shift = target_offset;
+
+                                pos_to_shift = target_pos + target_pointer_shift;
+                            }
+                        } else {
+                            pos_to_shift = target_pos; // we can get all the positions we need without negative indexing
+                        }
+                    }
+
+                    uint64_t target_delta_x = target_delta + pos_to_shift;
+
+                    if (target_delta_x > 0) {
+                        std::string query_rev(query + query_pos, query_delta);
+                        std::reverse(query_rev.begin(), query_rev.end());
+
+                        std::string target_rev(target - target_pointer_shift + target_pos_x, target_delta_x);
+                        std::reverse(target_rev.begin(), target_rev.end());
+
+                        /*std::cerr << "query: ";
+                        for (int i = 0; i < query_delta; ++i) {
+                            std::cerr << query_rev[i];
+                        }
+                        std::cerr << "\ntarget: ";;
+                        for (int i = 0; i < target_delta_x; ++i) {
+                            std::cerr << target_rev[i];
+                        }
+                        std::cerr << std::endl;*/
+
+                        auto result = do_edlib_patch_alignment(
+                                query_rev.c_str(), 0, query_rev.size(),
+                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
+                        if (result.status == EDLIB_STATUS_OK
+                            && result.alignmentLength != 0
+                            && result.editDistance >= 0) {
+                            got_alignment = true;
+
+                            target_pos = target_pos_x;
+                            target_delta = target_delta_x;
+
+                            target_start = target_pos;
+                            target_length_mut += pos_to_shift;
+
+                            for (int i = *result.endLocations + 1; i < target_delta; ++i) {
+                                tracev.push_back('D');
+                            }
+
+                            // copy it into the trace
+                            char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
+                            auto& end_idx = result.alignmentLength;
+                            for (int i = end_idx - 1; i >= 0; --i) {
+                                tracev.push_back(moveCodeToChar[result.alignment[i]]);
+                            }
+
+                            for (int i = 0; i < *result.startLocations; ++i) {
+                                tracev.push_back('D');
+                            }
+                        }
+                        edlibFreeAlignResult(result);
+                    }
                 }
+
                 // add in stuff if we didn't align
                 if (!got_alignment) {
                     for (uint64_t i = 0; i < query_delta; ++i) {
@@ -1102,7 +1148,7 @@ void write_merged_alignment(
 
                     auto result = do_edlib_patch_alignment(
                             query, query_pos, query_delta,
-                            target, target_pos, target_delta_x,
+                            target - target_pointer_shift, target_pos, target_delta_x,
                             EDLIB_MODE_SHW);
 
                     if (result.status == EDLIB_STATUS_OK
@@ -1171,15 +1217,21 @@ void write_merged_alignment(
 #endif
 
 #ifdef VALIDATE_WFA_WFLIGN
-    if (!validate_trace(tracev, query, target, query_length, target_length_mut, query_start, target_start)) {
+//    std::cerr << "query_length: " << query_length << std::endl;
+//    std::cerr << "target_length_mut: " << target_length_mut << std::endl;
+//    std::cerr << "query_start: " << query_start << std::endl;
+//    std::cerr << "target_start: " << target_start << std::endl;
+
+    if (!validate_trace(tracev, query, target - target_pointer_shift, query_length, target_length_mut, query_start, target_start)) {
         std::cerr << "cigar failure at alignment (before head/tail del trimming) "
+                  << "\t" << query_name
                   << "\t" << query_total_length
                   << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
                   << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
                   << "\t" << (query_is_rev ? "-" : "+")
                   << "\t" << target_name
                   << "\t" << target_total_length
-                  << "\t" << target_offset + target_start
+                  << "\t" << target_offset - target_pointer_shift + target_start
                   << "\t" << target_offset + target_end << std::endl;
         exit(1);
     }
@@ -1199,25 +1251,29 @@ void write_merged_alignment(
         while (first_non_del != tracev.end() && *first_non_del == 'D') { ++first_non_del; }
         trim_del_first = std::distance(tracev.begin(), first_non_del);
         target_start += trim_del_first;
+        //target_length_mut -= trim_del_first;
+
         // 3.) count D's at end of tracev --> tracev_end
         //   b.) subtract from target_end this count
         auto last_non_del = tracev.rbegin();
         while (last_non_del != tracev.rend() && *last_non_del == 'D') { ++last_non_del; }
         trim_del_last = std::distance(tracev.rbegin(), last_non_del);
         target_end -= trim_del_last;
+        //target_length_mut -= trim_del_last;
     }
 
     /*
 #ifdef VALIDATE_WFA_WFLIGN
     if (!validate_trace(tracev, query, target, query_length, target_length_mut, query_start, target_start)) {
         std::cerr << "cigar failure at alignment (after head/tail del trimming) "
+                  << "\t" << query_name
                   << "\t" << query_total_length
                   << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
                   << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
                   << "\t" << (query_is_rev ? "-" : "+")
                   << "\t" << target_name
                   << "\t" << target_total_length
-                  << "\t" << target_offset + target_start
+                  << "\t" << target_offset - target_pointer_shift + target_start
                   << "\t" << target_offset + target_end << std::endl;
         exit(1);
     }
@@ -1269,7 +1325,7 @@ void write_merged_alignment(
                         t_off += last_len;
                     }else if (last_op == 'X') {
                         for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << l_MD << target[t_off + ii];
+                            out << l_MD << target[t_off + ii - target_pointer_shift];
                             l_MD = 0;
                         }
 
@@ -1277,7 +1333,7 @@ void write_merged_alignment(
                     }else if (last_op == 'D') {
                         out << l_MD << "^";
                         for (uint64_t ii = 0; ii < last_len; ++ii) {
-                            out << target[t_off + ii];
+                            out << target[t_off + ii - target_pointer_shift];
                         }
 
                         l_MD = 0;
@@ -1296,7 +1352,7 @@ void write_merged_alignment(
                 out << last_len + l_MD;
             }else if (last_op == 'X') {
                 for (uint64_t ii = 0; ii < last_len; ++ii) {
-                    out << l_MD << target[t_off + ii];
+                    out << l_MD << target[t_off + ii - target_pointer_shift];
                     l_MD = 0;
                 }
                 out << "0";
@@ -1305,7 +1361,7 @@ void write_merged_alignment(
             }else if (last_op == 'D') {
                 out << l_MD << "^";
                 for (uint64_t ii = 0; ii < last_len; ++ii) {
-                    out << target[t_off + ii];
+                    out << target[t_off + ii - target_pointer_shift];
                 }
                 out << "0";
             }
@@ -1325,7 +1381,7 @@ void write_merged_alignment(
                 << "\t" << (query_is_rev ? "-" : "+")
                 << "\t" << target_name
                 << "\t" << target_total_length
-                << "\t" << target_offset + target_start
+                << "\t" << target_offset - target_pointer_shift + target_start
                 << "\t" << target_offset + target_end
                 << "\t" << matches
                 << "\t" << std::max(total_target_aligned_length, total_query_aligned_length)
@@ -1356,7 +1412,7 @@ void write_merged_alignment(
             out << query_name                                                   // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0")                          // bitwise FLAG
                 << "\t" << target_name                                          // Reference sequence NAME
-                << "\t" << target_offset + target_start + 1                     // 1-based leftmost mapping POSition
+                << "\t" << target_offset - target_pointer_shift + target_start + 1      // 1-based leftmost mapping POSition
                 << "\t" << std::round(float2phred(1.0-block_identity))          // MAPping Quality
                 << "\t";
 
