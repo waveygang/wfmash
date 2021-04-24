@@ -358,13 +358,6 @@ void wflign_affine_wavefront(
     // Free
     wflambda::affine_wavefronts_delete(affine_wavefronts);
     wflambda::mm_allocator_delete(wflambda_mm_allocator);
-    /*
-    for (const auto& p : alignments) {
-        if (p.second != nullptr) {
-            delete p.second;
-        }
-    }
-    */
 }
 
 // accumulate alignment objects
@@ -700,6 +693,11 @@ bool validate_trace(
             ++j; ++i;
             break;
         case 'X':
+            // check that we don't match
+            if (query[j] == target[i]) {
+                std::cerr << "match @ " << j << " " << i << " " << query[j] << " " << target[i] << std::endl;
+                ok = false;
+            }
             ++j; ++i;
             break;
         case 'I':
