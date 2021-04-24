@@ -895,9 +895,9 @@ void write_merged_alignment(
 #endif
             //erode by removing matches < k
             for (uint64_t i = 0; i < rawv.size(); ) {
-                if (rawv[i] == 'M') {
+                if (rawv[i] == 'M' || rawv[i] == 'X') {
                     uint64_t j = i;
-                    while (++j < rawv.size() && rawv[j] == 'M') { }
+                    while (++j < rawv.size() && (rawv[j] == 'M' || rawv[j] == 'X')) { }
                     if (j-i < erode_k) {
                         while (i < j) {
                             erodev.push_back('D');
