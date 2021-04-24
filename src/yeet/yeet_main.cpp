@@ -26,6 +26,7 @@
 
 //External includes
 #include "common/args.hxx"
+#include "common/ALeS.hpp"
 
 int main(int argc, char** argv) {
     /*
@@ -46,6 +47,23 @@ int main(int argc, char** argv) {
     //skch::parseandSave(argc, argv, cmd, parameters);
     if (!yeet_parameters.remapping) {
         skch::printCmdOptions(map_parameters);
+
+
+        if (map_parameters.use_spaced_seeds) {
+          std::cerr << "[wfmash::map] Generating spaced seeds" << std::endl;
+          uint32_t seed_weight = map_parameters.spaced_seed_params.weight;
+          uint32_t seed_count = map_parameters.spaced_seed_params.seed_count;
+          float similarity = map_parameters.spaced_seed_params.similarity;
+          uint32_t region_length = map_parameters.spaced_seed_params.region_length;
+
+          ales::spaced_seeds sps = ales::generate_spaced_seeds(seed_weight, seed_count, similarity, region_length);
+          std::chrono::duration<double> time_spaced_seeds = skch::Time::now() - t0;
+          std::cerr << "[wfmash::map] Time spent generating spaced seeds " << time_spaced_seeds.count()  << " seconds" << std::endl;
+          map_parameters.spaced_seed_sensitivity = sps.sensitivity;
+          map_parameters.spaced_seeds =  sps.seeds;
+          ales::printSpacedSeeds(map_parameters.spaced_seeds);
+          std::cerr << "[wfmash::map] Spaced seed sensitivity " << sps.sensitivity << std::endl;
+        }
 
         //Build the sketch for reference
         skch::Sketch referSketch(map_parameters);

@@ -8,8 +8,19 @@
 
 #include <vector>
 
+#include "common/ALeS.hpp"
+
 namespace skch
 {
+
+
+struct ales_params {
+  uint32_t weight;
+  uint32_t seed_count;
+  float similarity;
+  uint32_t region_length;
+};
+
 /**
  * @brief   configuration parameters for building sketch
  *          expected to be initialized using command line arguments
@@ -40,6 +51,11 @@ struct Parameters
 
     float pval_cutoff;                                //p-value cutoff for determining window size
     float confidence_interval;                        //Confidence interval to relax jaccard cutoff for mapping (0-1)
+
+    bool use_spaced_seeds;                            //
+    ales_params spaced_seed_params;                   //
+    double spaced_seed_sensitivity;                   //
+    std::vector<ales::spaced_seed> spaced_seeds;      //
 };
 
 

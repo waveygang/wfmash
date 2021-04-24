@@ -182,7 +182,11 @@ namespace skch
         MI_Type* thread_output = new MI_Type();
 
         //Compute minimizers in reference sequence
-        skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
+        if (param.spaced_seeds.empty()) {
+          skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
+        } else {
+          skch::CommonFunc::addSpacedSeedMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter, param.spaced_seeds);
+        }
 
         return thread_output;
       }

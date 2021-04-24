@@ -151,6 +151,12 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     std::cerr << "[wfmash::map] Mapping output file = " << parameters.outFileName << std::endl;
     std::cerr << "[wfmash::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
     std::cerr << "[wfmash::map] Execution threads  = " << parameters.threads << std::endl;
+    std::cerr << "[wfmash::map] Spaced seed parameters  = "
+              << "(weight = " << parameters.spaced_seed_params.weight
+              << ", count = " << parameters.spaced_seed_params.seed_count
+              << ", similarity = " << parameters.spaced_seed_params.similarity
+              << ", region length = " << parameters.spaced_seed_params.region_length
+              << " )"<< std::endl;
   }
 
   /**
