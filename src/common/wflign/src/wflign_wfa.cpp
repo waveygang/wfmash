@@ -24,7 +24,8 @@ void wflign_affine_wavefront(
     const uint64_t& segment_length,
     const float& min_identity,
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-    const int& wflambda_max_distance_threshold) {
+    const int& wflambda_max_distance_threshold,
+    const double& mashmap_identity) {
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold) {
 
@@ -339,7 +340,8 @@ void wflign_affine_wavefront(
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
                                    max_patch_length,
-                                   elapsed_time_wflambda_ms);
+                                   elapsed_time_wflambda_ms,
+                                   mashmap_identity);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 //std::cerr << "on alignment" << std::endl;
@@ -347,7 +349,8 @@ void wflign_affine_wavefront(
                                 query_name, query_total_length, query_offset, query_length,
                                 query_is_rev,
                                 target_name, target_total_length, target_offset, target_length,
-                                min_identity);
+                                min_identity,
+                                mashmap_identity);
             }
         }
     }
@@ -798,6 +801,7 @@ void write_merged_alignment(
     const float& min_identity,
     const uint64_t& dropout_rescue_max,
     const long& elapsed_time_wflambda_ms,
+    const double& mashmap_identity,
     const bool& with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -1405,7 +1409,8 @@ void write_merged_alignment(
                 //<< "\t" << "ii:i:" << inserted_bp
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
-                << "\t" << "cg:Z:" << cigarv;
+                << "\t" << "cg:Z:" << cigarv
+                << "\t" << "md:f:" << mashmap_identity;
 
                 if (emit_md_tag) {
                     out << "\t";
@@ -1496,6 +1501,7 @@ void write_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length, // unused
     const float& min_identity,
+    const double& mashmap_identity,
     const bool& with_endline) {
 //    bool aligned = false;
     //Output to file
@@ -1562,7 +1568,8 @@ void write_alignment(
                 //<< "\t" << "bi:i:" << inserted_bp
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "bd:i:" << deleted_bp
-                << "\t" << "cg:Z:" << cigar;
+                << "\t" << "cg:Z:" << cigar
+                << "\t" << "md:f:" << mashmap_identity;
             if (with_endline) {
                 out << std::endl;
             }

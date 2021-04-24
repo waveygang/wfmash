@@ -364,6 +364,27 @@ namespace align
         //We expect and need at least these many values in a mashmap mapping
         assert(tokens.size() >= 9);
 
+        // Extract the mashmap identity from the string
+        auto split = [](string s, string delimiter) {
+          size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+          string token;
+          vector<string> res;
+
+          while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+            token = s.substr (pos_start, pos_end - pos_start);
+            pos_start = pos_end + delim_len;
+            res.push_back (token);
+          }
+
+          res.push_back (s.substr (pos_start));
+          return res;
+        };
+
+        char delimiter = ':';
+        std::string delimeter_str(1, delimiter);
+        vector<string> mm_id_vec = split(tokens[12], delimeter_str);
+        double mm_id = std::stod(mm_id_vec.back())/100; // divide by 100 for consistency with block alignment
+
         //Save words into currentRecord
         {
           currentRecord.qId = tokens[0];
@@ -373,6 +394,7 @@ namespace align
           currentRecord.refId = tokens[5];
           currentRecord.rStartPos = std::stoi(tokens[7]);
           currentRecord.rEndPos = std::stoi(tokens[8]);
+          currentRecord.mashmap_identity = mm_id;
         }
       }
 
@@ -437,7 +459,8 @@ namespace align
             param.wflambda_segment_length,
             param.min_identity,
             param.wflambda_min_wavefront_length,
-            param.wflambda_max_distance_threshold);
+            param.wflambda_max_distance_threshold,
+            currentRecord.mashmap_identity);
 
         delete [] queryRegionStrand;
 

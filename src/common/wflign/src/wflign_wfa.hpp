@@ -215,7 +215,8 @@ void wflign_affine_wavefront(
     const uint64_t& segment_length,
     const float& min_identity,
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-    const int& wflambda_max_distance_threshold);
+    const int& wflambda_max_distance_threshold,
+    const double& mashmap_identity);
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold);
 
@@ -286,6 +287,7 @@ void write_merged_alignment(
     const float& min_identity,
     const uint64_t& dropout_rescue_max,
     const long& elapsed_time_wflambda_ms,
+    const double& mashmap_identity,
     const bool& with_endline = true);
 
 void write_alignment(
@@ -301,6 +303,7 @@ void write_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
+    const double& mashmap_identity,
     const bool& with_endline = true);
 
 char* alignment_to_cigar(
