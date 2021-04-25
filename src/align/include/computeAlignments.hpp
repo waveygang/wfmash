@@ -112,10 +112,8 @@ namespace align
                 const std::string& seq) {
                 // todo: offset_t is an 32-bit integer, which could cause problems
                 skch::offset_t len = seq.length();
-                // upper-case our input
-                skch::CommonFunc::makeUpperCase((char*)seq.c_str(), len);
-                // and make sure it's canonical DNA (for WFA)
-                skch::CommonFunc::makeValidDNA((char*)seq.c_str(), len);
+                // upper-case our input and make sure it's canonical DNA (for WFA)
+                skch::CommonFunc::makeUpperCaseAndValidDNA((char*)seq.c_str(), len);
                 //seqId shouldn't already exist in our table
                 assert(this->refSequences.count(seq_name) == 0);
                 refSequences.emplace(seq_name, seq);
@@ -212,10 +210,8 @@ namespace align
                               std::shared_ptr<std::string> seq(new std::string(_seq));
                               // todo: offset_t is an 32-bit integer, which could cause problems
                               skch::offset_t len = seq->length();
-                              // upper-case our input
-                              skch::CommonFunc::makeUpperCase((char*)seq->c_str(), len);
-                              // and make sure it's canonical DNA (for WFA)
-                              skch::CommonFunc::makeValidDNA((char*)seq->c_str(), len);
+                              // upper-case our input and make sure it's canonical DNA (for WFA)
+                              skch::CommonFunc::makeUpperCaseAndValidDNA((char*)seq->c_str(), len);
                               // todo maybe this should change to some kind of unique pointer?
                               // something where we can GC it when we're done aligning to it
                               //std::string qSequence = seq;
