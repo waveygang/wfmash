@@ -378,5 +378,52 @@ void affine_wavefronts_align(
   //affine_wavefronts_debug_step(affine_wavefronts,pattern,text,score);
   WAVEFRONT_STATS_COUNTER_ADD(affine_wavefronts,wf_score,score); // STATS
 }
+/*
+ * Bounded computation using Wavefronts
+ */
+void affine_wavefronts_align_bounded(
+    affine_wavefronts_t* const affine_wavefronts,
+    const std::function<bool(const int&, const int&)>& match_lambda,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
+    const int pattern_length,
+    const int text_length,
+    const int max_score) {
+  // Initialize wavefront
+  affine_wavefront_initialize(affine_wavefronts);
+  // Compute wavefronts for increasing score
+  int score = 0;
+  while (true) {
+    // Exact extend s-wavefront
+    affine_wavefronts_extend_wavefront(
+        affine_wavefronts,
+        match_lambda,
+        pattern_length,
+        text_length,score);
+    // Exit condition
+    if (affine_wavefront_end_reached(affine_wavefronts,pattern_length,text_length,score)) {
+      // Backtrace & check alignment reached
+      affine_wavefronts_backtrace(
+          affine_wavefronts,
+          traceback_lambda,
+          pattern_length,
+          text_length,score);
+      break;
+    }
+    // Update all wavefronts
+    ++score; // Increase score
+    if (score > max_score) {
+        break; // todo... signal failure somehow
+    }
+    affine_wavefronts_compute_wavefront(
+        affine_wavefronts,match_lambda,pattern_length,
+        text_length,score);
+    // DEBUG
+    //affine_wavefronts_debug_step(affine_wavefronts,pattern,text,score);
+    WAVEFRONT_STATS_COUNTER_ADD(affine_wavefronts,wf_steps,1);
+  }
+  // DEBUG
+  //affine_wavefronts_debug_step(affine_wavefronts,pattern,text,score);
+  WAVEFRONT_STATS_COUNTER_ADD(affine_wavefronts,wf_score,score); // STATS
+}
 
 }

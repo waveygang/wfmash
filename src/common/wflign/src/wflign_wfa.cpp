@@ -175,13 +175,16 @@ void wflign_affine_wavefront(
 
     auto start_time = std::chrono::steady_clock::now();
 
+    int max_score = (pattern_length + text_length)/8;
+
     // Align
-    wflambda::affine_wavefronts_align(
+    wflambda::affine_wavefronts_align_bounded(
         affine_wavefronts,
         extend_match,
         trace_match,
         pattern_length,
-        text_length);
+        text_length,
+        max_score);
 
     for (const auto& p : alignments) {
         if (!p.second->keep) {

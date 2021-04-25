@@ -47,5 +47,13 @@ void affine_wavefronts_align(
     const int pattern_length,
     const int text_length);
 
+void affine_wavefronts_align_bounded(
+    affine_wavefronts_t* const affine_wavefronts,
+    const std::function<bool(const int&, const int&)>& match_lambda,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
+    const int pattern_length,
+    const int text_length,
+    const int max_score);
+
 }
 
