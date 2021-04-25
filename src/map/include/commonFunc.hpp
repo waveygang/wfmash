@@ -139,12 +139,7 @@ namespace skch {
              */
             std::deque<std::pair<MinimizerInfo, offset_t> > Q;
 
-
             makeUpperCaseAndValidDNA(seq, len);
-            for (uint64_t i = 0; i < len; ++i) {
-                std::cerr << seq[i];
-            }
-            std::cerr << std::endl;
 
             //Compute reverse complement of seq
             char *seqRev = new char[len];
