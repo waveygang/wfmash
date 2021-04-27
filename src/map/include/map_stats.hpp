@@ -224,35 +224,26 @@ namespace skch
      * @param[in] lengthReference   reference length
      * @return                      optimal window size for sketching
      */
-    inline int recommendedWindowSize(float pValue_cutoff, float confidence_interval,
+    inline int recommendedWindowSize(double pValue_cutoff, float confidence_interval,
         int k, int alphabetSize,
         float identity,
         int segmentLength, uint64_t lengthReference)
     {
       int lengthQuery = segmentLength;
 
-      //Push all the sketch values that we should try out in a vector
-      //{1, 2, 5, 10, 20, 30...}
-      std::vector<int> potentialSketchValues{1,2,5};
-      for(int i = 10; i < lengthQuery; i+= 10)
-        potentialSketchValues.push_back(i);
-
       int optimalSketchSize;
-
-      for(auto &e : potentialSketchValues)
-      {
+      for (optimalSketchSize = 10; optimalSketchSize < lengthQuery; optimalSketchSize += 50) {
         //Compute pvalue
-        double pVal = estimate_pvalue(e, k, alphabetSize, identity, lengthQuery, lengthReference, confidence_interval);
+        double pVal = estimate_pvalue(optimalSketchSize, k, alphabetSize, identity, lengthQuery, lengthReference, confidence_interval);
 
         //Check if pvalue is <= cutoff
         if(pVal <= pValue_cutoff)
         {
-          optimalSketchSize = e;
           break;
         }
       }
-      
-      int w =  2.0 * lengthQuery/optimalSketchSize;
+
+      int w =  (2.0 * lengthQuery)/optimalSketchSize;
 
       // 1 <= w <= lengthQuery
       return std::min( std::max(w,1), lengthQuery);

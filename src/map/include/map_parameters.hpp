@@ -38,7 +38,7 @@ struct Parameters
     bool mergeMappings;                               //if we should merge consecutive segment mappings
     bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
 
-    float pval_cutoff;                                //p-value cutoff for determining window size
+    double pval_cutoff;                               //p-value cutoff for determining window size
     float confidence_interval;                        //Confidence interval to relax jaccard cutoff for mapping (0-1)
 };
 
