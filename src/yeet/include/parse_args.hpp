@@ -158,6 +158,8 @@ void parse_args(int argc,
       auto spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
       map_parameters.use_spaced_seeds = true;
       map_parameters.spaced_seed_params = spaced_seed_params;
+    } else {
+      map_parameters.use_spaced_seeds = false;
     }
 
     map_parameters.alphabetSize = 4;
