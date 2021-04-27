@@ -1409,7 +1409,6 @@ void write_merged_alignment(
                 //<< "\t" << "ii:i:" << inserted_bp
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
-                << "\t" << "cg:Z:" << cigarv
                 << "\t" << "md:f:" << mashmap_identity;
 
                 if (emit_md_tag) {
@@ -1418,7 +1417,8 @@ void write_merged_alignment(
                     write_tag_and_md_string(out, cigarv, target_start);
                 }
 
-                out << "\t" << timings << "\n";
+                out << "\t" << timings
+                    << "\t" << "cg:Z:" << cigarv << "\n";
         } else {
             uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
             uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
