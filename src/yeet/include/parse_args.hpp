@@ -52,6 +52,8 @@ void parse_args(int argc,
     args::ValueFlag<double> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-120]", {'w', "p-value-window-size"});
     args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidence-interval"});
 
+    args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
+
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
@@ -108,7 +110,56 @@ void parse_args(int argc,
         skch::parseFileList(args::get(query_sequence_file_list), map_parameters.querySequences);
         skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
-    
+
+
+    if (spaced_seed_params) {
+
+      auto split = [](string s, string delimiter) {
+        size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+        string token;
+        vector<string> res;
+
+        while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+          token = s.substr (pos_start, pos_end - pos_start);
+          pos_start = pos_end + delim_len;
+          res.push_back (token);
+        }
+
+        res.push_back (s.substr (pos_start));
+        return res;
+      };
+
+      std::string foobar = args::get(spaced_seed_params);
+
+      // delimeters can be full colon (:) or a space
+      char delimeter;
+      if (foobar.find(' ') !=  std::string::npos) {
+        delimeter = ' ';
+      } else if (foobar.find(':') !=  std::string::npos) {
+        delimeter = ':';
+      } else {
+        std::cerr << "[mashz] ERROR, skch::parseandSave, mashz expects either space or : for to seperate spaced seed params" << std::endl;
+        exit(1);
+      }
+
+      std::string delimeter_str(1, delimeter);
+      std::vector<std::string> p = split(foobar, delimeter_str);
+      if (p.size() != 4) {
+        std::cerr << "[mashz] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
+        exit(1);
+      }
+
+      uint32_t seed_weight   = stoi(p[0]);
+      uint32_t seed_count    = stoi(p[1]);
+      float similarity       = stof(p[2]);
+      uint32_t region_length = stoi(p[3]);
+
+      // Generate an ALeS params struct
+      auto spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
+      map_parameters.use_spaced_seeds = true;
+      map_parameters.spaced_seed_params = spaced_seed_params;
+    }
+
     map_parameters.alphabetSize = 4;
 
     if (no_filter) {
