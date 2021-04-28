@@ -117,6 +117,29 @@ namespace skch {
         }
 
         /**
+         * @brief		takes hash value of kmer and adjusts it based on kmer's weight
+         *					this value will determine its order for minimizer selection
+         * @details	this is inspired from Chum et al.'s min-Hash and tf-idf weighting
+         */
+        static inline double applyWeight(char* kmer, int kmer_size, hash_t kmer_hash, const std::unordered_set<std::string>& high_freq_kmers) {
+            double x = kmer_hash * 1.0 / UINT32_MAX;  //bring it within [0, 1]
+            //assert (x >= 0.0 && x <= 1.0);
+
+            std::string kmer_str(kmer, kmer_size);
+            if (high_freq_kmers.count(kmer_str) > 0) {
+                /* downweigting by a factor of 8 */
+                /* further aggressive downweigting may affect accuracy */
+                double p2 = x*x;
+                double p4 = p2 * p2;
+                return - 1.0 * (p4 * p4);
+            }
+            return -1.0 * x;
+
+            //range of returned value is between [-1,0]
+            //we avoid adding one for better double precision
+        }
+
+        /**
          * @brief       compute winnowed minimizers from a given sequence and add to the index
          * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
          * @param[in]   seq             pointer to input sequence
@@ -131,7 +154,8 @@ namespace skch {
                                   int kmerSize,
                                   int windowSize,
                                   int alphabetSize,
-                                  seqno_t seqCounter) {
+                                  seqno_t seqCounter,
+                                  const std::unordered_set<std::string>& high_freq_kmers) {
             /**
              * Double-ended queue (saves minimum at front end)
              * Saves pair of the minimizer and the position of hashed kmer in the sequence
@@ -161,28 +185,85 @@ namespace skch {
                 else  //proteins
                     hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
 
+//#define DEBUG_WINNOWING
+#ifdef DEBUG_WINNOWING
+                std::cout << "pos: " << i << std::endl;
+                std::cout << "kmers: ";
+                for (uint64_t j = 0; j < kmerSize; ++j) {
+                    std::cout << seq[i + j];
+                }
+                std::cout << " --> " << hashFwd << " - " << hashBwd << std::endl;
+
+                std::cout << "Q1" << std::endl;
+                for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
+                    std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
+                }
+                std::cout << std::endl;
+#endif
+
                 //Consider non-symmetric kmers only
                 if (hashBwd != hashFwd) {
                     //Take minimum value of kmer and its reverse complement
                     hash_t currentKmer = std::min(hashFwd, hashBwd);
 
-                    //Check the strand of this minimizer hash value
-                    auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
-
-                    //If front minimum is not in the current window, remove it
-                    while (!Q.empty() && Q.front().second <= i - windowSize)
-                        Q.pop_front();
+                    double order = (hashFwd < hashBwd) ?
+                                   applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
+                                   applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);
 
                     //Hashes less than equal to currentKmer are not required
                     //Remove them from Q (back)
-                    while (!Q.empty() && Q.back().first.hash >= currentKmer)
+                    while (!Q.empty() && Q.back().first.order > order)
                         Q.pop_back();
+
+#ifdef DEBUG_WINNOWING
+                    std::cout << "Q2" << std::endl;
+                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
+                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
+                    }
+                    std::cout << std::endl;
+#endif
+
+                    //Check the strand of this minimizer hash value
+                    auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
 
                     //Push currentKmer and position to back of the queue
                     //-1 indicates the dummy window # (will be updated later)
                     Q.push_back(std::make_pair(
-                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
+                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
                             i));
+
+#ifdef DEBUG_WINNOWING
+                    std::cout << "Q3" << std::endl;
+                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
+                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
+                    }
+                    std::cout << std::endl;
+#endif
+
+                    //If front minimum is not in the current window, remove it
+                    if (!Q.empty() && Q.front().second <= i - windowSize) {
+                        while (!Q.empty() && Q.front().second <= i - windowSize)
+                            Q.pop_front();
+#ifdef DEBUG_WINNOWING
+                        std::cout << "Q4" << std::endl;
+                        for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
+                            std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
+                        }
+                        std::cout << std::endl;
+#endif
+
+                        // Robust-winnowing
+                        while (Q.size() > 1 && Q.begin()->first.order == (++Q.begin())->first.order)
+                            Q.pop_front();
+                    }
+
+#ifdef DEBUG_WINNOWING
+                    std::cout << "Q5" << std::endl;
+                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
+                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
+                    }
+                    std::cout << std::endl;
+#endif
 
                     //Select the minimizer from Q and put into index
                     if (currentWindowId >= 0) {
@@ -192,9 +273,30 @@ namespace skch {
                             //This step also ensures we don't re-insert the same minimizer again
                             Q.front().first.wpos = currentWindowId;
                             minimizerIndex.push_back(Q.front().first);
+
+#ifdef DEBUG_WINNOWING
+                            std::cout << "PUSHED: " << Q.front().first.wpos << " " << Q.front().first.hash << std::endl;
+#endif
                         }
                     }
+
+#ifdef DEBUG_WINNOWING
+                    std::cout << "Q - FINAL" << std::endl;
+                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
+                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
+                    }
+                    std::cout << std::endl;
+
+                    std::cout << "minimizerIndex" << std::endl;
+                    for(auto iter = minimizerIndex.begin(); iter != minimizerIndex.end(); ++iter) {
+                        std::cout << iter->wpos << " " << iter->hash << std::endl;
+                    }
+                    std::cout << std::endl;
+#endif
                 }
+#ifdef DEBUG_WINNOWING
+                std::cout << "--------------------------------------------------------" << std::endl;
+#endif
             }
 
 #ifdef DEBUG

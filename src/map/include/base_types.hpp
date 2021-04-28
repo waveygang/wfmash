@@ -27,6 +27,7 @@ namespace skch
     seqno_t seqId;                            //sequence or contig id
     offset_t wpos;                            //First (left-most) window position when the minimizer is saved
     strand_t strand;                          //strand information
+    double order;
 
     //Lexographical less than comparison
     bool operator <(const MinimizerInfo& x) {
