@@ -163,7 +163,7 @@ void parse_args(int argc,
       auto spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
       map_parameters.use_spaced_seeds = true;
       map_parameters.spaced_seed_params = spaced_seed_params;
-      map_parameters.kmerSize = seed_weight;
+      map_parameters.kmerSize = seed_weight * seed_count;
     } else {
       map_parameters.use_spaced_seeds = false;
     }
@@ -290,6 +290,10 @@ void parse_args(int argc,
                                                                   map_parameters.percentageIdentity,
                                                                   map_parameters.segLength,
                                                                   map_parameters.referenceSize);
+
+    if (map_parameters.use_spaced_seeds) {
+        map_parameters.windowSize *= map_parameters.spaced_seed_params.seed_count;
+    }
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
