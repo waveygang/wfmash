@@ -248,8 +248,9 @@ namespace skch {
           if(alphabetSize == 4) //not protein
             CommonFunc::reverseComplement(seq, seqRev, len);
 
-          for (auto &s : spaced_seeds) {
-            size_t seed_length = s.length;
+          for (uint32_t spaced_seed_number=0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
+            ales::spaced_seed s = spaced_seeds[spaced_seed_number];
+            size_t seed_length =  s.length;
             char* ss = s.seed;
 
             for (offset_t i = 0; i < len - seed_length + 1; i++) {
@@ -298,13 +299,15 @@ namespace skch {
 
                 //Hashes less than equal to currentKmer are not required
                 //Remove them from Q (back)
-                while(!Q.empty() && Q.back().first.hash >= currentKmer)
+                while(!Q.empty() &&
+                      Q.back().first.hash >= currentKmer &&
+                      Q.back().first.seed_number == spaced_seed_number)
                   Q.pop_back();
 
                 //Push currentKmer and position to back of the queue
                 //0 indicates the dummy window # (will be updated later)
                 Q.push_back( std::make_pair(
-                                            MinimizerInfo{currentKmer, seqCounter, 0, currentStrand},
+                                            MinimizerInfo{currentKmer, seqCounter, 0, currentStrand, spaced_seed_number},
                                             i));
 
                 //Select the minimizer from Q and put into index
