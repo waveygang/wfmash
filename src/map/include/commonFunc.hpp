@@ -255,13 +255,15 @@ namespace skch {
             for (offset_t i = 0; i < len - seed_length + 1; i++) {
               char* forward_start_char = seq+i;
               char* reverse_start_char = seqRev + len - i - seed_length;
-              std::string new_forward_kmer, new_reverse_kmer;
+              char new_forward_kmer[seed_length];
+              char new_reverse_kmer[seed_length];
 
-              for (size_t j=0; j<seed_length; j++, ss++, forward_start_char++, reverse_start_char++) {
-                if (*ss == '1') {
-                  new_forward_kmer.push_back(*forward_start_char);
-                  new_reverse_kmer.push_back(*reverse_start_char);
-                }
+              for (size_t j=0; j<seed_length; ++j, ++ss, ++forward_start_char) {
+                  new_forward_kmer[j] = *ss == '1' ? *forward_start_char : '*';
+              }
+              ss = s.seed;
+              for (size_t j=0; j<seed_length; ++j, ++ss, ++reverse_start_char) {
+                  new_reverse_kmer[j] = *ss == '1' ? *reverse_start_char : '*';
               }
               ss = s.seed; // reset the seed for the next iteration of the loop
 
