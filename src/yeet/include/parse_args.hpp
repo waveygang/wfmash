@@ -49,7 +49,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<double> pval_cutoff(parser, "N", "p-value cutoff for determining the window size [default: 1e-120]", {'w', "p-value-window-size"});
+    args::ValueFlag<int> window_size(parser, "N", "window size for sketching [default: automatically computed]", {'w', "window-size"});
     args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidence-interval"});
 
     args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
@@ -226,9 +226,6 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
-
-    map_parameters.pval_cutoff = pval_cutoff ? args::get(pval_cutoff) : 1e-120;
-
     if (confidence_interval) {
         float ci = args::get(confidence_interval);
 
@@ -303,13 +300,14 @@ void parse_args(int argc,
      */
 
     //Compute optimal window size
-    map_parameters.windowSize = skch::Stat::recommendedWindowSize(map_parameters.pval_cutoff,
-                                                                  map_parameters.confidence_interval,
-                                                                  map_parameters.kmerSize,
-                                                                  map_parameters.alphabetSize,
-                                                                  map_parameters.percentageIdentity,
-                                                                  map_parameters.segLength,
-                                                                  map_parameters.referenceSize);
+    map_parameters.windowSize = window_size ? std::max(1, args::get(window_size)) :
+            skch::Stat::recommendedWindowSize(skch::fixed::pval_cutoff,
+                                              map_parameters.confidence_interval,
+                                              map_parameters.kmerSize,
+                                              map_parameters.alphabetSize,
+                                              map_parameters.percentageIdentity,
+                                              map_parameters.segLength,
+                                              map_parameters.referenceSize);
 
     if (map_parameters.use_spaced_seeds) {
         map_parameters.windowSize *= map_parameters.spaced_seed_params.seed_count;

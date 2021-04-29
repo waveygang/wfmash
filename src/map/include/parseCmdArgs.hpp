@@ -329,7 +329,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
     //Compute optimal window size
     parameters.windowSize = skch::Stat::recommendedWindowSize(
-            parameters.pval_cutoff, parameters.confidence_interval,
+            skch::fixed::pval_cutoff, parameters.confidence_interval,
             parameters.kmerSize, parameters.alphabetSize,
             parameters.percentageIdentity,
             parameters.segLength, parameters.referenceSize);
