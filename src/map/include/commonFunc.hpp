@@ -222,17 +222,12 @@ namespace skch {
                                      int windowSize,
                                      int alphabetSize,
                                      seqno_t seqCounter,
-                                     std::vector<ales::spaced_seed> spaced_seeds
+                                     const std::vector<ales::spaced_seed>& spaced_seeds
                                      )
         {
-          /**
-           * Double-ended queue (saves minimum at front end)
-           * Saves pair of the minimizer and the position of hashed kmer in the sequence
-           * Position of kmer is required to discard kmers that fall out of current window
-           */
-          std::deque< std::pair<MinimizerInfo, offset_t> > Q;
 
           makeUpperCaseAndValidDNA(seq, len);
+          size_t minimizer_range_start = minimizerIndex.size();
 
           //Compute reverse complement of seq
           char* seqRev = new char[len];
@@ -248,8 +243,15 @@ namespace skch {
           if(alphabetSize == 4) //not protein
             CommonFunc::reverseComplement(seq, seqRev, len);
 
-          for (auto &s : spaced_seeds) {
-            size_t seed_length = s.length;
+          for (uint32_t spaced_seed_number=0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
+            /**
+             * Double-ended queue (saves minimum at front end)
+             * Saves pair of the minimizer and the position of hashed kmer in the sequence
+             * Position of kmer is required to discard kmers that fall out of current window
+             */
+            std::deque< std::pair<MinimizerInfo, offset_t> > Q;
+            const auto& s = spaced_seeds[spaced_seed_number];
+            size_t seed_length =  s.length;
             char* ss = s.seed;
 
             for (offset_t i = 0; i < len - seed_length + 1; i++) {
@@ -298,13 +300,14 @@ namespace skch {
 
                 //Hashes less than equal to currentKmer are not required
                 //Remove them from Q (back)
-                while(!Q.empty() && Q.back().first.hash >= currentKmer)
+                while(!Q.empty() &&
+                      Q.back().first.hash >= currentKmer)
                   Q.pop_back();
 
                 //Push currentKmer and position to back of the queue
-                //0 indicates the dummy window # (will be updated later)
+                //-1 indicates the dummy window # (will be updated later)
                 Q.push_back( std::make_pair(
-                                            MinimizerInfo{currentKmer, seqCounter, 0, currentStrand},
+                                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
                                             i));
 
                 //Select the minimizer from Q and put into index
@@ -322,6 +325,13 @@ namespace skch {
               }
             }
           }
+
+          // sort our minimizerIndex by window position
+          std::sort(minimizerIndex.begin() + minimizer_range_start,
+                    minimizerIndex.end(),
+                    [](const MinimizerInfo& a, const MinimizerInfo& b) {
+                        return a.wpos < b.wpos;
+                    });
 
 #ifdef DEBUG
           std::cout << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";

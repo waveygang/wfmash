@@ -15,7 +15,7 @@ namespace skch
   typedef uint32_t hash_t;    //hash type
   typedef int offset_t;       //position within sequence
   typedef int seqno_t;        //sequence counter in file
-  typedef int32_t strand_t;   //sequence strand 
+  typedef int32_t strand_t;   //sequence strand
 
   //C++ timer
   typedef std::chrono::high_resolution_clock Time;
