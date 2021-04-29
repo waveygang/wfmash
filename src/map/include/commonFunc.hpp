@@ -222,7 +222,7 @@ namespace skch {
                                      int windowSize,
                                      int alphabetSize,
                                      seqno_t seqCounter,
-                                     std::vector<ales::spaced_seed> spaced_seeds
+                                     const std::vector<ales::spaced_seed>& spaced_seeds
                                      )
         {
           /**
