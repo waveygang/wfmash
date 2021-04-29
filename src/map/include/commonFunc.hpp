@@ -225,12 +225,6 @@ namespace skch {
                                      const std::vector<ales::spaced_seed>& spaced_seeds
                                      )
         {
-          /**
-           * Double-ended queue (saves minimum at front end)
-           * Saves pair of the minimizer and the position of hashed kmer in the sequence
-           * Position of kmer is required to discard kmers that fall out of current window
-           */
-          std::deque< std::pair<MinimizerInfo, offset_t> > Q;
 
           makeUpperCaseAndValidDNA(seq, len);
 
@@ -249,7 +243,13 @@ namespace skch {
             CommonFunc::reverseComplement(seq, seqRev, len);
 
           for (uint32_t spaced_seed_number=0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
-            ales::spaced_seed s = spaced_seeds[spaced_seed_number];
+            /**
+             * Double-ended queue (saves minimum at front end)
+             * Saves pair of the minimizer and the position of hashed kmer in the sequence
+             * Position of kmer is required to discard kmers that fall out of current window
+             */
+            std::deque< std::pair<MinimizerInfo, offset_t> > Q;
+            const auto& s = spaced_seeds[spaced_seed_number];
             size_t seed_length =  s.length;
             char* ss = s.seed;
 
@@ -300,14 +300,13 @@ namespace skch {
                 //Hashes less than equal to currentKmer are not required
                 //Remove them from Q (back)
                 while(!Q.empty() &&
-                      Q.back().first.hash >= currentKmer &&
-                      Q.back().first.seed_number == spaced_seed_number)
+                      Q.back().first.hash >= currentKmer)
                   Q.pop_back();
 
                 //Push currentKmer and position to back of the queue
                 //-1 indicates the dummy window # (will be updated later)
                 Q.push_back( std::make_pair(
-                                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, spaced_seed_number},
+                                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
                                             i));
 
                 //Select the minimizer from Q and put into index
