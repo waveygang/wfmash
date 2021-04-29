@@ -206,13 +206,14 @@ namespace skch {
                     //Take minimum value of kmer and its reverse complement
                     hash_t currentKmer = std::min(hashFwd, hashBwd);
 
-                    double order = (hashFwd < hashBwd) ?
-                                   applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
-                                   applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);
+//                    double order = (hashFwd < hashBwd) ?
+//                                   applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
+//                                   applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);
 
                     //Hashes less than equal to currentKmer are not required
                     //Remove them from Q (back)
-                    while (!Q.empty() && Q.back().first.order > order)
+//                    while (!Q.empty() && Q.back().first.order > order)
+                    while (!Q.empty() && Q.back().first.hash > currentKmer)
                         Q.pop_back();
 
 #ifdef DEBUG_WINNOWING
@@ -229,7 +230,8 @@ namespace skch {
                     //Push currentKmer and position to back of the queue
                     //-1 indicates the dummy window # (will be updated later)
                     Q.push_back(std::make_pair(
-                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
+//                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
+                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
                             i));
 
 #ifdef DEBUG_WINNOWING
@@ -253,7 +255,8 @@ namespace skch {
 #endif
 
                         // Robust-winnowing
-                        while (Q.size() > 1 && Q.begin()->first.order == (++Q.begin())->first.order)
+//                        while (Q.size() > 1 && Q.begin()->first.order == (++Q.begin())->first.order)
+                        while (Q.size() > 1 && Q.begin()->first.hash == (++Q.begin())->first.hash)
                             Q.pop_front();
                     }
 

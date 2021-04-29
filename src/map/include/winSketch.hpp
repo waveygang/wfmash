@@ -48,7 +48,7 @@ namespace skch
       const skch::Parameters &param;
 
       //Ignore top % most frequent minimizers while lookups
-      const float percentageThreshold = 0;//0.001;
+      const float percentageThreshold = 0.001;
 
       //Minimizers that occur this or more times will be ignored (computed based on percentageThreshold)
       int freqThreshold = std::numeric_limits<int>::max();
