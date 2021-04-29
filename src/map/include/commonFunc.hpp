@@ -227,6 +227,7 @@ namespace skch {
         {
 
           makeUpperCaseAndValidDNA(seq, len);
+          size_t minimizer_range_start = minimizerIndex.size();
 
           //Compute reverse complement of seq
           char* seqRev = new char[len];
@@ -324,6 +325,13 @@ namespace skch {
               }
             }
           }
+
+          // sort our minimizerIndex by window position
+          std::sort(minimizerIndex.begin() + minimizer_range_start,
+                    minimizerIndex.end(),
+                    [](const MinimizerInfo& a, const MinimizerInfo& b) {
+                        return a.wpos < b.wpos;
+                    });
 
 #ifdef DEBUG
           std::cout << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";

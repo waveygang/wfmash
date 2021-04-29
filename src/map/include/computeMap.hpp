@@ -803,7 +803,8 @@ namespace skch
             return 0;
 
           //Count of minimizer windows in a super-window
-          offset_t countMinimizerWindows = Q.len - (param.windowSize-1) - (param.kmerSize-1); 
+          offset_t countMinimizerWindows = (Q.len - (param.windowSize-1) - (param.kmerSize-1))
+              * (param.spaced_seeds.empty() ? 1 : param.spaced_seeds.size());
 
           //Look up the end of the first L2 super-window in the index
           MIIter_t superWindowRangeEnd = this->refSketch.searchIndex(seqId, 
