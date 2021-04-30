@@ -394,11 +394,11 @@ bool do_wfa_segment_alignment(
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
-        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/8);
+        *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/4);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
-        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/8);
+        *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/4);
     }
 
     // first check if our mash dist is inbounds
