@@ -23,6 +23,7 @@ struct Parameters {
     int wflambda_segment_length;                      //segment length for wflambda
     int wflambda_min_wavefront_length;                //wavefront length to trigger reduction (how wide should it be)
     int wflambda_max_distance_threshold;              //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
+    uint16_t wflign_erode_k;
 
     std::vector<std::string> refSequences;        //reference sequence(s)
     std::vector<std::string> querySequences;      //query sequence(s)

@@ -59,7 +59,12 @@ void parse_args(int argc,
     args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
-    args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
+
+    //Unsupported
+    //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
+
+    // patching parameter
+    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
@@ -261,11 +266,19 @@ void parse_args(int argc,
     }
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
-    if (exact_wflambda) {
-        // set exact computation of wflambda
-        align_parameters.wflambda_min_wavefront_length = 0;
-        align_parameters.wflambda_max_distance_threshold = 0;
+    if (wflign_erode_k) {
+        align_parameters.wflign_erode_k = args::get(wflign_erode_k);
+    } else {
+        align_parameters.wflign_erode_k = 13;
     }
+
+
+    // Unsupproted
+    //if (exact_wflambda) {
+    //    // set exact computation of wflambda
+    //    align_parameters.wflambda_min_wavefront_length = 0;
+    //    align_parameters.wflambda_max_distance_threshold = 0;
+    //}
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
