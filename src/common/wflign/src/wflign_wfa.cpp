@@ -23,8 +23,8 @@ void wflign_affine_wavefront(
     const uint64_t& target_length,
     const uint64_t& segment_length,
     const float& min_identity,
-    const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-    const int& wflambda_max_distance_threshold,
+    const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
+    const uint32_t& wflambda_max_distance_threshold,
     const double& mashmap_identity,
     const uint64_t& wflign_max_len_major,
     const uint64_t& wflign_max_len_minor,
@@ -404,7 +404,7 @@ bool do_wfa_segment_alignment(
     }
 
     // first check if our mash dist is inbounds
-    const double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
     const int max_score = segment_length;
 
@@ -440,7 +440,7 @@ bool do_wfa_segment_alignment(
 
         aln.j = j;
         aln.i = i;
-        aln.mash_dist = mash_dist;
+        //aln.mash_dist = mash_dist;
         // copy our edit cigar if we aligned
         aln.ok = aln.score < max_score;
         if (aln.ok) {

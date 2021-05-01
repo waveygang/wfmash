@@ -54,7 +54,7 @@ struct alignment_t {
     bool ok = false;
     bool keep = false;
     int score = std::numeric_limits<int>::max();
-    double mash_dist = 1;
+    //float mash_dist = 1;
     wfa::edit_cigar_t edit_cigar{};
     void display(void) {
         std::cerr << j << " " << i << " " << query_length << " " << target_length << " " << ok << std::endl;
@@ -214,8 +214,8 @@ void wflign_affine_wavefront(
     const uint64_t& target_length,
     const uint64_t& segment_length,
     const float& min_identity,
-    const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-    const int& wflambda_max_distance_threshold,
+    const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
+    const uint32_t & wflambda_max_distance_threshold,
     const double& mashmap_identity,
     const uint64_t& wflign_max_len_major,
     const uint64_t& wflign_max_len_minor,
