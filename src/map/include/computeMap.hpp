@@ -666,7 +666,7 @@ namespace skch
 
                 res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
-                //Compute additional statistics -> strand, reference compexity
+                //Compute additional statistics -> strand, reference complexity
                 {
                   SlideMapper<Q_Info> slidemap(Q);
                   slidemap.insert_ref(l2.optimalStart, l2.optimalEnd);

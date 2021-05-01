@@ -406,14 +406,12 @@ bool do_wfa_segment_alignment(
     // first check if our mash dist is inbounds
     const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const int max_score = segment_length;
+    const uint64_t max_score = segment_length;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
     if (mash_dist > 0.618034) {
         // if it isn't, return false
-        aln.score = max_score;
-        aln.ok = false;
         return false;
     } else {
         // if it is, we'll align
