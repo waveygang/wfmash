@@ -217,6 +217,7 @@ void wflign_affine_wavefront(
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold,
     const double& mashmap_identity,
+    const uint64_t& max_patch_length,
     const uint16_t& erode_k);
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold);

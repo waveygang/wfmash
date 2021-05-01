@@ -64,6 +64,7 @@ void parse_args(int argc,
     //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
 
     // patching parameter
+    args::ValueFlag<uint64_t> wflign_max_patch_length(parser, "N", "maximum length to patch [default: 128*segment-length]", {'C', "max-length-patching"});
     args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
 
     // format parameters
@@ -73,8 +74,9 @@ void parse_args(int argc,
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
     args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
-    args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
-    args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
+
+    //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
+    //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -265,6 +267,12 @@ void parse_args(int argc,
         align_parameters.wflambda_max_distance_threshold = 100000;
     }
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
+
+    if (wflign_max_patch_length) {
+        align_parameters.wflign_max_patch_length = args::get(wflign_max_patch_length);
+    } else {
+        align_parameters.wflign_max_patch_length = map_parameters.segLength * 128;
+    }
 
     if (wflign_erode_k) {
         align_parameters.wflign_erode_k = args::get(wflign_erode_k);

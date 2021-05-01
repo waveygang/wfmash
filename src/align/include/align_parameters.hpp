@@ -19,10 +19,15 @@ struct Parameters {
     float min_identity;                           // drop alignments below this identity threshold
     //int wf_min;                                   // minimum wavefront length to trigger WF_reduce wavefront pruning
     //int wf_diff;                                  // max distance threshold that a wavefront may lag behind the best wavefront and not be removed
-    bool exact_wfa;                               // use exact WFA, avoiding adaptive wavefront reduction
+    //bool exact_wfa;                               // use exact WFA, avoiding adaptive wavefront reduction
+
+    //wflambda
     int wflambda_segment_length;                      //segment length for wflambda
     int wflambda_min_wavefront_length;                //wavefront length to trigger reduction (how wide should it be)
     int wflambda_max_distance_threshold;              //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
+
+    // wflign
+    uint64_t wflign_max_patch_length;
     uint16_t wflign_erode_k;
 
     std::vector<std::string> refSequences;        //reference sequence(s)

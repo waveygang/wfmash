@@ -26,6 +26,7 @@ void wflign_affine_wavefront(
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold,
     const double& mashmap_identity,
+    const uint64_t& max_patch_length,
     const uint16_t& erode_k) {
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold) {
@@ -42,9 +43,6 @@ void wflign_affine_wavefront(
     // Pattern & Text
     const int pattern_length = query_length / step_size;
     const int text_length = target_length / step_size;
-
-    // patching bound
-    const uint64_t max_patch_length = segment_length * 128;
 
     // uncomment to use reduced WFA locally
     // currently not supported due to issues with traceback when applying WF-reduction on small problems
