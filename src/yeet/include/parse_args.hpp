@@ -64,7 +64,8 @@ void parse_args(int argc,
     //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
 
     // patching parameter
-    args::ValueFlag<uint64_t> wflign_max_patch_length(parser, "N", "maximum length to patch [default: 128*segment-length]", {'C', "max-length-patching"});
+    args::ValueFlag<uint64_t> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
+    args::ValueFlag<uint64_t> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
     args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
 
     // format parameters
@@ -268,10 +269,16 @@ void parse_args(int argc,
     }
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
-    if (wflign_max_patch_length) {
-        align_parameters.wflign_max_patch_length = args::get(wflign_max_patch_length);
+    if (wflign_max_len_major) {
+        align_parameters.wflign_max_len_major = args::get(wflign_max_len_major);
     } else {
-        align_parameters.wflign_max_patch_length = map_parameters.segLength * 128;
+        align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
+    }
+
+    if (wflign_max_len_minor) {
+        align_parameters.wflign_max_len_minor = args::get(wflign_max_len_minor);
+    } else {
+        align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
     }
 
     if (wflign_erode_k) {

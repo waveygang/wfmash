@@ -83,7 +83,8 @@ void wflign_affine_wavefront(
     const float& min_identity,
     const int& min_wavefront_length, // with these set at 0 we do exact WFA
     const int& max_distance_threshold,
-    const uint64_t & max_patch_length,
+    const uint64_t & wflign_max_len_major,
+    const uint64_t & wflign_max_len_minor,
     const uint16_t& erode_k);
 
 bool do_alignment(

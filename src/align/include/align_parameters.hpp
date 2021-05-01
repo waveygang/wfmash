@@ -27,7 +27,8 @@ struct Parameters {
     int wflambda_max_distance_threshold;              //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
 
     // wflign
-    uint64_t wflign_max_patch_length;
+    uint64_t wflign_max_len_major;
+    uint64_t wflign_max_len_minor;
     uint16_t wflign_erode_k;
 
     std::vector<std::string> refSequences;        //reference sequence(s)

@@ -26,7 +26,8 @@ void wflign_affine_wavefront(
     const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const int& wflambda_max_distance_threshold,
     const double& mashmap_identity,
-    const uint64_t& max_patch_length,
+    const uint64_t& wflign_max_len_major,
+    const uint64_t& wflign_max_len_minor,
     const uint16_t& erode_k) {
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold) {
@@ -338,9 +339,10 @@ void wflign_affine_wavefront(
                                    target,
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
-                                   max_patch_length,
                                    elapsed_time_wflambda_ms,
                                    mashmap_identity,
+                                   wflign_max_len_major,
+                                   wflign_max_len_minor,
                                    erode_k);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -799,9 +801,10 @@ void write_merged_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
-    const uint64_t& dropout_rescue_max,
     const long& elapsed_time_wflambda_ms,
     const double& mashmap_identity,
+    const uint64_t& wflign_max_len_major,
+    const uint64_t& wflign_max_len_minor,
     const uint16_t& erode_k,
     const bool& with_endline) {
 
@@ -994,8 +997,8 @@ void write_merged_alignment(
 
                 if (last_match_query > -1 && last_match_target > -1) {
                     if (query_delta > 0 && target_delta > 0 &&
-                        (query_delta < dropout_rescue_max * 4 && target_delta < dropout_rescue_max * 4) &&
-                        (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
+                        (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                        (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)) {
 #ifdef WFLIGN_DEBUG
                         std::cerr << "[wflign::wflign_affine_wavefront] patching in "
                               << query_name << " " << query_offset << " @ " << query_pos

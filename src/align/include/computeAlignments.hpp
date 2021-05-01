@@ -461,7 +461,8 @@ namespace align
             param.wflambda_min_wavefront_length,
             param.wflambda_max_distance_threshold,
             currentRecord.mashmap_identity,
-            param.wflign_max_patch_length,
+            param.wflign_max_len_major,
+            param.wflign_max_len_minor,
             param.wflign_erode_k);
 
         delete [] queryRegionStrand;
