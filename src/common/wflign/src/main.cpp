@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
                                     segment_length,
                                     min_identity,
                                     min_wavefront_length,
-                                    max_distance_threshold);
+                                    max_distance_threshold, 13);
                             } else {
                                 wflign::wavefront::wflign_affine_wavefront(
                                     std::cout,
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
                                     segment_length,
                                     min_identity,
                                     min_wavefront_length,
-                                    max_distance_threshold);
+                                    max_distance_threshold, 13);
                             }
                         });
                 }

@@ -56,10 +56,17 @@ void parse_args(int argc,
 
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<int> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
-    args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-    args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
-    args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'E', "exact-wflambda"});
+    args::ValueFlag<uint32_t> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
+    args::ValueFlag<uint32_t> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
+    args::ValueFlag<uint32_t> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
+
+    //Unsupported
+    //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
+
+    // patching parameter
+    args::ValueFlag<uint64_t> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
+    args::ValueFlag<uint64_t> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
+    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
@@ -68,8 +75,9 @@ void parse_args(int argc,
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
     args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
-    args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
-    args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
+
+    //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
+    //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -261,11 +269,31 @@ void parse_args(int argc,
     }
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
-    if (exact_wflambda) {
-        // set exact computation of wflambda
-        align_parameters.wflambda_min_wavefront_length = 0;
-        align_parameters.wflambda_max_distance_threshold = 0;
+    if (wflign_max_len_major) {
+        align_parameters.wflign_max_len_major = args::get(wflign_max_len_major);
+    } else {
+        align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
     }
+
+    if (wflign_max_len_minor) {
+        align_parameters.wflign_max_len_minor = args::get(wflign_max_len_minor);
+    } else {
+        align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
+    }
+
+    if (wflign_erode_k) {
+        align_parameters.wflign_erode_k = args::get(wflign_erode_k);
+    } else {
+        align_parameters.wflign_erode_k = 13;
+    }
+
+
+    // Unsupproted
+    //if (exact_wflambda) {
+    //    // set exact computation of wflambda
+    //    align_parameters.wflambda_min_wavefront_length = 0;
+    //    align_parameters.wflambda_max_distance_threshold = 0;
+    //}
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);

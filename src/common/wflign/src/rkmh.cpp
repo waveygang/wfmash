@@ -91,7 +91,7 @@ std::vector<hash_t> hash_sequence(const char* seq,
     return hashes;
 }
 
-double compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta, const uint64_t& k) {
+float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta, const uint64_t& k) {
     int i = 0;
     int j = 0;
 
@@ -128,7 +128,7 @@ double compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta
     //std::cerr << "common " << common << std::endl;
     //std::cerr << "denom " << denom << std::endl;
 
-    double distance;
+    float distance;
 
     //todo put a flag for denom: take the smallest between alpha.size, beta.size
     double jaccard = double(common) / denom;

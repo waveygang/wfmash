@@ -15,10 +15,10 @@ namespace skch
 
 
 struct ales_params {
-  uint32_t weight;
-  uint32_t seed_count;
-  float similarity;
-  uint32_t region_length;
+  uint32_t weight{} ;
+  uint32_t seed_count{};
+  float similarity{};
+  uint32_t region_length{};
 };
 
 /**

@@ -23,9 +23,12 @@ void wflign_affine_wavefront(
     const uint64_t& target_length,
     const uint64_t& segment_length,
     const float& min_identity,
-    const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-    const int& wflambda_max_distance_threshold,
-    const double& mashmap_identity) {
+    const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
+    const uint32_t& wflambda_max_distance_threshold,
+    const double& mashmap_identity,
+    const uint64_t& wflign_max_len_major,
+    const uint64_t& wflign_max_len_minor,
+    const uint16_t& erode_k) {
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold) {
 
@@ -41,9 +44,6 @@ void wflign_affine_wavefront(
     // Pattern & Text
     const int pattern_length = query_length / step_size;
     const int text_length = target_length / step_size;
-
-    // patching bound
-    const uint64_t max_patch_length = segment_length * 128;
 
     // uncomment to use reduced WFA locally
     // currently not supported due to issues with traceback when applying WF-reduction on small problems
@@ -339,9 +339,11 @@ void wflign_affine_wavefront(
                                    target,
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
-                                   max_patch_length,
                                    elapsed_time_wflambda_ms,
-                                   mashmap_identity);
+                                   mashmap_identity,
+                                   wflign_max_len_major,
+                                   wflign_max_len_minor,
+                                   erode_k);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 //std::cerr << "on alignment" << std::endl;
@@ -402,16 +404,14 @@ bool do_wfa_segment_alignment(
     }
 
     // first check if our mash dist is inbounds
-    const double mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const int max_score = segment_length;
+    const uint64_t max_score = segment_length;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
     if (mash_dist > 0.618034) {
         // if it isn't, return false
-        aln.score = max_score;
-        aln.ok = false;
         return false;
     } else {
         // if it is, we'll align
@@ -438,7 +438,7 @@ bool do_wfa_segment_alignment(
 
         aln.j = j;
         aln.i = i;
-        aln.mash_dist = mash_dist;
+        //aln.mash_dist = mash_dist;
         // copy our edit cigar if we aligned
         aln.ok = aln.score < max_score;
         if (aln.ok) {
@@ -799,9 +799,11 @@ void write_merged_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
-    const uint64_t& dropout_rescue_max,
     const long& elapsed_time_wflambda_ms,
     const double& mashmap_identity,
+    const uint64_t& wflign_max_len_major,
+    const uint64_t& wflign_max_len_minor,
+    const uint16_t& erode_k,
     const bool& with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -837,8 +839,6 @@ void write_merged_alignment(
 
     //double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
-
-    const uint64_t erode_k = 13;
 
     auto start_time = std::chrono::steady_clock::now();
 
@@ -995,8 +995,8 @@ void write_merged_alignment(
 
                 if (last_match_query > -1 && last_match_target > -1) {
                     if (query_delta > 0 && target_delta > 0 &&
-                        (query_delta < dropout_rescue_max * 4 && target_delta < dropout_rescue_max * 4) &&
-                        (query_delta < dropout_rescue_max || target_delta < dropout_rescue_max)) {
+                        (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                        (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)) {
 #ifdef WFLIGN_DEBUG
                         std::cerr << "[wflign::wflign_affine_wavefront] patching in "
                               << query_name << " " << query_offset << " @ " << query_pos
