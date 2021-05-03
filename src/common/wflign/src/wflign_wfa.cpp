@@ -95,18 +95,15 @@ void wflign_affine_wavefront(
     auto extend_match = [&](const int& v, const int& h) {
             bool aligned = false;
             if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
-                uint64_t k = encode_pair(v, h);
-                auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
+                const uint64_t k = encode_pair(v, h);
+                const auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
                 if (f != alignments.end()) {
                     aligned = true;
                 } else  {
-                    uint64_t query_begin = (v < pattern_length-1 ? v * step_size
-                                            : query_length - segment_length);
-                    uint64_t target_begin = (h < text_length-1 ? h * step_size
-                                             : target_length - segment_length);
+                    const uint64_t query_begin = (v < pattern_length-1 ? v * step_size : query_length - segment_length);
+                    const uint64_t target_begin = (h < text_length-1 ? h * step_size : target_length - segment_length);
                     auto* aln = new alignment_t();
-                    aligned =
-                        do_wfa_segment_alignment(
+                    aligned = do_wfa_segment_alignment(
                             query_name,
                             query,
                             query_sketches[v],
@@ -163,18 +160,18 @@ void wflign_affine_wavefront(
     std::vector<alignment_t*> trace;
 
     auto trace_match = [&](const int& v, const int& h) {
-        if (v < 0 || h < 0 || v > pattern_length || h > text_length) {
-            return false;
-        } else {
-            uint64_t k = encode_pair(v, h);
+        if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
+            const uint64_t k = encode_pair(v, h);
             auto* aln = alignments[k];
             aln->keep = true;
             trace.push_back(aln);
             return true;
+        } else {
+            return false;
         }
     };
 
-    auto start_time = std::chrono::steady_clock::now();
+    const auto start_time = std::chrono::steady_clock::now();
 
     // Align
     wflambda::affine_wavefronts_align(
@@ -191,7 +188,7 @@ void wflign_affine_wavefront(
         }
     }
 
-    long elapsed_time_wflambda_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
+    const long elapsed_time_wflambda_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
 //#define WFLIGN_DEBUG
 #ifdef WFLIGN_DEBUG
@@ -453,7 +450,7 @@ bool do_wfa_segment_alignment(
 #endif
             wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
+            if (!validate_cigar(aln.edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
                 std::cerr << "cigar failure after cigar copy in alignment " << aln.j << " " << aln.i << std::endl;
                 assert(false);
             }
@@ -541,7 +538,7 @@ EdlibAlignResult do_edlib_patch_alignment(
 
     //std::cerr << "do_edlib_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
 
-    auto edlib_config = edlibNewAlignConfig(-1,
+    const auto edlib_config = edlibNewAlignConfig(-1,
                                             align_mode,
                                             EDLIB_TASK_PATH,
                                             NULL, 0);
@@ -559,8 +556,8 @@ bool hack_cigar(
     uint64_t j, uint64_t i) {
     const int start_idx = cigar.begin_offset;
     const int end_idx = cigar.end_offset;
-    uint64_t j_max = j + query_aln_len;
-    uint64_t i_max = i + target_aln_len;
+    const uint64_t j_max = j + query_aln_len;
+    const uint64_t i_max = i + target_aln_len;
     bool ok = true;
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
@@ -625,8 +622,8 @@ bool validate_cigar(
     // check that our cigar matches where it claims it does
     const int start_idx = cigar.begin_offset;
     const int end_idx = cigar.end_offset;
-    uint64_t j_max = j + query_aln_len;
-    uint64_t i_max = i + target_aln_len;
+    const uint64_t j_max = j + query_aln_len;
+    const uint64_t i_max = i + target_aln_len;
     bool ok = true;
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
@@ -672,8 +669,8 @@ bool validate_trace(
     // check that our cigar matches where it claims it does
     const int start_idx = 0;
     const int end_idx = tracev.size();
-    uint64_t j_max = j + query_aln_len;
-    uint64_t i_max = i + target_aln_len;
+    const uint64_t j_max = j + query_aln_len;
+    const uint64_t i_max = i + target_aln_len;
     bool ok = true;
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
@@ -724,8 +721,8 @@ bool unpack_display_cigar(
     // check that our cigar matches where it claims it does
     const int start_idx = cigar.begin_offset;
     const int end_idx = cigar.end_offset;
-    uint64_t j_max = j + query_aln_len;
-    uint64_t i_max = i + target_aln_len;
+    const uint64_t j_max = j + query_aln_len;
+    const uint64_t i_max = i + target_aln_len;
     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
         // if new sequence of same moves started
@@ -1382,7 +1379,7 @@ void write_merged_alignment(
     };
     //std::cerr << "target_offset: " << target_offset << " -- target_start: " << target_start << std::endl;
     if (gap_compressed_identity >= min_identity) {
-        long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
+        const long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
         const std::string timings = "wt:i:" + std::to_string(elapsed_time_wflambda_ms) + "\tpt:i:" + std::to_string(elapsed_time_patching_ms);
 
@@ -1420,8 +1417,8 @@ void write_merged_alignment(
                 out << "\t" << timings
                     << "\t" << "cg:Z:" << cigarv << "\n";
         } else {
-            uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
-            uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
+            const uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
+            const uint64_t query_end_pos = query_offset + (query_is_rev ? query_length - query_start : query_end);
 
             out << query_name                                                   // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0")                          // bitwise FLAG
