@@ -248,6 +248,23 @@ namespace skch
 
       /**
        * @brief               helper to main mapping function
+       * @details             filters long-to-short mappings if we're in an all-vs-all mode
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterSelfingLongToShorts(MappingResultsVector_t &readMappings)
+      {
+          if (param.skip_self || param.skip_prefix) {
+              readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){ return e.selfMapFilter == true; }),
+                  readMappings.end());
+          }
+      }
+
+      /**
+       * @brief               helper to main mapping function
        * @details             filters mappings whose identity and query/ref length don't agree
        * @param[in]   input   mappings
        * @return              void
@@ -378,6 +395,12 @@ namespace skch
         if (split_mapping) {
             this->filterShortMappings(output->readMappings);
         }
+
+        // remove self-mode don't-maps
+        this->filterSelfingLongToShorts(output->readMappings);
+
+        // remove alignments where the ratio between query and target length is < our identity threshold
+        this->filterFalseHighIdentity(output->readMappings);
 
         //Make sure mapping boundary don't exceed sequence lengths
         this->mappingBoundarySanityCheck(input, output->readMappings);
@@ -640,6 +663,8 @@ namespace skch
                 res.conservedSketches = l2.sharedSketchSize;
                 res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
                 res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
+
+                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
                 //Compute additional statistics -> strand, reference complexity
                 {
