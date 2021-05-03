@@ -182,7 +182,10 @@ void parse_args(int argc,
         map_parameters.filterMode = skch::filter::NONE;
     } else {
         if (skip_self || skip_prefix) {
-            map_parameters.filterMode = skch::filter::ONETOONE;
+            // before we set skch::filter::ONETOONE here
+            // but this does not provide a clear benefit in all-to-all
+            // as it sometimes introduces cases of over-filtering
+            map_parameters.filterMode = skch::filter::MAP;
         } else {
             map_parameters.filterMode = skch::filter::MAP;
         }
