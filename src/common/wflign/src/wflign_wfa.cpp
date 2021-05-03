@@ -96,17 +96,14 @@ void wflign_affine_wavefront(
             bool aligned = false;
             if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
                 const uint64_t k = encode_pair(v, h);
-                auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
+                const auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
                 if (f != alignments.end()) {
                     aligned = true;
                 } else  {
-                    const uint64_t query_begin = (v < pattern_length-1 ? v * step_size
-                                            : query_length - segment_length);
-                    const uint64_t target_begin = (h < text_length-1 ? h * step_size
-                                             : target_length - segment_length);
+                    const uint64_t query_begin = (v < pattern_length-1 ? v * step_size : query_length - segment_length);
+                    const uint64_t target_begin = (h < text_length-1 ? h * step_size : target_length - segment_length);
                     auto* aln = new alignment_t();
-                    aligned =
-                        do_wfa_segment_alignment(
+                    aligned = do_wfa_segment_alignment(
                             query_name,
                             query,
                             query_sketches[v],
@@ -453,7 +450,7 @@ bool do_wfa_segment_alignment(
 #endif
             wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
+            if (!validate_cigar(aln.edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
                 std::cerr << "cigar failure after cigar copy in alignment " << aln.j << " " << aln.i << std::endl;
                 assert(false);
             }
