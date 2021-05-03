@@ -265,10 +265,6 @@ EdlibAlignResult do_edlib_patch_alignment(
     const uint64_t& target_length,
     const EdlibAlignMode align_mode);
 
-void merge_alignments(
-    alignment_t& base,
-    const alignment_t& ext);
-
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*>& trace,
