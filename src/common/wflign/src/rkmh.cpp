@@ -106,7 +106,6 @@ float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta,
     }
     denom = i + j;
 
-    //todo early stopping
     while (i < alpha.size() && j < beta.size()) {
         if (alpha[i] == beta[j]) {
             i++;
@@ -125,28 +124,20 @@ float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta,
     denom += alpha.size() - i;
     denom += beta.size() - j;
 
-    //std::cerr << "common " << common << std::endl;
-    //std::cerr << "denom " << denom << std::endl;
+    float distance = 0.0;
 
-    float distance;
-
-    //todo put a flag for denom: take the smallest between alpha.size, beta.size
-    double jaccard = double(common) / denom;
-
-    if (common == denom) // avoid -0
-    {
-        distance = 0;
-    } else if (common == 0) // avoid inf
-    {
-        distance = 1.;
-    } else {
+    if (common == 0) {           // avoid inf
+        distance = 1.0;
+    } else if (common != denom){ // avoid -0
+        //todo put a flag for denom: take the smallest between alpha.size, beta.size
+        //const double jaccard = double(common) / denom;
         //distance = log(double(common + 1) / (denom + 1)) / log(1. / (denom + 1));
-        distance = -log(2 * jaccard / (1. + jaccard)) / k;
-
+        //distance = -log(2 * jaccard / (1. + jaccard)) / k;
+        distance = -log(2.0 * common / (double(denom) + common)) / k;
         if (distance > 1) {
-            distance = 1;
+            distance = 1.0;
         }
-    }
+    }//else {distance = 0.0;}
 
     return distance;
 }
