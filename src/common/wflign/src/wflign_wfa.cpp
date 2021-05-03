@@ -163,14 +163,14 @@ void wflign_affine_wavefront(
     std::vector<alignment_t*> trace;
 
     auto trace_match = [&](const int& v, const int& h) {
-        if (v < 0 || h < 0 || v > pattern_length || h > text_length) {
-            return false;
-        } else {
+        if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
             const uint64_t k = encode_pair(v, h);
             auto* aln = alignments[k];
             aln->keep = true;
             trace.push_back(aln);
             return true;
+        } else {
+            return false;
         }
     };
 
