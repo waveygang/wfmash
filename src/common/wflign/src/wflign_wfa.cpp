@@ -496,7 +496,7 @@ void do_wfa_patch_alignment(
     aln.query_length = query_length;
     aln.target_length = target_length;
 
-    const int max_score = (target_length + query_length) * 2;
+    const int max_score = (target_length + query_length) * 5;
 
     aln.score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
@@ -808,7 +808,7 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 0;//16;
+    const uint64_t min_wfa_length = 1;//16;
     //const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
@@ -1021,7 +1021,7 @@ void write_merged_alignment(
                                     tracev.push_back(patch_aln.edit_cigar.operations[i]);
                                 }
                             }
-                        } /*else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
+                        } else /*if (query_delta > min_edlib_length && target_delta > min_edlib_length)*/ {
                             // Global mode
                             auto result = do_edlib_patch_alignment(
                                     query, query_pos, query_delta,
@@ -1038,7 +1038,7 @@ void write_merged_alignment(
                                 }
                             }
                             edlibFreeAlignResult(result);
-                        }*/
+                        }
                     }
                 } else if (query_delta > 0) {
                     // Semi-global mode for patching the heads
