@@ -808,7 +808,7 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 1;//16;
+    const uint64_t min_wfa_length = 2;//16;
     //const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
