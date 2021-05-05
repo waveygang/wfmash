@@ -42,8 +42,8 @@ void parse_args(int argc,
     args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
     args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
-    args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
-    args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
+    args::ValueFlag<uint16_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
+    args::ValueFlag<int> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
@@ -351,16 +351,26 @@ void parse_args(int argc,
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 
-    if (map_secondaries) {
-        map_parameters.secondaryToKeep = args::get(map_secondaries);
+    if (num_mappings_for_segments) {
+        if (args::get(num_mappings_for_segments) > 0) {
+            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments);
+        } else {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be grater than 0." << std::endl;
+            exit(1);
+        }
     } else {
-        map_parameters.secondaryToKeep = 0;
+        map_parameters.numMappingsForSegment = 1;
     }
 
-    if (map_short_secondaries) {
-        map_parameters.shortSecondaryToKeep = args::get(map_short_secondaries);
+    if (num_mappings_for_short_seq) {
+        if (args::get(num_mappings_for_short_seq) > 0) {
+            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq);
+        } else {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
+            exit(1);
+        }
     } else {
-        map_parameters.shortSecondaryToKeep = 0;
+        map_parameters.numMappingsForShortSequence = 1;
     }
 
     if (skip_self) {

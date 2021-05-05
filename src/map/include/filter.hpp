@@ -73,7 +73,7 @@ namespace skch
          * @param[in/out]   L             container with mappings
          */
         template <typename Type>
-        inline void markGood(Type &L, int secondaryToKeep)
+        inline void markGood(Type &L, int mappingsToKeep)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -83,7 +83,7 @@ namespace skch
 
             for(auto it = L.begin(); it != L.end(); it++)
             {
-                if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
+                if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > mappingsToKeep) {
                     break;
                 }
 
@@ -99,7 +99,7 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap
        */
       template <typename VecIn>
-      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep)
+      void liFilterAlgorithm(VecIn &readMappings, int mappingsToKeep)
         {
           if(readMappings.size() <= 1)
             return;
@@ -147,7 +147,7 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep);
+            obj.markGood(bst, mappingsToKeep);
 
             it = it2;
           }
@@ -221,10 +221,10 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap (post merge step)
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, int secondaryToKeep)
+      void filterMappings(VecIn &readMappings, uint16_t mappingsToKeep)
       {
           //Apply the main filtering algorithm to ensure best mappings across complete axis
-          liFilterAlgorithm(readMappings, secondaryToKeep);
+          liFilterAlgorithm(readMappings, mappingsToKeep);
       }
 
      /**
@@ -328,7 +328,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, int secondaryToKeep)
+        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep)
         {
           if(readMappings.size() <= 1)
             return;

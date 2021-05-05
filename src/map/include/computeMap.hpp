@@ -205,7 +205,7 @@ namespace skch
         if (param.filterMode == filter::ONETOONE)
         {
           skch::Filter::ref::filterMappings(allReadMappings, this->refSketch,
-                                            param.secondaryToKeep
+                                            param.numMappingsForSegment
                                            // (input->len < param.segLength ? param.shortSecondaryToKeep : param.secondaryToKeep)
                                             );
 
@@ -388,10 +388,9 @@ namespace skch
 
         //filter mappings best over query sequence axis
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-            skch::Filter::query::filterMappings(output->readMappings,
-                                                (input->len < param.segLength ?
-                                                 param.shortSecondaryToKeep
-                                                 : param.secondaryToKeep));
+            skch::Filter::query::filterMappings(output->readMappings,(input->len < param.segLength ?
+                                                 param.numMappingsForShortSequence
+                                                 : param.numMappingsForSegment));
         }
 
         // remove short merged mappings when we are merging

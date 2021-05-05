@@ -348,12 +348,12 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     if(cmd.foundOption("secondaries"))
     {
       str << cmd.optionValue("secondaries");
-      str >> parameters.secondaryToKeep;
+      str >> parameters.numMappingsForSegment;
       str.clear();
     }
     else
     {
-      parameters.secondaryToKeep = 0;
+      parameters.numMappingsForSegment = 1;
     }
 
     printCmdOptions(parameters);
