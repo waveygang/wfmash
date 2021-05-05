@@ -50,7 +50,6 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
     args::ValueFlag<int> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size applying 0 as p-value cutoff [default: automatically computed applying 1e-120 as p-value cutoff]", {'w', "window-size"});
-    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidence-interval"});
 
     args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
 
@@ -235,18 +234,6 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
-    if (confidence_interval) {
-        float ci = args::get(confidence_interval);
-
-        if (ci > 1 ) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, confidence_interval must be between 0 and 1." << std::endl;
-            exit(1);
-        }
-        map_parameters.confidence_interval = ci;
-    } else {
-        map_parameters.confidence_interval = 0.95;
-    }
-
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
@@ -318,7 +305,7 @@ void parse_args(int argc,
             // If the input window size is 0, compute the best window size using 0 as p-value cutoff
             map_parameters.windowSize = skch::Stat::recommendedWindowSize(
                     ws == 0 ? 0.0 : skch::fixed::pval_cutoff,
-                    map_parameters.confidence_interval,
+                    skch::fixed::confidence_interval,
                     map_parameters.kmerSize,
                     map_parameters.alphabetSize,
                     map_parameters.percentageIdentity,
@@ -353,24 +340,24 @@ void parse_args(int argc,
 
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {
-            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments);
+            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) - 1;
         } else {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be grater than 0." << std::endl;
             exit(1);
         }
     } else {
-        map_parameters.numMappingsForSegment = 1;
+        map_parameters.numMappingsForSegment = 0;
     }
 
     if (num_mappings_for_short_seq) {
         if (args::get(num_mappings_for_short_seq) > 0) {
-            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq);
+            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq) - 1;
         } else {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
             exit(1);
         }
     } else {
-        map_parameters.numMappingsForShortSequence = 1;
+        map_parameters.numMappingsForShortSequence = 0;
     }
 
     if (skip_self) {

@@ -49,8 +49,6 @@ struct Parameters
     bool mergeMappings;                               //if we should merge consecutive segment mappings
     bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
 
-    float confidence_interval;                        //Confidence interval to relax jaccard cutoff for mapping (0-1)
-
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
@@ -64,14 +62,14 @@ struct Parameters
 namespace fixed
 {
 
-float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
+//float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
 //considered good by filtering algorithm
 
-int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best 
+//int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
 double pval_cutoff = 1e-120;                      //p-value cutoff for determining window size
-
+float confidence_interval = 0.95;                 //Confidence interval to relax jaccard cutoff for mapping (0-1)
 }
 }
 
