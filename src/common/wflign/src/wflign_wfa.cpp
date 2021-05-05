@@ -509,7 +509,8 @@ void do_wfa_patch_alignment(
     aln.ok = aln.score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
-        hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+        //hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i)) {
             std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
@@ -548,7 +549,7 @@ EdlibAlignResult do_edlib_patch_alignment(
                       edlib_config);
 
 }
-
+/*
 bool hack_cigar(
     wfa::edit_cigar_t& cigar,
     const char* query, const char* target,
@@ -605,12 +606,6 @@ bool hack_cigar(
         }
     }
     return ok;
-}
-
-/*
-wfa::edit_cigar_t filter_short_matches(
-    const wfa::edit_cigar_t& cigar) {
-// todo
 }
 */
 
@@ -808,7 +803,7 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 2;//16;
+    const uint64_t min_wfa_length = 9;
     //const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
