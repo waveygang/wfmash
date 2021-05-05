@@ -808,8 +808,8 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 16;
-    const uint64_t min_edlib_length = 0;
+    const uint64_t min_wfa_length = 0;//16;
+    //const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
     const uint64_t max_edlib_tail_length = 2000;
@@ -1004,10 +1004,8 @@ void write_merged_alignment(
                         uint64_t patch_query_aligned_length = 0;
                         //int query_delta = aln.j - query_end;
                         //int target_delta = aln.i - target_end;
-                        if (
+                        if (query_delta > min_wfa_length && target_delta > min_wfa_length){
                             // WFA is only global
-                                query_delta > min_wfa_length && target_delta > min_wfa_length
-                                ){
                             alignment_t patch_aln;
                             do_wfa_patch_alignment(
                                     query, query_pos, query_delta,
@@ -1023,7 +1021,7 @@ void write_merged_alignment(
                                     tracev.push_back(patch_aln.edit_cigar.operations[i]);
                                 }
                             }
-                        } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
+                        } /*else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
                             // Global mode
                             auto result = do_edlib_patch_alignment(
                                     query, query_pos, query_delta,
@@ -1040,12 +1038,12 @@ void write_merged_alignment(
                                 }
                             }
                             edlibFreeAlignResult(result);
-                        }
+                        }*/
                     }
                 } else if (query_delta > 0) {
                     // Semi-global mode for patching the heads
 
-                    uint64_t pos_to_ask = query_delta + target_delta;
+                    const uint64_t pos_to_ask = query_delta + target_delta;
 
                     uint64_t pos_to_shift = 0;
                     uint64_t target_pos_x, target_start_x;
@@ -1079,7 +1077,7 @@ void write_merged_alignment(
                         }
                     }
 
-                    uint64_t target_delta_x = target_delta + pos_to_shift;
+                    const uint64_t target_delta_x = target_delta + pos_to_shift;
 
                     if (target_delta_x > 0) {
                         std::string query_rev(query + query_pos, query_delta);
