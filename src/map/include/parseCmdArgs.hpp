@@ -331,7 +331,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
     //Compute optimal window size
     parameters.windowSize = skch::Stat::recommendedWindowSize(
-            skch::fixed::pval_cutoff, parameters.confidence_interval,
+            skch::fixed::pval_cutoff, skch::fixed::confidence_interval,
             parameters.kmerSize, parameters.alphabetSize,
             parameters.percentageIdentity,
             parameters.segLength, parameters.referenceSize);
@@ -348,12 +348,12 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     if(cmd.foundOption("secondaries"))
     {
       str << cmd.optionValue("secondaries");
-      str >> parameters.secondaryToKeep;
+      str >> parameters.numMappingsForSegment;
       str.clear();
     }
     else
     {
-      parameters.secondaryToKeep = 0;
+      parameters.numMappingsForSegment = 1;
     }
 
     printCmdOptions(parameters);

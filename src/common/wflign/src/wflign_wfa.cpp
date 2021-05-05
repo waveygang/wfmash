@@ -496,7 +496,7 @@ void do_wfa_patch_alignment(
     aln.query_length = query_length;
     aln.target_length = target_length;
 
-    const int max_score = (target_length + query_length) * 2;
+    const int max_score = (target_length + query_length) * 5;
 
     aln.score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
@@ -509,7 +509,8 @@ void do_wfa_patch_alignment(
     aln.ok = aln.score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
-        hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+        //hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i)) {
             std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
@@ -548,7 +549,7 @@ EdlibAlignResult do_edlib_patch_alignment(
                       edlib_config);
 
 }
-
+/*
 bool hack_cigar(
     wfa::edit_cigar_t& cigar,
     const char* query, const char* target,
@@ -605,12 +606,6 @@ bool hack_cigar(
         }
     }
     return ok;
-}
-
-/*
-wfa::edit_cigar_t filter_short_matches(
-    const wfa::edit_cigar_t& cigar) {
-// todo
 }
 */
 
@@ -808,8 +803,8 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 16;
-    const uint64_t min_edlib_length = 0;
+    const uint64_t min_wfa_length = 9;
+    //const uint64_t min_edlib_length = 0;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
     const uint64_t max_edlib_tail_length = 2000;
@@ -1004,10 +999,8 @@ void write_merged_alignment(
                         uint64_t patch_query_aligned_length = 0;
                         //int query_delta = aln.j - query_end;
                         //int target_delta = aln.i - target_end;
-                        if (
+                        if (query_delta > min_wfa_length && target_delta > min_wfa_length){
                             // WFA is only global
-                                query_delta > min_wfa_length && target_delta > min_wfa_length
-                                ){
                             alignment_t patch_aln;
                             do_wfa_patch_alignment(
                                     query, query_pos, query_delta,
@@ -1023,7 +1016,7 @@ void write_merged_alignment(
                                     tracev.push_back(patch_aln.edit_cigar.operations[i]);
                                 }
                             }
-                        } else if (query_delta > min_edlib_length && target_delta > min_edlib_length) {
+                        } else /*if (query_delta > min_edlib_length && target_delta > min_edlib_length)*/ {
                             // Global mode
                             auto result = do_edlib_patch_alignment(
                                     query, query_pos, query_delta,
@@ -1045,7 +1038,7 @@ void write_merged_alignment(
                 } else if (query_delta > 0) {
                     // Semi-global mode for patching the heads
 
-                    uint64_t pos_to_ask = query_delta + target_delta;
+                    const uint64_t pos_to_ask = query_delta + target_delta;
 
                     uint64_t pos_to_shift = 0;
                     uint64_t target_pos_x, target_start_x;
@@ -1079,7 +1072,7 @@ void write_merged_alignment(
                         }
                     }
 
-                    uint64_t target_delta_x = target_delta + pos_to_shift;
+                    const uint64_t target_delta_x = target_delta + pos_to_shift;
 
                     if (target_delta_x > 0) {
                         std::string query_rev(query + query_pos, query_delta);
@@ -1152,9 +1145,9 @@ void write_merged_alignment(
                 if (query_delta > 0 && query_delta <= max_edlib_tail_length) {
                     // there is a piece of query
                     auto target_delta_x = target_delta +
-                            (target_pos + target_delta + query_delta < target_total_length ?
+                            ((target_offset - target_pointer_shift) + target_pos + target_delta + query_delta < target_total_length ?
                                     query_delta :
-                                    target_total_length - (target_pos + target_delta));
+                                    target_total_length - ((target_offset - target_pointer_shift) + target_pos + target_delta));
 
                     auto result = do_edlib_patch_alignment(
                             query, query_pos, query_delta,
@@ -1192,7 +1185,7 @@ void write_merged_alignment(
                     edlibFreeAlignResult(result);
                 }
 
-                if(!got_alignment){
+                if (!got_alignment){
                     // add in our tail gap / softclip
                     for (uint64_t i = 0; i < query_delta; ++i) {
                         tracev.push_back('I');

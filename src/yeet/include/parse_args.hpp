@@ -42,15 +42,14 @@ void parse_args(int argc,
     args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
     args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
-    args::ValueFlag<int> map_secondaries(parser, "N", "number of secondary mappings to retain in 'map' filter mode (total number of mappings is this + 1) [default: 0]", {'n', "n-secondary"});
-    args::ValueFlag<int> map_short_secondaries(parser, "N", "number of secondary mappings to retain for sequences shorter than segment length [default: 0]", {'S', "n-short-secondary"});
+    args::ValueFlag<uint16_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
+    args::ValueFlag<uint16_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
     args::ValueFlag<int> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size applying 0 as p-value cutoff [default: automatically computed applying 1e-120 as p-value cutoff]", {'w', "window-size"});
-    args::ValueFlag<float> confidence_interval(parser, "N", "confidence interval to relax the jaccard cutoff for mapping [default: 0.95]", {'c', "confidence-interval"});
 
     args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
 
@@ -235,18 +234,6 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
-    if (confidence_interval) {
-        float ci = args::get(confidence_interval);
-
-        if (ci > 1 ) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, confidence_interval must be between 0 and 1." << std::endl;
-            exit(1);
-        }
-        map_parameters.confidence_interval = ci;
-    } else {
-        map_parameters.confidence_interval = 0.95;
-    }
-
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
@@ -318,7 +305,7 @@ void parse_args(int argc,
             // If the input window size is 0, compute the best window size using 0 as p-value cutoff
             map_parameters.windowSize = skch::Stat::recommendedWindowSize(
                     ws == 0 ? 0.0 : skch::fixed::pval_cutoff,
-                    map_parameters.confidence_interval,
+                    skch::fixed::confidence_interval,
                     map_parameters.kmerSize,
                     map_parameters.alphabetSize,
                     map_parameters.percentageIdentity,
@@ -351,16 +338,26 @@ void parse_args(int argc,
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 
-    if (map_secondaries) {
-        map_parameters.secondaryToKeep = args::get(map_secondaries);
+    if (num_mappings_for_segments) {
+        if (args::get(num_mappings_for_segments) > 0) {
+            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
+        } else {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be grater than 0." << std::endl;
+            exit(1);
+        }
     } else {
-        map_parameters.secondaryToKeep = 0;
+        map_parameters.numMappingsForSegment = 1;
     }
 
-    if (map_short_secondaries) {
-        map_parameters.shortSecondaryToKeep = args::get(map_short_secondaries);
+    if (num_mappings_for_short_seq) {
+        if (args::get(num_mappings_for_short_seq) > 0) {
+            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq);
+        } else {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
+            exit(1);
+        }
     } else {
-        map_parameters.shortSecondaryToKeep = 0;
+        map_parameters.numMappingsForShortSequence = 1;
     }
 
     if (skip_self) {

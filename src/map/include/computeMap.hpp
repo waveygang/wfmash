@@ -205,7 +205,7 @@ namespace skch
         if (param.filterMode == filter::ONETOONE)
         {
           skch::Filter::ref::filterMappings(allReadMappings, this->refSketch,
-                                            param.secondaryToKeep
+                                            param.numMappingsForSegment - 1
                                            // (input->len < param.segLength ? param.shortSecondaryToKeep : param.secondaryToKeep)
                                             );
 
@@ -390,8 +390,8 @@ namespace skch
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
             skch::Filter::query::filterMappings(output->readMappings,
                                                 (input->len < param.segLength ?
-                                                 param.shortSecondaryToKeep
-                                                 : param.secondaryToKeep));
+                                                 param.numMappingsForShortSequence
+                                                 : param.numMappingsForSegment) - 1);
         }
 
         // remove short merged mappings when we are merging
@@ -543,7 +543,7 @@ namespace skch
             }
           }
 
-          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, param.confidence_interval);
+          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
 
           this->computeL1CandidateRegions(Q, seedHitsL1, minimumHits, l1Mappings);
 
@@ -628,7 +628,7 @@ namespace skch
             float mash_dist = Stat::j2md(1.0 * l2.sharedSketchSize/Q.sketchSize, param.kmerSize);
 
             //Compute lower bound to mash distance within 90% confidence interval
-            float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, param.confidence_interval);
+            float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
 
             float nucIdentity = (1 - mash_dist);
             float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
