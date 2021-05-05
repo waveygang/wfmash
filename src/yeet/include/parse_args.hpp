@@ -340,24 +340,24 @@ void parse_args(int argc,
 
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {
-            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) - 1;
+            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
         } else {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be grater than 0." << std::endl;
             exit(1);
         }
     } else {
-        map_parameters.numMappingsForSegment = 0;
+        map_parameters.numMappingsForSegment = 1;
     }
 
     if (num_mappings_for_short_seq) {
         if (args::get(num_mappings_for_short_seq) > 0) {
-            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq) - 1;
+            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq);
         } else {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
             exit(1);
         }
     } else {
-        map_parameters.numMappingsForShortSequence = 0;
+        map_parameters.numMappingsForShortSequence = 1;
     }
 
     if (skip_self) {
