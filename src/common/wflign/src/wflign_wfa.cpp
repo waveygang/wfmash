@@ -1145,9 +1145,9 @@ void write_merged_alignment(
                 if (query_delta > 0 && query_delta <= max_edlib_tail_length) {
                     // there is a piece of query
                     auto target_delta_x = target_delta +
-                            (target_offset + target_pos + target_delta + query_delta < target_total_length ?
+                            ((target_offset - target_pointer_shift) + target_pos + target_delta + query_delta < target_total_length ?
                                     query_delta :
-                                    target_total_length - (target_offset + target_pos + target_delta));
+                                    target_total_length - ((target_offset - target_pointer_shift) + target_pos + target_delta));
 
                     auto result = do_edlib_patch_alignment(
                             query, query_pos, query_delta,
