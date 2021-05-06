@@ -24,6 +24,7 @@ add_subdirectory(deps/WFA EXCLUDE_FROM_ALL)
 
 add_executable(wflign
   src/main.cpp
+  src/ksw2/ksw2_extz.c
   src/wflign_edlib.cpp
   src/wflign_wfa.cpp
   src/wfa_edit_callback.cpp
@@ -41,6 +42,7 @@ target_link_libraries(wflign
   z)
 
 add_library(libwflign_static STATIC
+  src/ksw2/ksw2_extz.c
   src/wflign_edlib.cpp
   src/wflign_wfa.cpp
   src/wfa_edit_callback.cpp
