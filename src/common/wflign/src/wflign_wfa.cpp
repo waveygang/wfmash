@@ -32,23 +32,25 @@ void wflign_affine_wavefront(
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold) {
 
-    if (query_offset + query_length > query_total_length
-        || target_offset + target_length > target_total_length) {
+    if (query_offset + query_length > query_total_length || target_offset + target_length > target_total_length) {
         return;
     }
 
+    const uint64_t segment_length_to_use = (query_length < segment_length || target_length < segment_length) ?
+            std::min(query_length, target_length) : segment_length;
+
     // set up our implicit matrix
     const uint64_t steps_per_segment = 2;
-    const uint64_t step_size = segment_length / steps_per_segment;
+    const uint64_t step_size = segment_length_to_use / steps_per_segment;
 
     // Pattern & Text
-    const int pattern_length = query_length / step_size;
-    const int text_length = target_length / step_size;
+    const uint64_t pattern_length = query_length / step_size;
+    const uint64_t text_length = target_length / step_size;
 
     // uncomment to use reduced WFA locally
     // currently not supported due to issues with traceback when applying WF-reduction on small problems
-    const int wfa_min_wavefront_length = 0; //segment_length / 16;
-    const int wfa_max_distance_threshold = 0; //segment_length / 8;
+    const uint32_t wfa_min_wavefront_length = 0; //segment_length_to_use / 16;
+    const uint32_t wfa_max_distance_threshold = 0; //segment_length_to_use / 8;
 
     // Allocate MM
     wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -93,66 +95,69 @@ void wflign_affine_wavefront(
     int h_max = 0;
 
     auto extend_match = [&](const int& v, const int& h) {
-            bool aligned = false;
-            if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
-                const uint64_t k = encode_pair(v, h);
-                const auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
-                if (f != alignments.end()) {
-                    aligned = true;
-                } else  {
-                    const uint64_t query_begin = (v < pattern_length-1 ? v * step_size : query_length - segment_length);
-                    const uint64_t target_begin = (h < text_length-1 ? h * step_size : target_length - segment_length);
-                    auto* aln = new alignment_t();
-                    aligned = do_wfa_segment_alignment(
-                            query_name,
-                            query,
-                            query_sketches[v],
-                            query_length,
-                            query_begin,
-                            target_name,
-                            target,
-                            target_sketches[h],
-                            target_length,
-                            target_begin,
-                            segment_length,
-                            step_size,
-                            minhash_kmer_size,
-                            wfa_min_wavefront_length,
-                            wfa_max_distance_threshold,
-                            wfa_mm_allocator,
-                            &wfa_affine_penalties,
-                            *aln);
-                    //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
-                    if (aligned) {
-                        alignments[k] = aln;
-                    } else {
-                        delete aln;
-                    }
-                    // cleanup old sketches
-                    if (v > v_max) {
-                        v_max = v;
-                        if (v >= wflambda_max_distance_threshold) {
-                            auto& s = query_sketches[v - wflambda_max_distance_threshold];
-                            // The C++ language guarantees that delete p will do nothing if p is equal to NULL
-                            delete s;
-                            s = nullptr;
-                        }
-                    }
-                    if (h > h_max) {
-                        h_max = h;
-                        if (h >= wflambda_max_distance_threshold) {
-                            auto& s = target_sketches[h - wflambda_max_distance_threshold];
-                            // The C++ language guarantees that delete p will do nothing if p is equal to NULL
-                            delete s;
-                            s = nullptr;
-                        }
+        bool aligned = false;
+        if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
+            const uint64_t k = encode_pair(v, h);
+            const auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
+            if (f != alignments.end()) {
+                aligned = true;
+            } else  {
+                const uint64_t query_begin = (v < pattern_length-1 ? v * step_size :
+                        query_length - segment_length_to_use);
+                const uint64_t target_begin = (h < text_length-1 ? h * step_size :
+                        target_length - segment_length_to_use);
+
+                auto* aln = new alignment_t();
+                aligned = do_wfa_segment_alignment(
+                        query_name,
+                        query,
+                        query_sketches[v],
+                        query_length,
+                        query_begin,
+                        target_name,
+                        target,
+                        target_sketches[h],
+                        target_length,
+                        target_begin,
+                        segment_length_to_use,
+                        step_size,
+                        minhash_kmer_size,
+                        wfa_min_wavefront_length,
+                        wfa_max_distance_threshold,
+                        wfa_mm_allocator,
+                        &wfa_affine_penalties,
+                        *aln);
+                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                if (aligned) {
+                    alignments[k] = aln;
+                } else {
+                    delete aln;
+                }
+                // cleanup old sketches
+                if (v > v_max) {
+                    v_max = v;
+                    if (v >= wflambda_max_distance_threshold) {
+                        auto& s = query_sketches[v - wflambda_max_distance_threshold];
+                        // The C++ language guarantees that delete p will do nothing if p is equal to NULL
+                        delete s;
+                        s = nullptr;
                     }
                 }
-            } else if (h < 0 || v < 0) { //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
-                aligned = true;
+                if (h > h_max) {
+                    h_max = h;
+                    if (h >= wflambda_max_distance_threshold) {
+                        auto& s = target_sketches[h - wflambda_max_distance_threshold];
+                        // The C++ language guarantees that delete p will do nothing if p is equal to NULL
+                        delete s;
+                        s = nullptr;
+                    }
+                }
             }
-            return aligned;
-        };
+        } else if (h < 0 || v < 0) { //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
+            aligned = true;
+        }
+        return aligned;
+    };
 
     // accumulate runs of matches in reverse order
     // then trim the cigars of successive mappings
@@ -381,8 +386,8 @@ bool do_wfa_segment_alignment(
     const uint64_t& segment_length,
     const uint64_t& step_size,
     const uint64_t& minhash_kmer_size,
-    const int min_wavefront_length,
-    const int max_distance_threshold,
+    const uint32_t min_wavefront_length,
+    const uint32_t max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln) {

@@ -237,8 +237,8 @@ bool do_wfa_segment_alignment(
     const uint64_t& segment_length,
     const uint64_t& step_size,
     const uint64_t& minhash_kmer_size,
-    const int min_wavefront_length,
-    const int max_distance_threshold,
+    const uint32_t min_wavefront_length,
+    const uint32_t max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
