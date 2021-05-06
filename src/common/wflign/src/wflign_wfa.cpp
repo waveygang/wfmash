@@ -547,7 +547,7 @@ char* do_ksw2_patch_alignment(
     int i, a = sc_mch, b = sc_mis < 0? sc_mis : -sc_mis; // a>0 and b<0
     int8_t mat[25] = { a,b,b,b,0, b,a,b,b,0, b,b,a,b,0, b,b,b,a,0, 0,0,0,0,0 };
 
-    std::cerr << "query\n";
+    /*std::cerr << "query\n";
     for(uint64_t xx = 0; xx < query_length; ++xx) {
         std::cerr << qseq[xx];
     }
@@ -555,7 +555,7 @@ char* do_ksw2_patch_alignment(
     for(uint64_t xx = 0; xx < target_length; ++xx) {
         std::cerr << tseq[xx];
     }
-    std::cerr << "\n";
+    std::cerr << "\n";*/
 
     uint8_t *ts, *qs, c[256];
     ksw_extz_t ez;
@@ -568,14 +568,17 @@ char* do_ksw2_patch_alignment(
     qs = (uint8_t*)malloc(query_length);
     for (i = 0; i < target_length; ++i) ts[i] = c[(uint8_t)tseq[i]]; // encode to 0/1/2/3
     for (i = 0; i < query_length; ++i) qs[i] = c[(uint8_t)qseq[i]];
-    ksw_extz(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, 0, &ez);
-    
+    //ksw_extz(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, 0, &ez);
+
+    ksw_extd(0, query_length, qs, target_length, ts, 5, mat,
+                  gapo, gape, 24, 1, -1, -1, 0, &ez);
+
     char* cigar_ = (char*) malloc((ez.n_cigar * 2 + 1) * sizeof(char));
 
     for (i = 0; i < ez.n_cigar; ++i) {
         //cigar_[i] = ez.cigar[i]>>4;
         //cigar_[i + 1] = "MID"[ez.cigar[i]&0xf];
-        printf("%d%c", ez.cigar[i]>>4, "MID"[ez.cigar[i]&0xf]);
+        //printf("%d%c", ez.cigar[i]>>4, "MID"[ez.cigar[i]&0xf]);
     }
     cigar_[ez.n_cigar * 2] = 0;
     putchar('\n');
@@ -1156,7 +1159,7 @@ void write_merged_alignment(
                         char* ksw2_cigar = do_ksw2_patch_alignment(
                                 query_rev.c_str(), query_rev.size(),
                                 target_rev.c_str(), target_rev.size(),
-                                1, -6, 10, 1);
+                                1, -6, 10, 2);
 
                         if (result.status == EDLIB_STATUS_OK
                             && result.alignmentLength != 0
@@ -1223,7 +1226,7 @@ void write_merged_alignment(
                     char* ksw2_cigar = do_ksw2_patch_alignment(
                             query + query_pos, query_delta,
                             target - target_pointer_shift + target_pos, target_delta_x,
-                            1, -6, 10, 1);
+                            1, -6, 10, 2);
 
                     if (result.status == EDLIB_STATUS_OK
                         && result.alignmentLength != 0
