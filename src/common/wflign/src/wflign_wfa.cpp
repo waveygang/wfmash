@@ -1,6 +1,8 @@
 #include <chrono>
 #include "wflign_wfa.hpp"
 
+#include "ksw2/ksw2.h"
+
 namespace wflign {
 
 namespace wavefront {
@@ -531,6 +533,56 @@ void do_wfa_patch_alignment(
     affine_wavefronts_delete(affine_wavefronts);
     // cleanup allocator to keep memory low
     wfa::mm_allocator_clear(mm_allocator);
+}
+
+char* do_ksw2_patch_alignment(
+        const char *qseq,
+        const uint64_t& query_length,
+        const char *tseq,
+        const uint64_t& target_length,
+        int sc_mch,
+        int sc_mis,
+        int gapo,
+        int gape) {
+    int i, a = sc_mch, b = sc_mis < 0? sc_mis : -sc_mis; // a>0 and b<0
+    int8_t mat[25] = { a,b,b,b,0, b,a,b,b,0, b,b,a,b,0, b,b,b,a,0, 0,0,0,0,0 };
+
+    std::cerr << "query\n";
+    for(uint64_t xx = 0; xx < query_length; ++xx) {
+        std::cerr << qseq[xx];
+    }
+    std::cerr << "\ntarget\n";
+    for(uint64_t xx = 0; xx < target_length; ++xx) {
+        std::cerr << tseq[xx];
+    }
+    std::cerr << "\n";
+
+    uint8_t *ts, *qs, c[256];
+    ksw_extz_t ez;
+
+    memset(&ez, 0, sizeof(ksw_extz_t));
+    memset(c, 4, 256);
+    c['A'] = c['a'] = 0; c['C'] = c['c'] = 1;
+    c['G'] = c['g'] = 2; c['T'] = c['t'] = 3; // build the encoding table
+    ts = (uint8_t*)malloc(target_length);
+    qs = (uint8_t*)malloc(query_length);
+    for (i = 0; i < target_length; ++i) ts[i] = c[(uint8_t)tseq[i]]; // encode to 0/1/2/3
+    for (i = 0; i < query_length; ++i) qs[i] = c[(uint8_t)qseq[i]];
+    ksw_extz(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, 0, &ez);
+    
+    char* cigar_ = (char*) malloc((ez.n_cigar * 2 + 1) * sizeof(char));
+
+    for (i = 0; i < ez.n_cigar; ++i) {
+        //cigar_[i] = ez.cigar[i]>>4;
+        //cigar_[i + 1] = "MID"[ez.cigar[i]&0xf];
+        printf("%d%c", ez.cigar[i]>>4, "MID"[ez.cigar[i]&0xf]);
+    }
+    cigar_[ez.n_cigar * 2] = 0;
+    putchar('\n');
+
+    free(ez.cigar); free(ts); free(qs);
+
+    return cigar_;
 }
 
 EdlibAlignResult do_edlib_patch_alignment(
@@ -1099,6 +1151,13 @@ void write_merged_alignment(
                         auto result = do_edlib_patch_alignment(
                                 query_rev.c_str(), 0, query_rev.size(),
                                 target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
+
+                        //TODO to finish
+                        char* ksw2_cigar = do_ksw2_patch_alignment(
+                                query_rev.c_str(), query_rev.size(),
+                                target_rev.c_str(), target_rev.size(),
+                                1, -6, 10, 1);
+
                         if (result.status == EDLIB_STATUS_OK
                             && result.alignmentLength != 0
                             && result.editDistance >= 0) {
@@ -1126,6 +1185,7 @@ void write_merged_alignment(
                             }
                         }
                         edlibFreeAlignResult(result);
+                        free(ksw2_cigar);
                     }
                 }
 
@@ -1159,6 +1219,12 @@ void write_merged_alignment(
                             target - target_pointer_shift, target_pos, target_delta_x,
                             EDLIB_MODE_SHW);
 
+                    //TODO to finish
+                    char* ksw2_cigar = do_ksw2_patch_alignment(
+                            query + query_pos, query_delta,
+                            target - target_pointer_shift + target_pos, target_delta_x,
+                            1, -6, 10, 1);
+
                     if (result.status == EDLIB_STATUS_OK
                         && result.alignmentLength != 0
                         && result.editDistance >= 0) {
@@ -1188,6 +1254,7 @@ void write_merged_alignment(
                     }
 
                     edlibFreeAlignResult(result);
+                    free(ksw2_cigar);
                 }
 
                 if (!got_alignment){
