@@ -1000,18 +1000,32 @@ void write_merged_alignment(
                               << target_name << " " << target_offset << " @ " << target_pos
                               << std::endl;
 #endif
+
+                        // nibble forward if we're below the correct length
+                        while (q != erodev.end() && (query_delta <= min_wfa_length || target_delta <= min_wfa_length)) {
+                            const auto& c = *q;
+                            switch (c) {
+                            case 'M': case 'X':
+                                ++query_delta; ++target_delta; break;
+                            case 'I': ++query_delta; break;
+                            case 'D': ++target_delta; break;
+                            default: break;
+                            }
+                            ++q;
+                        }
+
                         uint64_t patch_target_aligned_length = 0;
                         uint64_t patch_query_aligned_length = 0;
-                        //int query_delta = aln.j - query_end;
-                        //int target_delta = aln.i - target_end;
-                        if (query_delta > min_wfa_length && target_delta > min_wfa_length){
-                            // WFA is only global
+
+                        // WFA is only global
+                        // we need to be sure that our nibble made the problem long enough
+                        if (query_delta > min_wfa_length && target_delta > min_wfa_length) {
                             alignment_t patch_aln;
                             do_wfa_patch_alignment(
-                                    query, query_pos, query_delta,
-                                    target - target_pointer_shift, target_pos, target_delta,
-                                    min_wf_length, max_dist_threshold,
-                                    mm_allocator, affine_penalties, patch_aln);
+                                query, query_pos, query_delta,
+                                target - target_pointer_shift, target_pos, target_delta,
+                                min_wf_length, max_dist_threshold,
+                                mm_allocator, affine_penalties, patch_aln);
                             if (patch_aln.ok) {
                                 //std::cerr << "got an ok patch aln" << std::endl;
                                 got_alignment = true;
@@ -1021,23 +1035,6 @@ void write_merged_alignment(
                                     tracev.push_back(patch_aln.edit_cigar.operations[i]);
                                 }
                             }
-                        } else /*if (query_delta > min_edlib_length && target_delta > min_edlib_length)*/ {
-                            // Global mode
-                            auto result = do_edlib_patch_alignment(
-                                    query, query_pos, query_delta,
-                                    target - target_pointer_shift, target_pos, target_delta,EDLIB_MODE_NW);
-                            if (result.status == EDLIB_STATUS_OK
-                                && result.alignmentLength != 0
-                                && result.editDistance >= 0) {
-                                got_alignment = true;
-                                // copy it into the trace
-                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                                auto& end_idx = result.alignmentLength;
-                                for (int i = 0; i < end_idx; ++i) {
-                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
-                                }
-                            }
-                            edlibFreeAlignResult(result);
                         }
                     }
                 } else if (query_delta > 0) {
