@@ -1030,6 +1030,19 @@ void write_merged_alignment(
                             nibble_fwd ^= true;
                         }
 
+                        // check forward if there are other Is/Ds to merge in the current patch
+                        while (q != erodev.end() &&
+                                (*q == 'I' || *q == 'D') &&
+                                ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+                            const auto& c = *q++;
+                            if (c == 'I') {
+                                ++query_delta;
+                            } else {
+                                ++target_delta;
+                            }
+                        }
+
                         // we need to be sure that our nibble made the problem long enough
                         // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
                         if (query_delta >= 10 && target_delta >= 10) {
