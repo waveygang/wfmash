@@ -809,8 +809,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    // for affine WFA to be correct, it must be at least 10
-    const uint16_t min_patch_length = 112;
+    const uint8_t min_wfa_patch_length = 112;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
     const uint16_t max_edlib_head_tail_patch_length = 2000;
@@ -997,14 +996,14 @@ void write_merged_alignment(
                         (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)) {
 #ifdef WFLIGN_DEBUG
                         std::cerr << "[wflign::wflign_affine_wavefront] patching in "
-                              << query_name << " " << query_offset << " @ " << query_pos
-                              << target_name << " " << target_offset << " @ " << target_pos
-                              << std::endl;
+                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+                                      << std::endl;
 #endif
 
                         // nibble forward/backward if we're below the correct length
                         bool nibble_fwd = true;
-                        while (q != erodev.end() && (query_delta < min_patch_length || target_delta < min_patch_length)) {
+                        while (q != erodev.end() && (query_delta < min_wfa_patch_length || target_delta < min_wfa_patch_length)) {
                             if (nibble_fwd) {
                                 const auto& c = *q++;
                                 switch (c) {
@@ -1032,7 +1031,8 @@ void write_merged_alignment(
                         }
 
                         // we need to be sure that our nibble made the problem long enough
-                        if (query_delta >= min_patch_length && target_delta >= min_patch_length) {
+                        // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
+                        if (query_delta >= 10 && target_delta >= 10) {
                             alignment_t patch_aln;
                             // WFA is only global
                             do_wfa_patch_alignment(
