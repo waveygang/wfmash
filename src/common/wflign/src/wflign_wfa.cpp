@@ -810,10 +810,10 @@ void write_merged_alignment(
     // patching parameters
     // we will nibble patching back to this length
     // for affine WFA to be correct, it must be at least 10
-    const uint64_t min_patch_length = 64;
+    const uint16_t min_patch_length = 112;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
-    const uint64_t max_edlib_tail_length = 2000;
+    const uint16_t max_edlib_tail_length = 2000;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1004,8 +1004,7 @@ void write_merged_alignment(
 
                         // nibble forward/backward if we're below the correct length
                         bool nibble_fwd = true;
-                        while (q != erodev.end() && (query_delta < min_patch_length
-                                                     || target_delta < min_patch_length)) {
+                        while (q != erodev.end() && (query_delta < min_patch_length || target_delta < min_patch_length)) {
                             if (nibble_fwd) {
                                 const auto& c = *q++;
                                 switch (c) {
@@ -1032,13 +1031,10 @@ void write_merged_alignment(
                             nibble_fwd ^= true;
                         }
 
-                        uint64_t patch_target_aligned_length = 0;
-                        uint64_t patch_query_aligned_length = 0;
-
-                        // WFA is only global
                         // we need to be sure that our nibble made the problem long enough
                         if (query_delta >= min_patch_length && target_delta >= min_patch_length) {
                             alignment_t patch_aln;
+                            // WFA is only global
                             do_wfa_patch_alignment(
                                 query, query_pos, query_delta,
                                 target - target_pointer_shift, target_pos, target_delta,
@@ -1390,7 +1386,7 @@ void write_merged_alignment(
             }
         }
     };
-    //std::cerr << "target_offset: " << target_offset << " -- target_start: " << target_start << std::endl;
+
     if (gap_compressed_identity >= min_identity) {
         const long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
@@ -1494,6 +1490,7 @@ void write_merged_alignment(
             out << "\t" << timings << "\n";
         }
     }
+
     // always clean up
     free(cigarv);
 }
