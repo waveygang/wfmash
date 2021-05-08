@@ -813,7 +813,7 @@ void write_merged_alignment(
     const uint16_t min_patch_length = 112;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
-    const uint16_t max_edlib_tail_length = 2000;
+    const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1051,7 +1051,7 @@ void write_merged_alignment(
                             }
                         }
                     }
-                } else if (query_delta > 0) {
+                } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
                     // Semi-global mode for patching the heads
 
                     const uint64_t pos_to_ask = query_delta + target_delta;
@@ -1158,7 +1158,7 @@ void write_merged_alignment(
 
                 bool got_alignment = false;
 
-                if (query_delta > 0 && query_delta <= max_edlib_tail_length) {
+                if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
                     // there is a piece of query
                     auto target_delta_x = target_delta +
                             ((target_offset - target_pointer_shift) + target_pos + target_delta + query_delta < target_total_length ?
