@@ -808,8 +808,9 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 9;
-    //const uint64_t min_edlib_length = 0;
+    // we will nibble patching back to this length
+    // for affine WFA to be correct, it must be at least 10
+    const uint64_t min_patch_length = 64;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
     const uint64_t max_edlib_tail_length = 2000;
@@ -1001,17 +1002,34 @@ void write_merged_alignment(
                               << std::endl;
 #endif
 
-                        // nibble forward if we're below the correct length
-                        while (q != erodev.end() && (query_delta <= min_wfa_length || target_delta <= min_wfa_length)) {
-                            const auto& c = *q;
-                            switch (c) {
-                            case 'M': case 'X':
-                                ++query_delta; ++target_delta; break;
-                            case 'I': ++query_delta; break;
-                            case 'D': ++target_delta; break;
-                            default: break;
+                        // nibble forward/backward if we're below the correct length
+                        bool nibble_fwd = true;
+                        while (q != erodev.end() && (query_delta < min_patch_length
+                                                     || target_delta < min_patch_length)) {
+                            if (nibble_fwd) {
+                                const auto& c = *q++;
+                                switch (c) {
+                                case 'M': case 'X':
+                                    ++query_delta; ++target_delta; break;
+                                case 'I': ++query_delta; break;
+                                case 'D': ++target_delta; break;
+                                default: break;
+                                }
+                            } else if (!tracev.empty()) {
+                                const auto& c = tracev.back();
+                                switch (c) {
+                                case 'M': case 'X':
+                                    --query_pos; --target_pos;
+                                    last_match_query = query_pos;
+                                    last_match_target = target_pos;
+                                    ++query_delta; ++target_delta; break;
+                                case 'I': ++query_delta; --query_pos; break;
+                                case 'D': ++target_delta; --target_pos; break;
+                                default: break;
+                                }
+                                tracev.pop_back();
                             }
-                            ++q;
+                            nibble_fwd ^= true;
                         }
 
                         uint64_t patch_target_aligned_length = 0;
@@ -1019,7 +1037,7 @@ void write_merged_alignment(
 
                         // WFA is only global
                         // we need to be sure that our nibble made the problem long enough
-                        if (query_delta > min_wfa_length && target_delta > min_wfa_length) {
+                        if (query_delta >= min_patch_length && target_delta >= min_patch_length) {
                             alignment_t patch_aln;
                             do_wfa_patch_alignment(
                                 query, query_pos, query_delta,
