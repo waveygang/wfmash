@@ -243,7 +243,8 @@ namespace skch
         }
       }
 
-      int w =  (2.0 * lengthQuery)/optimalSketchSize;
+      //int w =  (2.0 * lengthQuery)/optimalSketchSize;
+      int w =  (0.5 * lengthQuery)/optimalSketchSize; // harder window size
 
       // 1 <= w <= lengthQuery
       return std::min( std::max(w,1), lengthQuery);
