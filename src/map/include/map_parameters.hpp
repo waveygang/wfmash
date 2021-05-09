@@ -68,8 +68,8 @@ namespace fixed
 //int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
-double pval_cutoff = 1e-120;                      //p-value cutoff for determining window size
-float confidence_interval = 0.95;                 //Confidence interval to relax jaccard cutoff for mapping (0-1)
+double pval_cutoff = 0.0;//1e-120;                  //p-value cutoff for determining window size
+float confidence_interval = 0.95;                   //Confidence interval to relax jaccard cutoff for mapping (0-1)
 }
 }
 
