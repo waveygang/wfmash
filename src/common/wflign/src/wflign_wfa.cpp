@@ -543,7 +543,8 @@ char* do_ksw2_patch_alignment(
         int sc_mch,
         int sc_mis,
         int gapo,
-        int gape) {
+        int gape,
+        bool reverse_cigar) {
     int i, a = sc_mch, b = sc_mis < 0? sc_mis : -sc_mis; // a>0 and b<0
     int8_t mat[25] = { a,b,b,b,0, b,a,b,b,0, b,b,a,b,0, b,b,b,a,0, 0,0,0,0,0 };
 
@@ -568,17 +569,22 @@ char* do_ksw2_patch_alignment(
     qs = (uint8_t*)malloc(query_length);
     for (i = 0; i < target_length; ++i) ts[i] = c[(uint8_t)tseq[i]]; // encode to 0/1/2/3
     for (i = 0; i < query_length; ++i) qs[i] = c[(uint8_t)qseq[i]];
-    //ksw_extz(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, 0, &ez);
 
-    ksw_extd(0, query_length, qs, target_length, ts, 5, mat,
-                  gapo, gape, 24, 1, -1, -1, 0, &ez);
+    int flag = 0;
+    //flag |= KSW_EZ_GENERIC_SC | KSW_EZ_EXTZ_ONLY;
+    if (reverse_cigar) {
+        flag |= KSW_EZ_REV_CIGAR;
+    }
+
+    ksw_extz(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, flag, &ez);
+    //ksw_extd(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, 24, 1, -1, -1, flag, &ez);
 
     char* cigar_ = (char*) malloc((ez.n_cigar * 2 + 1) * sizeof(char));
 
     for (i = 0; i < ez.n_cigar; ++i) {
         //cigar_[i] = ez.cigar[i]>>4;
         //cigar_[i + 1] = "MID"[ez.cigar[i]&0xf];
-        //printf("%d%c", ez.cigar[i]>>4, "MID"[ez.cigar[i]&0xf]);
+        printf("%d%c", ez.cigar[i]>>4, "MID"[ez.cigar[i]&0xf]);
     }
     cigar_[ez.n_cigar * 2] = 0;
     putchar('\n');
@@ -1156,10 +1162,11 @@ void write_merged_alignment(
                                 target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
 
                         //TODO to finish
+                        std::cerr << "HEAD\n";
                         char* ksw2_cigar = do_ksw2_patch_alignment(
-                                query_rev.c_str(), query_rev.size(),
-                                target_rev.c_str(), target_rev.size(),
-                                1, -6, 10, 2);
+                                query + query_pos, query_delta,
+                                target - target_pointer_shift + target_pos_x, target_delta_x,
+                                0, -7, 11, 1, false);
 
                         if (result.status == EDLIB_STATUS_OK
                             && result.alignmentLength != 0
@@ -1173,6 +1180,7 @@ void write_merged_alignment(
                             target_length_mut += pos_to_shift;
 
                             for (int i = *result.endLocations + 1; i < target_delta; ++i) {
+                                std::cerr << "D";
                                 tracev.push_back('D');
                             }
 
@@ -1180,12 +1188,15 @@ void write_merged_alignment(
                             char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                             auto& end_idx = result.alignmentLength;
                             for (int i = end_idx - 1; i >= 0; --i) {
+                                std::cerr << moveCodeToChar[result.alignment[i]];
                                 tracev.push_back(moveCodeToChar[result.alignment[i]]);
                             }
 
                             for (int i = 0; i < *result.startLocations; ++i) {
+                                std::cerr << "D";
                                 tracev.push_back('D');
                             }
+                            std::cerr << "\n";
                         }
                         edlibFreeAlignResult(result);
                         free(ksw2_cigar);
@@ -1223,10 +1234,11 @@ void write_merged_alignment(
                             EDLIB_MODE_SHW);
 
                     //TODO to finish
+                    std::cerr << "TAIL\n";
                     char* ksw2_cigar = do_ksw2_patch_alignment(
                             query + query_pos, query_delta,
                             target - target_pointer_shift + target_pos, target_delta_x,
-                            1, -6, 10, 2);
+                            0, -7, 11, 1, true);
 
                     if (result.status == EDLIB_STATUS_OK
                         && result.alignmentLength != 0
@@ -1241,6 +1253,7 @@ void write_merged_alignment(
                         target_delta = target_delta_x;
 
                         for (int i = 0; i < *result.startLocations; ++i) {
+                            std::cerr << "D";
                             tracev.push_back('D');
                         }
 
@@ -1248,12 +1261,15 @@ void write_merged_alignment(
                         char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                         auto& end_idx = result.alignmentLength;
                         for (int i = 0; i < end_idx; ++i) {
+                            std::cerr << moveCodeToChar[result.alignment[i]];
                             tracev.push_back(moveCodeToChar[result.alignment[i]]);
                         }
 
                         for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
+                            std::cerr << "D";
                             tracev.push_back('D');
                         }
+                        std::cerr << "\n";
                     }
 
                     edlibFreeAlignResult(result);
