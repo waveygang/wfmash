@@ -516,14 +516,8 @@ void do_wfa_patch_alignment(
 
     aln.ok = aln.score < max_score;
     if (aln.ok) {
-        // Not used for the patching
-        //aln.j = j;
-        //aln.i = i;
-        //aln.query_length = query_length;
-        //aln.target_length = target_length;
-
         // correct X/M errors in the cigar
-        //hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+        hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
 
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i)) {
@@ -566,7 +560,7 @@ EdlibAlignResult do_edlib_patch_alignment(
                       edlib_config);
 
 }
-/*
+
 bool hack_cigar(
     wfa::edit_cigar_t& cigar,
     const char* query, const char* target,
@@ -624,7 +618,6 @@ bool hack_cigar(
     }
     return ok;
 }
-*/
 
 bool validate_cigar(
     const wfa::edit_cigar_t& cigar,
@@ -823,7 +816,7 @@ void write_merged_alignment(
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 64;
-    const int max_dist_threshold = 256;
+    const int max_dist_threshold = 1024;
     const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
