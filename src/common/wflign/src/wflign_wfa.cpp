@@ -21,7 +21,7 @@ void wflign_affine_wavefront(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
-    const uint64_t& segment_length,
+    const uint16_t& segment_length,
     const float& min_identity,
     const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const uint32_t& wflambda_max_distance_threshold,
@@ -36,12 +36,12 @@ void wflign_affine_wavefront(
         return;
     }
 
-    const uint64_t segment_length_to_use = (query_length < segment_length || target_length < segment_length) ?
+    const uint16_t segment_length_to_use = (query_length < segment_length || target_length < segment_length) ?
             std::min(query_length, target_length) : segment_length;
 
     // set up our implicit matrix
-    const uint64_t steps_per_segment = 2;
-    const uint64_t step_size = segment_length_to_use / steps_per_segment;
+    const uint8_t steps_per_segment = 2;
+    const uint16_t step_size = segment_length_to_use / steps_per_segment;
 
     // Pattern & Text
     const uint64_t pattern_length = query_length / step_size;
@@ -383,17 +383,14 @@ bool do_wfa_segment_alignment(
     std::vector<rkmh::hash_t>*& target_sketch,
     const uint64_t& target_length,
     const uint64_t& i,
-    const uint64_t& segment_length,
-    const uint64_t& step_size,
+    const uint16_t& segment_length,
+    const uint16_t& step_size,
     const uint64_t& minhash_kmer_size,
-    const uint32_t min_wavefront_length,
-    const uint32_t max_distance_threshold,
+    const uint32_t& min_wavefront_length,
+    const uint32_t& max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln) {
-
-    aln.query_length = segment_length;
-    aln.target_length = segment_length;
 
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
@@ -408,7 +405,7 @@ bool do_wfa_segment_alignment(
     // first check if our mash dist is inbounds
     const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const uint64_t max_score = segment_length;
+    const int max_score = segment_length;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
@@ -441,8 +438,9 @@ bool do_wfa_segment_alignment(
         aln.j = j;
         aln.i = i;
         //aln.mash_dist = mash_dist;
-        // copy our edit cigar if we aligned
         aln.ok = aln.score < max_score;
+
+        // copy our edit cigar if we aligned
         if (aln.ok) {
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
@@ -848,10 +846,12 @@ void write_merged_alignment(
         std::vector<char> erodev;
         {
             std::vector<char> rawv;
+
             // copy
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] copying traceback" << std::endl;
 #endif
+
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 auto& aln = **x;
                 if (aln.ok) {
@@ -893,9 +893,11 @@ void write_merged_alignment(
                 // clean up
                 delete *x;
             }
+
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] eroding traceback at k=" << erode_k << std::endl;
 #endif
+
             //erode by removing matches < k
             for (uint64_t i = 0; i < rawv.size(); ) {
                 if (rawv[i] == 'M' || rawv[i] == 'X') {
@@ -917,10 +919,12 @@ void write_merged_alignment(
                 }
             }
         }
-        // normalize: sort so that I<D and otherwise leave it as-is
+
 #ifdef WFLIGN_DEBUG
         std::cerr << "[wflign::wflign_affine_wavefront] normalizing eroded traceback" << std::endl;
 #endif
+
+        // normalize: sort so that I<D and otherwise leave it as-is
         sort_indels(erodev);
 
 #ifdef WFLIGN_DEBUG
@@ -930,8 +934,10 @@ void write_merged_alignment(
         }
         std::cerr << std::endl;
 #endif
+
         // patch: walk the cigar, patching directly when we have simultaneous gaps in query and ref
         // and adding our results to the final trace as we go
+
         auto q = erodev.begin();
         uint64_t query_pos = query_start;
         uint64_t target_pos = target_start;
@@ -1203,6 +1209,7 @@ void write_merged_alignment(
                 target_pos += target_delta;
             }
         }
+
 #ifdef WFLIGN_DEBUG
         std::cerr << "[wflign::wflign_affine_wavefront] got unsorted patched traceback: ";
         for (auto c : tracev) {
@@ -1300,7 +1307,6 @@ void write_merged_alignment(
                                       deletions,
                                       deleted_bp);
 
-    // gap-compressed identity
     const double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
 
     const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
@@ -1375,7 +1381,9 @@ void write_merged_alignment(
             }
         }
     };
+
     //std::cerr << "target_offset: " << target_offset << " -- target_start: " << target_start << std::endl;
+
     if (gap_compressed_identity >= min_identity) {
         const long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
@@ -1479,6 +1487,7 @@ void write_merged_alignment(
             out << "\t" << timings << "\n";
         }
     }
+
     // always clean up
     free(cigarv);
 }

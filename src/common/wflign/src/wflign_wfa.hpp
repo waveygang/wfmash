@@ -49,8 +49,8 @@ bool unpack_display_cigar(
 struct alignment_t {
     int j = 0;
     int i = 0;
-    int query_length = 0;
-    int target_length = 0;
+    uint16_t query_length = 0;
+    uint16_t target_length = 0;
     bool ok = false;
     bool keep = false;
     int score = std::numeric_limits<int>::max();
@@ -212,7 +212,7 @@ void wflign_affine_wavefront(
     const uint64_t& target_total_length,
     const uint64_t& target_offset,
     const uint64_t& target_length,
-    const uint64_t& segment_length,
+    const uint16_t& segment_length,
     const float& min_identity,
     const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
     const uint32_t & wflambda_max_distance_threshold,
@@ -234,11 +234,11 @@ bool do_wfa_segment_alignment(
     std::vector<rkmh::hash_t>*& target_sketches,
     const uint64_t& target_length,
     const uint64_t& i,
-    const uint64_t& segment_length,
-    const uint64_t& step_size,
+    const uint16_t& segment_length,
+    const uint16_t& step_size,
     const uint64_t& minhash_kmer_size,
-    const uint32_t min_wavefront_length,
-    const uint32_t max_distance_threshold,
+    const uint32_t& min_wavefront_length,
+    const uint32_t& max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
