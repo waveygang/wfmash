@@ -820,11 +820,11 @@ void write_merged_alignment(
     uint64_t target_length_mut = target_length;
 
     // patching parameters
-    const uint64_t min_wfa_length = 9;
-    //const uint64_t min_edlib_length = 0;
+    // we will nibble patching back to this length
+    const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 64;
     const int max_dist_threshold = 256;
-    const uint64_t max_edlib_tail_length = 2000;
+    const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1016,22 +1016,64 @@ void write_merged_alignment(
                         (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)) {
 #ifdef WFLIGN_DEBUG
                         std::cerr << "[wflign::wflign_affine_wavefront] patching in "
-                              << query_name << " " << query_offset << " @ " << query_pos
-                              << target_name << " " << target_offset << " @ " << target_pos
-                              << std::endl;
+                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+                                      << std::endl;
 #endif
-                        uint64_t patch_target_aligned_length = 0;
-                        uint64_t patch_query_aligned_length = 0;
-                        //int query_delta = aln.j - query_end;
-                        //int target_delta = aln.i - target_end;
-                        if (query_delta > min_wfa_length && target_delta > min_wfa_length){
-                            // WFA is only global
+
+                        uint64_t target_patch_length = std::max(min_wfa_patch_length, std::max(query_delta, target_delta)/128);
+                        // nibble forward/backward if we're below the correct length
+                        bool nibble_fwd = true;
+                        while (q != erodev.end() && (query_delta < target_patch_length || target_delta < target_patch_length)) {
+                            if (nibble_fwd) {
+                                const auto& c = *q++;
+                                switch (c) {
+                                case 'M': case 'X':
+                                    ++query_delta; ++target_delta; break;
+                                case 'I': ++query_delta; break;
+                                case 'D': ++target_delta; break;
+                                default: break;
+                                }
+                            } else if (!tracev.empty()) {
+                                const auto& c = tracev.back();
+                                switch (c) {
+                                case 'M': case 'X':
+                                    --query_pos; --target_pos;
+                                    last_match_query = query_pos;
+                                    last_match_target = target_pos;
+                                    ++query_delta; ++target_delta; break;
+                                case 'I': ++query_delta; --query_pos; break;
+                                case 'D': ++target_delta; --target_pos; break;
+                                default: break;
+                                }
+                                tracev.pop_back();
+                            }
+                            nibble_fwd ^= true;
+                        }
+
+                        // check forward if there are other Is/Ds to merge in the current patch
+                        while (q != erodev.end() &&
+                                (*q == 'I' || *q == 'D') &&
+                                ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+                            const auto& c = *q++;
+                            if (c == 'I') {
+                                ++query_delta;
+                            } else {
+                                ++target_delta;
+                            }
+                        }
+
+                        // we need to be sure that our nibble made the problem long enough
+                        // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
+                        if (query_delta >= 10 && target_delta >= 10) {
                             alignment_t patch_aln;
+                            // WFA is only global
                             do_wfa_patch_alignment(
-                                    query, query_pos, query_delta,
-                                    target - target_pointer_shift, target_pos, target_delta,
-                                    min_wf_length, max_dist_threshold,
-                                    mm_allocator, affine_penalties, patch_aln);
+                                query, query_pos, query_delta,
+                                target - target_pointer_shift, target_pos, target_delta,
+                                min_wf_length, max_dist_threshold,
+                                mm_allocator, affine_penalties, patch_aln);
                             if (patch_aln.ok) {
                                 //std::cerr << "got an ok patch aln" << std::endl;
                                 got_alignment = true;
@@ -1041,26 +1083,9 @@ void write_merged_alignment(
                                     tracev.push_back(patch_aln.edit_cigar.operations[i]);
                                 }
                             }
-                        } else /*if (query_delta > min_edlib_length && target_delta > min_edlib_length)*/ {
-                            // Global mode
-                            auto result = do_edlib_patch_alignment(
-                                    query, query_pos, query_delta,
-                                    target - target_pointer_shift, target_pos, target_delta,EDLIB_MODE_NW);
-                            if (result.status == EDLIB_STATUS_OK
-                                && result.alignmentLength != 0
-                                && result.editDistance >= 0) {
-                                got_alignment = true;
-                                // copy it into the trace
-                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                                auto& end_idx = result.alignmentLength;
-                                for (int i = 0; i < end_idx; ++i) {
-                                    tracev.push_back(moveCodeToChar[result.alignment[i]]);
-                                }
-                            }
-                            edlibFreeAlignResult(result);
                         }
                     }
-                } else if (query_delta > 0) {
+                } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
                     // Semi-global mode for patching the heads
 
                     const uint64_t pos_to_ask = query_delta + target_delta;
@@ -1167,7 +1192,7 @@ void write_merged_alignment(
 
                 bool got_alignment = false;
 
-                if (query_delta > 0 && query_delta <= max_edlib_tail_length) {
+                if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
                     // there is a piece of query
                     auto target_delta_x = target_delta +
                             ((target_offset - target_pointer_shift) + target_pos + target_delta + query_delta < target_total_length ?
@@ -1395,8 +1420,6 @@ void write_merged_alignment(
             }
         }
     };
-
-    //std::cerr << "target_offset: " << target_offset << " -- target_start: " << target_start << std::endl;
 
     if (gap_compressed_identity >= min_identity) {
         const long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
