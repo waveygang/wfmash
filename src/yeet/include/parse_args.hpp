@@ -51,6 +51,8 @@ void parse_args(int argc,
 
     args::ValueFlag<int> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size applying 0 as p-value cutoff [default: automatically computed applying 1e-120 as p-value cutoff]", {'w', "window-size"});
 
+    //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
+
     args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
 
     // align parameters
@@ -234,6 +236,22 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
+//    if (path_high_frequency_kmers && !args::get(path_high_frequency_kmers).empty()) {
+//        std::ifstream high_freq_kmers (args::get(path_high_frequency_kmers));
+//
+//        std::string kmer;
+//        uint64_t freq;
+//        while(high_freq_kmers >> kmer >> freq) {
+//            if (kmer.length() != map_parameters.kmerSize) {
+//                std::cerr << "[wfmash] ERROR, skch::parseandSave, high frequency k-mers length and kmerSize parameter are inconsistent." << std::endl;
+//                exit(1);
+//            }
+//
+//            map_parameters.high_freq_kmers.insert(kmer);
+//        }
+//        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
+//    }
+
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
@@ -314,7 +332,6 @@ void parse_args(int argc,
             map_parameters.windowSize = std::min(256, map_parameters.windowSize);
         }
     }
-
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";

@@ -183,7 +183,7 @@ namespace skch
 
         //Compute minimizers in reference sequence
         if (param.spaced_seeds.empty()) {
-          skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
+          skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);//, param.high_freq_kmers);
         } else {
           skch::CommonFunc::addSpacedSeedMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter, param.spaced_seeds);
         }
@@ -214,6 +214,8 @@ namespace skch
           // [hash value -> info about minimizer]
           minimizerPosLookupIndex[e.hash].push_back( 
               MinimizerMetaData{e.seqId, e.wpos, e.strand});
+
+            //std::cout << "GREPME\t" << e.wpos << "\n";
         }
 
         std::cerr << "[wfmash::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
