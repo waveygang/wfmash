@@ -121,23 +121,23 @@ namespace skch {
          *					this value will determine its order for minimizer selection
          * @details	this is inspired from Chum et al.'s min-Hash and tf-idf weighting
          */
-        static inline double applyWeight(char* kmer, int kmer_size, hash_t kmer_hash, const std::unordered_set<std::string>& high_freq_kmers) {
-            double x = kmer_hash * 1.0 / UINT32_MAX;  //bring it within [0, 1]
-            //assert (x >= 0.0 && x <= 1.0);
-
-            std::string kmer_str(kmer, kmer_size);
-            if (high_freq_kmers.count(kmer_str) > 0) {
-                /* downweigting by a factor of 8 */
-                /* further aggressive downweigting may affect accuracy */
-                double p2 = x*x;
-                double p4 = p2 * p2;
-                return - 1.0 * (p4 * p4);
-            }
-            return -1.0 * x;
-
-            //range of returned value is between [-1,0]
-            //we avoid adding one for better double precision
-        }
+//        static inline double applyWeight(char* kmer, int kmer_size, hash_t kmer_hash, const std::unordered_set<std::string>& high_freq_kmers) {
+//            double x = kmer_hash * 1.0 / UINT32_MAX;  //bring it within [0, 1]
+//            //assert (x >= 0.0 && x <= 1.0);
+//
+//            std::string kmer_str(kmer, kmer_size);
+//            if (high_freq_kmers.count(kmer_str) > 0) {
+//                /* downweigting by a factor of 8 */
+//                /* further aggressive downweigting may affect accuracy */
+//                double p2 = x*x;
+//                double p4 = p2 * p2;
+//                return - 1.0 * (p4 * p4);
+//            }
+//            return -1.0 * x;
+//
+//            //range of returned value is between [-1,0]
+//            //we avoid adding one for better double precision
+//        }
 
         /**
          * @brief       compute winnowed minimizers from a given sequence and add to the index
@@ -154,8 +154,9 @@ namespace skch {
                                   int kmerSize,
                                   int windowSize,
                                   int alphabetSize,
-                                  seqno_t seqCounter,
-                                  const std::unordered_set<std::string>& high_freq_kmers) {
+                                  seqno_t seqCounter
+                                  //const std::unordered_set<std::string>& high_freq_kmers
+                                  ) {
             /**
              * Double-ended queue (saves minimum at front end)
              * Saves pair of the minimizer and the position of hashed kmer in the sequence
@@ -206,13 +207,13 @@ namespace skch {
                     //Take minimum value of kmer and its reverse complement
                     hash_t currentKmer = std::min(hashFwd, hashBwd);
 
-//                    double order = (hashFwd < hashBwd) ?
-//                                   applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
-//                                   applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);
+                    /*double order = (hashFwd < hashBwd) ?
+                                   applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
+                                   applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);*/
 
                     //Hashes less than equal to currentKmer are not required
                     //Remove them from Q (back)
-//                    while (!Q.empty() && Q.back().first.order > order)
+                    //while (!Q.empty() && Q.back().first.order > order)
                     while (!Q.empty() && Q.back().first.hash > currentKmer)
                         Q.pop_back();
 
@@ -230,7 +231,7 @@ namespace skch {
                     //Push currentKmer and position to back of the queue
                     //-1 indicates the dummy window # (will be updated later)
                     Q.push_back(std::make_pair(
-//                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
+                            //MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
                             MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
                             i));
 
@@ -255,7 +256,7 @@ namespace skch {
 #endif
 
                         // Robust-winnowing
-//                        while (Q.size() > 1 && Q.begin()->first.order == (++Q.begin())->first.order)
+                        //while (Q.size() > 1 && Q.begin()->first.order == (++Q.begin())->first.order)
                         while (Q.size() > 1 && Q.begin()->first.hash == (++Q.begin())->first.hash)
                             Q.pop_front();
                     }

@@ -55,7 +55,7 @@ struct Parameters
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
 
-    std::unordered_set<std::string> high_freq_kmers;  //
+    //std::unordered_set<std::string> high_freq_kmers;  //
 };
 
 

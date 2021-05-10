@@ -499,7 +499,7 @@ namespace skch
           ///1. Compute the minimizers
 
           if (param.spaced_seeds.empty()) {
-            CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter, param.high_freq_kmers);
+            CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);//, param.high_freq_kmers);
           } else {
             CommonFunc::addSpacedSeedMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter, param.spaced_seeds);
           }
