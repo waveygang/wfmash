@@ -16,10 +16,10 @@ namespace skch
 
 
 struct ales_params {
-  uint32_t weight;
-  uint32_t seed_count;
-  float similarity;
-  uint32_t region_length;
+  uint32_t weight{} ;
+  uint32_t seed_count{};
+  float similarity{};
+  uint32_t region_length{};
 };
 
 /**
@@ -37,8 +37,8 @@ struct Parameters
     uint64_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
     int filterMode;                                   //filtering mode in mashmap
-    int secondaryToKeep;                              //how many secondary alignments we keep
-    int shortSecondaryToKeep;                         //how many secondary alignments we keep for reads < segLength
+    uint16_t numMappingsForSegment;                   //how many mappings to retain for each segment
+    uint16_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
     int threads;                                      //execution thread count
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
@@ -49,8 +49,6 @@ struct Parameters
     char prefix_delim;                                //the prefix delimiter
     bool mergeMappings;                               //if we should merge consecutive segment mappings
     bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
-
-    float confidence_interval;                        //Confidence interval to relax jaccard cutoff for mapping (0-1)
 
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
@@ -67,14 +65,14 @@ struct Parameters
 namespace fixed
 {
 
-float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
+//float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
 //considered good by filtering algorithm
 
-int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best 
+//int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
-double pval_cutoff = 1e-120;                      //p-value cutoff for determining window size
-
+double pval_cutoff = 0.0;//1e-120;                  //p-value cutoff for determining window size
+float confidence_interval = 0.95;                   //Confidence interval to relax jaccard cutoff for mapping (0-1)
 }
 }
 

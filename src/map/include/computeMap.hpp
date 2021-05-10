@@ -205,7 +205,7 @@ namespace skch
         if (param.filterMode == filter::ONETOONE)
         {
           skch::Filter::ref::filterMappings(allReadMappings, this->refSketch,
-                                            param.secondaryToKeep
+                                            param.numMappingsForSegment - 1
                                            // (input->len < param.segLength ? param.shortSecondaryToKeep : param.secondaryToKeep)
                                             );
 
@@ -383,21 +383,21 @@ namespace skch
           }
         }
 
+        // remove self-mode don't-maps
+        this->filterSelfingLongToShorts(output->readMappings);
+
         //filter mappings best over query sequence axis
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
             skch::Filter::query::filterMappings(output->readMappings,
                                                 (input->len < param.segLength ?
-                                                 param.shortSecondaryToKeep
-                                                 : param.secondaryToKeep));
+                                                 param.numMappingsForShortSequence
+                                                 : param.numMappingsForSegment) - 1);
         }
 
         // remove short merged mappings when we are merging
         if (split_mapping) {
             this->filterShortMappings(output->readMappings);
         }
-
-        // remove self-mode don't-maps
-        this->filterSelfingLongToShorts(output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
         this->filterFalseHighIdentity(output->readMappings);
@@ -543,7 +543,7 @@ namespace skch
             }
           }
 
-          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, param.confidence_interval);
+          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
 
           this->computeL1CandidateRegions(Q, seedHitsL1, minimumHits, l1Mappings);
 
@@ -628,7 +628,7 @@ namespace skch
             float mash_dist = Stat::j2md(1.0 * l2.sharedSketchSize/Q.sketchSize, param.kmerSize);
 
             //Compute lower bound to mash distance within 90% confidence interval
-            float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, param.confidence_interval);
+            float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
 
             float nucIdentity = (1 - mash_dist);
             float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
@@ -666,7 +666,7 @@ namespace skch
 
                 res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
-                //Compute additional statistics -> strand, reference compexity
+                //Compute additional statistics -> strand, reference complexity
                 {
                   SlideMapper<Q_Info> slidemap(Q);
                   slidemap.insert_ref(l2.optimalStart, l2.optimalEnd);
@@ -803,7 +803,8 @@ namespace skch
             return 0;
 
           //Count of minimizer windows in a super-window
-          offset_t countMinimizerWindows = Q.len - (param.windowSize-1) - (param.kmerSize-1); 
+          offset_t countMinimizerWindows = (Q.len - (param.windowSize-1) - (param.kmerSize-1))
+              * (param.spaced_seeds.empty() ? 1 : param.spaced_seeds.size());
 
           //Look up the end of the first L2 super-window in the index
           MIIter_t superWindowRangeEnd = this->refSketch.searchIndex(seqId, 

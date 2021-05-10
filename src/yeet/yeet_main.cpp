@@ -48,7 +48,6 @@ int main(int argc, char** argv) {
     if (!yeet_parameters.remapping) {
         skch::printCmdOptions(map_parameters);
 
-
         if (map_parameters.use_spaced_seeds) {
           std::cerr << "[wfmash::map] Generating spaced seeds" << std::endl;
           uint32_t seed_weight = map_parameters.spaced_seed_params.weight;

@@ -82,7 +82,10 @@ void wflign_affine_wavefront(
     const uint64_t& segment_length,
     const float& min_identity,
     const int& min_wavefront_length, // with these set at 0 we do exact WFA
-    const int& max_distance_threshold);
+    const int& max_distance_threshold,
+    const uint64_t & wflign_max_len_major,
+    const uint64_t & wflign_max_len_minor,
+    const uint16_t& erode_k);
 
 bool do_alignment(
     const std::string& query_name,

@@ -221,7 +221,7 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap (post merge step)
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, int secondaryToKeep)
+      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep)
       {
           //Apply the main filtering algorithm to ensure best mappings across complete axis
           liFilterAlgorithm(readMappings, secondaryToKeep);
@@ -328,7 +328,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, int secondaryToKeep)
+        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep)
         {
           if(readMappings.size() <= 1)
             return;
