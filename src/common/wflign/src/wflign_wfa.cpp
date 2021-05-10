@@ -458,7 +458,9 @@ bool do_wfa_segment_alignment(
                 assert(false);
             }
 #endif
+
             wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
+
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(aln.edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
                 std::cerr << "cigar failure after cigar copy in alignment " << aln.j << " " << aln.i << std::endl;
@@ -466,7 +468,7 @@ bool do_wfa_segment_alignment(
             }
 #endif
         }
-        
+
         // cleanup wavefronts to keep memory low
         affine_wavefronts_delete(affine_wavefronts);
 
@@ -481,8 +483,8 @@ void do_wfa_patch_alignment(
     const char* target,
     const uint64_t& i,
     const uint64_t& target_length,
-    const int min_wavefront_length,
-    const int max_distance_threshold,
+    const int& min_wavefront_length,
+    const int& max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln) {
@@ -502,11 +504,6 @@ void do_wfa_patch_alignment(
             target_length, query_length, affine_penalties, NULL, mm_allocator);
     }
 
-    aln.j = j;
-    aln.i = i;
-    aln.query_length = query_length;
-    aln.target_length = target_length;
-
     const int max_score = (target_length + query_length) * 5;
 
     aln.score = wfa::affine_wavefronts_align_bounded(
@@ -519,6 +516,12 @@ void do_wfa_patch_alignment(
 
     aln.ok = aln.score < max_score;
     if (aln.ok) {
+        // Not used for the patching
+        //aln.j = j;
+        //aln.i = i;
+        //aln.query_length = query_length;
+        //aln.target_length = target_length;
+
         // correct X/M errors in the cigar
         //hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
 
@@ -531,10 +534,13 @@ void do_wfa_patch_alignment(
             assert(false);
         }
 #endif
+
         wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
     }
+
     // cleanup wavefronts to keep memory low
     affine_wavefronts_delete(affine_wavefronts);
+
     // cleanup allocator to keep memory low
     wfa::mm_allocator_clear(mm_allocator);
 }

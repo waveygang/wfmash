@@ -250,8 +250,8 @@ void do_wfa_patch_alignment(
     const char* target,
     const uint64_t& i,
     const uint64_t& target_length,
-    const int min_wavefront_length,
-    const int max_distance_threshold,
+    const int& min_wavefront_length,
+    const int& max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
