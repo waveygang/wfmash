@@ -440,8 +440,15 @@ bool do_wfa_segment_alignment(
         //aln.mash_dist = mash_dist;
         aln.ok = aln.score < max_score;
 
-        // copy our edit cigar if we aligned
+        // fill the alignment info if we aligned
         if (aln.ok) {
+            aln.query_length = segment_length;
+            aln.target_length = segment_length;
+
+            aln.j = j;
+            aln.i = i;
+            //aln.mash_dist = mash_dist;
+
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
                 std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
@@ -459,6 +466,7 @@ bool do_wfa_segment_alignment(
             }
 #endif
         }
+        
         // cleanup wavefronts to keep memory low
         affine_wavefronts_delete(affine_wavefronts);
 
