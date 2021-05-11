@@ -7,6 +7,7 @@
 #define SKETCH_CONFIG_HPP
 
 #include <vector>
+#include <unordered_set>
 
 #include "common/ALeS.hpp"
 
@@ -53,6 +54,8 @@ struct Parameters
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
+
+    //std::unordered_set<std::string> high_freq_kmers;  //
 };
 
 
@@ -68,8 +71,8 @@ namespace fixed
 //int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
-double pval_cutoff = 1e-120;                      //p-value cutoff for determining window size
-float confidence_interval = 0.95;                 //Confidence interval to relax jaccard cutoff for mapping (0-1)
+double pval_cutoff = 0.0;//1e-120;                  //p-value cutoff for determining window size
+float confidence_interval = 0.95;                   //Confidence interval to relax jaccard cutoff for mapping (0-1)
 }
 }
 

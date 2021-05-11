@@ -51,11 +51,13 @@ void parse_args(int argc,
 
     args::ValueFlag<int> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size applying 0 as p-value cutoff [default: automatically computed applying 1e-120 as p-value cutoff]", {'w', "window-size"});
 
+    //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
+
     args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
 
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::ValueFlag<uint32_t> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
+    args::ValueFlag<uint16_t> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<uint32_t> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<uint32_t> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
 
@@ -234,6 +236,22 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
+//    if (path_high_frequency_kmers && !args::get(path_high_frequency_kmers).empty()) {
+//        std::ifstream high_freq_kmers (args::get(path_high_frequency_kmers));
+//
+//        std::string kmer;
+//        uint64_t freq;
+//        while(high_freq_kmers >> kmer >> freq) {
+//            if (kmer.length() != map_parameters.kmerSize) {
+//                std::cerr << "[wfmash] ERROR, skch::parseandSave, high frequency k-mers length and kmerSize parameter are inconsistent." << std::endl;
+//                exit(1);
+//            }
+//
+//            map_parameters.high_freq_kmers.insert(kmer);
+//        }
+//        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
+//    }
+
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
@@ -311,9 +329,9 @@ void parse_args(int argc,
                     map_parameters.percentageIdentity,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
+            map_parameters.windowSize = std::min(256, map_parameters.windowSize);
         }
     }
-
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
