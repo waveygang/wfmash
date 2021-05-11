@@ -582,7 +582,7 @@ char* do_ksw2_patch_alignment(
         flag |= KSW_EZ_REV_CIGAR;
     }
 
-    ksw_extz(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, flag, &ez);
+    ksw_extz2_sse(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, -1, -1, -1, flag, &ez);
     //ksw_extd(0, query_length, qs, target_length, ts, 5, mat, gapo, gape, 24, 1, -1, -1, flag, &ez);
 
     char* cigar_ = (char*) malloc((ez.n_cigar * 2 + 1) * sizeof(char));
