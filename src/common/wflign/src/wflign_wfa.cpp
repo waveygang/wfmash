@@ -816,7 +816,7 @@ void write_merged_alignment(
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 64;
-    const int max_dist_threshold = 1024;
+    const int max_dist_threshold = 512;
     const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
@@ -1014,7 +1014,7 @@ void write_merged_alignment(
                                       << std::endl;
 #endif
 
-                        uint64_t target_patch_length = std::max(min_wfa_patch_length, std::max(query_delta, target_delta)/128);
+                        uint64_t target_patch_length = min_wfa_patch_length;
                         // nibble forward/backward if we're below the correct length
                         bool nibble_fwd = true;
                         while (q != erodev.end() && (query_delta < target_patch_length || target_delta < target_patch_length)) {
