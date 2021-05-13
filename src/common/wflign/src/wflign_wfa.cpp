@@ -57,8 +57,8 @@ void wflign_affine_wavefront(
     // Set penalties
     wflambda::affine_penalties_t wflambda_affine_penalties = {
         .match = 0,
-        .mismatch = 7,
-        .gap_opening = 11,
+        .mismatch = 29,
+        .gap_opening = 47,
         .gap_extension = 1,
     };
     // Init Affine wflambda
@@ -821,7 +821,7 @@ void write_merged_alignment(
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 64;
-    const int max_dist_threshold = 512;
+    const int max_dist_threshold = 128;
     const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
