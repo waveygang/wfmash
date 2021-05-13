@@ -821,7 +821,7 @@ void write_merged_alignment(
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 64;
-    const int max_dist_threshold = 512;
+    const int max_dist_threshold = 256;
     const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
