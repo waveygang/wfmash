@@ -1050,7 +1050,7 @@ void write_merged_alignment(
                                       << std::endl;
 #endif
 
-                        uint64_t target_patch_length = min_wfa_patch_length;
+                        const uint64_t target_patch_length = min_wfa_patch_length;
                         // nibble forward/backward if we're below the correct length
                         bool nibble_fwd = true;
                         while (q != erodev.end() && (query_delta < target_patch_length || target_delta < target_patch_length)) {
@@ -1091,6 +1091,20 @@ void write_merged_alignment(
                             } else {
                                 ++target_delta;
                             }
+                        }
+
+                        // check backward if there are other Is/Ds to merge in the current patch
+                        while (!tracev.empty() &&
+                               (tracev.back() == 'I' || tracev.back() == 'D') &&
+                               ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+                            const auto& c = tracev.back();
+                            if (c == 'I') {
+                                ++query_delta; --query_pos;
+                            } else {
+                                ++target_delta; --target_pos;
+                            }
+                            tracev.pop_back();
                         }
 
                         // we need to be sure that our nibble made the problem long enough
