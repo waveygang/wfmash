@@ -414,14 +414,14 @@ bool do_wfa_segment_alignment(
     // first check if our mash dist is inbounds
     const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const int max_score = segment_length * (0.75 + mash_dist);
-
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
     if (mash_dist > 0.618034) {
         // if it isn't, return false
         return false;
     } else {
+        const int max_score = segment_length * (0.75 + mash_dist);
+
         // if it is, we'll align
         wfa::affine_wavefronts_t* affine_wavefronts;
         if (min_wavefront_length || max_distance_threshold) {
