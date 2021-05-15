@@ -494,6 +494,17 @@ void do_wfa_patch_alignment(
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln) {
 
+//    std::cerr << "\tquery\n\t";
+//    for (uint16_t xx = 0 ; xx < query_length; ++xx) {
+//        std::cerr << query[j + xx];
+//    }
+//    std::cerr << "\n";
+//    std::cerr << "\ttarget\n\t";
+//    for (uint16_t xx = 0 ; xx < target_length; ++xx) {
+//        std::cerr << target[i + xx];
+//    }
+//    std::cerr << "\n";
+
     //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
 
     wfa::affine_wavefronts_t* affine_wavefronts;
@@ -1078,6 +1089,37 @@ void write_merged_alignment(
                                 tracev.pop_back();
                             }
                             nibble_fwd ^= true;
+                        }
+
+                        // check forward if there are other Is/Ds closer to XXXX bps
+                        auto distance_indels_forward = [&q, &erodev]() {
+                            auto qq = q;
+
+                            uint64_t dist_closer_indel = 1;
+                            while (qq != erodev.end() && (*qq != 'I' && *qq != 'D') && dist_closer_indel < 4096){
+                                ++dist_closer_indel;
+                                ++qq;
+                            }
+
+                            return dist_closer_indel;
+                        };
+
+                        int64_t dist_closer_indel = distance_indels_forward();
+                        while (q != erodev.end() && dist_closer_indel < 4096) {
+                            while (q != erodev.end() && dist_closer_indel > 0) {
+                                const auto& c = *q++;
+                                switch (c) {
+                                    case 'M': case 'X':
+                                        ++query_delta; ++target_delta; break;
+                                    case 'I': ++query_delta; break;
+                                    case 'D': ++target_delta; break;
+                                    default: break;
+                                }
+
+                                --dist_closer_indel;
+                            }
+
+                            dist_closer_indel = distance_indels_forward();
                         }
 
                         // check forward if there are other Is/Ds to merge in the current patch
