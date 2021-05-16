@@ -801,9 +801,9 @@ bool unpack_display_cigar(
 // patching parameters
 #define MIN_WFA_PATCH_LENGTH 128 // we will nibble patching back to this length
 #define MIN_WF_LENGTH 64
-#define MAX_DIST_THRESHOLD 128
+#define MAX_DIST_THRESHOLD 256
 #define MAX_EDLIB_HEAD_TAIL_PATCH_LENGTH 2048
-#define MIN_DIST_PATCHES 8192
+#define MIN_DIST_PATCHES 512
 
 void write_merged_alignment(
     std::ostream& out,
