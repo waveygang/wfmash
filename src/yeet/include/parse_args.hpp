@@ -151,8 +151,10 @@ void parse_args(int argc,
         delimeter = ' ';
       } else if (foobar.find(':') !=  std::string::npos) {
         delimeter = ':';
+      } else if (foobar.find(',') !=  std::string::npos) {
+         delimeter = ',';
       } else {
-        std::cerr << "[mashz] ERROR, skch::parseandSave, mashz expects either space or : for to seperate spaced seed params" << std::endl;
+        std::cerr << "[mashz] ERROR, skch::parseandSave, mashz expects either ' ' ':' or ',' for to seperate spaced seed params" << std::endl;
         exit(1);
       }
 
@@ -205,9 +207,8 @@ void parse_args(int argc,
 
     if (segment_length) {
         map_parameters.segLength = args::get(segment_length);
-        if (map_parameters.segLength < 100) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 100 bp." << std::endl
-                      << "[wfmash] This is because Mashmap is not designed for computing short local alignments." << std::endl;
+        if (map_parameters.segLength < 16) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 16 bp." << std::endl;
             exit(1);
         }
     } else {
@@ -221,8 +222,8 @@ void parse_args(int argc,
     }
 
     if (map_pct_identity) {
-        if (args::get(map_pct_identity) < 70) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
+        if (args::get(map_pct_identity) < 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 0\%" << std::endl;
             exit(1);
         }
         map_parameters.percentageIdentity = (float)args::get(map_pct_identity)/100.0; // scale to [0,1]

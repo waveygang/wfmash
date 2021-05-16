@@ -515,8 +515,8 @@ namespace ales {
     if(isRegionCreated)
       return;
 
-    std::random_device rd{}; // use to seed the rng
-    std::mt19937 rng{rd()}; // rng
+    //std::random_device rd{}; // use to seed the rng
+    std::mt19937 rng{421337}; // rng
     std::bernoulli_distribution distribution(p);
 
     // std::cerr<<std::endl<<"Seeds found for which Real Sensitivity cannot be computed because of Insufficient Memory"<<std::endl;
