@@ -414,14 +414,14 @@ bool do_wfa_segment_alignment(
     // first check if our mash dist is inbounds
     const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const int max_score = segment_length * (0.75 + mash_dist);
-
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
     if (mash_dist > 0.618034) {
         // if it isn't, return false
         return false;
     } else {
+        const int max_score = segment_length * (0.75 + mash_dist);
+
         // if it is, we'll align
         wfa::affine_wavefronts_t* affine_wavefronts;
         if (min_wavefront_length || max_distance_threshold) {
@@ -493,6 +493,17 @@ void do_wfa_patch_alignment(
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln) {
+
+//    std::cerr << "\tquery\n\t";
+//    for (uint16_t xx = 0 ; xx < query_length; ++xx) {
+//        std::cerr << query[j + xx];
+//    }
+//    std::cerr << "\n";
+//    std::cerr << "\ttarget\n\t";
+//    for (uint16_t xx = 0 ; xx < target_length; ++xx) {
+//        std::cerr << target[i + xx];
+//    }
+//    std::cerr << "\n";
 
     //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
 
@@ -787,6 +798,13 @@ bool unpack_display_cigar(
     return true;
 }
 
+// patching parameters
+#define MIN_WFA_PATCH_LENGTH 128 // we will nibble patching back to this length
+#define MIN_WF_LENGTH 64
+#define MAX_DIST_THRESHOLD 256
+#define MAX_EDLIB_HEAD_TAIL_PATCH_LENGTH 2048
+#define MIN_DIST_PATCHES 512
+
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*>& trace,
@@ -816,13 +834,6 @@ void write_merged_alignment(
     int64_t target_pointer_shift = 0;
 
     uint64_t target_length_mut = target_length;
-
-    // patching parameters
-    // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 128;
-    const int min_wf_length = 64;
-    const int max_dist_threshold = 128;
-    const uint16_t max_edlib_head_tail_patch_length = 2000;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1050,10 +1061,9 @@ void write_merged_alignment(
                                       << std::endl;
 #endif
 
-                        const uint64_t target_patch_length = min_wfa_patch_length;
                         // nibble forward/backward if we're below the correct length
                         bool nibble_fwd = true;
-                        while (q != erodev.end() && (query_delta < target_patch_length || target_delta < target_patch_length)) {
+                        while (q != erodev.end() && (query_delta < MIN_WFA_PATCH_LENGTH || target_delta < MIN_WFA_PATCH_LENGTH)) {
                             if (nibble_fwd) {
                                 const auto& c = *q++;
                                 switch (c) {
@@ -1078,6 +1088,43 @@ void write_merged_alignment(
                                 tracev.pop_back();
                             }
                             nibble_fwd ^= true;
+                        }
+
+                        // check forward if there are other Is/Ds closer to MIN_DIST_PATCHES bps
+                        auto distance_indels_forward = [&q, &erodev]() {
+                            auto qq = q;
+
+                            uint64_t dist_closer_indel = 0;
+                            while (qq != erodev.end() && (*qq != 'I' && *qq != 'D') && dist_closer_indel < MIN_DIST_PATCHES){
+                                ++dist_closer_indel;
+                                ++qq;
+                            }
+
+                            return dist_closer_indel;
+                        };
+
+                        uint64_t dist_closer_indel = distance_indels_forward();
+                        while (q != erodev.end() && dist_closer_indel < MIN_DIST_PATCHES &&
+                               ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+                            while (q != erodev.end() && (dist_closer_indel > 0 || (*q == 'I' || *q == 'D')) &&
+                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+                                const auto& c = *q++;
+                                switch (c) {
+                                    case 'M': case 'X':
+                                        ++query_delta; ++target_delta;
+                                        --dist_closer_indel;
+                                        break;
+                                    case 'I': ++query_delta; break;
+                                    case 'D': ++target_delta; break;
+                                    default: break;
+                                }
+
+
+                            }
+
+                            dist_closer_indel = distance_indels_forward();
                         }
 
                         // check forward if there are other Is/Ds to merge in the current patch
@@ -1115,7 +1162,7 @@ void write_merged_alignment(
                             do_wfa_patch_alignment(
                                 query, query_pos, query_delta,
                                 target - target_pointer_shift, target_pos, target_delta,
-                                min_wf_length, max_dist_threshold,
+                                MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
                                 mm_allocator, affine_penalties, patch_aln);
                             if (patch_aln.ok) {
                                 //std::cerr << "got an ok patch aln" << std::endl;
@@ -1128,7 +1175,7 @@ void write_merged_alignment(
                             }
                         }
                     }
-                } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
+                } else if (query_delta > 0 && query_delta <= MAX_EDLIB_HEAD_TAIL_PATCH_LENGTH) {
                     // Semi-global mode for patching the heads
 
                     const uint64_t pos_to_ask = query_delta + target_delta;
@@ -1235,7 +1282,7 @@ void write_merged_alignment(
 
                 bool got_alignment = false;
 
-                if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
+                if (query_delta > 0 && query_delta <= MAX_EDLIB_HEAD_TAIL_PATCH_LENGTH) {
                     // there is a piece of query
                     auto target_delta_x = target_delta +
                             ((target_offset - target_pointer_shift) + target_pos + target_delta + query_delta < target_total_length ?
