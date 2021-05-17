@@ -1325,7 +1325,8 @@ namespace ales {
   // This set is called ALeS-initial seed. Then the program tries to improve the seeds by computing random seeds and applying OC on them.
   void ALeS(char** S){
 
-    srand((unsigned )(time(0)));
+    uint32_t fixed_seed = 421337;
+    srand(fixed_seed);
     double t[2];
     // calculating the total memory available in the system to prevent the code from crashing while computing sensitivity.
     // total virtual memory of the system is total memory available - (1.5 time the size of homologous array)
