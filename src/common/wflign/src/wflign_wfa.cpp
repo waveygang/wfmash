@@ -1301,7 +1301,8 @@ void write_merged_alignment(
                         char* ksw2_cigar = do_ksw2_patch_alignment(
                                 query + query_pos, query_delta,
                                 target - target_pointer_shift + target_pos_x, target_delta_x,
-                                0, -7, 11, 1, false);
+                                affine_penalties->match, affine_penalties->mismatch,
+                                affine_penalties->gap_opening, affine_penalties->gap_extension, false);
 
                         if (result.status == EDLIB_STATUS_OK
                             && result.alignmentLength != 0
@@ -1373,7 +1374,8 @@ void write_merged_alignment(
                     char* ksw2_cigar = do_ksw2_patch_alignment(
                             query + query_pos, query_delta,
                             target - target_pointer_shift + target_pos, target_delta_x,
-                            0, -7, 11, 1, true);
+                            affine_penalties->match, affine_penalties->mismatch,
+                            affine_penalties->gap_opening, affine_penalties->gap_extension, true);
 
                     if (result.status == EDLIB_STATUS_OK
                         && result.alignmentLength != 0
