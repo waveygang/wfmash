@@ -1053,15 +1053,15 @@ void write_merged_alignment(
                         const uint64_t target_patch_length = min_wfa_patch_length;
                         // nibble forward/backward if we're below the correct length
                         bool nibble_fwd = true;
-                        while (q != erodev.end() && (query_delta < target_patch_length || target_delta < target_patch_length)) {
-                            if (nibble_fwd) {
+                        while ((q != erodev.end() || !tracev.empty()) && (query_delta < target_patch_length || target_delta < target_patch_length)) {
+                            if (nibble_fwd && q != erodev.end()) {
                                 const auto& c = *q++;
                                 switch (c) {
-                                case 'M': case 'X':
-                                    ++query_delta; ++target_delta; break;
-                                case 'I': ++query_delta; break;
-                                case 'D': ++target_delta; break;
-                                default: break;
+                                    case 'M': case 'X':
+                                        ++query_delta; ++target_delta; break;
+                                    case 'I': ++query_delta; break;
+                                    case 'D': ++target_delta; break;
+                                    default: break;
                                 }
                             } else if (!tracev.empty()) {
                                 const auto& c = tracev.back();
