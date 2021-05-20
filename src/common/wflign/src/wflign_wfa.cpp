@@ -509,7 +509,7 @@ void do_wfa_patch_alignment(
             target_length, query_length, affine_penalties, NULL, mm_allocator);
     }
 
-    const int max_score = target_length > query_length ? target_length : query_length;
+    const int max_score = (target_length > query_length ? target_length : query_length) * 1.5;
 
     aln.score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
