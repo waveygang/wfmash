@@ -222,7 +222,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-//#define VALIDATE_WFA_WFLIGN
+#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -509,7 +509,7 @@ void do_wfa_patch_alignment(
             target_length, query_length, affine_penalties, NULL, mm_allocator);
     }
 
-    const int max_score = (target_length > query_length ? target_length : query_length) * 1.5;
+    const int max_score = (target_length > query_length ? target_length : query_length) * 5;
 
     aln.score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
@@ -1119,11 +1119,65 @@ void write_merged_alignment(
                                 mm_allocator, affine_penalties, patch_aln);
                             if (patch_aln.ok) {
                                 //std::cerr << "got an ok patch aln" << std::endl;
+
                                 got_alignment = true;
                                 const int start_idx = patch_aln.edit_cigar.begin_offset;
                                 const int end_idx = patch_aln.edit_cigar.end_offset;
-                                for (int i = start_idx; i < end_idx; i++) {
-                                    tracev.push_back(patch_aln.edit_cigar.operations[i]);
+//                                for (int i = start_idx; i < end_idx; i++) {
+//                                    tracev.push_back(patch_aln.edit_cigar.operations[i]);
+//                                }
+                                int i = start_idx;
+                                int base_left = i;
+
+                                int left = i;
+                                while (left < end_idx && (patch_aln.edit_cigar.operations[left] == 'I' || patch_aln.edit_cigar.operations[left] == 'D')) { ++left; }
+
+                                while (i < end_idx) {
+                                    int middle = left;
+                                    while (middle < end_idx && (patch_aln.edit_cigar.operations[middle] == 'M' || patch_aln.edit_cigar.operations[middle] == 'X')) { ++middle; }
+
+                                    int right = middle;
+                                    while (right < end_idx && (patch_aln.edit_cigar.operations[right] == 'I' || patch_aln.edit_cigar.operations[right] == 'D')) { ++right; }
+
+                                    int right_island = right;
+                                    while (right_island < end_idx && (patch_aln.edit_cigar.operations[right_island] == 'M' || patch_aln.edit_cigar.operations[right_island] == 'X')) { ++right_island; }
+
+                                    const int len_left_indel = (left - base_left);
+                                    const int len_island = (middle - left);
+                                    const int len_right_indel = (right  - middle);
+                                    const int len_next_island = (right_island - right);
+
+                                    const uint16_t erode_k_indel = len_island * 8;
+
+                                    while (i < left) {
+                                        tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                                        ++i;
+                                    }
+
+                                    //std::cerr << len_left_indel << " - " << len_island << " - " << len_right_indel <<  " - " << len_next_island << std::endl;
+                                    if (len_island < erode_k && len_left_indel > erode_k_indel && len_right_indel > erode_k_indel) {
+                                        //std::cerr << "\t" << "PATCH" << std::endl;
+
+                                        while (i < middle) {
+                                            tracev.push_back('D');
+                                            tracev.push_back('I');
+                                            ++i;
+                                        }
+                                    } else {
+                                        //std::cerr << "\t" << target_offset - target_pointer_shift + target_pos + left << std::endl;
+                                        while (i < middle) {
+                                            tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                                            ++i;
+                                        }
+                                        base_left = middle;
+                                    }
+
+                                    while (i < right) {
+                                        tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                                        ++i;
+                                    }
+
+                                    left = right;
                                 }
                             }
                         }
