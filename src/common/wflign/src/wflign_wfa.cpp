@@ -55,20 +55,21 @@ void wflign_affine_wavefront(
     // Allocate MM
     wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
     // Set penalties
-    /*
     wflambda::affine_penalties_t wflambda_affine_penalties = {
         .match = 0,
         .mismatch = 13,
         .gap_opening = 21,
         .gap_extension = 1,
     };
-    */
+
+    /* high divergence
     wflambda::affine_penalties_t wflambda_affine_penalties = {
         .match = 0,
         .mismatch = 2,
         .gap_opening = 3,
         .gap_extension = 1,
     };
+    */
 
     // Init Affine wflambda
     wflambda::affine_wavefronts_t* affine_wavefronts;
@@ -93,7 +94,7 @@ void wflign_affine_wavefront(
 
     // setup affine WFA
     wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
-    /*
+
     wfa::affine_penalties_t wfa_affine_penalties = {
         .match = 0,
         .mismatch = 9,
@@ -101,7 +102,7 @@ void wflign_affine_wavefront(
         .gap_extension = 1,
     };
     const uint64_t minhash_kmer_size = 17;
-    */
+    /*
     wfa::affine_penalties_t wfa_affine_penalties = {
       .match = 0,
       .mismatch = 2,
@@ -109,6 +110,8 @@ void wflign_affine_wavefront(
       .gap_extension = 1,
     };
     const uint64_t minhash_kmer_size = 7;
+    */
+
     int v_max = 0;
     int h_max = 0;
 
