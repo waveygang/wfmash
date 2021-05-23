@@ -222,7 +222,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -509,7 +509,7 @@ void do_wfa_patch_alignment(
             target_length, query_length, affine_penalties, NULL, mm_allocator);
     }
 
-    const int max_score = (target_length > query_length ? target_length : query_length) * 5;
+    const int max_score = (target_length + query_length) * 5;
 
     aln.score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
@@ -1123,17 +1123,11 @@ void write_merged_alignment(
                                 got_alignment = true;
                                 const int start_idx = patch_aln.edit_cigar.begin_offset;
                                 const int end_idx = patch_aln.edit_cigar.end_offset;
-                                int i = start_idx;
-                                //for (int i = start_idx; i < end_idx; i++) {
-                                //    tracev.push_back(patch_aln.edit_cigar.operations[i]);
-                                //}
 
-                                // Remove matches-islands
-#define MAX_DIST_MATCH_ISLANDS  64
-                                auto distance_next_match = [](const char* cigar, const int len_cigar, const int start_pos) {
+                                auto distance_next_match = [](const char* cigar, const int len_cigar, const int start_pos,  const uint16_t max_dist) {
                                     int dist_next_match = 0;
                                     int x = start_pos;
-                                    while (x < len_cigar && (cigar[x] == 'I' || cigar[x] == 'D') && dist_next_match < MAX_DIST_MATCH_ISLANDS) {
+                                    while (x < len_cigar && (cigar[x] == 'I' || cigar[x] == 'D' || cigar[x] == 'Y') && dist_next_match < max_dist) {
                                         ++dist_next_match;
                                         ++x;
                                     }
@@ -1141,61 +1135,88 @@ void write_merged_alignment(
                                     return dist_next_match;
                                 };
 
-                                int base_left = start_idx;
-                                while (i < end_idx) {
-                                    while (i < end_idx && (patch_aln.edit_cigar.operations[i] == 'I' || patch_aln.edit_cigar.operations[i] == 'D')) {
-                                        tracev.push_back(patch_aln.edit_cigar.operations[i]);
-                                        ++i;
-                                    }
-                                    const int len_left_indel = (i - base_left);
+                                // Remove matches-islands, scanning the patched zone several times
+                                // Islands with len lower than left/right_indel_length / 10
 
-                                    int middle = i;
-                                    int len_islands = 0;
+                                // Note: signed positions are not replaced with I-D pairs, thus in the next erosion rounds,
+                                // the computed indels' lengths are shorter than the real ones
+                                bool continue_erosion;
+                                uint8_t num_rounds = 0;
+                                do {
+                                    continue_erosion = false;
+                                    ++num_rounds;
 
-                                    // Check islands' length, ignoring short indels between them
-                                    int dist_next_island = distance_next_match(patch_aln.edit_cigar.operations, end_idx, middle);
-                                    while (middle < end_idx && dist_next_island < MAX_DIST_MATCH_ISLANDS) {
-                                        while (middle < end_idx && (patch_aln.edit_cigar.operations[middle] == 'M' || patch_aln.edit_cigar.operations[middle] == 'X')) {
-                                            ++middle; ++len_islands;
+                                    const uint16_t max_dist_match_island = 48 * num_rounds;
+
+                                    int i = start_idx;
+                                    int base_left = start_idx;
+                                    while (i < end_idx) {
+                                        while (i < end_idx && (patch_aln.edit_cigar.operations[i] == 'I' || patch_aln.edit_cigar.operations[i] == 'D' || patch_aln.edit_cigar.operations[i] == 'Y')) {
+                                            ++i;
                                         }
+                                        const int len_left_indel = (i - base_left);
 
-                                        middle += dist_next_island;
-                                        dist_next_island = distance_next_match(patch_aln.edit_cigar.operations, end_idx, middle);
-                                    }
+                                        int middle = i;
+                                        int len_islands = 0;
 
-                                    //std::cerr << len_left_indel << " - " << len_islands << std::endl;
-
-                                    if (len_left_indel >= len_islands * 8) {
-                                        int right = middle;
-                                        while (right < end_idx && (patch_aln.edit_cigar.operations[right] == 'I' || patch_aln.edit_cigar.operations[right] == 'D')) { ++right; }
-                                        const int len_right_indel = (right - middle);
-                                        //std::cerr << "\t" << len_right_indel;
-
-                                        if (len_right_indel >= len_islands * 8) {
-                                            //std::cerr << " ---> PATCH\n";
-                                            while (i < middle) {
-                                                if (patch_aln.edit_cigar.operations[i] == 'M' || patch_aln.edit_cigar.operations[i] == 'X') {
-                                                    tracev.push_back('D');
-                                                    tracev.push_back('I');
-                                                } else {
-                                                    tracev.push_back(patch_aln.edit_cigar.operations[i]);
-                                                }
-
-                                                ++i;
+                                        // Check islands' length, ignoring short indels between them
+                                        int dist_next_island = distance_next_match(patch_aln.edit_cigar.operations, end_idx, middle, max_dist_match_island);
+                                        while (middle < end_idx && dist_next_island < max_dist_match_island) {
+                                            while (middle < end_idx && (patch_aln.edit_cigar.operations[middle] == 'M' || patch_aln.edit_cigar.operations[middle] == 'X')) {
+                                                ++middle;
+                                                ++len_islands;
                                             }
 
-                                            continue;
+                                            middle += dist_next_island;
+                                            dist_next_island = distance_next_match(patch_aln.edit_cigar.operations, end_idx, middle, max_dist_match_island);
                                         }
 
-                                        //std::cerr << " XXX\n";
+                                        //std::cerr << len_left_indel << " - " << len_islands << std::endl;
+
+                                        // Is there something to erode (len_islands > 0) and a big enough indel on the left?
+                                        if (len_islands > 0 && len_left_indel >= len_islands * (11 - num_rounds)) {
+
+                                            int right = middle;
+                                            while (right < end_idx && (patch_aln.edit_cigar.operations[right] == 'I' || patch_aln.edit_cigar.operations[right] == 'D' || patch_aln.edit_cigar.operations[right] == 'Y')) {
+                                                ++right;
+                                            }
+                                            const int len_right_indel = (right - middle);
+                                            //std::cerr << "\t" << len_right_indel;
+
+                                            // Is there a big enough indel on the right?
+                                            if (len_right_indel >= len_islands * (11 - num_rounds)) {
+                                                //std::cerr << " ---> PATCH\n";
+
+                                                // Sign positions to patch later
+                                                while (i < middle) {
+                                                    if (patch_aln.edit_cigar.operations[i] == 'M' || patch_aln.edit_cigar.operations[i] == 'X') {
+                                                        patch_aln.edit_cigar.operations[i] = 'Y';
+                                                    }
+
+                                                    ++i;
+                                                }
+
+                                                continue_erosion = true;
+                                                continue;
+                                            }
+
+                                            //std::cerr << " NOTHING\n";
+                                        }
+
+                                        i = middle;
+                                        base_left = middle;
                                     }
 
-                                    while (i < middle) {
+                                    //std::cerr << " ROUND " << num_rounds << " ---------------------------------------\n";
+                                } while(continue_erosion && num_rounds < 4);
+
+                                for (int i = start_idx; i < end_idx; i++) {
+                                    if (patch_aln.edit_cigar.operations[i] == 'Y') {
+                                        tracev.push_back('D');
+                                        tracev.push_back('I');
+                                    } else {
                                         tracev.push_back(patch_aln.edit_cigar.operations[i]);
-                                        ++i;
                                     }
-
-                                    base_left = middle;
                                 }
                             }
                         }
