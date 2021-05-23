@@ -1208,7 +1208,7 @@ void write_merged_alignment(
                                     }
 
                                     //std::cerr << " ROUND " << num_rounds << " ---------------------------------------\n";
-                                } while(continue_erosion && num_rounds < 4);
+                                } while(continue_erosion && num_rounds < 3);
 
                                 for (int i = start_idx; i < end_idx; i++) {
                                     if (patch_aln.edit_cigar.operations[i] == 'Y') {
