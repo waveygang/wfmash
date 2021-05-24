@@ -986,7 +986,8 @@ void write_merged_alignment(
             const uint16_t max_dist_to_look_at = std::min(indel_len * 10, (uint32_t)4096);
 
             auto qq = q;
-            uint32_t size_close_indel = 0, dist_close_indel = 0;
+            uint32_t size_close_indel = 0;
+            uint16_t dist_close_indel = 0;
             while (qq != erodev.end() && dist_close_indel < max_dist_to_look_at && size_close_indel < min_indel_len_to_find){
                 size_close_indel = 0;
                 while (qq != erodev.end() && (*qq == 'I' || *qq == 'D') && size_close_indel < min_indel_len_to_find) {
@@ -1071,22 +1072,54 @@ void write_merged_alignment(
                         (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)){
                         int16_t distance_close_indel = distance_close_big_enough_indel(std::max(query_delta, target_delta), q, erodev);
 
-//                        std::cerr << "query_delta " << query_delta << "\n";
-//                        std::cerr << "target_delta " << target_delta << "\n";
-//                        std::cerr << "distance_close_indel " << distance_close_indel << "\n";
+                        // Trigger the patching if there is a dropout (consecutive Is and Ds) or if there is a close and big enough indel forward
+                        if ((query_delta > 0 && target_delta > 0) || distance_close_indel > 0) {
+                        //std::cerr << "query_delta " << query_delta << "\n";
+                        //std::cerr << "target_delta " << target_delta << "\n";
+                        //std::cerr << "distance_close_indel " << distance_close_indel << "\n";
 
 #ifdef WFLIGN_DEBUG
-                        std::cerr << "[wflign::wflign_affine_wavefront] patching in "
+                            std::cerr << "[wflign::wflign_affine_wavefront] patching in "
                                       << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
                                       << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
                                       << std::endl;
 #endif
 
-                        const uint64_t target_patch_length = min_wfa_patch_length;
-                        // nibble forward/backward if we're below the correct length
-                        bool nibble_fwd = true;
-                        while ((q != erodev.end() || !tracev.empty()) && (query_delta < target_patch_length || target_delta < target_patch_length)) {
-                            if (nibble_fwd && q != erodev.end()) {
+                            const uint64_t target_patch_length = min_wfa_patch_length;
+                            // nibble forward/backward if we're below the correct length
+                            bool nibble_fwd = true;
+                            while ((q != erodev.end() || !tracev.empty()) && (query_delta < target_patch_length || target_delta < target_patch_length)) {
+                                if (nibble_fwd && q != erodev.end()) {
+                                    const auto& c = *q++;
+                                    switch (c) {
+                                        case 'M': case 'X':
+                                            ++query_delta; ++target_delta; break;
+                                        case 'I': ++query_delta; break;
+                                        case 'D': ++target_delta; break;
+                                        default: break;
+                                    }
+
+                                    --distance_close_indel;
+                                } else if (!tracev.empty()) {
+                                    const auto& c = tracev.back();
+                                    switch (c) {
+                                        case 'M': case 'X':
+                                            --query_pos; --target_pos;
+                                            last_match_query = query_pos;
+                                            last_match_target = target_pos;
+                                            ++query_delta; ++target_delta; break;
+                                        case 'I': ++query_delta; --query_pos; break;
+                                        case 'D': ++target_delta; --target_pos; break;
+                                        default: break;
+                                    }
+                                    tracev.pop_back();
+                                }
+                                nibble_fwd ^= true;
+                            }
+
+                            // Nibble until the close, big enough indel is reached
+                            // Important when the patching can't be computed correctly without including the next indel
+                            while (q != erodev.end() && distance_close_indel > 0){
                                 const auto& c = *q++;
                                 switch (c) {
                                     case 'M': case 'X':
@@ -1097,86 +1130,56 @@ void write_merged_alignment(
                                 }
 
                                 --distance_close_indel;
-                            } else if (!tracev.empty()) {
+                            }
+
+                            // check forward if there are other Is/Ds to merge in the current patch
+                            while (q != erodev.end() &&
+                                   (*q == 'I' || *q == 'D') &&
+                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+                                const auto& c = *q++;
+                                if (c == 'I') {
+                                    ++query_delta;
+                                } else {
+                                    ++target_delta;
+                                }
+                            }
+
+                            // check backward if there are other Is/Ds to merge in the current patch
+                            while (!tracev.empty() &&
+                                   (tracev.back() == 'I' || tracev.back() == 'D') &&
+                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
                                 const auto& c = tracev.back();
-                                switch (c) {
-                                case 'M': case 'X':
-                                    --query_pos; --target_pos;
-                                    last_match_query = query_pos;
-                                    last_match_target = target_pos;
-                                    ++query_delta; ++target_delta; break;
-                                case 'I': ++query_delta; --query_pos; break;
-                                case 'D': ++target_delta; --target_pos; break;
-                                default: break;
+                                if (c == 'I') {
+                                    ++query_delta; --query_pos;
+                                } else {
+                                    ++target_delta; --target_pos;
                                 }
                                 tracev.pop_back();
                             }
-                            nibble_fwd ^= true;
-                        }
 
-
-                        // Nibble until the close, big enough indel is reached
-                        while (q != erodev.end() && distance_close_indel > 0){
-                            const auto& c = *q++;
-                            switch (c) {
-                                case 'M': case 'X':
-                                    ++query_delta; ++target_delta; break;
-                                case 'I': ++query_delta; break;
-                                case 'D': ++target_delta; break;
-                                default: break;
-                            }
-
-                            --distance_close_indel;
-                        }
-
-
-                        // check forward if there are other Is/Ds to merge in the current patch
-                        while (q != erodev.end() &&
-                                (*q == 'I' || *q == 'D') &&
-                                ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
-                                (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
-                            const auto& c = *q++;
-                            if (c == 'I') {
-                                ++query_delta;
-                            } else {
-                                ++target_delta;
-                            }
-                        }
-
-                        // check backward if there are other Is/Ds to merge in the current patch
-                        while (!tracev.empty() &&
-                               (tracev.back() == 'I' || tracev.back() == 'D') &&
-                               ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
-                                (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
-                            const auto& c = tracev.back();
-                            if (c == 'I') {
-                                ++query_delta; --query_pos;
-                            } else {
-                                ++target_delta; --target_pos;
-                            }
-                            tracev.pop_back();
-                        }
-
-                        // we need to be sure that our nibble made the problem long enough
-                        // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
-                        if (query_delta >= 10 && target_delta >= 10) {
-                            alignment_t patch_aln;
-                            // WFA is only global
-                            do_wfa_patch_alignment(
-                                query, query_pos, query_delta,
-                                target - target_pointer_shift, target_pos, target_delta,
-                                min_wf_length, max_dist_threshold,
-                                mm_allocator, affine_penalties, patch_aln);
-                            if (patch_aln.ok) {
-                                //std::cerr << "got an ok patch aln" << std::endl;
-                                got_alignment = true;
-                                const int start_idx = patch_aln.edit_cigar.begin_offset;
-                                const int end_idx = patch_aln.edit_cigar.end_offset;
-                                for (int i = start_idx; i < end_idx; i++) {
-                                    //std::cerr << patch_aln.edit_cigar.operations[i];
-                                    tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                            // we need to be sure that our nibble made the problem long enough
+                            // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
+                            if (query_delta >= 10 && target_delta >= 10) {
+                                alignment_t patch_aln;
+                                // WFA is only global
+                                do_wfa_patch_alignment(
+                                        query, query_pos, query_delta,
+                                        target - target_pointer_shift, target_pos, target_delta,
+                                        min_wf_length, max_dist_threshold,
+                                        mm_allocator, affine_penalties, patch_aln);
+                                if (patch_aln.ok) {
+                                    //std::cerr << "got an ok patch aln" << std::endl;
+                                    got_alignment = true;
+                                    const int start_idx = patch_aln.edit_cigar.begin_offset;
+                                    const int end_idx = patch_aln.edit_cigar.end_offset;
+                                    for (int i = start_idx; i < end_idx; i++) {
+                                        //std::cerr << patch_aln.edit_cigar.operations[i];
+                                        tracev.push_back(patch_aln.edit_cigar.operations[i]);
+                                    }
+                                    //std::cerr << "\n"
                                 }
-                                //std::cerr << "\n"
                             }
                         }
                     }
