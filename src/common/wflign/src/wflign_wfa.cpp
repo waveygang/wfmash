@@ -981,6 +981,32 @@ void write_merged_alignment(
         // patch: walk the cigar, patching directly when we have simultaneous gaps in query and ref
         // and adding our results to the final trace as we go
 
+        auto distance_close_big_enough_indel = [](const uint32_t indel_len, auto q, const std::vector<char>& erodev) {
+            const uint32_t min_indel_len_to_find = indel_len / 2 + 1;
+            const uint16_t max_dist_to_look_at = std::min(indel_len * 10, (uint32_t)4096);
+
+            auto qq = q;
+            uint32_t size_close_indel = 0, dist_close_indel = 0;
+            while (qq != erodev.end() && dist_close_indel < max_dist_to_look_at && size_close_indel < min_indel_len_to_find){
+                size_close_indel = 0;
+                while (qq != erodev.end() && (*qq == 'I' || *qq == 'D') && size_close_indel < min_indel_len_to_find) {
+                    ++size_close_indel; ++dist_close_indel;
+
+                    ++qq;
+                }
+                if (size_close_indel >= min_indel_len_to_find) {
+                    break;
+                }
+
+                while (qq != erodev.end() && (max_dist_to_look_at > 0) && *qq != 'I' && *qq != 'D') {
+                    ++dist_close_indel;
+                    ++qq;
+                }
+            }
+
+            return size_close_indel >= min_indel_len_to_find ? dist_close_indel : -1;
+        };
+
         auto q = erodev.begin();
         uint64_t query_pos = query_start;
         uint64_t target_pos = target_start;
@@ -1040,9 +1066,15 @@ void write_merged_alignment(
                 bool got_alignment = false;
 
                 if (last_match_query > -1 && last_match_target > -1) {
-                    if (query_delta > 0 && target_delta > 0 &&
+                    if ((query_delta > 0 && target_delta > 0) || (query_delta > 2 || target_delta > 2) &&
                         (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
-                        (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)) {
+                        (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)){
+                        int16_t distance_close_indel = distance_close_big_enough_indel(std::max(query_delta, target_delta), q, erodev);
+
+//                        std::cerr << "query_delta " << query_delta << "\n";
+//                        std::cerr << "target_delta " << target_delta << "\n";
+//                        std::cerr << "distance_close_indel " << distance_close_indel << "\n";
+
 #ifdef WFLIGN_DEBUG
                         std::cerr << "[wflign::wflign_affine_wavefront] patching in "
                                       << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
@@ -1063,6 +1095,8 @@ void write_merged_alignment(
                                     case 'D': ++target_delta; break;
                                     default: break;
                                 }
+
+                                --distance_close_indel;
                             } else if (!tracev.empty()) {
                                 const auto& c = tracev.back();
                                 switch (c) {
@@ -1079,6 +1113,22 @@ void write_merged_alignment(
                             }
                             nibble_fwd ^= true;
                         }
+
+
+                        // Nibble until the close, big enough indel is reached
+                        while (q != erodev.end() && distance_close_indel > 0){
+                            const auto& c = *q++;
+                            switch (c) {
+                                case 'M': case 'X':
+                                    ++query_delta; ++target_delta; break;
+                                case 'I': ++query_delta; break;
+                                case 'D': ++target_delta; break;
+                                default: break;
+                            }
+
+                            --distance_close_indel;
+                        }
+
 
                         // check forward if there are other Is/Ds to merge in the current patch
                         while (q != erodev.end() &&
@@ -1123,8 +1173,10 @@ void write_merged_alignment(
                                 const int start_idx = patch_aln.edit_cigar.begin_offset;
                                 const int end_idx = patch_aln.edit_cigar.end_offset;
                                 for (int i = start_idx; i < end_idx; i++) {
+                                    //std::cerr << patch_aln.edit_cigar.operations[i];
                                     tracev.push_back(patch_aln.edit_cigar.operations[i]);
                                 }
+                                //std::cerr << "\n"
                             }
                         }
                     }
