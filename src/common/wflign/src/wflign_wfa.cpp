@@ -1087,10 +1087,9 @@ void write_merged_alignment(
                                       << std::endl;
 #endif
 
-                            const uint64_t target_patch_length = min_wfa_patch_length;
                             // nibble forward/backward if we're below the correct length
                             bool nibble_fwd = true;
-                            while ((q != erodev.end() || !tracev.empty()) && (query_delta < target_patch_length || target_delta < target_patch_length)) {
+                            while ((q != erodev.end() || !tracev.empty()) && (query_delta < min_wfa_patch_length || target_delta < min_wfa_patch_length)) {
                                 if (nibble_fwd && q != erodev.end()) {
                                     const auto& c = *q++;
                                     switch (c) {
@@ -1188,11 +1187,16 @@ void write_merged_alignment(
                 } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
                     // Semi-global mode for patching the heads
 
+
+                    // TODO: when we will have semi-global WFA
+                    // nibble forward if we're below the correct length
+
+
                     const uint64_t pos_to_ask = query_delta + target_delta;
 
                     uint64_t pos_to_shift = 0;
                     uint64_t target_pos_x, target_start_x;
-                    // todo: should we check if there are insertions at the beginning?
+
                     if (target_pos >= pos_to_ask) {
                         // Easy, we don't have to manage 'negative' indexes for the target array
                         pos_to_shift = pos_to_ask;
@@ -1294,10 +1298,28 @@ void write_merged_alignment(
         }
 
         // we're at the end
-        // check backward if there are other Is/Ds to merge in the current patch
         // Important: the last patch can generate a tail
-        while (!tracev.empty() &&
-               (tracev.back() == 'I' || tracev.back() == 'D') &&
+
+        // TODO: when we will have semi-global WFA
+        // nibble backward if we're below the correct length
+//        bool nibble_fwd = true;
+//        while (!tracev.empty() && query_delta < min_wfa_patch_length) {
+//            const auto& c = tracev.back();
+//            switch (c) {
+//                case 'M': case 'X':
+//                    --query_pos; --target_pos;
+//                    //last_match_query = query_pos;
+//                    //last_match_target = target_pos;
+//                    ++query_delta; ++target_delta; break;
+//                case 'I': ++query_delta; --query_pos; break;
+//                case 'D': ++target_delta; --target_pos; break;
+//                default: break;
+//            }
+//            tracev.pop_back();
+//        }
+
+        // check backward if there are other Is/Ds to merge in the current patch
+        while (!tracev.empty() && (tracev.back() == 'I' || tracev.back() == 'D') &&
                ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
                 (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
             const auto& c = tracev.back();
@@ -1416,6 +1438,7 @@ void write_merged_alignment(
         exit(1);
     }
 #endif
+
     // trim deletions at start and end of tracev
     uint64_t trim_del_first = 0;
     uint64_t trim_del_last = 0;
