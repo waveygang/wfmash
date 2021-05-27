@@ -1053,12 +1053,10 @@ void write_merged_alignment(
                 ++q;
             }
             // how long a gap?
-            query_delta = 0;
             while (q != erodev.end() && *q == 'I') {
                 ++query_delta;
                 ++q;
             }
-            target_delta = 0;
             while (q != erodev.end() && *q == 'D') {
                 ++target_delta;
                 ++q;
@@ -1076,11 +1074,13 @@ void write_merged_alignment(
 
                         // Trigger the patching if there is a dropout (consecutive Is and Ds) or if there is a close and big enough indel forward
                         if ((query_delta > 0 && target_delta > 0) || distance_close_indel > 0) {
-                        //std::cerr << "query_delta " << query_delta << "\n";
-                        //std::cerr << "target_delta " << target_delta << "\n";
-                        //std::cerr << "distance_close_indel " << distance_close_indel << "\n";
+
 
 #ifdef WFLIGN_DEBUG
+                            //std::cerr << "query_delta " << query_delta << "\n";
+                            //std::cerr << "target_delta " << target_delta << "\n";
+                            //std::cerr << "distance_close_indel " << distance_close_indel << "\n";
+
                             std::cerr << "[wflign::wflign_affine_wavefront] patching in "
                                       << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
                                       << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
@@ -1287,6 +1287,9 @@ void write_merged_alignment(
                 //std::cerr << "target_delta " << target_delta << std::endl;
                 query_pos += query_delta;
                 target_pos += target_delta;
+
+                query_delta = 0;
+                target_delta = 0;
             }
         }
 
@@ -1325,9 +1328,14 @@ void write_merged_alignment(
                 && result.editDistance >= 0) {
                 got_alignment = true;
 
-                if (target_pos + target_delta_x > target_length_mut) {
-                    target_end += (target_pos + target_delta_x - target_length_mut);
-                    target_length_mut = target_pos + target_delta_x;
+                {
+                    //if (target_pos + target_delta_x > target_length_mut) {
+                    //    target_end += (target_pos + target_delta_x - target_length_mut);
+                    //    target_length_mut = target_pos + target_delta_x;
+                    //}
+                    const uint32_t inc = target_delta_x - target_delta;
+                    target_end += inc;
+                    target_length_mut+= inc;
                 }
 
                 target_delta = target_delta_x;
