@@ -222,7 +222,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-//#define VALIDATE_WFA_WFLIGN
+#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -1053,10 +1053,12 @@ void write_merged_alignment(
                 ++q;
             }
             // how long a gap?
+            query_delta = 0;
             while (q != erodev.end() && *q == 'I') {
                 ++query_delta;
                 ++q;
             }
+            target_delta = 0;
             while (q != erodev.end() && *q == 'D') {
                 ++target_delta;
                 ++q;
@@ -1286,13 +1288,11 @@ void write_merged_alignment(
                 query_pos += query_delta;
                 target_pos += target_delta;
             }
-
-            query_delta = 0;
-            target_delta = 0;
         }
 
         // we're at the end
         // check backward if there are other Is/Ds to merge in the current patch
+        // Important: the last patch can generate a tail
         while (!tracev.empty() &&
                (tracev.back() == 'I' || tracev.back() == 'D') &&
                ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
@@ -1333,6 +1333,7 @@ void write_merged_alignment(
                 target_delta = target_delta_x;
 
                 for (int i = 0; i < *result.startLocations; ++i) {
+                    //std::cerr << "D";
                     tracev.push_back('D');
                 }
 
@@ -1340,12 +1341,15 @@ void write_merged_alignment(
                 char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                 auto& end_idx = result.alignmentLength;
                 for (int i = 0; i < end_idx; ++i) {
+                    //std::cerr << moveCodeToChar[result.alignment[i]];
                     tracev.push_back(moveCodeToChar[result.alignment[i]]);
                 }
 
                 for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
+                    //std::cerr << "D";
                     tracev.push_back('D');
                 }
+                //std::cerr << "\n";
             }
 
             edlibFreeAlignResult(result);
