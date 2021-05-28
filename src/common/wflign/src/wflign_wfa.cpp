@@ -983,7 +983,7 @@ void write_merged_alignment(
 
         auto distance_close_big_enough_indel = [](const uint32_t indel_len, auto q, const std::vector<char>& erodev) {
             const uint32_t min_indel_len_to_find = indel_len / 2 + 1;
-            const uint16_t max_dist_to_look_at = std::min(indel_len * 10, (uint32_t)4096);
+            const uint16_t max_dist_to_look_at = std::min(indel_len * 16, (uint32_t)4096);
 
             auto qq = q;
             uint32_t size_close_indel = 0;
