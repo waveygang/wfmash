@@ -1066,10 +1066,11 @@ void write_merged_alignment(
             // how long was our last gap?
             // if it's long enough, patch it
             if (q != erodev.end()) {
-                bool got_alignment = false;
                 bool continue_patching = false;
 
                 do {
+                    bool got_alignment = false;
+
                     if (continue_patching || last_match_query > -1 && last_match_target > -1) {
                         if (continue_patching || (query_delta > 0 && target_delta > 0) || (query_delta > 2 || target_delta > 2) &&
                             (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
