@@ -1089,35 +1089,38 @@ void write_merged_alignment(
                                           << std::endl;
         #endif
 
-                                // nibble forward/backward if we're below the correct length
-                                bool nibble_fwd = true;
-                                while ((q != erodev.end() || !tracev.empty()) && (query_delta < min_wfa_patch_length || target_delta < min_wfa_patch_length)) {
-                                    if (nibble_fwd && q != erodev.end()) {
-                                        const auto& c = *q++;
-                                        switch (c) {
-                                            case 'M': case 'X':
-                                                ++query_delta; ++target_delta; break;
-                                            case 'I': ++query_delta; break;
-                                            case 'D': ++target_delta; break;
-                                            default: break;
-                                        }
+                                // nibble forward if we're below the correct length
+                                while (q != erodev.end() && (query_delta < (min_wfa_patch_length / 2) || target_delta < (min_wfa_patch_length / 2))) {
+                                    const auto& c = *q++;
+                                    switch (c) {
+                                        case 'M': case 'X':
+                                            ++query_delta; ++target_delta; break;
+                                        case 'I': ++query_delta; break;
+                                        case 'D': ++target_delta; break;
+                                        default: break;
+                                    }
 
-                                        --distance_close_indel;
-                                    } else if (!tracev.empty()) {
+                                    --distance_close_indel;
+                                }
+
+                                // if we are continuing a patch, we must go on, to avoid the risk of going in endless loop
+                                if (!continue_patching) {
+                                    // nibble backward if we're below the correct length
+                                    while (!tracev.empty() && (query_delta < (min_wfa_patch_length / 2) || target_delta < (min_wfa_patch_length / 2))) {
                                         const auto& c = tracev.back();
                                         switch (c) {
                                             case 'M': case 'X':
                                                 --query_pos; --target_pos;
                                                 last_match_query = query_pos;
                                                 last_match_target = target_pos;
-                                                ++query_delta; ++target_delta; break;
+                                                ++query_delta; ++target_delta;
+                                                break;
                                             case 'I': ++query_delta; --query_pos; break;
                                             case 'D': ++target_delta; --target_pos; break;
                                             default: break;
                                         }
                                         tracev.pop_back();
                                     }
-                                    nibble_fwd ^= true;
                                 }
 
                                 // Nibble until the close, big enough indel is reached
@@ -1149,6 +1152,7 @@ void write_merged_alignment(
                                 }
 
                                 // check backward if there are other Is/Ds to merge in the current patch
+                                // it will eventually nibble the Is/Ds left from the last patch
                                 while (!tracev.empty() &&
                                        (tracev.back() == 'I' || tracev.back() == 'D') &&
                                        ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
@@ -1163,7 +1167,6 @@ void write_merged_alignment(
                                 }
 
                                 continue_patching = false;
-
                                 // we need to be sure that our nibble made the problem long enough
                                 // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
                                 if (query_delta >= 10 && target_delta >= 10) {
@@ -1194,9 +1197,11 @@ void write_merged_alignment(
                                                 break;
                                             }
                                         }
-                                        //std::cerr << "size_last_indel " << size_last_indel << std::endl;
+
                                         // Not too big, to avoid repatching structural variants boundaries
-                                        if (size_last_indel > 2 && size_last_indel <= min_wfa_patch_length && size_last_indel < (end_idx - start_idx) / 2){
+                                        if (size_last_indel > 2 &&  size_last_indel <= min_wfa_patch_length && size_last_indel <= (end_idx - start_idx) / 2){
+                                            //std::cerr << "size_last_indel " << size_last_indel << std::endl;
+                                            //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
                                             continue_patching = true;
                                         }
                                     }
