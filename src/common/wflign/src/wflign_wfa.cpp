@@ -222,7 +222,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-//#define VALIDATE_WFA_WFLIGN
+#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -1066,19 +1066,20 @@ void write_merged_alignment(
             // how long was our last gap?
             // if it's long enough, patch it
             if (q != erodev.end()) {
-                bool continue_patching = false;
+                uint32_t size_region_to_repatch = 0;
+                int16_t distance_close_indel = 0;
 
                 do {
                     bool got_alignment = false;
 
-                    if (continue_patching || last_match_query > -1 && last_match_target > -1) {
-                        if (continue_patching || (query_delta > 0 && target_delta > 0) || (query_delta > 2 || target_delta > 2) &&
+                    if (size_region_to_repatch > 0 || last_match_query > -1 && last_match_target > -1) {
+                        if (size_region_to_repatch > 0 || (query_delta > 0 && target_delta > 0) || (query_delta > 2 || target_delta > 2) &&
                             (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
                             (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)){
-                            int16_t distance_close_indel = distance_close_big_enough_indel(std::max(query_delta, target_delta), q, erodev);
+                            distance_close_indel = distance_close_big_enough_indel(std::max(query_delta, target_delta), q, erodev);
 
                             // Trigger the patching if there is a dropout (consecutive Is and Ds) or if there is a close and big enough indel forward
-                            if (continue_patching || (query_delta > 0 && target_delta > 0) || distance_close_indel > 0) {
+                            if (size_region_to_repatch > 0 || (query_delta > 0 && target_delta > 0) || distance_close_indel > 0) {
         #ifdef WFLIGN_DEBUG
                                 //std::cerr << "query_delta " << query_delta << "\n";
                                 //std::cerr << "target_delta " << target_delta << "\n";
@@ -1090,22 +1091,26 @@ void write_merged_alignment(
                                           << std::endl;
         #endif
 
-                                // nibble forward if we're below the correct length
-                                while (q != erodev.end() && (query_delta < (min_wfa_patch_length / 2) || target_delta < (min_wfa_patch_length / 2))) {
-                                    const auto& c = *q++;
-                                    switch (c) {
-                                        case 'M': case 'X':
-                                            ++query_delta; ++target_delta; break;
-                                        case 'I': ++query_delta; break;
-                                        case 'D': ++target_delta; break;
-                                        default: break;
+                                // if we are continuing a patch, we can't nibble backward too much to avoid the risk of going in endless loop
+                                if (size_region_to_repatch > 0) {
+                                    // nibble backward
+                                    while (!tracev.empty() && size_region_to_repatch > 0) {
+                                        const auto& c = tracev.back();
+                                        switch (c) {
+                                            case 'M': case 'X':
+                                                --query_pos; --target_pos;
+                                                last_match_query = query_pos;
+                                                last_match_target = target_pos;
+                                                ++query_delta; ++target_delta;
+                                                break;
+                                            case 'I': ++query_delta; --query_pos; break;
+                                            case 'D': ++target_delta; --target_pos; break;
+                                            default: break;
+                                        }
+                                        tracev.pop_back();
+                                        --size_region_to_repatch;
                                     }
-
-                                    --distance_close_indel;
-                                }
-
-                                // if we are continuing a patch, we must go on, to avoid the risk of going in endless loop
-                                if (!continue_patching) {
+                                } else {
                                     // nibble backward if we're below the correct length
                                     while (!tracev.empty() && (query_delta < (min_wfa_patch_length / 2) || target_delta < (min_wfa_patch_length / 2))) {
                                         const auto& c = tracev.back();
@@ -1122,6 +1127,20 @@ void write_merged_alignment(
                                         }
                                         tracev.pop_back();
                                     }
+                                }
+
+                                // nibble forward if we're below the correct length
+                                while (q != erodev.end() && (query_delta < min_wfa_patch_length || target_delta < min_wfa_patch_length)) {
+                                    const auto& c = *q++;
+                                    switch (c) {
+                                        case 'M': case 'X':
+                                            ++query_delta; ++target_delta; break;
+                                        case 'I': ++query_delta; break;
+                                        case 'D': ++target_delta; break;
+                                        default: break;
+                                    }
+
+                                    --distance_close_indel;
                                 }
 
                                 // Nibble until the close, big enough indel is reached
@@ -1167,7 +1186,7 @@ void write_merged_alignment(
                                     tracev.pop_back();
                                 }
 
-                                continue_patching = false;
+                                size_region_to_repatch = 0;
                                 // we need to be sure that our nibble made the problem long enough
                                 // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
                                 if (query_delta >= 10 && target_delta >= 10) {
@@ -1189,21 +1208,30 @@ void write_merged_alignment(
                                         }
                                         //std::cerr << "\n";
 
-                                        uint32_t size_last_indel = 0;
+                                        uint32_t size_indel = 0;
                                         for (int i = end_idx - 1; i >= start_idx; --i) {
-                                            //std::cerr << "A " << patch_aln.edit_cigar.operations[i] << std::endl;
+                                            //std::cerr << patch_aln.edit_cigar.operations[i];
                                             if (patch_aln.edit_cigar.operations[i] == 'I' || patch_aln.edit_cigar.operations[i] == 'D') {
-                                                ++size_last_indel;
+                                                ++size_indel;
+                                                ++size_region_to_repatch;
                                             } else {
-                                                break;
+                                                // Not too big, to avoid repatching structural variants boundaries
+                                                if (size_indel > 2 &&  size_indel <= 4096 && size_indel < (end_idx - start_idx)){
+                                                    break;
+                                                }
+
+                                                ++size_region_to_repatch;
+                                                size_indel = 0;
                                             }
                                         }
+                                        //std::cerr << std::endl;
 
                                         // Not too big, to avoid repatching structural variants boundaries
-                                        if (size_last_indel > 2 &&  size_last_indel <= min_wfa_patch_length && size_last_indel <= (end_idx - start_idx) / 2){
-                                            //std::cerr << "size_last_indel " << size_last_indel << std::endl;
+                                        if (size_indel > 2 &&  size_indel <= 4096 && size_region_to_repatch < (end_idx - start_idx)){
+                                            //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
                                             //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
-                                            continue_patching = true;
+                                        } else {
+                                            size_region_to_repatch = 0;
                                         }
                                     }
                                 }
@@ -1320,7 +1348,7 @@ void write_merged_alignment(
                     query_delta = 0;
                     target_delta = 0;
 
-                } while (continue_patching);
+                } while (size_region_to_repatch > 0);
             }
         }
 
