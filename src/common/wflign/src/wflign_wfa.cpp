@@ -720,6 +720,9 @@ namespace wflign {
                     default:
                         break;
                 }
+                if (!ok){
+                    break;
+                }
             }
             return ok;
         }
@@ -1149,7 +1152,6 @@ namespace wflign {
                                 } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
                                     // Semi-global mode for patching the heads
 
-
                                     // TODO: when we will have semi-global WFA
                                     // nibble forward if we're below the correct length
 
@@ -1159,7 +1161,8 @@ namespace wflign {
                                     uint64_t pos_to_shift = 0;
                                     uint64_t target_pos_x, target_start_x, target_pointer_shift_x;
 
-                                    if (target_start >= pos_to_ask) {
+                                    // Note that target_pos >= target_start
+                                    if (target_pos >= pos_to_ask) {
                                         // Easy, we don't have to manage 'negative' indexes for the target array
                                         pos_to_shift = pos_to_ask;
 
@@ -1186,6 +1189,7 @@ namespace wflign {
                                             }
                                         } else {
                                             pos_to_shift = target_pos; // we can get all the positions we need without negative indexing
+                                            target_pointer_shift_x = target_pointer_shift;
                                         }
                                     }
 
