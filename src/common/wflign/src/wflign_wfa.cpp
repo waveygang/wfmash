@@ -222,7 +222,7 @@ namespace wflign {
 
             // Trim alignments that overlap in the query
             if (!trace.empty()) {
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
                 if (!trace.front()->validate(query, target)) {
                     std::cerr << "first traceback is wrong" << std::endl;
@@ -719,9 +719,6 @@ namespace wflign {
                         break;
                     default:
                         break;
-                }
-                if (!ok){
-                    break;
                 }
             }
             return ok;
