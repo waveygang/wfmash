@@ -1157,14 +1157,15 @@ namespace wflign {
                                     const uint64_t pos_to_ask = query_delta + target_delta;
 
                                     uint64_t pos_to_shift = 0;
-                                    uint64_t target_pos_x, target_start_x;
+                                    uint64_t target_pos_x, target_start_x, target_pointer_shift_x;
 
-                                    if (target_pos >= pos_to_ask) {
+                                    if (target_start >= pos_to_ask) {
                                         // Easy, we don't have to manage 'negative' indexes for the target array
                                         pos_to_shift = pos_to_ask;
 
                                         target_pos_x = target_pos - pos_to_shift;
-                                        target_start_x = target_start;
+                                        target_start_x = target_start - pos_to_shift;
+                                        target_pointer_shift_x = target_pointer_shift;
                                     } else {
                                         target_pos_x = 0;
                                         target_start_x = 0;
@@ -1174,14 +1175,14 @@ namespace wflign {
                                         if (positions_to_get > 0) {
                                             // Manage negative indexes
                                             if (target_offset >= positions_to_get) {
-                                                target_pointer_shift = positions_to_get;
+                                                target_pointer_shift_x = target_pointer_shift + positions_to_get;
 
                                                 pos_to_shift = pos_to_ask; // we can get all the positions we need
                                             } else {
                                                 // We can't get all the positions we need
-                                                target_pointer_shift = target_offset;
+                                                target_pointer_shift_x = target_pointer_shift + target_offset;
 
-                                                pos_to_shift = target_pos + target_pointer_shift;
+                                                pos_to_shift = target_pos + target_pointer_shift_x;
                                             }
                                         } else {
                                             pos_to_shift = target_pos; // we can get all the positions we need without negative indexing
@@ -1194,7 +1195,7 @@ namespace wflign {
                                         std::string query_rev(query + query_pos, query_delta);
                                         std::reverse(query_rev.begin(), query_rev.end());
 
-                                        std::string target_rev(target - target_pointer_shift + target_pos_x, target_delta_x);
+                                        std::string target_rev(target - target_pointer_shift_x + target_pos_x, target_delta_x);
                                         std::reverse(target_rev.begin(), target_rev.end());
 
                                         /*std::cerr << "query: ";
@@ -1217,8 +1218,9 @@ namespace wflign {
 
                                             target_pos = target_pos_x;
                                             target_delta = target_delta_x;
+                                            target_pointer_shift = target_pointer_shift_x;
 
-                                            target_start = target_pos;
+                                            target_start = target_start_x;
                                             target_length_mut += pos_to_shift;
 
                                             for (int i = *result.endLocations + 1; i < target_delta; ++i) {
@@ -1422,7 +1424,7 @@ namespace wflign {
                         }
 
 #ifdef VALIDATE_WFA_WFLIGN
-                        if (!validate_trace(rawv, query, target, query_length, target_length_mut, query_start, target_start)) {
+                        if (!validate_trace(rawv, query, target - target_pointer_shift, query_length, target_length_mut, query_start, target_start)) {
                             std::cerr << "cigar failure in rawv (at end) "
                                       << "\t" << query_name
                                       << "\t" << query_total_length
@@ -1464,7 +1466,7 @@ namespace wflign {
                     }
 
 #ifdef VALIDATE_WFA_WFLIGN
-                    if (!validate_trace(erodev, query, target, query_length, target_length_mut, query_start, target_start)) {
+                    if (!validate_trace(erodev, query, target - target_pointer_shift, query_length, target_length_mut, query_start, target_start)) {
                         std::cerr << "cigar failure in erodev "
                                   << "\t" << query_name
                                   << "\t" << query_total_length
@@ -1496,6 +1498,23 @@ namespace wflign {
 
                     //std::cerr << "FIRST PATCH ROUND +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
                     patching(erodev, pre_tracev);
+
+#ifdef VALIDATE_WFA_WFLIGN
+                    if (!validate_trace(pre_tracev, query, target - target_pointer_shift, query_length, target_length_mut, query_start, target_start)) {
+                        std::cerr << "cigar failure in erodev "
+                                  << "\t" << query_name
+                                  << "\t" << query_total_length
+                                  << "\t" << query_offset + (query_is_rev ? query_length - query_end : query_start)
+                                  << "\t" << query_offset + (query_is_rev ? query_length - query_start : query_end)
+                                  << "\t" << (query_is_rev ? "-" : "+")
+                                  << "\t" << target_name
+                                  << "\t" << target_total_length
+                                  << "\t" << target_offset - target_pointer_shift + target_start
+                                  << "\t" << target_offset + target_end << std::endl;
+                        exit(1);
+                    }
+#endif
+
                 }
 
                 //std::cerr << "SECOND PATCH ROUND +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
@@ -1515,10 +1534,10 @@ namespace wflign {
 #endif
 
 #ifdef VALIDATE_WFA_WFLIGN
-//    std::cerr << "query_length: " << query_length << std::endl;
-//    std::cerr << "target_length_mut: " << target_length_mut << std::endl;
-//    std::cerr << "query_start: " << query_start << std::endl;
-//    std::cerr << "target_start: " << target_start << std::endl;
+//            std::cerr << "query_length: " << query_length << std::endl;
+//            std::cerr << "target_length_mut: " << target_length_mut << std::endl;
+//            std::cerr << "query_start: " << query_start << std::endl;
+//            std::cerr << "target_start: " << target_start << std::endl;
 
             if (!validate_trace(tracev, query, target - target_pointer_shift, query_length, target_length_mut, query_start, target_start)) {
                 std::cerr << "cigar failure at alignment (before head/tail del trimming) "
@@ -1563,7 +1582,7 @@ namespace wflign {
 
             /*
         #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(tracev, query, target, query_length, target_length_mut, query_start, target_start)) {
+            if (!validate_trace(tracev, query, target - target_pointer_shift, query_length, target_length_mut, query_start, target_start)) {
                 std::cerr << "cigar failure at alignment (after head/tail del trimming) "
                           << "\t" << query_name
                           << "\t" << query_total_length
