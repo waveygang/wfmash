@@ -1305,49 +1305,51 @@ namespace wflign {
                                                query_delta :
                                                target_total_length - ((target_offset - target_pointer_shift) + target_pos + target_delta));
 
-                        auto result = do_edlib_patch_alignment(
-                                query, query_pos, query_delta,
-                                target - target_pointer_shift, target_pos, target_delta_x,
-                                EDLIB_MODE_SHW);
+                        if (target_delta_x > 0) {
+                            auto result = do_edlib_patch_alignment(
+                                    query, query_pos, query_delta,
+                                    target - target_pointer_shift, target_pos, target_delta_x,
+                                    EDLIB_MODE_SHW);
 
-                        if (result.status == EDLIB_STATUS_OK
-                            && result.alignmentLength != 0
-                            && result.editDistance >= 0) {
-                            got_alignment = true;
+                            if (result.status == EDLIB_STATUS_OK
+                                && result.alignmentLength != 0
+                                && result.editDistance >= 0) {
+                                got_alignment = true;
 
-                            {
-                                //if (target_pos + target_delta_x > target_length_mut) {
-                                //    target_end += (target_pos + target_delta_x - target_length_mut);
-                                //    target_length_mut = target_pos + target_delta_x;
-                                //}
-                                const uint32_t inc = target_delta_x - target_delta;
-                                target_end += inc;
-                                target_length_mut+= inc;
+                                {
+                                    //if (target_pos + target_delta_x > target_length_mut) {
+                                    //    target_end += (target_pos + target_delta_x - target_length_mut);
+                                    //    target_length_mut = target_pos + target_delta_x;
+                                    //}
+                                    const uint32_t inc = target_delta_x - target_delta;
+                                    target_end += inc;
+                                    target_length_mut+= inc;
+                                }
+
+                                target_delta = target_delta_x;
+
+                                for (int i = 0; i < *result.startLocations; ++i) {
+                                    //std::cerr << "D";
+                                    patched.push_back('D');
+                                }
+
+                                // copy it into the trace
+                                char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
+                                auto& end_idx = result.alignmentLength;
+                                for (int i = 0; i < end_idx; ++i) {
+                                    //std::cerr << moveCodeToChar[result.alignment[i]];
+                                    patched.push_back(moveCodeToChar[result.alignment[i]]);
+                                }
+
+                                for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
+                                    //std::cerr << "D";
+                                    patched.push_back('D');
+                                }
+                                //std::cerr << "\n";
                             }
 
-                            target_delta = target_delta_x;
-
-                            for (int i = 0; i < *result.startLocations; ++i) {
-                                //std::cerr << "D";
-                                patched.push_back('D');
-                            }
-
-                            // copy it into the trace
-                            char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                            auto& end_idx = result.alignmentLength;
-                            for (int i = 0; i < end_idx; ++i) {
-                                //std::cerr << moveCodeToChar[result.alignment[i]];
-                                patched.push_back(moveCodeToChar[result.alignment[i]]);
-                            }
-
-                            for (int i = *result.startLocations + result.alignmentLength; i < target_delta; ++i) {
-                                //std::cerr << "D";
-                                patched.push_back('D');
-                            }
-                            //std::cerr << "\n";
+                            edlibFreeAlignResult(result);
                         }
-
-                        edlibFreeAlignResult(result);
                     }
 
                     if (!got_alignment){
