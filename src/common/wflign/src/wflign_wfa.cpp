@@ -937,7 +937,7 @@ namespace wflign {
                             // TODO: when we will have semi-global WFA
 
 //                            std::cerr << "HEAD patching in "
-//                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+//                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " --- "
 //                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
 //                                      << std::endl;
 
@@ -956,7 +956,7 @@ namespace wflign {
                                 target_pos_x = target_pos - target_delta_to_shift;
                                 target_start_x = target_pos_x < target_start ? target_pos_x : target_start;
 
-                                target_pointer_shift_x = target_pointer_shift;
+                                target_pointer_shift_x = target_pointer_shift;// + 0;
                             } else {
                                 //std::cerr << "B\n";
                                 target_pos_x = 0;
@@ -972,18 +972,21 @@ namespace wflign {
                                     target_delta_to_shift = delta_to_ask; // we can get all the positions we need
                                 } else {
                                     //std::cerr << "B.2\n";
-                                    //std::cerr << "query_name: " << query_name << std::endl;
                                     // We can't get all the positions we need
-                                    target_pointer_shift_x = target_pointer_shift + (int64_t)target_offset;
 
-                                    target_delta_to_shift = target_pos + target_pointer_shift_x;
+                                    target_pointer_shift_x = (int64_t)target_offset; //<=> target_pointer_shift + (int64_t)target_offset - target_pointer_shift;
+
+                                    target_delta_to_shift = target_offset + target_pos - target_pointer_shift;
                                 }
                             }
 
-                            //std::cerr << "target_start " << target_start << std::endl;
-                            //std::cerr << "target_pos " << target_pos << std::endl;
-                            //std::cerr << "target_pointer_shift_x " << target_pointer_shift_x << std::endl;
-                            //std::cerr << "target_delta_to_shift " << target_delta_to_shift << std::endl;
+//                            std::cerr << "target_start " << target_start << std::endl;
+//                            std::cerr << "target_start_x " << target_start_x << std::endl;
+//                            std::cerr << "target_pos " << target_pos << std::endl;
+//                            std::cerr << "target_pos_x " << target_pos_x << std::endl;
+//                            std::cerr << "target_offset " << target_offset << std::endl;
+//                            std::cerr << "target_pointer_shift_x " << target_pointer_shift_x << std::endl;
+//                            std::cerr << "target_delta_to_shift " << target_delta_to_shift << std::endl;
 
                             const uint64_t target_delta_x = target_delta + target_delta_to_shift;
 
