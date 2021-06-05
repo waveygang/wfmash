@@ -971,8 +971,8 @@ namespace wflign {
 
                                     target_delta_to_shift = delta_to_ask; // we can get all the positions we need
                                 } else {
-                                    std::cerr << "B.2\n";
-                                    std::cerr << "query_name: " << query_name << std::endl;
+                                    //std::cerr << "B.2\n";
+                                    //std::cerr << "query_name: " << query_name << std::endl;
                                     // We can't get all the positions we need
                                     target_pointer_shift_x = target_pointer_shift + (int64_t)target_offset;
 
