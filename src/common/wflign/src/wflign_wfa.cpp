@@ -1322,30 +1322,27 @@ namespace wflign {
                         } while (size_region_to_repatch > 0);
                     }
 
-                    // we're at the end
-                    // Important: the last patch can generate a tail
-
-                    // TODO: when we will have semi-global WFA
-                    /*// nibble backward if we're below the correct length
-                    bool nibble_fwd = true;
-                    while (!tracev.empty() && query_delta < min_wfa_patch_length) {
-                        const auto& c = tracev.back();
-                        switch (c) {
-                            case 'M': case 'X':
-                                --query_pos; --target_pos;
-                                ++query_delta; ++target_delta; break;
-                            case 'I': ++query_delta; --query_pos; break;
-                            case 'D': ++target_delta; --target_pos; break;
-                            default: break;
-                        }
-                        tracev.pop_back();
-                    }
-                    */
-                    // TODO: when we will have semi-global WFA
-
-
                     // Tail patching
                     {
+                        // TODO: when we will have semi-global WFA
+                        // nibble backward if we're below the correct length
+                        /*bool nibble_fwd = true;
+                        while (!patched.empty() && query_delta < min_wfa_patch_length) {
+                            const auto& c = patched.back();
+                            switch (c) {
+                                case 'M': case 'X':
+                                    --query_pos; --target_pos;
+                                    ++query_delta; ++target_delta; break;
+                                case 'I': ++query_delta; --query_pos; break;
+                                case 'D': ++target_delta; --target_pos; break;
+                                default: break;
+                            }
+                            patched.pop_back();
+                        }
+                        */
+                        // TODO: when we will have semi-global WFA
+
+                        // Important: the last patch (in the middle of the traceback) can generate a tail
                         // check backward if there are other Is/Ds to merge in the current patch
                         while (!patched.empty() && (patched.back() == 'I' || patched.back() == 'D') &&
                                ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
