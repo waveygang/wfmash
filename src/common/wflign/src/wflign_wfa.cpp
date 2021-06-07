@@ -85,11 +85,12 @@ namespace wflign {
             // setup affine WFA
             wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
             wfa::affine_penalties_t wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 9,
-                    .gap_opening = 13,
-                    .gap_extension = 1,
+                .match = 0,
+                .mismatch = 9,
+                .gap_opening = 13,
+                .gap_extension = 1,
             };
+            uint64_t num_alignments = 0;
             const uint64_t minhash_kmer_size = 17;
             int v_max = 0;
             int h_max = 0;
@@ -128,6 +129,7 @@ namespace wflign {
                                 &wfa_affine_penalties,
                                 *aln);
                         //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                        ++num_alignments;
                         if (aligned) {
                             alignments[k] = aln;
                         } else {
@@ -351,7 +353,7 @@ namespace wflign {
                                            target_name, target_total_length, target_offset, target_length,
                                            min_identity,
                                            elapsed_time_wflambda_ms,
-                                           alignments.size(),
+                                           num_alignments,
                                            mashmap_identity,
                                            wflign_max_len_major,
                                            wflign_max_len_minor,
