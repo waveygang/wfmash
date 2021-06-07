@@ -90,6 +90,7 @@ void wflign_affine_wavefront(
         .gap_opening = 13,
         .gap_extension = 1,
     };
+    uint64_t num_alignments = 0;
     const uint64_t minhash_kmer_size = 17;
     int v_max = 0;
     int h_max = 0;
@@ -128,6 +129,7 @@ void wflign_affine_wavefront(
                         &wfa_affine_penalties,
                         *aln);
                 //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                ++num_alignments;
                 if (aligned) {
                     alignments[k] = aln;
                 } else {
@@ -351,6 +353,7 @@ void wflign_affine_wavefront(
                                    target_name, target_total_length, target_offset, target_length,
                                    min_identity,
                                    elapsed_time_wflambda_ms,
+                                   num_alignments,
                                    mashmap_identity,
                                    wflign_max_len_major,
                                    wflign_max_len_minor,
@@ -807,6 +810,7 @@ void write_merged_alignment(
     const uint64_t& target_length,
     const float& min_identity,
     const long& elapsed_time_wflambda_ms,
+    const long& num_alignments_performed,
     const double& mashmap_identity,
     const uint64_t& wflign_max_len_major,
     const uint64_t& wflign_max_len_minor,
@@ -1573,7 +1577,9 @@ void write_merged_alignment(
     if (gap_compressed_identity >= min_identity) {
         const long elapsed_time_patching_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
 
-        const std::string timings = "wt:i:" + std::to_string(elapsed_time_wflambda_ms) + "\tpt:i:" + std::to_string(elapsed_time_patching_ms);
+        const std::string timings_and_num_alignements = "wt:i:" + std::to_string(elapsed_time_wflambda_ms) +
+                "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
+                "\tna:i:" + std::to_string(num_alignments_performed);
 
         if (paf_format_else_sam) {
             out << query_name
@@ -1606,7 +1612,7 @@ void write_merged_alignment(
                     write_tag_and_md_string(out, cigarv, target_start);
                 }
 
-                out << "\t" << timings
+                out << "\t" << timings_and_num_alignements
                     << "\t" << "cg:Z:" << cigarv << "\n";
         } else {
             const uint64_t query_start_pos = query_offset + (query_is_rev ? query_length - query_end : query_start);
@@ -1670,7 +1676,7 @@ void write_merged_alignment(
                 write_tag_and_md_string(out, cigarv, target_start);
             }
 
-            out << "\t" << timings << "\n";
+            out << "\t" << timings_and_num_alignements << "\n";
         }
     }
 
