@@ -129,7 +129,7 @@ namespace wflign {
                                 wfa_mm_allocator,
                                 &wfa_affine_penalties,
                                 *aln);
-                        std::cerr << v << "\t" << h << "\t" << aln->mash_dist << "\t" << aligned << std::endl;
+                        //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
                         ++num_alignments;
                         if (aln->score != std::numeric_limits<int>::max()) {
                             ++num_alignments_performed;
