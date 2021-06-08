@@ -285,6 +285,7 @@ void write_merged_alignment(
     const uint64_t& target_length,
     const float& min_identity,
     const long& elapsed_time_wflambda_ms,
+    const long& num_alignments,
     const long& num_alignments_performed,
     const double& mashmap_identity,
     const uint64_t& wflign_max_len_major,

@@ -91,6 +91,7 @@ namespace wflign {
                 .gap_extension = 1,
             };
             uint64_t num_alignments = 0;
+            uint64_t num_alignments_performed = 0;
             const uint64_t minhash_kmer_size = 17;
             int v_max = 0;
             int h_max = 0;
@@ -128,8 +129,11 @@ namespace wflign {
                                 wfa_mm_allocator,
                                 &wfa_affine_penalties,
                                 *aln);
-                        //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                        std::cerr << v << "\t" << h << "\t" << aln->mash_dist << "\t" << aligned << std::endl;
                         ++num_alignments;
+                        if (aln->score != std::numeric_limits<int>::max()) {
+                            ++num_alignments_performed;
+                        }
                         if (aligned) {
                             alignments[k] = aln;
                         } else {
@@ -354,6 +358,7 @@ namespace wflign {
                                            min_identity,
                                            elapsed_time_wflambda_ms,
                                            num_alignments,
+                                           num_alignments_performed,
                                            mashmap_identity,
                                            wflign_max_len_major,
                                            wflign_max_len_minor,
@@ -810,6 +815,7 @@ namespace wflign {
                 const uint64_t& target_length,
                 const float& min_identity,
                 const long& elapsed_time_wflambda_ms,
+                const long& num_alignments,
                 const long& num_alignments_performed,
                 const double& mashmap_identity,
                 const uint64_t& wflign_max_len_major,
@@ -1763,7 +1769,8 @@ namespace wflign {
 
                 const std::string timings_and_num_alignements = "wt:i:" + std::to_string(elapsed_time_wflambda_ms) +
                                                                 "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
-                                                                "\tna:i:" + std::to_string(num_alignments_performed);
+                                                                "\taa:i:" + std::to_string(num_alignments) +
+                                                                "\tap:i:" + std::to_string(num_alignments_performed);
 
                 if (paf_format_else_sam) {
                     out << query_name
