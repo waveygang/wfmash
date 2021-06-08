@@ -94,6 +94,8 @@ namespace wflign {
             int v_max = 0;
             int h_max = 0;
 
+            const float max_mash_dist = (1.0 - mashmap_identity) * 5.0;
+
             auto extend_match = [&](const int& v, const int& h) {
                 bool aligned = false;
                 if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
@@ -124,6 +126,7 @@ namespace wflign {
                                 minhash_kmer_size,
                                 wfa_min_wavefront_length,
                                 wfa_max_distance_threshold,
+                                max_mash_dist,
                                 wfa_mm_allocator,
                                 &wfa_affine_penalties,
                                 *aln);
@@ -398,6 +401,7 @@ namespace wflign {
                 const uint64_t& minhash_kmer_size,
                 const uint32_t& min_wavefront_length,
                 const uint32_t& max_distance_threshold,
+                const float& max_mash_dist,
                 wfa::mm_allocator_t* const mm_allocator,
                 wfa::affine_penalties_t* const affine_penalties,
                 alignment_t& aln) {
@@ -419,7 +423,7 @@ namespace wflign {
 
             // the mash distance generally underestimates the actual divergence
             // but when it's high we are almost certain that it's not a match
-            if (mash_dist > 0.618034) {
+            if (mash_dist > max_mash_dist) {
                 // if it isn't, return false
                 return false;
             } else {
