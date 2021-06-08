@@ -430,7 +430,7 @@ namespace wflign {
 
             // the mash distance generally underestimates the actual divergence
             // but when it's high we are almost certain that it's not a match
-            if (mash_dist > max_mash_dist) {
+            if (mash_dist > 0.618034) {
                 // if it isn't, return false
                 return false;
             } else {
