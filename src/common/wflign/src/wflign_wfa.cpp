@@ -416,11 +416,11 @@ namespace wflign {
             // first make the sketches if we haven't yet
             if (query_sketch == nullptr) {
                 query_sketch = new std::vector<rkmh::hash_t>();
-                *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/8);
+                *query_sketch = rkmh::hash_sequence(query+j, segment_length, minhash_kmer_size, segment_length/20);
             }
             if (target_sketch == nullptr) {
                 target_sketch = new std::vector<rkmh::hash_t>();
-                *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/8);
+                *target_sketch = rkmh::hash_sequence(target+i, segment_length, minhash_kmer_size, segment_length/20);
             }
 
             // first check if our mash dist is inbounds
@@ -430,7 +430,7 @@ namespace wflign {
 
             // the mash distance generally underestimates the actual divergence
             // but when it's high we are almost certain that it's not a match
-            if (mash_dist > 0.618034) {
+            if (mash_dist > 0.1) { //0.618034) {
                 // if it isn't, return false
                 return false;
             } else {
@@ -833,8 +833,8 @@ namespace wflign {
 
             // patching parameters
             // we will nibble patching back to this length
-            const uint64_t min_wfa_patch_length = 128;
-            const int min_wf_length = 64;
+            const uint64_t min_wfa_patch_length = 16;
+            const int min_wf_length = 256;
             const int max_dist_threshold = 128;
 
             // we need to get the start position in the query and target
