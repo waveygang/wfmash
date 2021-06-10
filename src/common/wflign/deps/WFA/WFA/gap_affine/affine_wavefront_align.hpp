@@ -54,5 +54,13 @@ int affine_wavefronts_align_bounded(
     const int text_length,
     const int max_score);
 
+int affine_wavefronts_align_bounded_no_cigar(
+        affine_wavefronts_t* const affine_wavefronts,
+        const char* const pattern,
+        const int pattern_length,
+        const char* const text,
+        const int text_length,
+        const int max_score);
+
 }
 

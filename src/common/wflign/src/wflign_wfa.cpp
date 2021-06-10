@@ -74,7 +74,7 @@ void wflign_affine_wavefront(
     }
 
     // save computed alignments in a pair-indexed patchmap
-    whash::patchmap<uint64_t,alignment_t*> alignments;
+    whash::patchmap<uint64_t,cigar_less_alignment_t*> alignments;
 
     // allocate vectors to store our sketches
     std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length, nullptr);
@@ -108,8 +108,8 @@ void wflign_affine_wavefront(
                 const uint64_t target_begin = (h < text_length-1 ? h * step_size :
                         target_length - segment_length_to_use);
 
-                auto* aln = new alignment_t();
-                aligned = do_wfa_segment_alignment(
+                auto* aln = new cigar_less_alignment_t();
+                aligned = do_wfa_segment_alignment_no_cigar(
                         query_name,
                         query,
                         query_sketches[v],
@@ -169,10 +169,13 @@ void wflign_affine_wavefront(
     auto trace_match = [&](const int& v, const int& h) {
         if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
             const uint64_t k = encode_pair(v, h);
-            auto* aln = alignments[k];
-            if (aln->ok) {
+            auto* ligh_aln = alignments[k];
+            if (ligh_aln->ok) {
+                ligh_aln->keep = true;
+
+                auto* aln = new alignment_t();
+                aln->ligh_aln = ligh_aln;
                 trace.push_back(aln);
-                aln->keep = true;
             }
             return true;
         } else {
@@ -224,7 +227,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-//#define VALIDATE_WFA_WFLIGN
+#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -234,23 +237,65 @@ void wflign_affine_wavefront(
 #endif
 
         auto x = trace.rbegin();
+        if ((**x).ligh_aln->ok) {
+            do_wfa_segment_alignment(
+                    query_name,
+                    query,
+                    query_length,
+                    (**x).ligh_aln->j,
+                    target_name,
+                    target,
+                    target_length,
+                    (**x).ligh_aln->i,
+                    segment_length_to_use,
+                    step_size,
+                    wfa_min_wavefront_length,
+                    wfa_max_distance_threshold,
+                    wfa_mm_allocator,
+                    &wfa_affine_penalties,
+                    **x);
+        }
+
         auto c = x + 1;
         while (x != trace.rend() && c != trace.rend()) {
             // establish our last and curr alignments to consider when trimming
-            auto& last = **x;
-            auto& curr = **c;
+            alignment_t& last = **x;
+            alignment_t& curr = **c;
+
+            std::cerr << "last: j (q): " << (**x).ligh_aln->j << " - i (t): " << (**x).ligh_aln->i << std::endl;
+            std::cerr << "curr: j (q): " << (**c).ligh_aln->j << " - i (t): " << (**c).ligh_aln->i << std::endl;
+
+            if (curr.ligh_aln->ok) {
+                do_wfa_segment_alignment(
+                        query_name,
+                        query,
+                        query_length,
+                        curr.ligh_aln->j,
+                        target_name,
+                        target,
+                        target_length,
+                        curr.ligh_aln->i,
+                        segment_length_to_use,
+                        step_size,
+                        wfa_min_wavefront_length,
+                        wfa_max_distance_threshold,
+                        wfa_mm_allocator,
+                        &wfa_affine_penalties,
+                        curr);
+            }
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (curr.ok && !curr.validate(query, target)) {
-                std::cerr << "curr traceback is wrong before trimming @ " << curr.j << " " << curr.i << std::endl;
+            if (curr.ligh_aln->ok && !curr.validate(query, target)) {
+                std::cerr << "curr traceback is wrong before trimming @ " << curr.ligh_aln->j << " " << curr.ligh_aln->i << std::endl;
                 curr.display();
                 assert(false);
             }
 #endif
-            trace_pos_t last_pos = { last.j, last.i,
+
+            trace_pos_t last_pos = { last.ligh_aln->j, last.ligh_aln->i,
                                      &last.edit_cigar,
                                      last.edit_cigar.begin_offset };
-            trace_pos_t curr_pos = { curr.j, curr.i,
+            trace_pos_t curr_pos = { curr.ligh_aln->j, curr.ligh_aln->i,
                                      &curr.edit_cigar,
                                      curr.edit_cigar.begin_offset };
 
@@ -279,8 +324,8 @@ void wflign_affine_wavefront(
             int trim_last=0, trim_curr=0;
             if (match_pos.assigned()) {
                 // we'll use our match position to set up the trims
-                trim_last = (last.j + last.query_length) - match_pos.j;
-                trim_curr = match_pos.j - curr.j;
+                trim_last = (last.ligh_aln->j + last.ligh_aln->query_length) - match_pos.j;
+                trim_curr = match_pos.j - last.ligh_aln->j;
             } else {
                 // we want to remove any possible overlaps in query or target
                 // walk back last until we don't overlap in i or j
@@ -295,8 +340,8 @@ void wflign_affine_wavefront(
                     }
                     flip ^= true;
                 }
-                trim_last = (last.j + last.query_length) - last_pos.j + 1;
-                trim_curr = curr_pos.j - curr.j + 1;
+                trim_last = (last.ligh_aln->j + last.ligh_aln->query_length) - last_pos.j + 1;
+                trim_curr = curr_pos.j - last.ligh_aln->j + 1;
                 assert(last_pos.j <= curr_pos.j);
                 assert(last_pos.i <= curr_pos.i);
             }
@@ -305,8 +350,8 @@ void wflign_affine_wavefront(
             if (trim_last > 0) {
                 last.trim_back(trim_last);
 #ifdef VALIDATE_WFA_WFLIGN
-                if (last.ok && !last.validate(query, target)) {
-                    std::cerr << "traceback is wrong after last trimming @ " << last.j << " " << last.i << std::endl;
+                if (last.ligh_aln->ok && !last.validate(query, target)) {
+                    std::cerr << "traceback is wrong after last trimming @ " << last.ligh_aln->j << " " << last.ligh_aln->i << std::endl;
                     last.display();
                     assert(false);
                 }
@@ -316,25 +361,26 @@ void wflign_affine_wavefront(
             if (trim_curr > 0) {
                 curr.trim_front(trim_curr);
 #ifdef VALIDATE_WFA_WFLIGN
-                if (curr.ok && !curr.validate(query, target)) {
-                    std::cerr << "traceback is wrong after curr trimming @ " << curr.j << " " << curr.i << std::endl;
+                if (curr.ligh_aln->ok && !curr.validate(query, target)) {
+                    std::cerr << "traceback is wrong after curr trimming @ " << curr.ligh_aln->j << " " << curr.ligh_aln->i << std::endl;
                     curr.display();
                     assert(false);
                 }
 #endif
             }
-            if (curr.ok) {
+            if (curr.ligh_aln->ok) {
+                std::cerr << "WE\n";
                 x = c;
             }
             ++c;
 #ifdef VALIDATE_WFA_WFLIGN
-            auto distance_target = (curr.i - (last.i + last.target_length));
-            auto distance_query = (curr.j - (last.j + last.query_length));
-            if (last.ok && curr.ok && (distance_query < 0 || distance_target < 0)) {
+            auto distance_target = (curr.ligh_aln->i - (last.ligh_aln->i + last.ligh_aln->target_length));
+            auto distance_query = (curr.ligh_aln->j - (last.ligh_aln->j + last.ligh_aln->query_length));
+            if (last.ligh_aln->ok && curr.ligh_aln->ok && (distance_query < 0 || distance_target < 0)) {
                 std::cerr << "distance_target_query "
                           << distance_target << " " << distance_query << std::endl;
                 std::cerr << "trimming failure at @ "
-                          << last.j << "," << last.i << " -> " << curr.j << "," << curr.i << std::endl;
+                          << last.ligh_aln->j << "," << last.ligh_aln->i << " -> " << curr.ligh_aln->j << "," << curr.ligh_aln->i << std::endl;
                 last.display();
                 curr.display();
                 exit(1);
@@ -369,6 +415,11 @@ void wflign_affine_wavefront(
                                 mashmap_identity);
             }
         }
+
+        for (auto& t : trace) {
+            std::cerr << "tttt: j (q): " << t->ligh_aln->j << " - i (t): " << t->ligh_aln->i << std::endl;
+            delete t;
+        }
     }
 
     // clean up our WFA allocator
@@ -384,25 +435,93 @@ void wflign_affine_wavefront(
 // order them and write them out
 // needed--- 0-cost deduplication of alignment regions (how????)
 //     --- trim the alignment back to the first 1/2 of the query
-bool do_wfa_segment_alignment(
+void do_wfa_segment_alignment(
     const std::string& query_name,
     const char* query,
-    std::vector<rkmh::hash_t>*& query_sketch,
     const uint64_t& query_length,
     const uint64_t& j,
     const std::string& target_name,
     const char* target,
-    std::vector<rkmh::hash_t>*& target_sketch,
     const uint64_t& target_length,
     const uint64_t& i,
     const uint16_t& segment_length,
     const uint16_t& step_size,
-    const uint64_t& minhash_kmer_size,
     const uint32_t& min_wavefront_length,
     const uint32_t& max_distance_threshold,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln) {
+
+    // if it is, we'll align
+    wfa::affine_wavefronts_t* affine_wavefronts;
+    if (min_wavefront_length || max_distance_threshold) {
+        // adaptive affine WFA setup
+        affine_wavefronts = affine_wavefronts_new_reduced(
+                segment_length, segment_length, affine_penalties,
+                min_wavefront_length, max_distance_threshold,
+                NULL, mm_allocator);
+    } else {
+        // exact WFA
+        affine_wavefronts = affine_wavefronts_new_complete(
+                segment_length, segment_length, affine_penalties, NULL, mm_allocator);
+    }
+
+    wfa::affine_wavefronts_align(
+            affine_wavefronts,
+            target+i,
+            segment_length,
+            query+j,
+            segment_length);
+
+#ifdef VALIDATE_WFA_WFLIGN
+    if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.ligh_aln->j, aln.ligh_aln->i)) {
+            std::cerr << "cigar failure at alignment " << aln.ligh_aln->j << " " << aln.ligh_aln->i << std::endl;
+            unpack_display_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.ligh_aln->j, aln.ligh_aln->i);
+            std::cerr << ">query" << std::endl << std::string(query+j, segment_length) << std::endl;
+            std::cerr << ">target" << std::endl << std::string(target+i, segment_length) << std::endl;
+            assert(false);
+        }
+#endif
+
+    wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
+
+    std::cerr << "j (q): " << j << " - i (t): " << i << std::endl;
+    for(int ii = aln.edit_cigar.begin_offset; ii < aln.edit_cigar.end_offset; ++ii){
+        std::cerr << aln.edit_cigar.operations[ii];
+    }
+    std::cerr << std::endl;
+
+#ifdef VALIDATE_WFA_WFLIGN
+    if (!validate_cigar(aln.edit_cigar, query, target, segment_length, segment_length, aln.ligh_aln->j, aln.ligh_aln->i)) {
+            std::cerr << "cigar failure after cigar copy in alignment " << aln.ligh_aln->j << " " << aln.ligh_aln->i << std::endl;
+            assert(false);
+        }
+#endif
+
+
+    // cleanup wavefronts to keep memory low
+    affine_wavefronts_delete(affine_wavefronts);
+}
+
+bool do_wfa_segment_alignment_no_cigar(
+        const std::string& query_name,
+        const char* query,
+        std::vector<rkmh::hash_t>*& query_sketch,
+        const uint64_t& query_length,
+        const uint64_t& j,
+        const std::string& target_name,
+        const char* target,
+        std::vector<rkmh::hash_t>*& target_sketch,
+        const uint64_t& target_length,
+        const uint64_t& i,
+        const uint16_t& segment_length,
+        const uint16_t& step_size,
+        const uint64_t& minhash_kmer_size,
+        const uint32_t& min_wavefront_length,
+        const uint32_t& max_distance_threshold,
+        wfa::mm_allocator_t* const mm_allocator,
+        wfa::affine_penalties_t* const affine_penalties,
+        cigar_less_alignment_t& aln) {
 
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
@@ -430,22 +549,22 @@ bool do_wfa_segment_alignment(
         if (min_wavefront_length || max_distance_threshold) {
             // adaptive affine WFA setup
             affine_wavefronts = affine_wavefronts_new_reduced(
-                segment_length, segment_length, affine_penalties,
-                min_wavefront_length, max_distance_threshold,
-                NULL, mm_allocator);
+                    segment_length, segment_length, affine_penalties,
+                    min_wavefront_length, max_distance_threshold,
+                    NULL, mm_allocator);
         } else {
             // exact WFA
             affine_wavefronts = affine_wavefronts_new_complete(
-                segment_length, segment_length, affine_penalties, NULL, mm_allocator);
+                    segment_length, segment_length, affine_penalties, NULL, mm_allocator);
         }
 
-        aln.score = wfa::affine_wavefronts_align_bounded(
-            affine_wavefronts,
-            target+i,
-            segment_length,
-            query+j,
-            segment_length,
-            max_score);
+        aln.score = wfa::affine_wavefronts_align_bounded_no_cigar(
+                affine_wavefronts,
+                target+i,
+                segment_length,
+                query+j,
+                segment_length,
+                max_score);
 
         aln.j = j;
         aln.i = i;
@@ -457,24 +576,6 @@ bool do_wfa_segment_alignment(
         if (aln.ok) {
             aln.query_length = segment_length;
             aln.target_length = segment_length;
-#ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
-                std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
-                unpack_display_cigar(affine_wavefronts->edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i);
-                std::cerr << ">query" << std::endl << std::string(query+j, segment_length) << std::endl;
-                std::cerr << ">target" << std::endl << std::string(target+i, segment_length) << std::endl;
-                assert(false);
-            }
-#endif
-
-            wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
-
-#ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(aln.edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
-                std::cerr << "cigar failure after cigar copy in alignment " << aln.j << " " << aln.i << std::endl;
-                assert(false);
-            }
-#endif
         }
 
         // cleanup wavefronts to keep memory low
@@ -514,7 +615,7 @@ void do_wfa_patch_alignment(
 
     const int max_score = (target_length + query_length) * 5;
 
-    aln.score = wfa::affine_wavefronts_align_bounded(
+    aln.ligh_aln->score = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
         target+i,
         target_length,
@@ -522,15 +623,15 @@ void do_wfa_patch_alignment(
         query_length,
         max_score);
 
-    aln.ok = aln.score < max_score;
-    if (aln.ok) {
+    aln.ligh_aln->ok = aln.ligh_aln->score < max_score;
+    if (aln.ligh_aln->ok) {
         // correct X/M errors in the cigar
         hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, j, i);
 
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, j, i)) {
-            std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
-            unpack_display_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+            std::cerr << "cigar failure at alignment " << aln.ligh_aln->j << " " << aln.ligh_aln->i << std::endl;
+            unpack_display_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.ligh_aln->j, aln.ligh_aln->i);
             std::cerr << ">query" << std::endl << std::string(query+j, query_length) << std::endl;
             std::cerr << ">target" << std::endl << std::string(target+i, target_length) << std::endl;
             assert(false);
@@ -868,22 +969,28 @@ void write_merged_alignment(
             std::cerr << "[wflign::wflign_affine_wavefront] copying traceback" << std::endl;
 #endif
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
+                std::cerr <<"AAAA\n";
                 auto& aln = **x;
-                if (aln.ok) {
+                std::cerr << "query_start " << aln.ligh_aln->j << std::endl;
+                std::cerr << "target_start " << aln.ligh_aln->i << std::endl;
+
+                if (aln.ligh_aln->ok) {
                     if (ok_alns == 0) {
-                        query_start = aln.j;
-                        target_start = aln.i;
+                        query_start = aln.ligh_aln->j;
+                        target_start = aln.ligh_aln->i;
                     }
                     ++ok_alns;
-                    if (query_end && aln.j > query_end) {
-                        const int len = aln.j - query_end;
+                    if (query_end && aln.ligh_aln->j > query_end) {
+                        const int len = aln.ligh_aln->j - query_end;
                         for (uint64_t i = 0; i < len; ++i) {
+                            std::cerr << "I";
                             rawv.push_back('I');
                         }
                     }
-                    if (target_end && aln.i > target_end) {
-                        const int len = aln.i - target_end;
+                    if (target_end && aln.ligh_aln->i > target_end) {
+                        const int len = aln.ligh_aln->i - target_end;
                         for (uint64_t i = 0; i < len; ++i) {
+                            std::cerr << "D";
                             rawv.push_back('D');
                         }
                     }
@@ -893,6 +1000,7 @@ void write_merged_alignment(
                     const int end_idx = aln.edit_cigar.end_offset;
                     for (int i = start_idx; i < end_idx; i++) {
                         const auto& c = aln.edit_cigar.operations[i];
+                        std::cerr << c;
                         switch (c) {
                         case 'M': case 'X':
                             ++query_aligned_length; ++target_aligned_length; break;
@@ -902,11 +1010,12 @@ void write_merged_alignment(
                         }
                         rawv.push_back(c);
                     }
-                    query_end = aln.j + query_aligned_length;
-                    target_end = aln.i + target_aligned_length;
+                    std::cerr << "\n";
+                    query_end = aln.ligh_aln->j + query_aligned_length;
+                    target_end = aln.ligh_aln->i + target_aligned_length;
                 }
-                // clean up
-                delete *x;
+//                // clean up
+//                delete *x;
             }
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -1070,217 +1179,225 @@ void write_merged_alignment(
             if (q != erodev.end()) {
                 bool got_alignment = false;
 
-                if (last_match_query > -1 && last_match_target > -1) {
-                    if ((query_delta > 0 && target_delta > 0) || (query_delta > 2 || target_delta > 2) &&
-                        (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
-                        (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)){
-                        int16_t distance_close_indel = distance_close_big_enough_indel(std::max(query_delta, target_delta), q, erodev);
-
-                        // Trigger the patching if there is a dropout (consecutive Is and Ds) or if there is a close and big enough indel forward
-                        if ((query_delta > 0 && target_delta > 0) || distance_close_indel > 0) {
-
-
-#ifdef WFLIGN_DEBUG
-                            //std::cerr << "query_delta " << query_delta << "\n";
-                            //std::cerr << "target_delta " << target_delta << "\n";
-                            //std::cerr << "distance_close_indel " << distance_close_indel << "\n";
-
-                            std::cerr << "[wflign::wflign_affine_wavefront] patching in "
-                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
-                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
-                                      << std::endl;
-#endif
-
-                            // nibble forward/backward if we're below the correct length
-                            bool nibble_fwd = true;
-                            while ((q != erodev.end() || !tracev.empty()) && (query_delta < min_wfa_patch_length || target_delta < min_wfa_patch_length)) {
-                                if (nibble_fwd && q != erodev.end()) {
-                                    const auto& c = *q++;
-                                    switch (c) {
-                                        case 'M': case 'X':
-                                            ++query_delta; ++target_delta; break;
-                                        case 'I': ++query_delta; break;
-                                        case 'D': ++target_delta; break;
-                                        default: break;
-                                    }
-
-                                    --distance_close_indel;
-                                } else if (!tracev.empty()) {
-                                    const auto& c = tracev.back();
-                                    switch (c) {
-                                        case 'M': case 'X':
-                                            --query_pos; --target_pos;
-                                            last_match_query = query_pos;
-                                            last_match_target = target_pos;
-                                            ++query_delta; ++target_delta; break;
-                                        case 'I': ++query_delta; --query_pos; break;
-                                        case 'D': ++target_delta; --target_pos; break;
-                                        default: break;
-                                    }
-                                    tracev.pop_back();
-                                }
-                                nibble_fwd ^= true;
-                            }
-
-                            // Nibble until the close, big enough indel is reached
-                            // Important when the patching can't be computed correctly without including the next indel
-                            while (q != erodev.end() && distance_close_indel > 0){
-                                const auto& c = *q++;
-                                switch (c) {
-                                    case 'M': case 'X':
-                                        ++query_delta; ++target_delta; break;
-                                    case 'I': ++query_delta; break;
-                                    case 'D': ++target_delta; break;
-                                    default: break;
-                                }
-
-                                --distance_close_indel;
-                            }
-
-                            // check forward if there are other Is/Ds to merge in the current patch
-                            while (q != erodev.end() &&
-                                   (*q == 'I' || *q == 'D') &&
-                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
-                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
-                                const auto& c = *q++;
-                                if (c == 'I') {
-                                    ++query_delta;
-                                } else {
-                                    ++target_delta;
-                                }
-                            }
-
-                            // check backward if there are other Is/Ds to merge in the current patch
-                            while (!tracev.empty() &&
-                                   (tracev.back() == 'I' || tracev.back() == 'D') &&
-                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
-                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
-                                const auto& c = tracev.back();
-                                if (c == 'I') {
-                                    ++query_delta; --query_pos;
-                                } else {
-                                    ++target_delta; --target_pos;
-                                }
-                                tracev.pop_back();
-                            }
-
-                            // we need to be sure that our nibble made the problem long enough
-                            // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
-                            if (query_delta >= 10 && target_delta >= 10) {
-                                alignment_t patch_aln;
-                                // WFA is only global
-                                do_wfa_patch_alignment(
-                                        query, query_pos, query_delta,
-                                        target - target_pointer_shift, target_pos, target_delta,
-                                        min_wf_length, max_dist_threshold,
-                                        mm_allocator, affine_penalties, patch_aln);
-                                if (patch_aln.ok) {
-                                    //std::cerr << "got an ok patch aln" << std::endl;
-                                    got_alignment = true;
-                                    const int start_idx = patch_aln.edit_cigar.begin_offset;
-                                    const int end_idx = patch_aln.edit_cigar.end_offset;
-                                    for (int i = start_idx; i < end_idx; i++) {
-                                        //std::cerr << patch_aln.edit_cigar.operations[i];
-                                        tracev.push_back(patch_aln.edit_cigar.operations[i]);
-                                    }
-                                    //std::cerr << "\n";
-                                }
-                            }
-                        }
-                    }
-                } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
-                    // Semi-global mode for patching the heads
-
-
-                    // TODO: when we will have semi-global WFA
-                    // nibble forward if we're below the correct length
-
-
-                    const uint64_t pos_to_ask = query_delta + target_delta;
-
-                    uint64_t pos_to_shift = 0;
-                    uint64_t target_pos_x, target_start_x;
-
-                    if (target_pos >= pos_to_ask) {
-                        // Easy, we don't have to manage 'negative' indexes for the target array
-                        pos_to_shift = pos_to_ask;
-
-                        target_pos_x = target_pos - pos_to_shift;
-                        target_start_x = target_start;
-                    } else {
-                        target_pos_x = 0;
-                        target_start_x = 0;
-
-                        int64_t positions_to_get = pos_to_ask - target_pos;
-
-                        if (positions_to_get > 0) {
-                            // Manage negative indexes
-                            if (target_offset >= positions_to_get) {
-                                target_pointer_shift = positions_to_get;
-
-                                pos_to_shift = pos_to_ask; // we can get all the positions we need
-                            } else {
-                                // We can't get all the positions we need
-                                target_pointer_shift = target_offset;
-
-                                pos_to_shift = target_pos + target_pointer_shift;
-                            }
-                        } else {
-                            pos_to_shift = target_pos; // we can get all the positions we need without negative indexing
-                        }
-                    }
-
-                    const uint64_t target_delta_x = target_delta + pos_to_shift;
-
-                    if (target_delta_x > 0) {
-                        std::string query_rev(query + query_pos, query_delta);
-                        std::reverse(query_rev.begin(), query_rev.end());
-
-                        std::string target_rev(target - target_pointer_shift + target_pos_x, target_delta_x);
-                        std::reverse(target_rev.begin(), target_rev.end());
-
-                        /*std::cerr << "query: ";
-                        for (int i = 0; i < query_delta; ++i) {
-                            std::cerr << query_rev[i];
-                        }
-                        std::cerr << "\ntarget: ";;
-                        for (int i = 0; i < target_delta_x; ++i) {
-                            std::cerr << target_rev[i];
-                        }
-                        std::cerr << std::endl;*/
-
-                        auto result = do_edlib_patch_alignment(
-                                query_rev.c_str(), 0, query_rev.size(),
-                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
-                        if (result.status == EDLIB_STATUS_OK
-                            && result.alignmentLength != 0
-                            && result.editDistance >= 0) {
-                            got_alignment = true;
-
-                            target_pos = target_pos_x;
-                            target_delta = target_delta_x;
-
-                            target_start = target_pos;
-                            target_length_mut += pos_to_shift;
-
-                            for (int i = *result.endLocations + 1; i < target_delta; ++i) {
-                                tracev.push_back('D');
-                            }
-
-                            // copy it into the trace
-                            char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
-                            auto& end_idx = result.alignmentLength;
-                            for (int i = end_idx - 1; i >= 0; --i) {
-                                tracev.push_back(moveCodeToChar[result.alignment[i]]);
-                            }
-
-                            for (int i = 0; i < *result.startLocations; ++i) {
-                                tracev.push_back('D');
-                            }
-                        }
-                        edlibFreeAlignResult(result);
-                    }
-                }
+//                if (last_match_query > -1 && last_match_target > -1) {
+//                    if ((query_delta > 0 && target_delta > 0) || (query_delta > 2 || target_delta > 2) &&
+//                        (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+//                        (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)){
+//                        int16_t distance_close_indel = distance_close_big_enough_indel(std::max(query_delta, target_delta), q, erodev);
+//
+//                        // Trigger the patching if there is a dropout (consecutive Is and Ds) or if there is a close and big enough indel forward
+//                        if ((query_delta > 0 && target_delta > 0) || distance_close_indel > 0) {
+//
+//
+//#ifdef WFLIGN_DEBUG
+//                            //std::cerr << "query_delta " << query_delta << "\n";
+//                            //std::cerr << "target_delta " << target_delta << "\n";
+//                            //std::cerr << "distance_close_indel " << distance_close_indel << "\n";
+//
+//                            std::cerr << "[wflign::wflign_affine_wavefront] patching in "
+//                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+//                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+//                                      << std::endl;
+//#endif
+//                            std::cerr << "A patching in "
+//                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+//                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+//                                      << std::endl;
+//                            // nibble forward/backward if we're below the correct length
+//                            bool nibble_fwd = true;
+//                            while ((q != erodev.end() || !tracev.empty()) && (query_delta < min_wfa_patch_length || target_delta < min_wfa_patch_length)) {
+//                                if (nibble_fwd && q != erodev.end()) {
+//                                    const auto& c = *q++;
+//                                    switch (c) {
+//                                        case 'M': case 'X':
+//                                            ++query_delta; ++target_delta; break;
+//                                        case 'I': ++query_delta; break;
+//                                        case 'D': ++target_delta; break;
+//                                        default: break;
+//                                    }
+//
+//                                    --distance_close_indel;
+//                                } else if (!tracev.empty()) {
+//                                    const auto& c = tracev.back();
+//                                    switch (c) {
+//                                        case 'M': case 'X':
+//                                            --query_pos; --target_pos;
+//                                            last_match_query = query_pos;
+//                                            last_match_target = target_pos;
+//                                            ++query_delta; ++target_delta; break;
+//                                        case 'I': ++query_delta; --query_pos; break;
+//                                        case 'D': ++target_delta; --target_pos; break;
+//                                        default: break;
+//                                    }
+//                                    tracev.pop_back();
+//                                }
+//                                nibble_fwd ^= true;
+//                            }
+//
+//                            // Nibble until the close, big enough indel is reached
+//                            // Important when the patching can't be computed correctly without including the next indel
+//                            while (q != erodev.end() && distance_close_indel > 0){
+//                                const auto& c = *q++;
+//                                switch (c) {
+//                                    case 'M': case 'X':
+//                                        ++query_delta; ++target_delta; break;
+//                                    case 'I': ++query_delta; break;
+//                                    case 'D': ++target_delta; break;
+//                                    default: break;
+//                                }
+//
+//                                --distance_close_indel;
+//                            }
+//
+//                            // check forward if there are other Is/Ds to merge in the current patch
+//                            while (q != erodev.end() &&
+//                                   (*q == 'I' || *q == 'D') &&
+//                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+//                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+//                                const auto& c = *q++;
+//                                if (c == 'I') {
+//                                    ++query_delta;
+//                                } else {
+//                                    ++target_delta;
+//                                }
+//                            }
+//
+//                            // check backward if there are other Is/Ds to merge in the current patch
+//                            while (!tracev.empty() &&
+//                                   (tracev.back() == 'I' || tracev.back() == 'D') &&
+//                                   ((query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
+//                                    (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor))) {
+//                                const auto& c = tracev.back();
+//                                if (c == 'I') {
+//                                    ++query_delta; --query_pos;
+//                                } else {
+//                                    ++target_delta; --target_pos;
+//                                }
+//                                tracev.pop_back();
+//                            }
+//
+//                            std::cerr << "B patching in "
+//                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+//                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+//                                      << std::endl;
+//
+//                            // we need to be sure that our nibble made the problem long enough
+//                            // For affine WFA to be correct (to avoid trace-back errors), it must be at least 10 nt
+//                            if (query_delta >= 10 && target_delta >= 10) {
+//                                alignment_t patch_aln;
+//                                // WFA is only global
+//                                do_wfa_patch_alignment(
+//                                        query, query_pos, query_delta,
+//                                        target - target_pointer_shift, target_pos, target_delta,
+//                                        min_wf_length, max_dist_threshold,
+//                                        mm_allocator, affine_penalties, patch_aln);
+//                                if (patch_aln.ligh_aln->ok) {
+//                                    //std::cerr << "got an ok patch aln" << std::endl;
+//                                    got_alignment = true;
+//                                    const int start_idx = patch_aln.edit_cigar.begin_offset;
+//                                    const int end_idx = patch_aln.edit_cigar.end_offset;
+//                                    for (int i = start_idx; i < end_idx; i++) {
+//                                        //std::cerr << patch_aln.edit_cigar.operations[i];
+//                                        tracev.push_back(patch_aln.edit_cigar.operations[i]);
+//                                    }
+//                                    //std::cerr << "\n";
+//                                }
+//                            }
+//                        }
+//                    }
+//                } else if (query_delta > 0 && query_delta <= max_edlib_head_tail_patch_length) {
+//                    // Semi-global mode for patching the heads
+//
+//
+//                    // TODO: when we will have semi-global WFA
+//                    // nibble forward if we're below the correct length
+//
+//
+//                    const uint64_t pos_to_ask = query_delta + target_delta;
+//
+//                    uint64_t pos_to_shift = 0;
+//                    uint64_t target_pos_x, target_start_x;
+//
+//                    if (target_pos >= pos_to_ask) {
+//                        // Easy, we don't have to manage 'negative' indexes for the target array
+//                        pos_to_shift = pos_to_ask;
+//
+//                        target_pos_x = target_pos - pos_to_shift;
+//                        target_start_x = target_start;
+//                    } else {
+//                        target_pos_x = 0;
+//                        target_start_x = 0;
+//
+//                        int64_t positions_to_get = pos_to_ask - target_pos;
+//
+//                        if (positions_to_get > 0) {
+//                            // Manage negative indexes
+//                            if (target_offset >= positions_to_get) {
+//                                target_pointer_shift = positions_to_get;
+//
+//                                pos_to_shift = pos_to_ask; // we can get all the positions we need
+//                            } else {
+//                                // We can't get all the positions we need
+//                                target_pointer_shift = target_offset;
+//
+//                                pos_to_shift = target_pos + target_pointer_shift;
+//                            }
+//                        } else {
+//                            pos_to_shift = target_pos; // we can get all the positions we need without negative indexing
+//                        }
+//                    }
+//
+//                    const uint64_t target_delta_x = target_delta + pos_to_shift;
+//
+//                    if (target_delta_x > 0) {
+//                        std::string query_rev(query + query_pos, query_delta);
+//                        std::reverse(query_rev.begin(), query_rev.end());
+//
+//                        std::string target_rev(target - target_pointer_shift + target_pos_x, target_delta_x);
+//                        std::reverse(target_rev.begin(), target_rev.end());
+//
+//                        /*std::cerr << "query: ";
+//                        for (int i = 0; i < query_delta; ++i) {
+//                            std::cerr << query_rev[i];
+//                        }
+//                        std::cerr << "\ntarget: ";;
+//                        for (int i = 0; i < target_delta_x; ++i) {
+//                            std::cerr << target_rev[i];
+//                        }
+//                        std::cerr << std::endl;*/
+//
+//                        auto result = do_edlib_patch_alignment(
+//                                query_rev.c_str(), 0, query_rev.size(),
+//                                target_rev.c_str(), 0, target_rev.size(), EDLIB_MODE_SHW);
+//                        if (result.status == EDLIB_STATUS_OK
+//                            && result.alignmentLength != 0
+//                            && result.editDistance >= 0) {
+//                            got_alignment = true;
+//
+//                            target_pos = target_pos_x;
+//                            target_delta = target_delta_x;
+//
+//                            target_start = target_pos;
+//                            target_length_mut += pos_to_shift;
+//
+//                            for (int i = *result.endLocations + 1; i < target_delta; ++i) {
+//                                tracev.push_back('D');
+//                            }
+//
+//                            // copy it into the trace
+//                            char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
+//                            auto& end_idx = result.alignmentLength;
+//                            for (int i = end_idx - 1; i >= 0; --i) {
+//                                tracev.push_back(moveCodeToChar[result.alignment[i]]);
+//                            }
+//
+//                            for (int i = 0; i < *result.startLocations; ++i) {
+//                                tracev.push_back('D');
+//                            }
+//                        }
+//                        edlibFreeAlignResult(result);
+//                    }
+//                }
 
                 // add in stuff if we didn't align
                 if (!got_alignment) {
@@ -1702,7 +1819,7 @@ void write_alignment(
 //    bool aligned = false;
     //Output to file
     //auto& result = aln.result;
-    if (aln.ok) {
+    if (aln.ligh_aln->ok) {
 
         /*
         if (result.status == EDLIB_STATUS_OK
@@ -1729,7 +1846,7 @@ void write_alignment(
                                              deletions,
                                              deleted_bp);
 
-        size_t alignmentRefPos = aln.i;
+        size_t alignmentRefPos = aln.ligh_aln->i;
         //double identity = (double)matches / (matches + mismatches + insertions + deletions);
         double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
         double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
@@ -1738,9 +1855,9 @@ void write_alignment(
         if (gap_compressed_identity >= min_identity) {
             uint64_t q_start;
             if (query_is_rev) {
-                q_start = query_offset + (query_length - (aln.j + qAlignedLength));
+                q_start = query_offset + (query_length - (aln.ligh_aln->j + qAlignedLength));
             } else {
-                q_start = query_offset + aln.j;
+                q_start = query_offset + aln.ligh_aln->j;
             }
             out << query_name
                 << "\t" << query_total_length
@@ -1754,7 +1871,7 @@ void write_alignment(
                 << "\t" << matches
                 << "\t" << std::max(refAlignedLength, qAlignedLength)
                 << "\t" << std::round(float2phred(1.0-block_identity))
-                << "\t" << "as:i:" << aln.score
+                << "\t" << "as:i:" << aln.ligh_aln->score
                 << "\t" << "gi:f:" << gap_compressed_identity
                 << "\t" << "bi:f:" << block_identity
                 //<< "\t" << "md:f:" << aln.mash_dist

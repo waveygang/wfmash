@@ -46,7 +46,7 @@ bool unpack_display_cigar(
     const uint64_t& query_aln_len, const uint64_t& target_aln_len,
     uint64_t j, uint64_t i);
 
-struct alignment_t {
+struct cigar_less_alignment_t {
     int j = 0;
     int i = 0;
     uint16_t query_length = 0;
@@ -55,48 +55,53 @@ struct alignment_t {
     bool keep = false;
     int score = std::numeric_limits<int>::max();
     //float mash_dist = 1;
+};
+
+struct alignment_t {
+    cigar_less_alignment_t* ligh_aln{};
+
     wfa::edit_cigar_t edit_cigar{};
-    void display(void) {
-        std::cerr << j << " " << i << " " << query_length << " " << target_length << " " << ok << std::endl;
+    void display() {
+        std::cerr << ligh_aln->j << " " << ligh_aln->i << " " << ligh_aln->query_length << " " << ligh_aln->target_length << " " << ligh_aln->ok << std::endl;
         for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
             std::cerr << edit_cigar.operations[x++];
         }
         std::cerr << std::endl;
     }
-    bool validate(const char* query, const char* target) {
-        return validate_cigar(edit_cigar, query, target, query_length, target_length, j, i);
+    bool validate(const char* query, const char* target) const {
+        return validate_cigar(edit_cigar, query, target, ligh_aln->query_length, ligh_aln->target_length, ligh_aln->j, ligh_aln->i);
     }
     void trim_front(int query_trim) {
         // this kills the alignment
-        if (query_trim >= query_length) {
-            ok = false;
+        if (query_trim >= ligh_aln->query_length) {
+            ligh_aln->ok = false;
             return;
         }
         // increment j and i appropriately
-        int trim_to_j = j + query_trim;
+        int trim_to_j = ligh_aln->j + query_trim;
         int x = edit_cigar.begin_offset;
         while (x < edit_cigar.end_offset
-               && j < trim_to_j) {
+               && ligh_aln->j < trim_to_j) {
             switch (edit_cigar.operations[x++]) {
-            case 'M': case 'X': --query_length; --target_length; ++j; ++i; break;
-            case 'I': --query_length; ++j; break;
-            case 'D': --target_length; ++i; break;
+            case 'M': case 'X': --ligh_aln->query_length; --ligh_aln->target_length; ++ligh_aln->j; ++ligh_aln->i; break;
+            case 'I': --ligh_aln->query_length; ++ligh_aln->j; break;
+            case 'D': --ligh_aln->target_length; ++ligh_aln->i; break;
             default: break;
             }
-            if (target_length <= 0 || query_length <= 0) {
-                ok = false;
+            if (ligh_aln->target_length <= 0 || ligh_aln->query_length <= 0) {
+                ligh_aln->ok = false;
                 return;
             }
         }
         while (x < edit_cigar.end_offset && edit_cigar.operations[x] == 'D') {
-            ++x; --target_length; ++i;
+            ++x; --ligh_aln->target_length; ++ligh_aln->i;
         }
-        if (x == edit_cigar.end_offset) ok = false;
+        if (x == edit_cigar.end_offset) ligh_aln->ok = false;
         edit_cigar.begin_offset = x;
     }
     void trim_back(int query_trim) {
-        if (query_trim >= query_length) {
-            ok = false;
+        if (query_trim >= ligh_aln->query_length) {
+            ligh_aln->ok = false;
             return;
         }
         int x = edit_cigar.end_offset;
@@ -104,23 +109,24 @@ struct alignment_t {
         while (x > edit_cigar.begin_offset
                && q < query_trim) {
             switch (edit_cigar.operations[--x]) {
-            case 'M': case 'X': --query_length; --target_length; ++q; break;
-            case 'I': --query_length; ++q; break;
-            case 'D': --target_length; break;
+            case 'M': case 'X': --ligh_aln->query_length; --ligh_aln->target_length; ++q; break;
+            case 'I': --ligh_aln->query_length; ++q; break;
+            case 'D': --ligh_aln->target_length; break;
             default: break;
             }
-            if (target_length <= 0 || query_length <= 0) {
-                ok = false;
+            if (ligh_aln->target_length <= 0 || ligh_aln->query_length <= 0) {
+                ligh_aln->ok = false;
                 return;
             }
         }
         while (x >= edit_cigar.begin_offset && edit_cigar.operations[x-1] == 'D') {
-            --x; --target_length;
+            --x; --ligh_aln->target_length;
         }
-        if (x == edit_cigar.begin_offset) ok = false;
+        if (x == edit_cigar.begin_offset) ligh_aln->ok = false;
         edit_cigar.end_offset = x;
     }
     ~alignment_t() {
+        delete ligh_aln;
         free(edit_cigar.operations);
     }
 };
@@ -223,25 +229,42 @@ void wflign_affine_wavefront(
     //const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA for WFA itself
     //const int& wfa_max_distance_threshold);
 
-bool do_wfa_segment_alignment(
-    const std::string& query_name,
-    const char* query,
-    std::vector<rkmh::hash_t>*& query_sketches,
-    const uint64_t& query_length,
-    const uint64_t& j,
-    const std::string& target_name,
-    const char* target,
-    std::vector<rkmh::hash_t>*& target_sketches,
-    const uint64_t& target_length,
-    const uint64_t& i,
-    const uint16_t& segment_length,
-    const uint16_t& step_size,
-    const uint64_t& minhash_kmer_size,
-    const uint32_t& min_wavefront_length,
-    const uint32_t& max_distance_threshold,
-    wfa::mm_allocator_t* const mm_allocator,
-    wfa::affine_penalties_t* const affine_penalties,
-    alignment_t& aln);
+void do_wfa_segment_alignment(
+        const std::string& query_name,
+        const char* query,
+        const uint64_t& query_length,
+        const uint64_t& j,
+        const std::string& target_name,
+        const char* target,
+        const uint64_t& target_length,
+        const uint64_t& i,
+        const uint16_t& segment_length,
+        const uint16_t& step_size,
+        const uint32_t& min_wavefront_length,
+        const uint32_t& max_distance_threshold,
+        wfa::mm_allocator_t* const mm_allocator,
+        wfa::affine_penalties_t* const affine_penalties,
+        alignment_t& aln);
+
+bool do_wfa_segment_alignment_no_cigar(
+        const std::string& query_name,
+        const char* query,
+        std::vector<rkmh::hash_t>*& query_sketches,
+        const uint64_t& query_length,
+        const uint64_t& j,
+        const std::string& target_name,
+        const char* target,
+        std::vector<rkmh::hash_t>*& target_sketches,
+        const uint64_t& target_length,
+        const uint64_t& i,
+        const uint16_t& segment_length,
+        const uint16_t& step_size,
+        const uint64_t& minhash_kmer_size,
+        const uint32_t& min_wavefront_length,
+        const uint32_t& max_distance_threshold,
+        wfa::mm_allocator_t* const mm_allocator,
+        wfa::affine_penalties_t* const affine_penalties,
+        cigar_less_alignment_t& aln);
 
 void do_wfa_patch_alignment(
     const char* query,
