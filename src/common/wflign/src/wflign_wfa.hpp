@@ -53,7 +53,7 @@ struct cigar_less_alignment_t {
     uint16_t target_length = 0;
     bool ok = false;
     bool keep = false;
-    int score = std::numeric_limits<int>::max();
+    //int score = std::numeric_limits<int>::max();
     //float mash_dist = 1;
 };
 

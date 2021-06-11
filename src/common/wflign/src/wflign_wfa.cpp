@@ -530,50 +530,73 @@ bool do_wfa_segment_alignment_no_cigar(
     // first check if our mash dist is inbounds
     const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const int max_score = segment_length * (0.75 + mash_dist);
+    //aln.mash_dist = mash_dist;
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.618034) {
+    if (mash_dist > 0.2) {
         // if it isn't, return false
         return false;
     } else {
-        // if it is, we'll align
-        wfa::affine_wavefronts_t* affine_wavefronts;
-        if (min_wavefront_length || max_distance_threshold) {
-            // adaptive affine WFA setup
-            affine_wavefronts = affine_wavefronts_new_reduced(
-                    segment_length, segment_length, affine_penalties,
-                    min_wavefront_length, max_distance_threshold,
-                    NULL, mm_allocator);
-        } else {
-            // exact WFA
-            affine_wavefronts = affine_wavefronts_new_complete(
-                    segment_length, segment_length, affine_penalties, NULL, mm_allocator);
-        }
-
-        aln.score = wfa::affine_wavefronts_align_bounded_no_cigar(
-                affine_wavefronts,
-                target+i,
-                segment_length,
-                query+j,
-                segment_length,
-                max_score);
-
         aln.j = j;
         aln.i = i;
 
-        //aln.mash_dist = mash_dist;
-        aln.ok = aln.score < max_score;
+        if (mash_dist > 0.008) {
+            const int max_score = segment_length * (0.75 + mash_dist);
 
-        // fill the alignment info if we aligned
-        if (aln.ok) {
+            // if it is, we'll align
+            wfa::affine_wavefronts_t* affine_wavefronts;
+            if (min_wavefront_length || max_distance_threshold) {
+                // adaptive affine WFA setup
+                affine_wavefronts = affine_wavefronts_new_reduced(
+                        segment_length, segment_length, affine_penalties,
+                        min_wavefront_length, max_distance_threshold,
+                        NULL, mm_allocator);
+            } else {
+                // exact WFA
+                affine_wavefronts = affine_wavefronts_new_complete(
+                        segment_length, segment_length, affine_penalties, NULL, mm_allocator);
+            }
+
+            aln.ok = wfa::affine_wavefronts_align_bounded_no_cigar(
+                    affine_wavefronts,
+                    target+i,
+                    segment_length,
+                    query+j,
+                    segment_length,
+                    max_score) < max_score ;
+
+            // cleanup wavefronts to keep memory low
+            affine_wavefronts_delete(affine_wavefronts);
+            // fill the alignment info if we aligned
+            if (aln.ok) {
+                aln.query_length = segment_length;
+                aln.target_length = segment_length;
+            }
+
+//            EdlibAlignResult result = edlibAlign(
+//                    target+i,
+//                    segment_length,
+//                    query+j,
+//                    segment_length,
+//                    edlibNewAlignConfig(192, EDLIB_MODE_HW, EDLIB_TASK_PATH, NULL, 0)
+//            );
+//            if (result.status == EDLIB_STATUS_OK && result.editDistance < 192) {
+//                char* cigar = edlibAlignmentToCigar(result.alignment, result.alignmentLength, EDLIB_CIGAR_STANDARD);
+//                std::cerr << result.editDistance << std::endl;
+//                std::cerr << cigar << std::endl<< std::endl;
+//                free(cigar);
+//
+//                aln.ok = true;
+//                aln.query_length = segment_length;
+//                aln.target_length = segment_length;
+//            }
+//            edlibFreeAlignResult(result);
+        } else {
+            aln.ok = true;
             aln.query_length = segment_length;
             aln.target_length = segment_length;
         }
-
-        // cleanup wavefronts to keep memory low
-        affine_wavefronts_delete(affine_wavefronts);
 
         return aln.ok;
     }
@@ -619,15 +642,14 @@ void do_wfa_patch_alignment(
     }
     std::cerr << std::endl;*/
 
-    aln.ligh_aln->score = wfa::affine_wavefronts_align_bounded(
+    aln.ligh_aln->ok = wfa::affine_wavefronts_align_bounded(
         affine_wavefronts,
         target+i,
         target_length,
         query+j,
         query_length,
-        max_score);
+        max_score) < max_score;
 
-    aln.ligh_aln->ok = aln.ligh_aln->score < max_score;
     if (aln.ligh_aln->ok) {
         // correct X/M errors in the cigar
         hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, j, i);
@@ -1864,7 +1886,7 @@ void write_alignment(
             << "\t" << matches
             << "\t" << std::max(refAlignedLength, qAlignedLength)
             << "\t" << std::round(float2phred(1.0-block_identity))
-            << "\t" << "as:i:" << aln.ligh_aln->score
+            //<< "\t" << "as:i:" << aln.ligh_aln->score
             << "\t" << "gi:f:" << gap_compressed_identity
             << "\t" << "bi:f:" << block_identity
             //<< "\t" << "md:f:" << aln.mash_dist
