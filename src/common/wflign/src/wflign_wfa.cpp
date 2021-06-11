@@ -227,7 +227,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
         if (!trace.front()->validate(query, target)) {
             std::cerr << "first traceback is wrong" << std::endl;
@@ -260,24 +260,22 @@ void wflign_affine_wavefront(
             alignment_t& last = **x;
             alignment_t& curr = **c;
 
-            if (curr.ligh_aln->ok) {
-                do_wfa_segment_alignment(
-                        query_name,
-                        query,
-                        query_length,
-                        curr.ligh_aln->j,
-                        target_name,
-                        target,
-                        target_length,
-                        curr.ligh_aln->i,
-                        segment_length_to_use,
-                        step_size,
-                        wfa_min_wavefront_length,
-                        wfa_max_distance_threshold,
-                        wfa_mm_allocator,
-                        &wfa_affine_penalties,
-                        curr);
-            }
+            do_wfa_segment_alignment(
+                    query_name,
+                    query,
+                    query_length,
+                    curr.ligh_aln->j,
+                    target_name,
+                    target,
+                    target_length,
+                    curr.ligh_aln->i,
+                    segment_length_to_use,
+                    step_size,
+                    wfa_min_wavefront_length,
+                    wfa_max_distance_threshold,
+                    wfa_mm_allocator,
+                    &wfa_affine_penalties,
+                    curr);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (curr.ligh_aln->ok && !curr.validate(query, target)) {
