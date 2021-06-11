@@ -96,7 +96,10 @@ namespace wflign {
             int v_max = 0;
             int h_max = 0;
 
-            const float max_mash_dist = (1.0 - mashmap_identity) * 5.0;
+            // heuristic bound on the max mash dist, adaptive based on estimated identity
+            // the goal here is to sparsify the set of alignments in the wflambda layer
+            // we then patch up the gaps between them
+            const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 20.0);
 
             auto extend_match = [&](const int& v, const int& h) {
                 bool aligned = false;
@@ -428,13 +431,10 @@ namespace wflign {
 
             const int max_score = segment_length * (0.75 + mash_dist);
 
-            // the mash distance generally underestimates the actual divergence
-            // but when it's high we are almost certain that it's not a match
-            // previously, we set a high threshold here, e.g. 0.618034
-            // but with efficient patching, it is actually advantageous to sparseify
-            // we set a low threshold to randomly sample high-quality matches
-            // nb. this is oriented towards very high-identity (>90%) mapping
-            if (mash_dist > 0.05) {
+            // this threshold is set low enough that we tend to randomly sample wflambda matrix cells for alignment
+            // the threshold is adaptive, based on the mash distance of the mapping we are aligning
+            // we should obtain enough alignments that we can still patch between them
+            if (mash_dist > max_mash_dist) {
                 // if it isn't, return false
                 return false;
             } else {
