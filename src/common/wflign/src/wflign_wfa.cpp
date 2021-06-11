@@ -833,7 +833,7 @@ namespace wflign {
 
             // patching parameters
             // we will nibble patching back to this length
-            const uint64_t min_wfa_patch_length = 16;
+            const uint64_t min_wfa_patch_length = 64;
             const int min_wf_length = 256;
             const int max_dist_threshold = 128;
 
