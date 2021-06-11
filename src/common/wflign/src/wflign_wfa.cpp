@@ -430,7 +430,11 @@ namespace wflign {
 
             // the mash distance generally underestimates the actual divergence
             // but when it's high we are almost certain that it's not a match
-            if (mash_dist > 0.1) { //0.618034) {
+            // previously, we set a high threshold here, e.g. 0.618034
+            // but with efficient patching, it is actually advantageous to sparseify
+            // we set a low threshold to randomly sample high-quality matches
+            // nb. this is oriented towards very high-identity (>90%) mapping
+            if (mash_dist > 0.05) {
                 // if it isn't, return false
                 return false;
             } else {
