@@ -128,7 +128,7 @@ void wflign_affine_wavefront(
                         wfa_mm_allocator,
                         &wfa_affine_penalties,
                         *aln);
-                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                //std::cerr << v << "\t" << h << "\t" << "\t" << aligned << std::endl;
                 ++num_alignments;
                 if (aligned) {
                     alignments[k] = aln;
@@ -235,6 +235,43 @@ void wflign_affine_wavefront(
             assert(false);
         }
 #endif
+
+        /*{
+            auto x = trace.rbegin();
+            while (x != trace.rend()) {
+                // establish our last and curr alignments to consider when trimming
+                alignment_t &last = **x;
+
+                //std::cerr << "last " << (**x).ligh_aln->j << " - " << (**x).ligh_aln->i << "\n";
+
+                do_wfa_segment_alignment(
+                    query_name,
+                    query,
+                    query_length,
+                    (**x).ligh_aln->j,
+                    target_name,
+                    target,
+                    target_length,
+                    (**x).ligh_aln->i,
+                    segment_length_to_use,
+                    step_size,
+                    wfa_min_wavefront_length,
+                    wfa_max_distance_threshold,
+                    wfa_mm_allocator,
+                    &wfa_affine_penalties,
+                    **x);
+
+#ifdef VALIDATE_WFA_WFLIGN
+                if ((**x).ligh_aln->ok && !(**x).validate(query, target)) {
+                    std::cerr << "curr traceback is wrong before trimming @ " << (**x).ligh_aln->j << " " << (**x).ligh_aln->i << std::endl;
+                    (**x).display();
+                    assert(false);
+                }
+#endif
+
+                ++x;
+            }
+        }*/
 
         auto x = trace.rbegin();
         do_wfa_segment_alignment(
@@ -532,14 +569,14 @@ bool do_wfa_segment_alignment_no_cigar(
 
     // the mash distance generally underestimates the actual divergence
     // but when it's high we are almost certain that it's not a match
-    if (mash_dist > 0.2) {
+    if (mash_dist > 0.618034) {
         // if it isn't, return false
         return false;
     } else {
         aln.j = j;
         aln.i = i;
 
-        if (mash_dist > 0.008) {
+        if (true || mash_dist > 0.007) {
             const int max_score = segment_length * (0.75 + mash_dist);
 
             // if it is, we'll align
@@ -566,30 +603,31 @@ bool do_wfa_segment_alignment_no_cigar(
 
             // cleanup wavefronts to keep memory low
             affine_wavefronts_delete(affine_wavefronts);
+
             // fill the alignment info if we aligned
             if (aln.ok) {
                 aln.query_length = segment_length;
                 aln.target_length = segment_length;
             }
 
-//            EdlibAlignResult result = edlibAlign(
-//                    target+i,
-//                    segment_length,
-//                    query+j,
-//                    segment_length,
-//                    edlibNewAlignConfig(192, EDLIB_MODE_HW, EDLIB_TASK_PATH, NULL, 0)
-//            );
-//            if (result.status == EDLIB_STATUS_OK && result.editDistance < 192) {
-//                char* cigar = edlibAlignmentToCigar(result.alignment, result.alignmentLength, EDLIB_CIGAR_STANDARD);
-//                std::cerr << result.editDistance << std::endl;
-//                std::cerr << cigar << std::endl<< std::endl;
-//                free(cigar);
-//
-//                aln.ok = true;
-//                aln.query_length = segment_length;
-//                aln.target_length = segment_length;
-//            }
-//            edlibFreeAlignResult(result);
+            /*EdlibAlignResult result = edlibAlign(
+                    target+i,
+                    segment_length,
+                    query+j,
+                    segment_length,
+                    edlibNewAlignConfig(192, EDLIB_MODE_HW, EDLIB_TASK_PATH, NULL, 0)
+            );
+            if (result.status == EDLIB_STATUS_OK && result.editDistance < 192) {
+                char* cigar = edlibAlignmentToCigar(result.alignment, result.alignmentLength, EDLIB_CIGAR_STANDARD);
+                std::cerr << result.editDistance << std::endl;
+                std::cerr << cigar << std::endl<< std::endl;
+                free(cigar);
+
+                aln.ok = true;
+                aln.query_length = segment_length;
+                aln.target_length = segment_length;
+            }
+            edlibFreeAlignResult(result);*/
         } else {
             aln.ok = true;
             aln.query_length = segment_length;
