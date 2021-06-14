@@ -99,7 +99,7 @@ namespace wflign {
             // heuristic bound on the max mash dist, adaptive based on estimated identity
             // the goal here is to sparsify the set of alignments in the wflambda layer
             // we then patch up the gaps between them
-            const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 20.0);
+            const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 5.0);
 
             auto extend_match = [&](const int& v, const int& h) {
                 bool aligned = false;
