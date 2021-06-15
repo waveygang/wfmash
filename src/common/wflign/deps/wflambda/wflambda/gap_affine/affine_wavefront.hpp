@@ -120,7 +120,7 @@ typedef struct {
   // Penalties
   affine_wavefronts_penalties_t penalties;     // Penalties parameters
   // CIGAR
-  edit_cigar_t edit_cigar;                     // Alignment CIGAR
+  //edit_cigar_t edit_cigar;                     // Alignment CIGAR
   // MM
   mm_allocator_t* mm_allocator;                // MM-Allocator
   affine_wavefront_t* wavefronts_mem;          // MM-Slab for affine_wavefront_t (base)

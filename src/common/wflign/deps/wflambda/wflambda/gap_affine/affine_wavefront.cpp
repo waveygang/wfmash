@@ -103,7 +103,7 @@ affine_wavefronts_t* affine_wavefronts_new(
   affine_wavefronts_allocate_wavefront_components(affine_wavefronts);
   affine_wavefronts_allocate_wavefront_null(affine_wavefronts);
   // CIGAR
-  edit_cigar_allocate(&affine_wavefronts->edit_cigar,pattern_length,text_length,mm_allocator);
+  //edit_cigar_allocate(&affine_wavefronts->edit_cigar,pattern_length,text_length,mm_allocator);
   // STATS
   affine_wavefronts->wavefronts_stats = NULL;
   // DEBUG
@@ -153,7 +153,7 @@ void affine_wavefronts_clear(
     }
   }
   // Clear CIGAR
-  edit_cigar_clear(&affine_wavefronts->edit_cigar);
+  //edit_cigar_clear(&affine_wavefronts->edit_cigar);
   // Clear bulk memory
   affine_wavefronts->wavefronts_current = affine_wavefronts->wavefronts_mem;
 }
@@ -171,7 +171,7 @@ void affine_wavefronts_delete(
   // Free bulk memory
   mm_allocator_free(mm_allocator,affine_wavefronts->wavefronts_mem);
   // CIGAR
-  edit_cigar_free(&affine_wavefronts->edit_cigar,mm_allocator);
+  //edit_cigar_free(&affine_wavefronts->edit_cigar,mm_allocator);
   // DEBUG
 #ifdef AFFINE_LAMBDA_WAVEFRONT_DEBUG
   affine_table_free(&affine_wavefronts->gap_affine_table,mm_allocator);

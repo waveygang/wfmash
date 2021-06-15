@@ -119,9 +119,9 @@ void benchmark_gap_affine_wavefront(
       align_input->text_length);
   timer_stop(&align_input->timer);
   // Debug alignment
-  if (align_input->debug_flags) {
-    benchmark_check_alignment(align_input,&affine_wavefronts->edit_cigar);
-  }
+//  if (align_input->debug_flags) {
+//    benchmark_check_alignment(align_input,&affine_wavefronts->edit_cigar);
+//  }
   // Free
   affine_wavefronts_delete(affine_wavefronts);
 }

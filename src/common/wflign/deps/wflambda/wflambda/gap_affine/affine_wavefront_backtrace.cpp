@@ -234,8 +234,8 @@ void affine_wavefronts_backtrace_matches__check(
     const int k,
     awf_offset_t offset,
     const bool valid_location,
-    const int num_matches,
-    edit_cigar_t* const edit_cigar) {
+    const int num_matches/*,
+    edit_cigar_t* const edit_cigar*/) {
   int i;
   for (i=0;i<num_matches;++i) {
     // run our traceback function on the alignments
@@ -249,7 +249,7 @@ void affine_wavefronts_backtrace_matches__check(
       exit(1);
     }
     // Set Match
-    edit_cigar->operations[(edit_cigar->begin_offset)--] = 'M';
+    //edit_cigar->operations[(edit_cigar->begin_offset)--] = 'M';
     // Update state
     --offset;
   }
@@ -277,7 +277,7 @@ void affine_wavefronts_backtrace(
   // Parameters
   const affine_penalties_t* const wavefront_penalties =
       &(affine_wavefronts->penalties.wavefront_penalties);
-  edit_cigar_t* const cigar = &affine_wavefronts->edit_cigar;
+  //edit_cigar_t* const cigar = &affine_wavefronts->edit_cigar;
   const int alignment_k = AFFINE_LAMBDA_WAVEFRONT_DIAGONAL(text_length,pattern_length);
   // Compute starting location
   int score = alignment_score;
@@ -290,12 +290,12 @@ void affine_wavefronts_backtrace(
   int h = AFFINE_LAMBDA_WAVEFRONT_H(k,offset);
   while (v > 0 && h > 0 && score > 0) {
     // Check location
-    if (!valid_location) {
-      valid_location = affine_wavefronts_valid_location(k,offset,pattern_length,text_length);
-      if (valid_location) {
-        affine_wavefronts_offset_add_trailing_gap(cigar,k,alignment_k);
-      }
-    }
+//    if (!valid_location) {
+//      valid_location = affine_wavefronts_valid_location(k,offset,pattern_length,text_length);
+//      if (valid_location) {
+//        affine_wavefronts_offset_add_trailing_gap(cigar,k,alignment_k);
+//      }
+//    }
     // Compute scores
     const int gap_open_score = score - wavefront_penalties->gap_opening - wavefront_penalties->gap_extension;
     const int gap_extend_score = score - wavefront_penalties->gap_extension;
@@ -320,27 +320,27 @@ void affine_wavefronts_backtrace(
       const int num_matches = offset - max_all;
       affine_wavefronts_backtrace_matches__check(
           affine_wavefronts,
-          lambda,k,offset,valid_location,num_matches,cigar);
+          lambda,k,offset,valid_location,num_matches/*,cigar*/);
       offset = max_all;
     }
     // Traceback Operation
     if (max_all == del_ext) {
       // Add Deletion
-      if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'D';
+      //if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'D';
       // Update state
       score = gap_extend_score;
       ++k;
       backtrace_type = backtrace_wavefront_D;
     } else if (max_all == del_open) {
       // Add Deletion
-      if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'D';
+      //if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'D';
       // Update state
       score = gap_open_score;
       ++k;
       backtrace_type = backtrace_wavefront_M;
     } else if (max_all == ins_ext) {
       // Add Insertion
-      if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'I';
+      //if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'I';
       // Update state
       score = gap_extend_score;
       --k;
@@ -348,7 +348,7 @@ void affine_wavefronts_backtrace(
       backtrace_type = backtrace_wavefront_I;
     } else if (max_all == ins_open) {
       // Add Insertion
-      if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'I';
+      //if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'I';
       // Update state
       score = gap_open_score;
       --k;
@@ -356,7 +356,7 @@ void affine_wavefronts_backtrace(
       backtrace_type = backtrace_wavefront_M;
     } else if (max_all == misms) {
       // Add Mismatch
-      if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'X';
+      //if (valid_location) cigar->operations[(cigar->begin_offset)--] = 'X';
       // Update state
       score = mismatch_score;
       --offset;
@@ -373,13 +373,13 @@ void affine_wavefronts_backtrace(
     // Account for last stroke of matches
     affine_wavefronts_backtrace_matches__check(
         affine_wavefronts,
-        lambda,k,offset,valid_location,offset,cigar);
-  } else {
+        lambda,k,offset,valid_location,offset/*,cigar*/);
+  } /*else {
     // Account for last stroke of insertion/deletion
     while (v > 0) {cigar->operations[(cigar->begin_offset)--] = 'D'; --v;};
     while (h > 0) {cigar->operations[(cigar->begin_offset)--] = 'I'; --h;};
-  }
-  ++(cigar->begin_offset); // Set CIGAR length
+  }*/
+  //++(cigar->begin_offset); // Set CIGAR length
   // STATS
   WAVEFRONT_STATS_TIMER_STOP(affine_wavefronts,wf_time_backtrace);
 }
