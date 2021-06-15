@@ -54,7 +54,7 @@ struct alignment_t {
     bool ok = false;
     bool keep = false;
     int score = std::numeric_limits<int>::max();
-    //float mash_dist = 1;
+    float mash_dist = 1;
     wfa::edit_cigar_t edit_cigar{};
     void display(void) {
         std::cerr << j << " " << i << " " << query_length << " " << target_length << " " << ok << std::endl;
@@ -228,17 +228,17 @@ bool do_wfa_segment_alignment(
     const char* query,
     std::vector<rkmh::hash_t>*& query_sketches,
     const uint64_t& query_length,
-    const uint64_t& j,
+    const int& j,
     const std::string& target_name,
     const char* target,
     std::vector<rkmh::hash_t>*& target_sketches,
     const uint64_t& target_length,
-    const uint64_t& i,
+    const int& i,
     const uint16_t& segment_length,
     const uint16_t& step_size,
     const uint64_t& minhash_kmer_size,
-    const uint32_t& min_wavefront_length,
-    const uint32_t& max_distance_threshold,
+    const int& min_wavefront_length,
+    const int& max_distance_threshold,
     const float& max_mash_dist,
     wfa::mm_allocator_t* const mm_allocator,
     wfa::affine_penalties_t* const affine_penalties,

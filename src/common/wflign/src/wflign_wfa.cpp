@@ -49,8 +49,8 @@ namespace wflign {
 
             // uncomment to use reduced WFA locally
             // currently not supported due to issues with traceback when applying WF-reduction on small problems
-            const uint32_t wfa_min_wavefront_length = 0; //segment_length_to_use / 16;
-            const uint32_t wfa_max_distance_threshold = 0; //segment_length_to_use / 8;
+            const int wfa_min_wavefront_length = 0; //segment_length_to_use / 16;
+            const int wfa_max_distance_threshold = 0; //segment_length_to_use / 8;
 
             // Allocate MM
             wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
@@ -73,33 +73,35 @@ namespace wflign {
                         pattern_length+1, text_length+1, &wflambda_affine_penalties, NULL, wflambda_mm_allocator);
             }
 
+            uint64_t num_alignments = 0;
+            uint64_t num_alignments_performed = 0;
+
             // save computed alignments in a pair-indexed patchmap
             whash::patchmap<uint64_t,alignment_t*> alignments;
+
+            int v_max = 0;
+            int h_max = 0;
+
+            const uint64_t minhash_kmer_size = 17;
 
             // allocate vectors to store our sketches
             std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length, nullptr);
             std::vector<std::vector<rkmh::hash_t>*> target_sketches(text_length, nullptr);
 
-            //std::cerr << "v" << "\t" << "h" << "\t" << "score" << "\t" << "aligned" << std::endl;
-
             // setup affine WFA
             wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
             wfa::affine_penalties_t wfa_affine_penalties = {
                 .match = 0,
-                .mismatch = 9,
-                .gap_opening = 13,
+                .mismatch = 8,
+                .gap_opening = 15,
                 .gap_extension = 1,
             };
-            uint64_t num_alignments = 0;
-            uint64_t num_alignments_performed = 0;
-            const uint64_t minhash_kmer_size = 17;
-            int v_max = 0;
-            int h_max = 0;
 
             // heuristic bound on the max mash dist, adaptive based on estimated identity
             // the goal here is to sparsify the set of alignments in the wflambda layer
             // we then patch up the gaps between them
-            const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 5.0);
+            //TODO
+            const float max_mash_dist = 0.6;//std::max(0.05, (1.0 - mashmap_identity) * 5.0);
 
             auto extend_match = [&](const int& v, const int& h) {
                 bool aligned = false;
@@ -108,11 +110,11 @@ namespace wflign {
                     const auto f = alignments.find(k); //TODO: it can be removed using an edit-distance mode as high-level of WF-inception
                     if (f != alignments.end()) {
                         aligned = true;
-                    } else  {
-                        const int query_begin = (int)(v < pattern_length-1 ? v * step_size :
-                                                      query_length - segment_length_to_use);
-                        const int target_begin = (int)(h < text_length-1 ? h * step_size :
-                                                       target_length - segment_length_to_use);
+                    } else {
+                        const int query_begin = (int) (v < pattern_length-1 ? v * step_size :
+                                                       query_length - segment_length_to_use);
+                        const int target_begin = (int) (h < text_length-1 ? h * step_size :
+                                                        target_length - segment_length_to_use);
 
                         auto* aln = new alignment_t();
                         aligned = do_wfa_segment_alignment(
@@ -135,7 +137,7 @@ namespace wflign {
                                 wfa_mm_allocator,
                                 &wfa_affine_penalties,
                                 *aln);
-                        //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                        //std::cout << v << "\t" << h << "\t" << aln->score << "\t" << aligned << "\t" << aln->mash_dist << std::endl;
                         ++num_alignments;
                         if (aln->score != std::numeric_limits<int>::max()) {
                             ++num_alignments_performed;
@@ -173,13 +175,13 @@ namespace wflign {
 
             // accumulate runs of matches in reverse order
             // then trim the cigars of successive mappings
-            //
             std::vector<alignment_t*> trace;
 
-            auto trace_match = [&](const int& v, const int& h) {
+            auto trace_match = [&](const int &v, const int &h) {
                 if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
                     const uint64_t k = encode_pair(v, h);
                     auto* aln = alignments[k];
+                    //std::cerr << "TRACE\t" << v << "\t" << h << "\t" << aln->score << "\t" << aln->ok << "\t" << aln->mash_dist << std::endl;
                     if (aln->ok) {
                         trace.push_back(aln);
                         aln->keep = true;
@@ -212,10 +214,10 @@ namespace wflign {
 //#define WFLIGN_DEBUG
 #ifdef WFLIGN_DEBUG
             // get alignment score
-    const int score = wflambda::edit_cigar_score_gap_affine(
-        &affine_wavefronts->edit_cigar, &wflambda_affine_penalties);
+            const int score = wflambda::edit_cigar_score_gap_affine(
+                &affine_wavefronts->edit_cigar, &wflambda_affine_penalties);
 
-    std::cerr << "[wflign::wflign_affine_wavefront] alignment score " << score << " for query: " << query_name << " target: " << target_name << std::endl;
+            std::cerr << "[wflign::wflign_affine_wavefront] alignment score " << score << " for query: " << query_name << " target: " << target_name << std::endl;
 #endif
 
             // clean up sketches
@@ -390,27 +392,27 @@ namespace wflign {
             wflambda::mm_allocator_delete(wflambda_mm_allocator);
         }
 
-// accumulate alignment objects
-// run the traceback determine which are part of the main chain
-// order them and write them out
-// needed--- 0-cost deduplication of alignment regions (how????)
-//     --- trim the alignment back to the first 1/2 of the query
+        // accumulate alignment objects
+        // run the traceback determine which are part of the main chain
+        // order them and write them out
+        // needed--- 0-cost deduplication of alignment regions (how????)
+        //     --- trim the alignment back to the first 1/2 of the query
         bool do_wfa_segment_alignment(
                 const std::string& query_name,
                 const char* query,
                 std::vector<rkmh::hash_t>*& query_sketch,
                 const uint64_t& query_length,
-                const uint64_t& j,
+                const int& j,
                 const std::string& target_name,
                 const char* target,
                 std::vector<rkmh::hash_t>*& target_sketch,
                 const uint64_t& target_length,
-                const uint64_t& i,
+                const int& i,
                 const uint16_t& segment_length,
                 const uint16_t& step_size,
                 const uint64_t& minhash_kmer_size,
-                const uint32_t& min_wavefront_length,
-                const uint32_t& max_distance_threshold,
+                const int& min_wavefront_length,
+                const int& max_distance_threshold,
                 const float& max_mash_dist,
                 wfa::mm_allocator_t* const mm_allocator,
                 wfa::affine_penalties_t* const affine_penalties,
@@ -429,11 +431,20 @@ namespace wflign {
             // first check if our mash dist is inbounds
             const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-            const int max_score = segment_length * (0.75 + mash_dist);
+            const float est_identity = 0.99;
 
+            // Worst case acceptable as a match: seg_len/4 Is/Ds + seg_len * 3/4 long good enough alignment + seg_len/4 Ds/Is
+            int segment_length_div_4 = segment_length / 4;
+            const int max_score =(int) ((1 + mash_dist) *
+                    (float) (affine_penalties->gap_opening + (segment_length_div_4 - 1) * affine_penalties->gap_extension) * 2 +
+                    ceil((float) segment_length_div_4 * 3 * (1 - est_identity)) *
+                    (float) (affine_penalties->gap_opening + affine_penalties->gap_extension + affine_penalties->mismatch));
+
+            //std::cerr << "max_score: " << max_score << std::endl;
             // this threshold is set low enough that we tend to randomly sample wflambda matrix cells for alignment
             // the threshold is adaptive, based on the mash distance of the mapping we are aligning
             // we should obtain enough alignments that we can still patch between them
+            aln.mash_dist = mash_dist;
             if (mash_dist > max_mash_dist) {
                 // if it isn't, return false
                 return false;
@@ -463,7 +474,6 @@ namespace wflign {
                 aln.j = j;
                 aln.i = i;
 
-                //aln.mash_dist = mash_dist;
                 aln.ok = aln.score < max_score;
 
                 // fill the alignment info if we aligned
@@ -1296,7 +1306,7 @@ namespace wflign {
                                                     ++size_region_to_repatch;
                                                 } else {
                                                     // Not too big, to avoid repatching structural variants boundaries
-                                                    if (size_indel > 7 &&  size_indel <= 4096 && size_indel < (end_idx - start_idx)){
+                                                    if (size_indel > 7 && size_indel <= 4096 && size_indel < (end_idx - start_idx)){
                                                         break;
                                                     }
 
@@ -1307,7 +1317,7 @@ namespace wflign {
                                             //std::cerr << std::endl;
 
                                             // Not too big, to avoid repatching structural variants boundaries
-                                            if (size_indel > 7 &&  size_indel <= 4096 && size_region_to_repatch < (end_idx - start_idx)){
+                                            if (size_indel > 7 && size_indel <= 4096 && size_region_to_repatch < (end_idx - start_idx)){
                                                 //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
                                                 //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
                                             } else {
@@ -1405,7 +1415,7 @@ namespace wflign {
                                         //}
                                         const uint32_t inc = target_delta_x - target_delta;
                                         target_end += inc;
-                                        target_length_mut+= inc;
+                                        target_length_mut += inc;
                                     }
 
                                     target_delta = target_delta_x;
@@ -1434,7 +1444,7 @@ namespace wflign {
                             }
                         }
 
-                        if (!got_alignment){
+                        if (!got_alignment) {
                             // add in our tail gap / softclip
                             for (uint64_t i = 0; i < query_delta; ++i) {
                                 patched.push_back('I');
@@ -1614,10 +1624,10 @@ namespace wflign {
 
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] got full patched traceback: ";
-    for (auto c : tracev) {
-        std::cerr << c;
-    }
-    std::cerr << std::endl;
+            for (auto c : tracev) {
+                std::cerr << c;
+            }
+            std::cerr << std::endl;
 #endif
 
 #ifdef VALIDATE_WFA_WFLIGN
