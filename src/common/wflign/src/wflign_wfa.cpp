@@ -128,7 +128,7 @@ void wflign_affine_wavefront(
                         wfa_mm_allocator,
                         &wfa_affine_penalties,
                         *aln);
-                //std::cerr << aln->j << "\t" << aln->i << "\t" << aln->score << "\t" << aligned << std::endl;
+                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
                 ++num_alignments;
                 if (aligned) {
                     alignments[k] = aln;
