@@ -214,8 +214,8 @@ void wflign_affine_wavefront(
     const uint64_t& target_length,
     const uint16_t& segment_length,
     const float& min_identity,
-    const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-    const uint32_t & wflambda_max_distance_threshold,
+    const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
+    const int & wflambda_max_distance_threshold,
     const double& mashmap_identity,
     const uint64_t& wflign_max_len_major,
     const uint64_t& wflign_max_len_minor,
@@ -264,7 +264,7 @@ EdlibAlignResult do_edlib_patch_alignment(
     const char* target,
     const uint64_t& i,
     const uint64_t& target_length,
-    const EdlibAlignMode align_mode);
+    const EdlibAlignMode& align_mode);
 
 void write_merged_alignment(
     std::ostream& out,
@@ -286,8 +286,8 @@ void write_merged_alignment(
     const uint64_t& target_length,
     const float& min_identity,
     const long& elapsed_time_wflambda_ms,
-    const long& num_alignments,
-    const long& num_alignments_performed,
+    const uint64_t& num_alignments,
+    const uint64_t& num_alignments_performed,
     const double& mashmap_identity,
     const uint64_t& wflign_max_len_major,
     const uint64_t& wflign_max_len_minor,
@@ -334,7 +334,7 @@ char* wfa_alignment_to_cigar(
     uint64_t& deletions,
     uint64_t& deleted_bp);
 
-char* edlib_alignment_to_cigar(
+/*char* edlib_alignment_to_cigar(
     const unsigned char* const alignment,
     const int alignment_length,
     uint64_t& target_aligned_length,
@@ -344,7 +344,7 @@ char* edlib_alignment_to_cigar(
     uint64_t& insertions,
     uint64_t& inserted_bp,
     uint64_t& deletions,
-    uint64_t& deleted_bp);
+    uint64_t& deleted_bp);*/
 
 double float2phred(const double& prob);
 

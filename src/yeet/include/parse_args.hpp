@@ -17,7 +17,7 @@ namespace yeet {
 struct Parameters {
     bool approx_mapping = false;
     bool remapping = false;
-    bool align_input_paf = false;
+    //bool align_input_paf = false;
 };
 
 void parse_args(int argc,
@@ -28,14 +28,14 @@ void parse_args(int argc,
 
     args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm");
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
-    args::ValueFlag<uint64_t> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
+    args::ValueFlag<int> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
     args::ValueFlag<std::string> target_sequence_file_list(parser, "targets", "alignment target file list", {'L', "target-file-list"});
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<uint64_t> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
-    args::ValueFlag<uint64_t> block_length_min(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length-min"});
+    args::ValueFlag<int> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
+    args::ValueFlag<int> block_length_min(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length-min"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
@@ -58,8 +58,8 @@ void parse_args(int argc,
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<uint16_t> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
-    args::ValueFlag<uint32_t> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-    args::ValueFlag<uint32_t> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
+    args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
+    args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
 
     //Unsupported
     //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
@@ -127,8 +127,7 @@ void parse_args(int argc,
     }
 
     if (spaced_seed_params) {
-
-      auto split = [](string s, string delimiter) {
+      auto split = [](const string& s, const string& delimiter) {
         size_t pos_start = 0, pos_end, delim_len = delimiter.length();
         string token;
         vector<string> res;
@@ -169,10 +168,9 @@ void parse_args(int argc,
       uint32_t region_length = stoi(p[3]);
 
       // Generate an ALeS params struct
-      auto spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
       map_parameters.use_spaced_seeds = true;
-      map_parameters.spaced_seed_params = spaced_seed_params;
-      map_parameters.kmerSize = seed_weight;
+      map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
+      map_parameters.kmerSize = (int) seed_weight;
     } else {
       map_parameters.use_spaced_seeds = false;
     }
@@ -225,7 +223,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
             exit(1);
         }
-        map_parameters.percentageIdentity = (float)args::get(map_pct_identity)/100.0; // scale to [0,1]
+        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
     } else {
         map_parameters.percentageIdentity = 0.95;
     }

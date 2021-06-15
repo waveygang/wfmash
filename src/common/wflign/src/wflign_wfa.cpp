@@ -23,8 +23,8 @@ namespace wflign {
                 const uint64_t& target_length,
                 const uint16_t& segment_length,
                 const float& min_identity,
-                const uint32_t& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
-                const uint32_t& wflambda_max_distance_threshold,
+                const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
+                const int& wflambda_max_distance_threshold,
                 const double& mashmap_identity,
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
@@ -44,8 +44,8 @@ namespace wflign {
             const uint16_t step_size = segment_length_to_use / steps_per_segment;
 
             // Pattern & Text
-            const uint64_t pattern_length = query_length / step_size;
-            const uint64_t text_length = target_length / step_size;
+            const int pattern_length = (int) query_length / step_size;
+            const int text_length = (int) target_length / step_size;
 
             // uncomment to use reduced WFA locally
             // currently not supported due to issues with traceback when applying WF-reduction on small problems
@@ -109,9 +109,9 @@ namespace wflign {
                     if (f != alignments.end()) {
                         aligned = true;
                     } else  {
-                        const uint64_t query_begin = (v < pattern_length-1 ? v * step_size :
+                        const int query_begin = (int)(v < pattern_length-1 ? v * step_size :
                                                       query_length - segment_length_to_use);
-                        const uint64_t target_begin = (h < text_length-1 ? h * step_size :
+                        const int target_begin = (int)(h < text_length-1 ? h * step_size :
                                                        target_length - segment_length_to_use);
 
                         auto* aln = new alignment_t();
@@ -567,7 +567,7 @@ namespace wflign {
                 const char* target,
                 const uint64_t& i,
                 const uint64_t& target_length,
-                const EdlibAlignMode align_mode) {
+                const EdlibAlignMode& align_mode) {
 
             //std::cerr << "do_edlib_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
 
@@ -823,8 +823,8 @@ namespace wflign {
                 const uint64_t& target_length,
                 const float& min_identity,
                 const long& elapsed_time_wflambda_ms,
-                const long& num_alignments,
-                const long& num_alignments_performed,
+                const uint64_t& num_alignments,
+                const uint64_t& num_alignments_performed,
                 const double& mashmap_identity,
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
@@ -1697,12 +1697,12 @@ namespace wflign {
                                               deletions,
                                               deleted_bp);
 
-            const double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
+            const double gap_compressed_identity = (double)matches / (double)(matches + mismatches + insertions + deletions);
 
             const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
 
             // identity over the full block
-            const double block_identity = (double)matches / (matches + edit_distance);
+            const double block_identity = (double)matches / (double)(matches + edit_distance);
 
             auto write_tag_and_md_string = [&](std::ostream& out, const char* c, const int target_start) {
                 out << "MD:Z:";
@@ -1930,8 +1930,8 @@ namespace wflign {
 
                 size_t alignmentRefPos = aln.i;
                 //double identity = (double)matches / (matches + mismatches + insertions + deletions);
-                double gap_compressed_identity = (double)matches / (matches + mismatches + insertions + deletions);
-                double block_identity = (double)matches / (matches + mismatches + inserted_bp + deleted_bp);
+                double gap_compressed_identity = (double)matches / (double)(matches + mismatches + insertions + deletions);
+                double block_identity = (double)matches / (double)(matches + mismatches + inserted_bp + deleted_bp);
                 // convert our coordinates to be relative to forward strand (matching PAF standard)
 
                 if (gap_compressed_identity >= min_identity) {
@@ -2133,7 +2133,7 @@ namespace wflign {
             return cigar_;
         }
 
-        char* edlib_alignment_to_cigar(
+       /* char* edlib_alignment_to_cigar(
                 const unsigned char* const alignment,
                 const int alignment_length,
                 uint64_t& target_aligned_length,
@@ -2149,7 +2149,7 @@ namespace wflign {
             //                        0    1    2    3
             char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
 
-            std::vector<char>* cigar = new std::vector<char>();
+            auto* cigar = new std::vector<char>();
             char lastMove = 0;  // Char of last move. 0 if there was no previous move.
             int numOfSameMoves = 0;
             auto& end_idx = alignment_length;
@@ -2206,7 +2206,7 @@ namespace wflign {
             delete cigar;
 
             return cigar_;
-        }
+        }*/
 
         double float2phred(const double& prob) {
             if (prob == 1)
