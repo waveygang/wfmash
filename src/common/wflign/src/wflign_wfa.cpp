@@ -847,9 +847,9 @@ namespace wflign {
 
             // patching parameters
             // we will nibble patching back to this length
-            const uint64_t min_wfa_patch_length = 64;
-            const int min_wf_length = 256;
-            const int max_dist_threshold = 128;
+            const uint64_t min_wfa_patch_length = 16;
+            const int min_wf_length = 1024;
+            const int max_dist_threshold = 64;
 
             // we need to get the start position in the query and target
             // then run through the whole alignment building up the cigar
@@ -991,7 +991,7 @@ namespace wflign {
                                 const uint64_t positions_to_get = delta_to_ask - target_pos;
 
                                 // Manage negative indexes
-                                if (target_offset >= positions_to_get) {
+                                if (target_offset - target_pointer_shift >= positions_to_get) {
                                     //std::cerr << "B.1\n";
                                     target_pointer_shift_x = target_pointer_shift + (int64_t)positions_to_get;
 
