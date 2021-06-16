@@ -55,10 +55,24 @@ namespace wflign {
             // Allocate MM
             wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
             // Set penalties
+            //0.1%
+//            wflambda::affine_penalties_t wflambda_affine_penalties = {
+//                    .match = 0,
+//                    .mismatch = 13,
+//                    .gap_opening = 21,
+//                    .gap_extension = 1,
+//            };
+            //1%
+//            wflambda::affine_penalties_t wflambda_affine_penalties = {
+//                    .match = 0,
+//                    .mismatch = 7,
+//                    .gap_opening = 13,
+//                    .gap_extension = 1,
+//            };
             wflambda::affine_penalties_t wflambda_affine_penalties = {
                     .match = 0,
-                    .mismatch = 13,
-                    .gap_opening = 21,
+                    .mismatch = 2,
+                    .gap_opening = 3,
                     .gap_extension = 1,
             };
             // Init Affine wflambda
@@ -90,10 +104,24 @@ namespace wflign {
 
             // setup affine WFA
             wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
+            // 0.1%
+//            wfa::affine_penalties_t wfa_affine_penalties = {
+//                    .match = 0,
+//                    .mismatch = 18,
+//                    .gap_opening = 38,
+//                    .gap_extension = 2,
+//            };
+//            // 1%
+//            wfa::affine_penalties_t wfa_affine_penalties = {
+//                .match = 0,
+//                .mismatch = 8,
+//                .gap_opening = 15,
+//                .gap_extension = 1,
+//            };
             wfa::affine_penalties_t wfa_affine_penalties = {
                 .match = 0,
-                .mismatch = 8,
-                .gap_opening = 15,
+                .mismatch = 3,
+                .gap_opening = 5,
                 .gap_extension = 1,
             };
 
