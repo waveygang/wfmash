@@ -99,7 +99,7 @@ namespace wflign {
             // heuristic bound on the max mash dist, adaptive based on estimated identity
             // the goal here is to sparsify the set of alignments in the wflambda layer
             // we then patch up the gaps between them
-            const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 5.0);
+            const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 10.0);
 
             auto extend_match = [&](const int& v, const int& h) {
                 bool aligned = false;
@@ -234,7 +234,7 @@ namespace wflign {
 
             // Trim alignments that overlap in the query
             if (!trace.empty()) {
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 #ifdef VALIDATE_WFA_WFLIGN
                 if (!trace.front()->validate(query, target)) {
                     std::cerr << "first traceback is wrong" << std::endl;
@@ -839,7 +839,7 @@ namespace wflign {
             // we will nibble patching back to this length
             const uint64_t min_wfa_patch_length = 16;
             const int min_wf_length = 1024;
-            const int max_dist_threshold = 32;
+            const int max_dist_threshold = 256;
 
             // we need to get the start position in the query and target
             // then run through the whole alignment building up the cigar
