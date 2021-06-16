@@ -69,12 +69,21 @@ namespace wflign {
 //                    .gap_opening = 13,
 //                    .gap_extension = 1,
 //            };
+            //5%
+//            wflambda::affine_penalties_t wflambda_affine_penalties = {
+//                    .match = 0,
+//                    .mismatch = 2,
+//                    .gap_opening = 4,
+//                    .gap_extension = 1,
+//            };
+            //15%
             wflambda::affine_penalties_t wflambda_affine_penalties = {
                     .match = 0,
-                    .mismatch = 2,
-                    .gap_opening = 3,
+                    .mismatch = 1,
+                    .gap_opening = 2,
                     .gap_extension = 1,
             };
+
             // Init Affine wflambda
             wflambda::affine_wavefronts_t* affine_wavefronts;
             if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
@@ -111,18 +120,26 @@ namespace wflign {
 //                    .gap_opening = 38,
 //                    .gap_extension = 2,
 //            };
-//            // 1%
+            // 1%
 //            wfa::affine_penalties_t wfa_affine_penalties = {
 //                .match = 0,
 //                .mismatch = 8,
 //                .gap_opening = 15,
 //                .gap_extension = 1,
 //            };
+            //5%
+//            wfa::affine_penalties_t wfa_affine_penalties = {
+//                .match = 0,
+//                .mismatch = 3,
+//                .gap_opening = 5,
+//                .gap_extension = 1,
+//            };
+            //15%
             wfa::affine_penalties_t wfa_affine_penalties = {
-                .match = 0,
-                .mismatch = 3,
-                .gap_opening = 5,
-                .gap_extension = 1,
+                    .match = 0,
+                    .mismatch = 1,
+                    .gap_opening = 2,
+                    .gap_extension = 1,
             };
 
             // heuristic bound on the max mash dist, adaptive based on estimated identity
