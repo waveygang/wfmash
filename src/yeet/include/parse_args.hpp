@@ -314,12 +314,12 @@ void parse_args(int argc,
 
     //Compute optimal window size
     {
-        const int ws = window_size && args::get(window_size) >= 0?  args::get(window_size) : -1;
+        const int ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
         if (ws > 0) {
             map_parameters.windowSize = ws;
         } else {
             // If the input window size is 0, compute the best window size using 0 as p-value cutoff
-            map_parameters.windowSize = skch::Stat::recommendedWindowSize(
+            const int windowSize = skch::Stat::recommendedWindowSize(
                     ws == 0 ? 0.0 : skch::fixed::pval_cutoff,
                     skch::fixed::confidence_interval,
                     map_parameters.kmerSize,
@@ -327,7 +327,10 @@ void parse_args(int argc,
                     map_parameters.percentageIdentity,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
-            map_parameters.windowSize = std::min(256, map_parameters.windowSize);
+
+            map_parameters.windowSize = std::min(
+                    map_parameters.percentageIdentity >= 0.97 ? 256 : (map_parameters.percentageIdentity >= 90 ? 224 : 192),
+                    windowSize);
         }
     }
 
