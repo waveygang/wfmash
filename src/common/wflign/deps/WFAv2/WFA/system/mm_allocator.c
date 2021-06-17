@@ -280,7 +280,7 @@ void* mm_allocator_allocate(
   // Zero check
   if (num_bytes == 0) {
     fprintf(stderr,"MMAllocator error. Zero bytes requested\n");
-    exit(1);
+    abort();
   }
   // Add payload
   const uint64_t num_bytes_allocated = num_bytes + sizeof(mm_allocator_reference_t) + align_bytes;
@@ -358,7 +358,7 @@ void mm_allocator_free_malloc_request(
   // Check double-free
   if (request->size == 0) {
     fprintf(stderr,"MMAllocator error: double free\n");
-    exit(1);
+    abort();
   }
   // Free request
   request->size = 0;
@@ -392,7 +392,7 @@ void mm_allocator_free_allocator_request(
   // Check double-free
   if (MM_ALLOCATOR_REQUEST_IS_FREE(request)) {
     fprintf(stderr,"MMAllocator error: double free\n");
-    exit(1);
+    abort();
   }
   // Free request
   MM_ALLOCATOR_REQUEST_SET_FREE(request);

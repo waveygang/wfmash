@@ -178,6 +178,10 @@ int wavefront_align_global_bounded(
         wf_aligner,sequences,pattern_length,text_length,score)) break;
     // Compute (s+1)-wavefront
     ++score;
+    // Bound the alignment at our max_score
+    if (score > max_score) {
+        break; // todo... signal failure somehow
+    }
     switch (distance_metric) {
       case gap_affine:
         wavefront_compute_affine(wf_aligner,

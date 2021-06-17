@@ -478,14 +478,16 @@ namespace wflign {
 
                 wfa::wavefront_aligner_clear__resize(
                     wf_aligner,
-                    target_length,query_length);
+                    segment_length,
+                    segment_length);
 
-                aln.score = wfa::wavefront_align(
+                aln.score = wfa::wavefront_align_bounded(
                     wf_aligner,
                     target+i,
                     segment_length,
                     query+j,
-                    segment_length);
+                    segment_length,
+                    max_score);
 
                 /*
                 aln.score = wfa::affine_wavefronts_align_bounded(
@@ -549,20 +551,17 @@ namespace wflign {
 
             //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
 
-            /*
-            wfa::affine_wavefronts_t* affine_wavefronts;
-            if (min_wavefront_length || max_distance_threshold) {
-                // adaptive affine WFA setup
-                affine_wavefronts = affine_wavefronts_new_reduced(
-                        target_length, query_length, affine_penalties,
-                        min_wavefront_length, max_distance_threshold,
-                        NULL, mm_allocator);
+            // Reduction strategy
+            if (query_length < max_distance_threshold
+                && target_length < max_distance_threshold) {
+                // wavefront_reduction_none
+                wfa::wavefront_reduction_set_none(&wf_aligner->reduction);
             } else {
-                // exact WFA
-                affine_wavefronts = affine_wavefronts_new_complete(
-                        target_length, query_length, affine_penalties, NULL, mm_allocator);
+                wfa::wavefront_reduction_set_dynamic(
+                    &wf_aligner->reduction,
+                    min_wavefront_length,
+                    max_distance_threshold);
             }
-            */
 
             const int max_score = (target_length + query_length) * 5;
 

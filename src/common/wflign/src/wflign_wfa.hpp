@@ -11,6 +11,7 @@
 #include "WFA/gap_affine/affine_matrix.h"
 #include "WFA/gap_affine/swg.h"
 #include "WFA/wavefront/wavefront_align.h"
+#include "WFA/wavefront/wavefront_reduction.h"
 #include "patchmap.hpp"
 #include "edlib.h"
 //#include "wfa_edit_callback.hpp"
