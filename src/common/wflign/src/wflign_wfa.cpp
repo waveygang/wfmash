@@ -1,6 +1,9 @@
 #include <chrono>
 #include "wflign_wfa.hpp"
 
+// not doing this results in a linker error
+#include "WFA/wavefront/wavefront_penalties.c" // TODO fixme
+
 namespace wflign {
 
     namespace wavefront {
