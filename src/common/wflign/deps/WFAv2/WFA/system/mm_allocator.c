@@ -300,7 +300,7 @@ void* mm_allocator_allocate(
       memory_aligned = memory_aligned - ((uintptr_t)memory_aligned % align_bytes);
     }
     // Set mm_reference
-    mm_allocator_reference_t* const mm_reference = (mm_allocator_reference_t*) memory_aligned - sizeof(mm_allocator_reference_t);
+    mm_allocator_reference_t* const mm_reference = (mm_allocator_reference_t*)(memory_aligned - sizeof(mm_allocator_reference_t));
     mm_reference->segment_idx = segment->idx;
     mm_reference->request_idx = mm_allocator_segment_get_num_requests(segment);
     // Add request
