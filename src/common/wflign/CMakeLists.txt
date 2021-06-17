@@ -20,7 +20,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(deps/edlib EXCLUDE_FROM_ALL)
 add_subdirectory(deps/wflambda EXCLUDE_FROM_ALL)
-add_subdirectory(deps/WFA EXCLUDE_FROM_ALL)
+add_subdirectory(deps/WFAv2 EXCLUDE_FROM_ALL)
 
 add_executable(wflign
   src/main.cpp
@@ -51,7 +51,7 @@ target_include_directories(libwflign_static PRIVATE
   deps/
   deps/patchmap
   deps/wflambda
-  deps/WFA
+  deps/WFAv2
   deps/edlib/edlib/include)
 # not clear if necessary
 #set_target_properties(libodgi_static PROPERTIES POSITION_INDEPENDENT_CODE TRUE)

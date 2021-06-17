@@ -26,18 +26,20 @@
  *
  * PROJECT: Wavefront Alignments Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
- * DESCRIPTION: Simple profile-counter for lightweight profiling
+ * VERSION: v20.08.25
+ * DESCRIPTION: Simple profile counter
  */
 
 #pragma once
 
-#include "wflambda/utils/commons.hpp"
+#include "WFA/utils/commons.h"
 
-namespace wflambda {
+#ifdef WFA_NAMESPACE
+namespace wfa {
+#endif
 
 /*
  * Counters
- *   (from http://www.johndcook.com/standard_deviation.html)
  */
 typedef struct {
   uint64_t total;
@@ -67,15 +69,6 @@ double counter_get_stddev(const profiler_counter_t* const counter);
 void counter_combine_sum(
     profiler_counter_t* const counter_dst,
     profiler_counter_t* const counter_src);
-void counter_combine_max(
-    profiler_counter_t* const counter_dst,
-    profiler_counter_t* const counter_src);
-void counter_combine_min(
-    profiler_counter_t* const counter_dst,
-    profiler_counter_t* const counter_src);
-void counter_combine_mean(
-    profiler_counter_t* const counter_dst,
-    profiler_counter_t* const counter_src);
 
 void counter_print(
     FILE* const stream,
@@ -83,11 +76,6 @@ void counter_print(
     const profiler_counter_t* const ref_counter,
     const char* const units,
     const bool full_report);
-void sampler_print(
-    FILE* const stream,
-    const profiler_counter_t* const counter,
-    const profiler_counter_t* const ref_counter,
-    const char* const units);
 void percentage_print(
     FILE* const stream,
     const profiler_counter_t* const counter,
@@ -111,7 +99,7 @@ void rcounter_stop(
 void rcounter_pause(
     profiler_rcounter_t* const rcounter,
     const uint64_t reference);
-void rcounter_continue(
+void rcounter_restart(
     profiler_rcounter_t* const rcounter,
     const uint64_t reference);
 void rcounter_reset(
@@ -128,15 +116,15 @@ uint64_t rcounter_get_stddev(profiler_rcounter_t* const rcounter);
 /*
  * Display
  */
-#define wflambda_PRIcounter "lu(#%" PRIu64 ",m%" PRIu64 ",M%" PRIu64 ",{%.2f})"
-#define wflambda_PRIcounterVal(counter) \
+#define PRIcounter "lu(#%" PRIu64 ",m%" PRIu64 ",M%" PRIu64",{%.2f})"
+#define PRIcounterVal(counter) \
   counter_get_total(counter), \
   counter_get_num_samples(counter), \
   counter_get_min(counter), \
   counter_get_max(counter), \
   counter_get_mean(counter)
-#define wflambda_PRIcounterX "lu(#%" PRIu64 ",m%" PRIu64 ",M%" PRIu64 ",{%.2f,%.2f,%.2f})"
-#define wflambda_PRIcounterXVal(counter) \
+#define PRIcounterX "lu(#%" PRIu64 ",m%" PRIu64 ",M%" PRIu64 ",{%.2f,%.2f,%.2f})"
+#define PRIcounterXVal(counter) \
   counter_get_total(counter), \
   counter_get_num_samples(counter), \
   counter_get_min(counter), \
@@ -145,5 +133,6 @@ uint64_t rcounter_get_stddev(profiler_rcounter_t* const rcounter);
   counter_get_variance(counter), \
   counter_get_stddev(counter)
 
+#ifdef WFA_NAMESPACE
 }
-
+#endif

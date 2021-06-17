@@ -5,9 +5,12 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
-#include "WFA/edit/edit_cigar.hpp"
+#include "WFA/edit/edit_dp.h"
 //#include "WFA/gap_affine/affine_wavefront.hpp"
-#include "WFA/gap_affine/affine_wavefront_align.hpp"
+//#include "WFA/gap_affine/affine_wavefront_align.h"
+#include "WFA/gap_affine/affine_matrix.h"
+#include "WFA/gap_affine/swg.h"
+#include "WFA/wavefront/wavefront_align.h"
 #include "patchmap.hpp"
 #include "edlib.h"
 //#include "wfa_edit_callback.hpp"
@@ -23,13 +26,13 @@ namespace wflign {
 namespace wavefront {
 
 bool hack_cigar(
-    wfa::edit_cigar_t& cigar,
+    wfa::cigar_t& cigar,
     const char* query, const char* target,
     const uint64_t& query_aln_len, const uint64_t& target_aln_len,
     uint64_t j, uint64_t i);
 
 bool validate_cigar(
-    const wfa::edit_cigar_t& cigar,
+    const wfa::cigar_t& cigar,
     const char* query, const char* target,
     const uint64_t& query_aln_len, const uint64_t& target_aln_len,
     uint64_t j, uint64_t i);
@@ -41,7 +44,7 @@ bool validate_trace(
     uint64_t j, uint64_t i);
 
 bool unpack_display_cigar(
-    const wfa::edit_cigar_t& cigar,
+    const wfa::cigar_t& cigar,
     const char* query, const char* target,
     const uint64_t& query_aln_len, const uint64_t& target_aln_len,
     uint64_t j, uint64_t i);
@@ -55,7 +58,7 @@ struct alignment_t {
     bool keep = false;
     int score = std::numeric_limits<int>::max();
     //float mash_dist = 1;
-    wfa::edit_cigar_t edit_cigar{};
+    wfa::cigar_t edit_cigar{};
     void display(void) {
         std::cerr << j << " " << i << " " << query_length << " " << target_length << " " << ok << std::endl;
         for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
@@ -129,7 +132,7 @@ struct alignment_t {
 struct trace_pos_t {
     int j = 0;
     int i = 0;
-    wfa::edit_cigar_t* edit_cigar = nullptr;
+    wfa::cigar_t* edit_cigar = nullptr;
     int offset = 0;
     bool incr() {
         if (offset < edit_cigar->end_offset) {
@@ -177,16 +180,16 @@ struct trace_pos_t {
 };
 
 void wflign_edit_cigar_copy(
-    wfa::edit_cigar_t* const edit_cigar_dst,
-    wfa::edit_cigar_t* const edit_cigar_src);
+    wfa::cigar_t* const edit_cigar_dst,
+    wfa::cigar_t* const edit_cigar_src);
 
 void copy_wfa_alignment_into_trace(
-    const wfa::edit_cigar_t* const edit_cigar,
+    const wfa::cigar_t* const edit_cigar,
     std::vector<char>& trace);
 
 /*
 void edlib_to_wflign_edit_cigar_copy(
-    wfa::edit_cigar_t* const edit_cigar_dst,
+    wfa::cigar_t* const edit_cigar_dst,
     char* const edlib_cigar_src,
     const uint64_t& edit_distance,
     const uint64_t& edlib_cigar_len);
@@ -324,7 +327,7 @@ char* alignment_to_cigar(
     uint64_t& deleted_bp);
 
 char* wfa_alignment_to_cigar(
-    const wfa::edit_cigar_t* const edit_cigar,
+    const wfa::cigar_t* const edit_cigar,
     uint64_t& target_aligned_length,
     uint64_t& query_aligned_length,
     uint64_t& matches,
