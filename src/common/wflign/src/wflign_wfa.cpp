@@ -23,9 +23,10 @@ namespace wflign {
                 const uint64_t& target_length,
                 const uint16_t& segment_length,
                 const float& min_identity,
+                const int& minhash_kmer_size,
                 const int& wflambda_min_wavefront_length, // with these set at 0 we do exact WFA for wflambda
                 const int& wflambda_max_distance_threshold,
-                const double& mashmap_identity,
+                const double& mashmap_estimated_identity,
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
                 const uint16_t& erode_k) {
@@ -59,7 +60,7 @@ namespace wflign {
             // Set penalties
             wflambda::affine_penalties_t wflambda_affine_penalties;
             wfa::affine_penalties_t wfa_affine_penalties;
-            if (mashmap_identity >= 0.995) {
+            if (mashmap_estimated_identity >= 0.995) {
                 wflambda_affine_penalties = {
                     .match = 0,
                     .mismatch = 13,
@@ -72,7 +73,7 @@ namespace wflign {
                         .gap_opening = 38,
                         .gap_extension = 2,
                 };
-            } else if (mashmap_identity >= 0.97) {
+            } else if (mashmap_estimated_identity >= 0.97) {
                 wflambda_affine_penalties = {
                         .match = 0,
                         .mismatch = 7,
@@ -85,7 +86,7 @@ namespace wflign {
                         .gap_opening = 15,
                         .gap_extension = 1,
                 };
-            } else if (mashmap_identity >= 0.9) {
+            } else if (mashmap_estimated_identity >= 0.9) {
                 wflambda_affine_penalties = {
                         .match = 0,
                         .mismatch = 2,
@@ -117,7 +118,7 @@ namespace wflign {
             // the goal here is to sparsify the set of alignments in the wflambda layer
             // we then patch up the gaps between them
             //TODO
-            const float max_mash_dist = 0.6;//std::max(0.05, (1.0 - mashmap_identity) * 5.0);
+            const float max_mash_dist = 0.6;//std::max(0.05, (1.0 - mashmap_estimated_identity) * 5.0);
 
             // Init Affine wflambda
             wflambda::affine_wavefronts_t* affine_wavefronts;
@@ -139,8 +140,6 @@ namespace wflign {
 
             int v_max = 0;
             int h_max = 0;
-
-            const uint64_t minhash_kmer_size = 17;
 
             // allocate vectors to store our sketches
             std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length, nullptr);
@@ -177,6 +176,7 @@ namespace wflign {
                                 wfa_min_wavefront_length,
                                 wfa_max_distance_threshold,
                                 max_mash_dist,
+                                mashmap_estimated_identity,
                                 wfa_mm_allocator,
                                 &wfa_affine_penalties,
                                 *aln);
@@ -410,7 +410,7 @@ namespace wflign {
                                            elapsed_time_wflambda_ms,
                                            num_alignments,
                                            num_alignments_performed,
-                                           mashmap_identity,
+                                           mashmap_estimated_identity,
                                            wflign_max_len_major,
                                            wflign_max_len_minor,
                                            erode_k);
@@ -422,7 +422,7 @@ namespace wflign {
                                         query_is_rev,
                                         target_name, target_total_length, target_offset, target_length,
                                         min_identity,
-                                        mashmap_identity);
+                                        mashmap_estimated_identity);
                     }
                 }
             }
@@ -457,6 +457,7 @@ namespace wflign {
                 const int& min_wavefront_length,
                 const int& max_distance_threshold,
                 const float& max_mash_dist,
+                const double& mashmap_estimated_identity,
                 wfa::mm_allocator_t* const mm_allocator,
                 wfa::affine_penalties_t* const affine_penalties,
                 alignment_t& aln) {
@@ -474,16 +475,13 @@ namespace wflign {
             // first check if our mash dist is inbounds
             const float mash_dist = rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-            const float est_identity = 0.99;
-
             // Worst case acceptable as a match: seg_len/4 Is/Ds + seg_len * 3/4 long good enough alignment + seg_len/4 Ds/Is
             int segment_length_div_4 = segment_length / 4;
-            const int max_score =(int) ((1 + mash_dist) *
+            const int max_score = (int) ((1.0 + mash_dist) *
                     (float) (affine_penalties->gap_opening + (segment_length_div_4 - 1) * affine_penalties->gap_extension) * 2 +
-                    ceil((float) segment_length_div_4 * 3 * (1 - est_identity)) *
+                    ceil((float) segment_length_div_4 * 3 * (1.0 - mashmap_estimated_identity)) *
                     (float) (affine_penalties->gap_opening + affine_penalties->gap_extension + affine_penalties->mismatch));
 
-            //std::cerr << "max_score: " << max_score << std::endl;
             // this threshold is set low enough that we tend to randomly sample wflambda matrix cells for alignment
             // the threshold is adaptive, based on the mash distance of the mapping we are aligning
             // we should obtain enough alignments that we can still patch between them
@@ -878,7 +876,7 @@ namespace wflign {
                 const long& elapsed_time_wflambda_ms,
                 const uint64_t& num_alignments,
                 const uint64_t& num_alignments_performed,
-                const double& mashmap_identity,
+                const double& mashmap_estimated_identity,
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
                 const uint16_t& erode_k,
@@ -1856,7 +1854,7 @@ namespace wflign {
                         //<< "\t" << "ii:i:" << inserted_bp
                         //<< "\t" << "nd:i:" << deletions
                         //<< "\t" << "dd:i:" << deleted_bp
-                        << "\t" << "md:f:" << mashmap_identity;
+                        << "\t" << "md:f:" << mashmap_estimated_identity;
 
                     if (emit_md_tag) {
                         out << "\t";
@@ -1949,7 +1947,7 @@ namespace wflign {
                 const uint64_t& target_offset,
                 const uint64_t& target_length, // unused
                 const float& min_identity,
-                const double& mashmap_identity,
+                const double& mashmap_estimated_identity,
                 const bool& with_endline) {
 //    bool aligned = false;
             //Output to file
@@ -2017,7 +2015,7 @@ namespace wflign {
                         //<< "\t" << "nd:i:" << deletions
                         //<< "\t" << "bd:i:" << deleted_bp
                         << "\t" << "cg:Z:" << cigar
-                        << "\t" << "md:f:" << mashmap_identity;
+                        << "\t" << "md:f:" << mashmap_estimated_identity;
                     if (with_endline) {
                         out << std::endl;
                     }

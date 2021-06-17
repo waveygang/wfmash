@@ -394,7 +394,7 @@ namespace align
           currentRecord.refId = tokens[5];
           currentRecord.rStartPos = std::stoi(tokens[7]);
           currentRecord.rEndPos = std::stoi(tokens[8]);
-          currentRecord.mashmap_identity = mm_id;
+          currentRecord.mashmap_estimated_identity = mm_id;
         }
       }
 
@@ -458,9 +458,10 @@ namespace align
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
             param.min_identity,
+            param.kmerSize,
             param.wflambda_min_wavefront_length,
             param.wflambda_max_distance_threshold,
-            currentRecord.mashmap_identity,
+            currentRecord.mashmap_estimated_identity,
             param.wflign_max_len_major,
             param.wflign_max_len_minor,
             param.wflign_erode_k);

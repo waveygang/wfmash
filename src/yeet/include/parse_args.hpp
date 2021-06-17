@@ -120,61 +120,6 @@ void parse_args(int argc,
         skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
 
-    if (kmer_size) {
-        map_parameters.kmerSize = args::get(kmer_size);
-    } else {
-        map_parameters.kmerSize = 16;
-    }
-
-    if (spaced_seed_params) {
-      auto split = [](const string& s, const string& delimiter) {
-        size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-        string token;
-        vector<string> res;
-
-        while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
-          token = s.substr (pos_start, pos_end - pos_start);
-          pos_start = pos_end + delim_len;
-          res.push_back (token);
-        }
-
-        res.push_back (s.substr (pos_start));
-        return res;
-      };
-
-      std::string foobar = args::get(spaced_seed_params);
-
-      // delimeters can be full colon (:) or a space
-      char delimeter;
-      if (foobar.find(' ') !=  std::string::npos) {
-        delimeter = ' ';
-      } else if (foobar.find(':') !=  std::string::npos) {
-        delimeter = ':';
-      } else {
-        std::cerr << "[mashz] ERROR, skch::parseandSave, mashz expects either space or : for to seperate spaced seed params" << std::endl;
-        exit(1);
-      }
-
-      std::string delimeter_str(1, delimeter);
-      std::vector<std::string> p = split(foobar, delimeter_str);
-      if (p.size() != 4) {
-        std::cerr << "[mashz] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
-        exit(1);
-      }
-
-      uint32_t seed_weight   = stoi(p[0]);
-      uint32_t seed_count    = stoi(p[1]);
-      float similarity       = stof(p[2]);
-      uint32_t region_length = stoi(p[3]);
-
-      // Generate an ALeS params struct
-      map_parameters.use_spaced_seeds = true;
-      map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
-      map_parameters.kmerSize = (int) seed_weight;
-    } else {
-      map_parameters.use_spaced_seeds = false;
-    }
-
     map_parameters.alphabetSize = 4;
 
     if (no_filter) {
@@ -234,6 +179,68 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     }
 
+    if (kmer_size) {
+        map_parameters.kmerSize = args::get(kmer_size);
+    } else {
+        // Smaller values of k are more sensitive for divergent genomes, but lose specificity for large
+        // genomes due to chance k-mer collisions. However, too large of a k-mer will reduce sensitivity
+        // and so choosing the smallest k that avoids chance collisions is recommended.
+
+        map_parameters.kmerSize = map_parameters.percentageIdentity >= 0.97 ? 19 : (map_parameters.percentageIdentity >= 0.9 ? 17 : 15);
+    }
+
+    if (spaced_seed_params) {
+        auto split = [](const string& s, const string& delimiter) {
+          size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+          string token;
+          vector<string> res;
+
+          while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+              token = s.substr (pos_start, pos_end - pos_start);
+              pos_start = pos_end + delim_len;
+              res.push_back (token);
+          }
+
+          res.push_back (s.substr (pos_start));
+          return res;
+        };
+
+        std::string foobar = args::get(spaced_seed_params);
+
+        // delimeters can be full colon (:) or a space
+        char delimeter;
+        if (foobar.find(' ') !=  std::string::npos) {
+            delimeter = ' ';
+        } else if (foobar.find(':') !=  std::string::npos) {
+            delimeter = ':';
+        } else {
+            std::cerr << "[mashz] ERROR, skch::parseandSave, mashz expects either space or : for to seperate spaced seed params" << std::endl;
+            exit(1);
+        }
+
+        std::string delimeter_str(1, delimeter);
+        std::vector<std::string> p = split(foobar, delimeter_str);
+        if (p.size() != 4) {
+            std::cerr << "[mashz] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
+            exit(1);
+        }
+
+        uint32_t seed_weight   = stoi(p[0]);
+        uint32_t seed_count    = stoi(p[1]);
+        float similarity       = stof(p[2]);
+        uint32_t region_length = stoi(p[3]);
+
+        // Generate an ALeS params struct
+        map_parameters.use_spaced_seeds = true;
+        map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
+        map_parameters.kmerSize = (int) seed_weight;
+    } else {
+        map_parameters.use_spaced_seeds = false;
+    }
+
+    align_parameters.kmerSize = map_parameters.kmerSize;
+
+
 //    if (path_high_frequency_kmers && !args::get(path_high_frequency_kmers).empty()) {
 //        std::ifstream high_freq_kmers (args::get(path_high_frequency_kmers));
 //
@@ -249,6 +256,7 @@ void parse_args(int argc,
 //        }
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
+
 
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
