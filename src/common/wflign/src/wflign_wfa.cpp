@@ -52,37 +52,72 @@ namespace wflign {
             const int wfa_min_wavefront_length = 0; //segment_length_to_use / 16;
             const int wfa_max_distance_threshold = 0; //segment_length_to_use / 8;
 
-            // Allocate MM
+            // Allocate MM for WFA and WF-lambda
             wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
+            wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
+
             // Set penalties
-            //0.1%
-//            wflambda::affine_penalties_t wflambda_affine_penalties = {
-//                    .match = 0,
-//                    .mismatch = 13,
-//                    .gap_opening = 21,
-//                    .gap_extension = 1,
-//            };
-            //1%
-//            wflambda::affine_penalties_t wflambda_affine_penalties = {
-//                    .match = 0,
-//                    .mismatch = 7,
-//                    .gap_opening = 13,
-//                    .gap_extension = 1,
-//            };
-            //5%
-//            wflambda::affine_penalties_t wflambda_affine_penalties = {
-//                    .match = 0,
-//                    .mismatch = 2,
-//                    .gap_opening = 4,
-//                    .gap_extension = 1,
-//            };
-            //15%
-            wflambda::affine_penalties_t wflambda_affine_penalties = {
+            wflambda::affine_penalties_t wflambda_affine_penalties;
+            wfa::affine_penalties_t wfa_affine_penalties;
+            if (mashmap_identity >= 0.995) {
+                wflambda_affine_penalties = {
                     .match = 0,
-                    .mismatch = 1,
-                    .gap_opening = 2,
+                    .mismatch = 13,
+                    .gap_opening = 21,
                     .gap_extension = 1,
-            };
+                };
+                wfa_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 18,
+                        .gap_opening = 38,
+                        .gap_extension = 2,
+                };
+            } else if (mashmap_identity >= 0.97) {
+                wflambda_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 7,
+                        .gap_opening = 13,
+                        .gap_extension = 1,
+                };
+                wfa_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 8,
+                        .gap_opening = 15,
+                        .gap_extension = 1,
+                };
+            } else if (mashmap_identity >= 0.9) {
+                wflambda_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 2,
+                        .gap_opening = 4,
+                        .gap_extension = 1,
+                };
+                wfa_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 3,
+                        .gap_opening = 5,
+                        .gap_extension = 1,
+                };
+            } else {
+                wflambda_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 1,
+                        .gap_opening = 2,
+                        .gap_extension = 1,
+                };
+                wfa_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 1,
+                        .gap_opening = 2,
+                        .gap_extension = 1,
+                };
+            }
+
+            // heuristic bound on the max mash dist, adaptive based on estimated identity
+            // the goal here is to sparsify the set of alignments in the wflambda layer
+            // we then patch up the gaps between them
+            //TODO
+            const float max_mash_dist = 0.6;//std::max(0.05, (1.0 - mashmap_identity) * 5.0);
 
             // Init Affine wflambda
             wflambda::affine_wavefronts_t* affine_wavefronts;
@@ -110,43 +145,6 @@ namespace wflign {
             // allocate vectors to store our sketches
             std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length, nullptr);
             std::vector<std::vector<rkmh::hash_t>*> target_sketches(text_length, nullptr);
-
-            // setup affine WFA
-            wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
-            // 0.1%
-//            wfa::affine_penalties_t wfa_affine_penalties = {
-//                    .match = 0,
-//                    .mismatch = 18,
-//                    .gap_opening = 38,
-//                    .gap_extension = 2,
-//            };
-            // 1%
-//            wfa::affine_penalties_t wfa_affine_penalties = {
-//                .match = 0,
-//                .mismatch = 8,
-//                .gap_opening = 15,
-//                .gap_extension = 1,
-//            };
-            //5%
-//            wfa::affine_penalties_t wfa_affine_penalties = {
-//                .match = 0,
-//                .mismatch = 3,
-//                .gap_opening = 5,
-//                .gap_extension = 1,
-//            };
-            //15%
-            wfa::affine_penalties_t wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 1,
-                    .gap_opening = 2,
-                    .gap_extension = 1,
-            };
-
-            // heuristic bound on the max mash dist, adaptive based on estimated identity
-            // the goal here is to sparsify the set of alignments in the wflambda layer
-            // we then patch up the gaps between them
-            //TODO
-            const float max_mash_dist = 0.6;//std::max(0.05, (1.0 - mashmap_identity) * 5.0);
 
             auto extend_match = [&](const int& v, const int& h) {
                 bool aligned = false;
