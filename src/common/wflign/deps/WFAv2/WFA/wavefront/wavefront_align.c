@@ -112,7 +112,7 @@ void wavefront_align_global_initialize(
 /*
  * Global Alignment
  */
-void wavefront_align_global(
+int wavefront_align_global(
     wavefront_aligner_t* const wf_aligner,
     strings_padded_t* const sequences,
     const int pattern_length,
@@ -151,6 +151,52 @@ void wavefront_align_global(
     // DEBUG
     //wavefront_aligner_print(stderr,wf_aligner,score,score,2,16);
   }
+  return score;
+}
+/*
+ * Bounded Global Alignment
+ */
+int wavefront_align_global_bounded(
+    wavefront_aligner_t* const wf_aligner,
+    strings_padded_t* const sequences,
+    const int pattern_length,
+    const int text_length,
+    const int max_score) {
+  // Parameters
+  const distance_metric_t distance_metric = wf_aligner->distance_metric;
+  // Initialize wavefront
+  wavefront_align_global_initialize(wf_aligner);
+  // Compute wavefronts of increasing score
+  int score = 0;
+  while (true) {
+    // Exact extend s-wavefront
+    wavefront_extend(wf_aligner,
+        sequences->pattern_padded,pattern_length,
+        sequences->text_padded,text_length,score);
+    // Exit condition
+    if (wavefront_align_global_terminate(
+        wf_aligner,sequences,pattern_length,text_length,score)) break;
+    // Compute (s+1)-wavefront
+    ++score;
+    switch (distance_metric) {
+      case gap_affine:
+        wavefront_compute_affine(wf_aligner,
+            sequences->pattern_padded,pattern_length,
+            sequences->text_padded,text_length,score);
+        break;
+      case gap_affine_2p:
+        wavefront_compute_affine2p(wf_aligner,
+            sequences->pattern_padded,pattern_length,
+            sequences->text_padded,text_length,score);
+        break;
+      default:
+        fprintf(stderr,"Distance function not yet implemented\n"); exit(1);
+        break;
+    }
+    // DEBUG
+    //wavefront_aligner_print(stderr,wf_aligner,score,score,2,16);
+  }
+  return score;
 }
 /*
  * Semi-Global Alignment
@@ -165,7 +211,7 @@ void wavefront_align_semiglobal(
 /*
  * Wavefront Alignment
  */
-void wavefront_align(
+int wavefront_align(
     wavefront_aligner_t* const wf_aligner,
     const char* const pattern,
     const int pattern_length,
@@ -177,9 +223,33 @@ void wavefront_align(
           pattern,pattern_length,text,text_length,
           WAVEFRONT_PADDING,wf_aligner->mm_allocator);
   // Alignment computing wavefronts
-  wavefront_align_global(wf_aligner,sequences,pattern_length,text_length);
+  int score = wavefront_align_global(wf_aligner,sequences,pattern_length,text_length);
   // Free
   strings_padded_delete(sequences);
+  // Return our resulting score
+  return score;
+}
+/*
+ * Bounded Wavefront Alignment
+ */
+int wavefront_align_bounded(
+    wavefront_aligner_t* const wf_aligner,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    const int max_score) {
+  // Init padded strings
+  strings_padded_t* const sequences =
+      strings_padded_new_rhomb(
+          pattern,pattern_length,text,text_length,
+          WAVEFRONT_PADDING,wf_aligner->mm_allocator);
+  // Alignment computing wavefronts
+  int score = wavefront_align_global_bounded(wf_aligner,sequences,pattern_length,text_length,max_score);
+  // Free
+  strings_padded_delete(sequences);
+  // Return our resulting score
+  return score;
 }
 
 #ifdef WFA_NAMESPACE

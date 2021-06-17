@@ -41,12 +41,22 @@ namespace wfa {
 /*
  * Wavefront Alignment
  */
-void wavefront_align(
+int wavefront_align(
     wavefront_aligner_t* const wf_aligner,
     const char* const pattern,
     const int pattern_length,
     const char* const text,
     const int text_length);
+/*
+ * Bounded Wavefront Alignment
+ */
+int wavefront_align_bounded(
+    wavefront_aligner_t* const wf_aligner,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    const int max_score);
 
 #ifdef WFA_NAMESPACE
 }

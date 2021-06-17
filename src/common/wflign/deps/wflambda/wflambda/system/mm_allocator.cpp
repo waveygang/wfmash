@@ -230,7 +230,7 @@ mm_allocator_segment_t* mm_allocator_fetch_segment(
   mm_allocator->current_segment_idx = segment->segment_idx;
   return segment;
 }
-void* wflambda_mm_allocator_allocate(
+void* mm_allocator_allocate(
     mm_allocator_t* const mm_allocator,
     uint64_t num_bytes,
     const bool zero_mem

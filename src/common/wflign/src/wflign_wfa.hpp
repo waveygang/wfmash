@@ -243,7 +243,7 @@ bool do_wfa_segment_alignment(
     const uint32_t& min_wavefront_length,
     const uint32_t& max_distance_threshold,
     const float& max_mash_dist,
-    wfa::mm_allocator_t* const mm_allocator,
+    wfa::wavefront_aligner_t* const wf_aligner,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
 
@@ -256,7 +256,7 @@ void do_wfa_patch_alignment(
     const uint64_t& target_length,
     const int& min_wavefront_length,
     const int& max_distance_threshold,
-    wfa::mm_allocator_t* const mm_allocator,
+    wfa::wavefront_aligner_t* const wf_aligner,
     wfa::affine_penalties_t* const affine_penalties,
     alignment_t& aln);
 
@@ -272,7 +272,7 @@ EdlibAlignResult do_edlib_patch_alignment(
 void write_merged_alignment(
     std::ostream& out,
     const std::vector<alignment_t*>& trace,
-    wfa::mm_allocator_t* const mm_allocator,
+    wfa::wavefront_aligner_t* const wf_aligner,
     wfa::affine_penalties_t* const affine_penalties,
     const bool& emit_md_tag,
     const bool& paf_format_else_sam,

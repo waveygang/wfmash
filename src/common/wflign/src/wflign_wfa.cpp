@@ -52,7 +52,7 @@ namespace wflign {
             const uint32_t wfa_min_wavefront_length = 0; //segment_length_to_use / 16;
             const uint32_t wfa_max_distance_threshold = 0; //segment_length_to_use / 8;
 
-            // Allocate MM
+            // Allocate MM for wflambda
             wflambda::mm_allocator_t* const wflambda_mm_allocator = wflambda::mm_allocator_new(BUFFER_SIZE_8M);
             // Set penalties
             wflambda::affine_penalties_t wflambda_affine_penalties = {
@@ -83,13 +83,30 @@ namespace wflign {
             //std::cerr << "v" << "\t" << "h" << "\t" << "score" << "\t" << "aligned" << std::endl;
 
             // setup affine WFA
-            wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
+            //wfa::mm_allocator_t* const wfa_mm_allocator = wfa::mm_allocator_new(BUFFER_SIZE_8M);
             wfa::affine_penalties_t wfa_affine_penalties = {
                 .match = 0,
                 .mismatch = 9,
                 .gap_opening = 13,
                 .gap_extension = 1,
             };
+
+            // Configure the attributes of the wf-aligner
+            wfa::wavefront_aligner_attr_t attributes = wfa::wavefront_aligner_attr_default;
+            attributes.distance_metric = wfa::gap_affine;
+            attributes.affine_penalties = wfa_affine_penalties;
+            // attributes.distance_metric = gap_affine2p;
+            // attributes.affine2p_penalties = affine2p_penalties;
+            attributes.reduction.reduction_strategy = wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
+            //attributes.reduction.min_wavefront_length = 10;
+            //attributes.reduction.max_distance_threshold = 50;
+            attributes.alignment_scope = wfa::alignment_scope_alignment; // alignment_scope_score
+            attributes.low_memory = true;
+            wfa::wavefront_aligner_t* const wf_aligner =
+                wfa::wavefront_aligner_new(segment_length_to_use,
+                                           segment_length_to_use,
+                                           &attributes);
+
             uint64_t num_alignments = 0;
             uint64_t num_alignments_performed = 0;
             const uint64_t minhash_kmer_size = 17;
@@ -132,7 +149,8 @@ namespace wflign {
                                 wfa_min_wavefront_length,
                                 wfa_max_distance_threshold,
                                 max_mash_dist,
-                                wfa_mm_allocator,
+                                //wfa_mm_allocator,
+                                wf_aligner,
                                 &wfa_affine_penalties,
                                 *aln);
                         //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
@@ -354,7 +372,7 @@ namespace wflign {
 
                 if (merge_alignments) {
                     // write a merged alignment
-                    write_merged_alignment(out, trace, wfa_mm_allocator, &wfa_affine_penalties,
+                    write_merged_alignment(out, trace, wf_aligner, &wfa_affine_penalties,
                                            emit_md_tag, paf_format_else_sam,
                                            query,
                                            query_name, query_total_length, query_offset, query_length,
@@ -383,7 +401,8 @@ namespace wflign {
             }
 
             // clean up our WFA allocator
-            wfa::mm_allocator_delete(wfa_mm_allocator);
+            //wfa::mm_allocator_delete(wfa_mm_allocator);
+            wfa::wavefront_aligner_delete(wf_aligner);
 
             // Free
             wflambda::affine_wavefronts_delete(affine_wavefronts);
@@ -412,7 +431,7 @@ namespace wflign {
                 const uint32_t& min_wavefront_length,
                 const uint32_t& max_distance_threshold,
                 const float& max_mash_dist,
-                wfa::mm_allocator_t* const mm_allocator,
+                wfa::wavefront_aligner_t* const wf_aligner,
                 wfa::affine_penalties_t* const affine_penalties,
                 alignment_t& aln) {
 
@@ -439,6 +458,7 @@ namespace wflign {
                 return false;
             } else {
                 // if it is, we'll align
+                /*
                 wfa::affine_wavefronts_t* affine_wavefronts;
                 if (min_wavefront_length || max_distance_threshold) {
                     // adaptive affine WFA setup
@@ -451,7 +471,20 @@ namespace wflign {
                     affine_wavefronts = affine_wavefronts_new_complete(
                             segment_length, segment_length, affine_penalties, NULL, mm_allocator);
                 }
+                */
 
+                wfa::wavefront_aligner_clear__resize(
+                    wf_aligner,
+                    target_length,query_length);
+
+                aln.score = wfa::wavefront_align(
+                    wf_aligner,
+                    target+i,
+                    segment_length,
+                    query+j,
+                    segment_length);
+
+                /*
                 aln.score = wfa::affine_wavefronts_align_bounded(
                         affine_wavefronts,
                         target+i,
@@ -459,6 +492,7 @@ namespace wflign {
                         query+j,
                         segment_length,
                         max_score);
+                */
 
                 aln.j = j;
                 aln.i = i;
@@ -480,7 +514,7 @@ namespace wflign {
                     }
 #endif
 
-                    wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
+                    wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
 
 #ifdef VALIDATE_WFA_WFLIGN
                     if (!validate_cigar(aln.edit_cigar, query, target, segment_length, segment_length, aln.j, aln.i)) {
@@ -491,7 +525,7 @@ namespace wflign {
                 }
 
                 // cleanup wavefronts to keep memory low
-                affine_wavefronts_delete(affine_wavefronts);
+                //affine_wavefronts_delete(affine_wavefronts);
 
                 return aln.ok;
             }
@@ -506,12 +540,13 @@ namespace wflign {
                 const uint64_t& target_length,
                 const int& min_wavefront_length,
                 const int& max_distance_threshold,
-                wfa::mm_allocator_t* const mm_allocator,
+                wfa::wavefront_aligner_t* const wf_aligner,
                 wfa::affine_penalties_t* const affine_penalties,
                 alignment_t& aln) {
 
             //std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << " " << target_length << std::endl;
 
+            /*
             wfa::affine_wavefronts_t* affine_wavefronts;
             if (min_wavefront_length || max_distance_threshold) {
                 // adaptive affine WFA setup
@@ -524,40 +559,45 @@ namespace wflign {
                 affine_wavefronts = affine_wavefronts_new_complete(
                         target_length, query_length, affine_penalties, NULL, mm_allocator);
             }
+            */
 
             const int max_score = (target_length + query_length) * 5;
 
-            aln.score = wfa::affine_wavefronts_align_bounded(
-                    affine_wavefronts,
-                    target+i,
-                    target_length,
-                    query+j,
-                    query_length,
-                    max_score);
+            wfa::wavefront_aligner_clear__resize(
+                wf_aligner,
+                target_length,query_length);
+
+            aln.score = wfa::wavefront_align_bounded(
+                wf_aligner,
+                target+i,
+                target_length,
+                query+j,
+                query_length,
+                max_score);
 
             aln.ok = aln.score < max_score;
             if (aln.ok) {
                 // correct X/M errors in the cigar
-                hack_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, j, i);
+                hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);
 
 #ifdef VALIDATE_WFA_WFLIGN
-                if (!validate_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, j, i)) {
+                if (!validate_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i)) {
                     std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i << std::endl;
-                    unpack_display_cigar(affine_wavefronts->edit_cigar, query, target, query_length, target_length, aln.j, aln.i);
+                    unpack_display_cigar(wf_aligner->cigar, query, target, query_length, target_length, aln.j, aln.i);
                     std::cerr << ">query" << std::endl << std::string(query+j, query_length) << std::endl;
                     std::cerr << ">target" << std::endl << std::string(target+i, target_length) << std::endl;
                     assert(false);
                 }
 #endif
 
-                wflign_edit_cigar_copy(&aln.edit_cigar, &affine_wavefronts->edit_cigar);
+                wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
             }
 
             // cleanup wavefronts to keep memory low
-            affine_wavefronts_delete(affine_wavefronts);
+            //affine_wavefronts_delete(affine_wavefronts);
 
             // cleanup allocator to keep memory low
-            wfa::mm_allocator_clear(mm_allocator);
+            //wfa::mm_allocator_clear(mm_allocator);
         }
 
         EdlibAlignResult do_edlib_patch_alignment(
@@ -583,7 +623,7 @@ namespace wflign {
         }
 
         bool hack_cigar(
-                wfa::edit_cigar_t& cigar,
+                wfa::cigar_t& cigar,
                 const char* query, const char* target,
                 const uint64_t& query_aln_len, const uint64_t& target_aln_len,
                 uint64_t j, uint64_t i) {
@@ -641,7 +681,7 @@ namespace wflign {
         }
 
         bool validate_cigar(
-                const wfa::edit_cigar_t& cigar,
+                const wfa::cigar_t& cigar,
                 const char* query, const char* target,
                 const uint64_t& query_aln_len, const uint64_t& target_aln_len,
                 uint64_t j, uint64_t i) {
@@ -740,7 +780,7 @@ namespace wflign {
         }
 
         bool unpack_display_cigar(
-                const wfa::edit_cigar_t& cigar,
+                const wfa::cigar_t& cigar,
                 const char* query, const char* target,
                 const uint64_t& query_aln_len, const uint64_t& target_aln_len,
                 uint64_t j, uint64_t i) {
@@ -806,7 +846,7 @@ namespace wflign {
         void write_merged_alignment(
                 std::ostream& out,
                 const std::vector<alignment_t*>& trace,
-                wfa::mm_allocator_t* const mm_allocator,
+                wfa::wavefront_aligner_t* const wf_aligner,
                 wfa::affine_penalties_t* const affine_penalties,
                 const bool& emit_md_tag,
                 const bool& paf_format_else_sam,
@@ -920,7 +960,7 @@ namespace wflign {
                         &wflign_max_len_major, &wflign_max_len_minor,
                         &distance_close_big_enough_indels,
                         &min_wf_length, &max_dist_threshold,
-                        &mm_allocator, &affine_penalties
+                        &wf_aligner, &affine_penalties
                 ](std::vector<char>& unpatched, std::vector<char>& patched) {
                     auto q = unpatched.begin();
 
@@ -1275,7 +1315,7 @@ namespace wflign {
                                                 query, query_pos, query_delta,
                                                 target - target_pointer_shift, target_pos, target_delta,
                                                 min_wf_length, max_dist_threshold,
-                                                mm_allocator, affine_penalties, patch_aln);
+                                                wf_aligner, affine_penalties, patch_aln);
                                         if (patch_aln.ok) {
                                             //std::cerr << "got an ok patch aln" << std::endl;
                                             got_alignment = true;
@@ -2054,7 +2094,7 @@ namespace wflign {
         }
 
         char* wfa_alignment_to_cigar(
-                const wfa::edit_cigar_t* const edit_cigar,
+                const wfa::cigar_t* const edit_cigar,
                 uint64_t& target_aligned_length,
                 uint64_t& query_aligned_length,
                 uint64_t& matches,
@@ -2219,8 +2259,8 @@ namespace wflign {
         }
 
         void wflign_edit_cigar_copy(
-                wfa::edit_cigar_t* const edit_cigar_dst,
-                wfa::edit_cigar_t* const edit_cigar_src) {
+                wfa::cigar_t* const edit_cigar_dst,
+                wfa::cigar_t* const edit_cigar_src) {
             edit_cigar_dst->max_operations = edit_cigar_src->max_operations;
             edit_cigar_dst->begin_offset = 0;
             edit_cigar_dst->end_offset = edit_cigar_src->end_offset - edit_cigar_src->begin_offset;
@@ -2247,23 +2287,6 @@ namespace wflign {
                 }
             }
         }
-
-/*
-void edlib_to_wflign_edit_cigar_copy(
-    wfa::edit_cigar_t* const edit_cigar_dst,
-    char* const edlib_cigar_src,
-    const uint64_t& edit_distance,
-    const uint64_t& edlib_cigar_len) {
-    //edit_cigar_dst->max_operations = edlib_cigar_src->max_operations; //hmmm
-    edit_cigar_dst->begin_offset = 0;
-    edit_cigar_dst->end_offset = edlib_cigar_len;
-    edit_cigar_dst->score = edit_distance;
-    edit_cigar_dst->operations = (char*)malloc(edit_cigar_dst->end_offset);
-    memcpy(edit_cigar_dst->operations,
-           edlib_cigar_src,
-           edit_cigar_dst->end_offset);
-}
-*/
 
     }
 
