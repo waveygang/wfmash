@@ -44,7 +44,7 @@ void affine_wavefronts_allocate_wavefront_null(
     affine_wavefronts_t* const affine_wavefronts) {
   // Allocate null wavefront
   const int wavefront_length = affine_wavefronts->pattern_length + affine_wavefronts->text_length + 1;
-  awf_offset_t* const offsets_null = mm_allocator_calloc(
+  awf_offset_t* const offsets_null = wflambda_mm_allocator_calloc(
       affine_wavefronts->mm_allocator,wavefront_length,awf_offset_t,false);
   // Initialize
   affine_wavefronts->wavefront_null.null = true;
@@ -64,15 +64,15 @@ void affine_wavefronts_allocate_wavefront_components(
   mm_allocator_t* const mm_allocator = affine_wavefronts->mm_allocator;
   // Initialize wavefronts
   affine_wavefronts->mwavefronts =
-      mm_allocator_calloc(mm_allocator,affine_wavefronts->num_wavefronts,affine_wavefront_t*,true);
+      wflambda_mm_allocator_calloc(mm_allocator,affine_wavefronts->num_wavefronts,affine_wavefront_t*,true);
   affine_wavefronts->iwavefronts =
-      mm_allocator_calloc(mm_allocator,affine_wavefronts->num_wavefronts,affine_wavefront_t*,true);
+      wflambda_mm_allocator_calloc(mm_allocator,affine_wavefronts->num_wavefronts,affine_wavefront_t*,true);
   affine_wavefronts->dwavefronts =
-      mm_allocator_calloc(mm_allocator,affine_wavefronts->num_wavefronts,affine_wavefront_t*,true);
+      wflambda_mm_allocator_calloc(mm_allocator,affine_wavefronts->num_wavefronts,affine_wavefront_t*,true);
   // Allocate bulk-memory (for all wavefronts)
   const int num_wavefronts = affine_wavefronts->num_wavefronts;
   affine_wavefront_t* const wavefronts_mem =
-      mm_allocator_calloc(mm_allocator,3*num_wavefronts,affine_wavefront_t,false);
+      wflambda_mm_allocator_calloc(mm_allocator,3*num_wavefronts,affine_wavefront_t,false);
   affine_wavefronts->wavefronts_mem = wavefronts_mem;
   affine_wavefronts->wavefronts_current = wavefronts_mem;
 }
@@ -83,7 +83,7 @@ affine_wavefronts_t* affine_wavefronts_new(
     const wavefronts_penalties_strategy penalties_strategy,
     mm_allocator_t* const mm_allocator) {
   // Allocate
-  affine_wavefronts_t* const affine_wavefronts = mm_allocator_alloc(mm_allocator,affine_wavefronts_t);
+  affine_wavefronts_t* const affine_wavefronts = wflambda_mm_allocator_alloc(mm_allocator,affine_wavefronts_t);
   // Dimensions
   const int max_score_misms = MIN(pattern_length,text_length) * penalties->mismatch;
   const int max_score_indel = penalties->gap_opening + ABS(pattern_length-text_length) * penalties->gap_extension;
@@ -246,13 +246,13 @@ affine_wavefront_t* affine_wavefronts_allocate_wavefront(
   wavefront->lo_base = lo_base;
   wavefront->hi_base = hi_base;
   // Allocate offsets
-  awf_offset_t* const offsets_mem = mm_allocator_calloc(
+  awf_offset_t* const offsets_mem = wflambda_mm_allocator_calloc(
       affine_wavefronts->mm_allocator,wavefront_length,awf_offset_t,false);
   awf_offset_t* const offsets = offsets_mem - lo_base; // Center at k=0
   wavefront->offsets = offsets;
   // DEBUG
 #ifdef AFFINE_LAMBDA_WAVEFRONT_DEBUG
-  awf_offset_t* const offsets_base_mem = mm_allocator_calloc(
+  awf_offset_t* const offsets_base_mem = wflambda_mm_allocator_calloc(
       affine_wavefronts->mm_allocator,wavefront_length,awf_offset_t,false);
   wavefront->offsets_base = offsets_base_mem - lo_base; // Center at k=0
 #endif

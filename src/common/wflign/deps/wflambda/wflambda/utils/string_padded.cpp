@@ -66,7 +66,7 @@ strings_padded_t* strings_padded_new(
     mm_allocator_t* const mm_allocator) {
   // Allocate
   strings_padded_t* const strings_padded =
-      mm_allocator_alloc(mm_allocator,strings_padded_t);
+      wflambda_mm_allocator_alloc(mm_allocator,strings_padded_t);
   strings_padded->mm_allocator = mm_allocator;
   // Compute padding dimensions
   const int pattern_begin_padding_length = 0;
@@ -96,7 +96,7 @@ strings_padded_t* strings_padded_new_rhomb(
     mm_allocator_t* const mm_allocator) {
   // Allocate
   strings_padded_t* const strings_padded =
-      mm_allocator_alloc(mm_allocator,strings_padded_t);
+      wflambda_mm_allocator_alloc(mm_allocator,strings_padded_t);
   strings_padded->mm_allocator = mm_allocator;
   // Compute padding dimensions
   const int pattern_begin_padding_length = text_length + padding_length;

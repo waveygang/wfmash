@@ -49,7 +49,7 @@ void edit_table_allocate(
   edit_table->num_columns = num_columns;
   edit_table->columns = (int**)wflambda_mm_allocator_malloc(mm_allocator,(text_length+1)*sizeof(int*)); // Columns
   for (h=0;h<num_columns;++h) {
-    edit_table->columns[h] = mm_allocator_calloc(mm_allocator,pattern_length+1,int,false); // Rows
+    edit_table->columns[h] = wflambda_mm_allocator_calloc(mm_allocator,pattern_length+1,int,false); // Rows
   }
   // CIGAR
   edit_cigar_allocate(&edit_table->edit_cigar,pattern_length,text_length,mm_allocator);
