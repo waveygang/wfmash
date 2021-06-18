@@ -36,27 +36,27 @@ namespace wflambda {
 /*
  * Constants
  */
-#define VECTOR_EXPAND_FACTOR (3.0/2.0)
+#define WFLAMBDA_VECTOR_EXPAND_FACTOR (3.0/2.0)
 
 /*
  * Setup
  */
-vector_t* vector_new_(const uint64_t num_initial_elements,const uint64_t element_size) {
-  vector_t* const vector_buffer = (vector_t*)malloc(sizeof(vector_t));
-  vector_buffer->element_size = element_size;
-  vector_buffer->elements_allocated = num_initial_elements;
-  vector_buffer->memory = malloc(num_initial_elements*element_size);
-  if (!vector_buffer->memory) {
+wflambda_vector_t* wflambda_vector_new_(const uint64_t num_initial_elements,const uint64_t element_size) {
+  wflambda_vector_t* const wflambda_vector_buffer = (wflambda_vector_t*)malloc(sizeof(wflambda_vector_t));
+  wflambda_vector_buffer->element_size = element_size;
+  wflambda_vector_buffer->elements_allocated = num_initial_elements;
+  wflambda_vector_buffer->memory = malloc(num_initial_elements*element_size);
+  if (!wflambda_vector_buffer->memory) {
       /*fprintf(stderr, "Could not create new vector (%"PRIu64" bytes requested)",
         num_initial_elements*element_size);*/
     exit(1);
   }
-  vector_buffer->used = 0;
-  return vector_buffer;
+  wflambda_vector_buffer->used = 0;
+  return wflambda_vector_buffer;
 }
-void vector_reserve(vector_t* const vector,const uint64_t num_elements,const bool zero_mem) {
+void wflambda_vector_reserve(wflambda_vector_t* const vector,const uint64_t num_elements,const bool zero_mem) {
   if (vector->elements_allocated < num_elements) {
-    const uint64_t proposed=(float)vector->elements_allocated*VECTOR_EXPAND_FACTOR;
+    const uint64_t proposed=(float)vector->elements_allocated*WFLAMBDA_VECTOR_EXPAND_FACTOR;
     vector->elements_allocated = num_elements>proposed?num_elements:proposed;
     vector->memory = realloc(vector->memory,vector->elements_allocated*vector->element_size);
     if (!vector->memory) {
@@ -70,9 +70,9 @@ void vector_reserve(vector_t* const vector,const uint64_t num_elements,const boo
         (vector->elements_allocated-vector->used)*vector->element_size);
   }
 }
-void vector_resize__clear(vector_t* const vector,const uint64_t num_elements) {
+void wflambda_vector_resize__clear(wflambda_vector_t* const vector,const uint64_t num_elements) {
   if (vector->elements_allocated < num_elements) {
-    const uint64_t proposed = (float)vector->elements_allocated*VECTOR_EXPAND_FACTOR;
+    const uint64_t proposed = (float)vector->elements_allocated*WFLAMBDA_VECTOR_EXPAND_FACTOR;
     vector->elements_allocated = (num_elements>proposed)?num_elements:proposed;
     // Free previous chunk (no need to pay the cost of reallocating memory)
     free(vector->memory);
@@ -86,20 +86,20 @@ void vector_resize__clear(vector_t* const vector,const uint64_t num_elements) {
   }
   vector->used=0;
 }
-void vector_cast__clear_(vector_t* const vector,const uint64_t element_size) {
+void wflambda_vector_cast__clear_(wflambda_vector_t* const vector,const uint64_t element_size) {
   vector->elements_allocated = (vector->elements_allocated*vector->element_size)/element_size;
   vector->element_size = element_size;
   vector->used = 0;
 }
-void vector_delete(vector_t* const vector) {
+void wflambda_vector_delete(wflambda_vector_t* const vector) {
   free(vector->memory);
   free(vector);
 }
 /*
  * Accessors
  */
-#ifdef VECTOR_DEBUG
-void* vector_get_mem_element(vector_t* const vector,const uint64_t position,const uint64_t element_size) {
+#ifdef WFLAMBDA_VECTOR_DEBUG
+void* wflambda_vector_get_mem_element(wflambda_vector_t* const vector,const uint64_t position,const uint64_t element_size) {
   if (position >= (vector)->used) {
       /*fprintf(stderr,"Vector position out-of-range [0,%"PRIu64")",(vector)->used);*/
     exit(1);
@@ -110,20 +110,20 @@ void* vector_get_mem_element(vector_t* const vector,const uint64_t position,cons
 /*
  * Miscellaneous
  */
-void vector_copy(vector_t* const vector_to,vector_t* const vector_from) {
+void wflambda_vector_copy(wflambda_vector_t* const wflambda_vector_to,wflambda_vector_t* const wflambda_vector_from) {
   // Prepare
-  vector_cast__clear_(vector_to,vector_from->element_size);
-  vector_reserve(vector_to,vector_from->used,false);
+  wflambda_vector_cast__clear_(wflambda_vector_to,wflambda_vector_from->element_size);
+  wflambda_vector_reserve(wflambda_vector_to,wflambda_vector_from->used,false);
   // Copy
-  vector_set_used(vector_to,vector_from->used);
-  memcpy(vector_to->memory,vector_from->memory,vector_from->used*vector_from->element_size);
+  wflambda_vector_set_used(wflambda_vector_to,wflambda_vector_from->used);
+  memcpy(wflambda_vector_to->memory,wflambda_vector_from->memory,wflambda_vector_from->used*wflambda_vector_from->element_size);
 }
-vector_t* vector_dup(vector_t* const vector_src) {
-  vector_t* const vector_cpy = vector_new_(vector_src->used,vector_src->element_size);
+wflambda_vector_t* wflambda_vector_dup(wflambda_vector_t* const wflambda_vector_src) {
+  wflambda_vector_t* const wflambda_vector_cpy = wflambda_vector_new_(wflambda_vector_src->used,wflambda_vector_src->element_size);
   // Copy
-  vector_set_used(vector_cpy,vector_src->used);
-  memcpy(vector_cpy->memory,vector_src->memory,vector_src->used*vector_src->element_size);
-  return vector_cpy;
+  wflambda_vector_set_used(wflambda_vector_cpy,wflambda_vector_src->used);
+  memcpy(wflambda_vector_cpy->memory,wflambda_vector_src->memory,wflambda_vector_src->used*wflambda_vector_src->element_size);
+  return wflambda_vector_cpy;
 }
 
 }

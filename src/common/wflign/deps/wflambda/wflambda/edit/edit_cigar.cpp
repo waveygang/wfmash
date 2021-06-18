@@ -305,9 +305,9 @@ void edit_cigar_print_pretty(
   char* const operations = edit_cigar->operations;
   // Allocate alignment buffers
   const int max_buffer_length = text_length+pattern_length+1;
-  char* const pattern_alg = mm_allocator_calloc(mm_allocator,max_buffer_length,char,true);
-  char* const ops_alg = mm_allocator_calloc(mm_allocator,max_buffer_length,char,true);
-  char* const text_alg = mm_allocator_calloc(mm_allocator,max_buffer_length,char,true);
+  char* const pattern_alg = wflambda_mm_allocator_calloc(mm_allocator,max_buffer_length,char,true);
+  char* const ops_alg = wflambda_mm_allocator_calloc(mm_allocator,max_buffer_length,char,true);
+  char* const text_alg = wflambda_mm_allocator_calloc(mm_allocator,max_buffer_length,char,true);
   // Compute alignment buffers
   int i, alg_pos = 0, pattern_pos = 0, text_pos = 0;
   for (i=edit_cigar->begin_offset;i<edit_cigar->end_offset;++i) {

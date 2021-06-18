@@ -49,7 +49,7 @@ void affine_table_allocate(
   table->num_columns = num_columns;
   table->columns = (affine_cell_t**)wflambda_mm_allocator_malloc(mm_allocator,(text_length+1)*sizeof(affine_cell_t*)); // Columns
   for (h=0;h<num_columns;++h) {
-    table->columns[h] = mm_allocator_calloc(mm_allocator,pattern_length+1,affine_cell_t,false); // Rows
+    table->columns[h] = wflambda_mm_allocator_calloc(mm_allocator,pattern_length+1,affine_cell_t,false); // Rows
   }
   // CIGAR
   edit_cigar_allocate(&table->edit_cigar,pattern_length,text_length,mm_allocator);
