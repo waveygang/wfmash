@@ -236,10 +236,11 @@ void wavefront_aligner_delete(
   // MM
   if (wf_aligner->bt_buffer) wf_backtrace_buffer_delete(wf_aligner->bt_buffer);
   wavefront_slab_delete(wf_aligner->wavefront_slab); // Slab
-  if (wf_aligner->mm_allocator_own) {
-    mm_allocator_delete(wf_aligner->mm_allocator);
-  }
+  const bool mm_allocator_own = wf_aligner->mm_allocator_own;
   mm_allocator_free(mm_allocator,wf_aligner); // Handler
+  if (mm_allocator_own) {
+    mm_allocator_delete(mm_allocator);
+  }
 }
 
 #ifdef WFA_NAMESPACE
