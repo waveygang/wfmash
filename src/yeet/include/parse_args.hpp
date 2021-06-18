@@ -298,7 +298,7 @@ void parse_args(int argc,
     if (wflign_erode_k) {
         align_parameters.wflign_erode_k = args::get(wflign_erode_k);
     } else {
-        align_parameters.wflign_erode_k = 13;
+        align_parameters.wflign_erode_k = map_parameters.percentageIdentity >= 0.97 ? 21 : (map_parameters.percentageIdentity >= 0.9 ? 17 : 13);
     }
 
     // Unsupproted
