@@ -103,13 +103,13 @@ namespace wflign {
                 wflambda_affine_penalties = {
                         .match = 0,
                         .mismatch = 1,
-                        .gap_opening = 2,
+                        .gap_opening = 3,
                         .gap_extension = 1,
                 };
                 wfa_affine_penalties = {
                         .match = 0,
                         .mismatch = 1,
-                        .gap_opening = 2,
+                        .gap_opening = 3,
                         .gap_extension = 1,
                 };
             }
