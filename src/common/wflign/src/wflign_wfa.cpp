@@ -1035,7 +1035,7 @@ void write_merged_alignment(
                             delta_to_ask - target_pos;
 
                         // Manage negative indexes
-                        if (target_offset >= positions_to_get) {
+                        if (target_offset - target_pointer_shift >= positions_to_get) {
                             // std::cerr << "B.1\n";
                             target_pointer_shift_x = target_pointer_shift +
                                                      (int64_t)positions_to_get;
