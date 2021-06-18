@@ -929,16 +929,17 @@ namespace wflign {
 #define MAX_NUM_INDELS_TO_LOOK_AT 3
                 auto distance_close_big_enough_indels = [](const uint32_t indel_len, auto iterator, const std::vector<char>& trace) {
                     const uint32_t min_indel_len_to_find = indel_len / 3 + 1;
-                    const uint16_t max_dist_to_look_at = std::min(indel_len * 64, (uint32_t)4096);
-
-                    //std::cerr << "min_indel_len_to_find " << min_indel_len_to_find << std::endl;
-                    //std::cerr << "max_dist_to_look_at " << max_dist_to_look_at << std::endl;
+                    const uint16_t max_dist_to_look_at = std::min(indel_len * 64, (uint32_t)std::numeric_limits<uint16_t>::max());
 
                     auto q = iterator;
 
                     uint8_t num_indels_to_find = MAX_NUM_INDELS_TO_LOOK_AT;
                     uint32_t curr_size_close_indel = 0;
-                    uint16_t dist_close_indels = 0;
+                    int32_t dist_close_indels = 0;
+
+                    //std::cerr << "indel_len " << indel_len << std::endl;
+                    //std::cerr << "min_indel_len_to_find " << min_indel_len_to_find << std::endl;
+                    //std::cerr << "max_dist_to_look_at " << max_dist_to_look_at << std::endl;
 
                     while (q != trace.end() && dist_close_indels < max_dist_to_look_at){
                         curr_size_close_indel = 0;
@@ -962,7 +963,10 @@ namespace wflign {
                         }
                     }
 
-                    return num_indels_to_find < MAX_NUM_INDELS_TO_LOOK_AT ? dist_close_indels : -1;
+                    //std::cerr << "dist_close_indels " << dist_close_indels << std::endl;
+                    //std::cerr << "num_indels_found " << MAX_NUM_INDELS_TO_LOOK_AT - num_indels_to_find << std::endl;
+
+                  return num_indels_to_find < MAX_NUM_INDELS_TO_LOOK_AT ? dist_close_indels : -1;
                 };
 
                 auto patching = [
@@ -1179,7 +1183,7 @@ namespace wflign {
 
                         // how long was our last gap?
                         // if it's long enough, patch it
-                        uint32_t size_region_to_repatch = 0;
+                        int32_t size_region_to_repatch = 0;
 
                         do {
                             got_alignment = false;
@@ -1188,7 +1192,8 @@ namespace wflign {
                                                                          (query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
                                                                          (query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)){
 
-                                int16_t distance_close_indels = distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched);
+                                int32_t distance_close_indels = distance_close_indels = distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched);
+
                                 //std::cerr << "distance_close_indels " << distance_close_indels << std::endl;
                                 // Trigger the patching if there is a dropout (consecutive Is and Ds) or if there is a close and big enough indel forward
                                 if (size_region_to_repatch > 0 || (query_delta > 0 && target_delta > 0) || (distance_close_indels > 0)) {
@@ -1224,6 +1229,22 @@ namespace wflign {
                                             patched.pop_back();
                                             --size_region_to_repatch;
                                         }
+
+                                        /*uint64_t to_nibble = min_wfa_patch_length;
+                                        while (q != unpatched.end() && (to_nibble > 0)) {
+                                            const auto& c = *q++;
+                                            switch (c) {
+                                                case 'M': case 'X':
+                                                    ++query_delta; ++target_delta; break;
+                                                case 'I': ++query_delta; break;
+                                                case 'D': ++target_delta; break;
+                                                default: break;
+                                            }
+
+                                            --to_nibble;
+                                        }
+
+                                        distance_close_indels = distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched);*/
                                     } else {
                                         // nibble backward if we're below the correct length
                                         while (!patched.empty() && (query_delta < (min_wfa_patch_length / 2) || target_delta < (min_wfa_patch_length / 2))) {
@@ -1357,10 +1378,11 @@ namespace wflign {
                                             }
                                             //std::cerr << std::endl;
 
+                                            //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
+                                            //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
                                             // Not too big, to avoid repatching structural variants boundaries
                                             if (size_indel > 7 && size_indel <= 4096 && size_region_to_repatch < (end_idx - start_idx)){
-                                                //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
-                                                //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
+                                                //std::cerr << "REPATCH " << std::endl;
                                             } else {
                                                 size_region_to_repatch = 0;
                                             }
