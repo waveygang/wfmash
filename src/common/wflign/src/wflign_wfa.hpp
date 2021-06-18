@@ -256,8 +256,8 @@ bool do_wfa_segment_alignment(
     std::vector<rkmh::hash_t> *&target_sketches, const uint64_t &target_length,
     const uint64_t &i, const uint16_t &segment_length,
     const uint16_t &step_size, const uint64_t &minhash_kmer_size,
-    const uint32_t &min_wavefront_length,
-    const uint32_t &max_distance_threshold, const float &max_mash_dist, const double& mashmap_estimated_identity,
+    const int &min_wavefront_length,
+    const int &max_distance_threshold, const float &max_mash_dist, const double& mashmap_estimated_identity,
     wfa::wavefront_aligner_t *const wf_aligner,
     wfa::affine_penalties_t *const affine_penalties, alignment_t &aln);
 

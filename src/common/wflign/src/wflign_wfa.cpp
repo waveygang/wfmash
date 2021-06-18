@@ -134,19 +134,6 @@ void wflign_affine_wavefront(
     std::vector<std::vector<rkmh::hash_t> *> target_sketches(text_length,
                                                              nullptr);
 
-    // std::cerr << "v" << "\t" << "h" << "\t" << "score" << "\t" << "aligned"
-    // << std::endl;
-
-    // setup affine WFA
-    // wfa::mm_allocator_t* const wfa_mm_allocator =
-    // wfa::mm_allocator_new(BUFFER_SIZE_8M);
-    wfa::affine_penalties_t wfa_affine_penalties = {
-        .match = 0,
-        .mismatch = 9,
-        .gap_opening = 13,
-        .gap_extension = 1,
-    };
-
     // Configure the attributes of the wf-aligner
     wfa::wavefront_aligner_attr_t attributes =
         wfa::wavefront_aligner_attr_default;
@@ -910,8 +897,8 @@ void write_merged_alignment(
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
-    const uint64_t &num_alignments, const uint64_t &num_alignments_performed, const double& mashmap_estimated_identity,
-    const double &mashmap_identity, const uint64_t &wflign_max_len_major,
+    const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
+    const double &mashmap_estimated_identity, const uint64_t &wflign_max_len_major,
     const uint64_t &wflign_max_len_minor, const uint16_t &erode_k,
     const bool &with_endline) {
 
