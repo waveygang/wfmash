@@ -172,7 +172,7 @@ wavefront_aligner_t* wavefront_aligner_new(
       &wf_aligner->num_wavefronts); // Compute dimensions
   wavefront_components_allocate(wf_aligner,attributes->distance_metric);
   // CIGAR
-  cigar_allocate(&wf_aligner->cigar,pattern_length+text_length,mm_allocator);
+  cigar_allocate(&wf_aligner->cigar,2*(pattern_length+text_length),mm_allocator);
   // Return
   return wf_aligner;
 }
@@ -207,7 +207,7 @@ void wavefront_aligner_clear__resize(
   // Resize CIGAR
   if (pattern_length+text_length > wf_aligner->pattern_length+wf_aligner->text_length) {
     cigar_free(&wf_aligner->cigar); // FIXME
-    cigar_allocate(&wf_aligner->cigar,pattern_length+text_length,wf_aligner->mm_allocator); // FIXME
+    cigar_allocate(&wf_aligner->cigar,2*(pattern_length+text_length),wf_aligner->mm_allocator); // FIXME
   } else {
     cigar_clear(&wf_aligner->cigar);
   }
