@@ -50,11 +50,11 @@ typedef struct {
   uint64_t request_ticker;      // Request ticker
   // Memory segments
   uint64_t segment_size;        // Memory segment size (bytes)
-  vector_t* segments;           // Memory segments (mm_allocator_segment_t*)
-  vector_t* segments_free;      // Completely free segments (mm_allocator_segment_t*)
+  wflambda_vector_t* segments;           // Memory segments (mm_allocator_segment_t*)
+  wflambda_vector_t* segments_free;      // Completely free segments (mm_allocator_segment_t*)
   uint64_t current_segment_idx; // Current segment being used (serving memory)
   // Malloc Memory
-  vector_t* malloc_requests;    // Malloc requests (void*)
+  wflambda_vector_t* malloc_requests;    // Malloc requests (void*)
 } mm_allocator_t;
 
 /*
@@ -81,18 +81,18 @@ void* mm_allocator_allocate(
     );
 
 #ifdef MM_ALLOCATOR_LOG
-#define mm_allocator_alloc(mm_allocator,type) \
+#define wflambda_mm_allocator_alloc(mm_allocator,type) \
   ((type*)mm_allocator_allocate(mm_allocator,sizeof(type),false,__func__,(uint64_t)__LINE__))
 #define wflambda_mm_allocator_malloc(mm_allocator,num_bytes) \
   (mm_allocator_allocate(mm_allocator,(num_bytes),false,__func__,(uint64_t)__LINE__))
-#define mm_allocator_calloc(mm_allocator,num_elements,type,clear_mem) \
+#define wflambda_mm_allocator_calloc(mm_allocator,num_elements,type,clear_mem) \
   ((type*)mm_allocator_allocate(mm_allocator,(num_elements)*sizeof(type),clear_mem,__func__,(uint64_t)__LINE__))
 #else
-#define mm_allocator_alloc(mm_allocator,type) \
+#define wflambda_mm_allocator_alloc(mm_allocator,type) \
   ((type*)mm_allocator_allocate(mm_allocator,sizeof(type),false))
 #define wflambda_mm_allocator_malloc(mm_allocator,num_bytes) \
   (mm_allocator_allocate(mm_allocator,(num_bytes),false))
-#define mm_allocator_calloc(mm_allocator,num_elements,type,clear_mem) \
+#define wflambda_mm_allocator_calloc(mm_allocator,num_elements,type,clear_mem) \
   ((type*)mm_allocator_allocate(mm_allocator,(num_elements)*sizeof(type),clear_mem))
 #endif
 

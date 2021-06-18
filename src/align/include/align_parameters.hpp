@@ -23,8 +23,8 @@ struct Parameters {
 
     //wflambda
     uint16_t wflambda_segment_length;             //segment length for wflambda
-    uint32_t wflambda_min_wavefront_length;       //wavefront length to trigger reduction (how wide should it be)
-    uint32_t wflambda_max_distance_threshold;     //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
+    int wflambda_min_wavefront_length;            //wavefront length to trigger reduction (how wide should it be)
+    int wflambda_max_distance_threshold;          //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
 
     // wflign
     uint64_t wflign_max_len_major;

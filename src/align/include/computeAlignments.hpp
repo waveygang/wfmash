@@ -78,7 +78,7 @@ namespace align
        * @brief                 constructor, also reads reference sequences
        * @param[in] p           algorithm parameters
        */
-      Aligner(const align::Parameters &p) :
+      explicit Aligner(const align::Parameters &p) :
         param(p)
       {
         this->getRefSequences();
@@ -188,7 +188,7 @@ namespace align
 
           // reader picks up candidate alignments from input
           auto reader_thread =
-              [&](void) {
+              [&]() {
                   //Parse query sequences
                   for(const auto &fileName : param.querySequences)
                   {
@@ -273,7 +273,7 @@ namespace align
           std::ofstream outstrm(param.pafOutputFile, ios::app);
 
           auto writer_thread =
-              [&](void) {
+              [&]() {
                   while (true) {
                       std::string* paf_lines = nullptr;
                       if (!paf_queue.try_pop(paf_lines)
@@ -299,14 +299,14 @@ namespace align
                           && reader_done.load()) {
                           break;
                       } else if (rec != nullptr) {
-                          std::string* paf_rec
+                          auto* paf_rec
                               = new std::string(
                                   doAlignment(rec->currentRecord,
                                               rec->mappingRecordLine,
                                               rec->qSequence));
                           progress.increment(rec->currentRecord.qEndPos
                                              - rec->currentRecord.qStartPos);
-                          if (paf_rec->size()) {
+                          if (!paf_rec->empty()) {
                               paf_queue.push(paf_rec);
                           } else {
                               delete paf_rec;
@@ -365,7 +365,7 @@ namespace align
         assert(tokens.size() >= 9);
 
         // Extract the mashmap identity from the string
-        auto split = [](string s, string delimiter) {
+        auto split = [](const string& s, const string& delimiter) {
           size_t pos_start = 0, pos_end, delim_len = delimiter.length();
           string token;
           vector<string> res;

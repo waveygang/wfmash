@@ -81,7 +81,7 @@ typedef struct {
   void* memory;                 // Memory
   uint64_t used;                // Bytes used (offset to memory next free byte)
   // Requests
-  vector_t* requests;           // Memory requests (mm_allocator_request_t)
+  wflambda_vector_t* requests;           // Memory requests (mm_allocator_request_t)
 } mm_allocator_segment_t;
 /*
  * Reference (Header of every memory allocated)
@@ -99,38 +99,38 @@ mm_allocator_segment_t* mm_allocator_segment_new(
   // Allocate new segment
   mm_allocator_segment_t* const segment = (mm_allocator_segment_t*)malloc(sizeof(mm_allocator_segment_t));
   // Index
-  const uint64_t segment_idx = vector_get_used(mm_allocator->segments);
+  const uint64_t segment_idx = wflambda_vector_get_used(mm_allocator->segments);
   segment->segment_idx = segment_idx;
   // Memory
   segment->segment_size = mm_allocator->segment_size;
   segment->memory = malloc(mm_allocator->segment_size);
   segment->used = 0;
   // Requests
-  segment->requests = vector_new(MM_ALLOCATOR_SEGMENT_INITIAL_REQUESTS,mm_allocator_request_t);
+  segment->requests = wflambda_vector_new(MM_ALLOCATOR_SEGMENT_INITIAL_REQUESTS,mm_allocator_request_t);
   // Add to segments
-  vector_insert(mm_allocator->segments,segment,mm_allocator_segment_t*);
+  wflambda_vector_insert(mm_allocator->segments,segment,mm_allocator_segment_t*);
   // Return
   return segment;
 }
 void mm_allocator_segment_clear(
     mm_allocator_segment_t* const segment) {
   segment->used = 0;
-  vector_clear(segment->requests);
+  wflambda_vector_clear(segment->requests);
 }
 void mm_allocator_segment_delete(
     mm_allocator_segment_t* const segment) {
-  vector_delete(segment->requests);
+  wflambda_vector_delete(segment->requests);
   free(segment->memory);
   free(segment);
 }
 mm_allocator_request_t* mm_allocator_segment_get_request(
     mm_allocator_segment_t* const segment,
     const uint64_t request_idx) {
-  return vector_get_elm(segment->requests,request_idx,mm_allocator_request_t);
+  return wflambda_vector_get_elm(segment->requests,request_idx,mm_allocator_request_t);
 }
 uint64_t mm_allocator_segment_get_num_requests(
     mm_allocator_segment_t* const segment) {
-  return vector_get_used(segment->requests);
+  return wflambda_vector_get_used(segment->requests);
 }
 /*
  * Setup
@@ -143,47 +143,47 @@ mm_allocator_t* mm_allocator_new(
   // Segments
   mm_allocator->segment_size = segment_size;
   mm_allocator->current_segment_idx = 0;
-  mm_allocator->segments = vector_new(MM_ALLOCATOR_INITIAL_SEGMENTS,mm_allocator_segment_t*);
-  mm_allocator->segments_free = vector_new(MM_ALLOCATOR_INITIAL_SEGMENTS,mm_allocator_segment_t*);
+  mm_allocator->segments = wflambda_vector_new(MM_ALLOCATOR_INITIAL_SEGMENTS,mm_allocator_segment_t*);
+  mm_allocator->segments_free = wflambda_vector_new(MM_ALLOCATOR_INITIAL_SEGMENTS,mm_allocator_segment_t*);
   // Allocate an initial segment
   mm_allocator_segment_new(mm_allocator);
   // Malloc Memory
-  mm_allocator->malloc_requests = vector_new(MM_ALLOCATOR_INITIAL_MALLOC_REQUESTS,void*);
+  mm_allocator->malloc_requests = wflambda_vector_new(MM_ALLOCATOR_INITIAL_MALLOC_REQUESTS,void*);
   // Return
   return mm_allocator;
 }
 void mm_allocator_clear(
     mm_allocator_t* const mm_allocator) {
   // Clear segments
-  vector_clear(mm_allocator->segments_free);
-  const uint64_t num_segments = vector_get_used(mm_allocator->segments);
+  wflambda_vector_clear(mm_allocator->segments_free);
+  const uint64_t num_segments = wflambda_vector_get_used(mm_allocator->segments);
   mm_allocator_segment_t** const segments = 
-      vector_get_mem(mm_allocator->segments,mm_allocator_segment_t*);
+      wflambda_vector_get_mem(mm_allocator->segments,mm_allocator_segment_t*);
   uint64_t i;
   for (i=1;i<num_segments;++i) {
     mm_allocator_segment_clear(segments[i]); // Clear segment
-    vector_insert(mm_allocator->segments_free,segments[i],mm_allocator_segment_t*); // Add to free segments
+    wflambda_vector_insert(mm_allocator->segments_free,segments[i],mm_allocator_segment_t*); // Add to free segments
   }
   mm_allocator->current_segment_idx = 0;
   // Clear malloc memory
-  VECTOR_ITERATE(mm_allocator->malloc_requests,malloc_request,m,void*) {
+  WFLAMBDA_VECTOR_ITERATE(mm_allocator->malloc_requests,malloc_request,m,void*) {
     free(*malloc_request); // Free malloc requests
   }
-  vector_clear(mm_allocator->malloc_requests);
+  wflambda_vector_clear(mm_allocator->malloc_requests);
 }
 void mm_allocator_delete(
     mm_allocator_t* const mm_allocator) {
   // Free segments
-  VECTOR_ITERATE(mm_allocator->segments,segment_ptr,p,mm_allocator_segment_t*) {
+  WFLAMBDA_VECTOR_ITERATE(mm_allocator->segments,segment_ptr,p,mm_allocator_segment_t*) {
     mm_allocator_segment_delete(*segment_ptr);
   }
-  vector_delete(mm_allocator->segments);
-  vector_delete(mm_allocator->segments_free);
+  wflambda_vector_delete(mm_allocator->segments);
+  wflambda_vector_delete(mm_allocator->segments_free);
   // Free malloc memory
-  VECTOR_ITERATE(mm_allocator->malloc_requests,malloc_request,m,void*) {
+  WFLAMBDA_VECTOR_ITERATE(mm_allocator->malloc_requests,malloc_request,m,void*) {
     free(*malloc_request); // Free remaining requests
   }
-  vector_delete(mm_allocator->malloc_requests);
+  wflambda_vector_delete(mm_allocator->malloc_requests);
   // Free handler
   free(mm_allocator);
 }
@@ -193,11 +193,11 @@ void mm_allocator_delete(
 mm_allocator_segment_t* mm_allocator_get_segment(
     mm_allocator_t* const mm_allocator,
     const uint64_t segment_idx) {
-  return *(vector_get_elm(mm_allocator->segments,segment_idx,mm_allocator_segment_t*));
+  return *(wflambda_vector_get_elm(mm_allocator->segments,segment_idx,mm_allocator_segment_t*));
 }
 uint64_t mm_allocator_get_num_segments(
     mm_allocator_t* const mm_allocator) {
-  return vector_get_used(mm_allocator->segments);
+  return wflambda_vector_get_used(mm_allocator->segments);
 }
 /*
  * Allocate
@@ -217,11 +217,11 @@ mm_allocator_segment_t* mm_allocator_fetch_segment(
     return NULL; // Memory request over segment size
   }
   // Get free segment
-  const uint64_t free_segments = vector_get_used(mm_allocator->segments_free);
+  const uint64_t free_segments = wflambda_vector_get_used(mm_allocator->segments_free);
   if (free_segments > 0) {
     mm_allocator_segment_t* const segment =
-        *vector_get_elm(mm_allocator->segments_free,free_segments-1,mm_allocator_segment_t*);
-    vector_dec_used(mm_allocator->segments_free);
+        *wflambda_vector_get_elm(mm_allocator->segments_free,free_segments-1,mm_allocator_segment_t*);
+    wflambda_vector_dec_used(mm_allocator->segments_free);
     mm_allocator->current_segment_idx = segment->segment_idx;
     return segment;
   }
@@ -265,7 +265,7 @@ void* mm_allocator_allocate(
     mm_reference->request_idx = mm_allocator_segment_get_num_requests(segment);
     // Add request
     mm_allocator_request_t* request;
-    vector_alloc_new(segment->requests,mm_allocator_request_t,request);
+    wflambda_vector_alloc_new(segment->requests,mm_allocator_request_t,request);
     request->offset = segment->used;
     request->size = num_bytes;
 #ifdef MM_ALLOCATOR_LOG
@@ -281,7 +281,7 @@ void* mm_allocator_allocate(
     // Allocate memory
     void* const memory = malloc(num_bytes);
     if (zero_mem) memset(memory,0,num_bytes); // Set zero
-    vector_insert(mm_allocator->malloc_requests,memory,void*);
+    wflambda_vector_insert(mm_allocator->malloc_requests,memory,void*);
     // Set reference
     mm_allocator_reference_t* const mm_reference = (mm_allocator_reference_t* const)memory;
     mm_reference->segment_idx = UINT32_MAX;
@@ -296,8 +296,8 @@ void mm_allocator_free_malloc_request(
     mm_allocator_t* const mm_allocator,
     void* memory) {
   // Search for address in malloc requests
-  const uint64_t num_malloc_requests = vector_get_used(mm_allocator->malloc_requests);
-  void** const malloc_requests = vector_get_mem(mm_allocator->malloc_requests,void*);
+  const uint64_t num_malloc_requests = wflambda_vector_get_used(mm_allocator->malloc_requests);
+  void** const malloc_requests = wflambda_vector_get_mem(mm_allocator->malloc_requests,void*);
   uint64_t i;
   for (i=0;i<num_malloc_requests;++i) { // TODO Needed just for report
     if (malloc_requests[i] == memory) {
@@ -307,7 +307,7 @@ void mm_allocator_free_malloc_request(
       for (;i<num_malloc_requests-1;++i) {
         malloc_requests[i] = malloc_requests[i+1];
       }
-      vector_dec_used(mm_allocator->malloc_requests);
+      wflambda_vector_dec_used(mm_allocator->malloc_requests);
       // Ok
       return;
     }
@@ -332,7 +332,7 @@ void mm_allocator_free_allocator_request(
   if (request_idx == num_requests-1) { // Is the last request?
     --num_requests;
     mm_allocator_request_t* request =
-        vector_get_mem(segment->requests,mm_allocator_request_t) + (num_requests-1);
+        wflambda_vector_get_mem(segment->requests,mm_allocator_request_t) + (num_requests-1);
     while (num_requests>0 && MM_ALLOCATOR_REQUEST_IS_FREE(request)) {
       --num_requests; // Free request
       --request;
@@ -340,13 +340,13 @@ void mm_allocator_free_allocator_request(
     // Update segment used
     if (num_requests > 0) {
       segment->used = request->offset + request->size;
-      vector_set_used(segment->requests,num_requests);
+      wflambda_vector_set_used(segment->requests,num_requests);
     } else {
       // Segment fully freed
       mm_allocator_segment_clear(segment); // Clear
       // Add to free segments (if it is not the current segment)
       if (segment->segment_idx != mm_allocator->current_segment_idx) {
-        vector_insert(mm_allocator->segments_free,segment,mm_allocator_segment_t*);
+        wflambda_vector_insert(mm_allocator->segments_free,segment,mm_allocator_segment_t*);
       }
     }
   }
