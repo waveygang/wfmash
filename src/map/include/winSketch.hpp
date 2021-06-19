@@ -28,7 +28,7 @@
 //#include "common/parallel-hashmap/parallel_hashmap/phmap.h"
 //#include <abseil-cpp/absl/container/flat_hash_map.h>
 //#include <common/sparse-map/include/tsl/sparse_map.h>
-#include <common/robin-hood-hashing/src/include/robin_hood.h>
+#include <common/robin-hood-hashing/robin_hood.h>
 
 #include "common/seqiter.hpp"
 
