@@ -7,12 +7,12 @@
 #ifndef WIN_SKETCH_HPP 
 #define WIN_SKETCH_HPP
 
-#include <vector>
 #include <algorithm>
-#include <unordered_map>
-#include <map>
 #include <cassert>
-//#include <zlib.h>  
+#include <map>
+#include <unordered_map>
+#include <vector>
+//#include <zlib.h>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -23,7 +23,13 @@
 //External includes
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
-#include "common/sparsehash/dense_hash_map"
+
+//#include "common/sparsehash/dense_hash_map"
+//#include "common/parallel-hashmap/parallel_hashmap/phmap.h"
+//#include <abseil-cpp/absl/container/flat_hash_map.h>
+//#include <common/sparse-map/include/tsl/sparse_map.h>
+#include <common/robin-hood-hashing/robin_hood.h>
+
 #include "common/seqiter.hpp"
 
 namespace skch
@@ -79,7 +85,11 @@ namespace skch
        * [minimizer #2] -> [pos1, pos2...]
        * ...
        */
-      using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = phmap::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = absl::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = tsl::sparse_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      using MI_Map_t = robin_hood::unordered_flat_map< MinimizerMapKeyType, MinimizerMapValueType >;
       MI_Map_t minimizerPosLookupIndex;
 
       private:
@@ -207,15 +217,15 @@ namespace skch
       void index()
       {
         //Parse all the minimizers and push into the map
-        minimizerPosLookupIndex.set_empty_key(0);
+        //minimizerPosLookupIndex.set_empty_key(0);
 
         for(auto &e : minimizerIndex)
         {
           // [hash value -> info about minimizer]
-          minimizerPosLookupIndex[e.hash].push_back( 
+          minimizerPosLookupIndex[e.hash].push_back(
               MinimizerMetaData{e.seqId, e.wpos, e.strand});
 
-            //std::cout << "GREPME\t" << e.wpos << "\n";
+          //std::cout << "GREPME\t" << e.wpos << "\n";
         }
 
         std::cerr << "[wfmash::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
