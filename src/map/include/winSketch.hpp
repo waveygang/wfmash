@@ -7,12 +7,12 @@
 #ifndef WIN_SKETCH_HPP 
 #define WIN_SKETCH_HPP
 
-#include <vector>
 #include <algorithm>
-#include <unordered_map>
-#include <map>
 #include <cassert>
-//#include <zlib.h>  
+#include <map>
+#include <unordered_map>
+#include <vector>
+//#include <zlib.h>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -23,8 +23,13 @@
 //External includes
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
+
 //#include "common/sparsehash/dense_hash_map"
-#include "common/parallel-hashmap/parallel_hashmap/phmap.h"
+//#include "common/parallel-hashmap/parallel_hashmap/phmap.h"
+//#include <abseil-cpp/absl/container/flat_hash_map.h>
+//#include <common/sparse-map/include/tsl/sparse_map.h>
+#include <common/robin-hood-hashing/src/include/robin_hood.h>
+
 #include "common/seqiter.hpp"
 
 namespace skch
@@ -81,7 +86,10 @@ namespace skch
        * ...
        */
       //using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
-      using MI_Map_t = phmap::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = phmap::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = absl::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = tsl::sparse_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      using MI_Map_t = robin_hood::unordered_flat_map< MinimizerMapKeyType, MinimizerMapValueType >;
       MI_Map_t minimizerPosLookupIndex;
 
       private:
