@@ -212,10 +212,12 @@ namespace skch
         for(auto &e : minimizerIndex)
         {
           // [hash value -> info about minimizer]
-          minimizerPosLookupIndex[e.hash].push_back( 
-              MinimizerMetaData{e.seqId, e.wpos, e.strand});
+          if (e.hash != 0) {
+            minimizerPosLookupIndex[e.hash].push_back(
+                MinimizerMetaData{e.seqId, e.wpos, e.strand});
 
             //std::cout << "GREPME\t" << e.wpos << "\n";
+          }
         }
 
         std::cerr << "[wfmash::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
