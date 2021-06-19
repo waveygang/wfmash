@@ -6,6 +6,9 @@
 #include <cstring>
 #include <iostream>
 #include <vector>
+#include <sstream>
+#include <functional>
+#include <fstream>
 //#include "WFA/gap_affine/affine_wavefront.hpp"
 //#include "WFA/gap_affine/affine_wavefront_align.h"
 #include "WFA/gap_affine/affine_matrix.h"
@@ -231,6 +234,11 @@ void edlib_to_wflign_edit_cigar_copy(
 inline uint64_t encode_pair(int v, int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
+
+wfa::wavefront_aligner_t* get_wavefront_aligner(
+    const wfa::affine_penalties_t& wfa_affine_penalties,
+    const uint64_t& target_length,
+    const uint64_t& query_length);
 
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,

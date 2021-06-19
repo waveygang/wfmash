@@ -8,6 +8,30 @@ namespace wflign {
 
 namespace wavefront {
 
+wfa::wavefront_aligner_t* get_wavefront_aligner(
+    const wfa::affine_penalties_t& wfa_affine_penalties,
+    const uint64_t& target_length,
+    const uint64_t& query_length) {
+    // Configure the attributes of the wf-aligner
+    wfa::wavefront_aligner_attr_t attributes =
+        wfa::wavefront_aligner_attr_default;
+    attributes.distance_metric = wfa::gap_affine;
+    attributes.affine_penalties = wfa_affine_penalties;
+    // attributes.distance_metric = gap_affine2p;
+    // attributes.affine2p_penalties = affine2p_penalties;
+    attributes.reduction.reduction_strategy =
+        wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
+    // attributes.reduction.min_wavefront_length = 10;
+    // attributes.reduction.max_distance_threshold = 50;
+    attributes.alignment_scope =
+        wfa::alignment_scope_alignment; // alignment_scope_score
+    attributes.low_memory = true;
+    //wfa::wavefront_aligner_t *const wf_aligner =
+    return wfa::wavefront_aligner_new(
+        target_length, query_length, &attributes);
+}
+
+
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
     const bool &paf_format_else_sam, const std::string &query_name,
@@ -94,22 +118,10 @@ void wflign_affine_wavefront(
         .gap_extension = 1,
     };
 
-    // Configure the attributes of the wf-aligner
-    wfa::wavefront_aligner_attr_t attributes =
-        wfa::wavefront_aligner_attr_default;
-    attributes.distance_metric = wfa::gap_affine;
-    attributes.affine_penalties = wfa_affine_penalties;
-    // attributes.distance_metric = gap_affine2p;
-    // attributes.affine2p_penalties = affine2p_penalties;
-    attributes.reduction.reduction_strategy =
-        wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
-    // attributes.reduction.min_wavefront_length = 10;
-    // attributes.reduction.max_distance_threshold = 50;
-    attributes.alignment_scope =
-        wfa::alignment_scope_alignment; // alignment_scope_score
-    attributes.low_memory = true;
-    wfa::wavefront_aligner_t *const wf_aligner = wfa::wavefront_aligner_new(
-        segment_length_to_use, segment_length_to_use, &attributes);
+    wfa::wavefront_aligner_t* const wf_aligner
+        = get_wavefront_aligner(wfa_affine_penalties,
+                                segment_length_to_use,
+                                segment_length_to_use);
 
     uint64_t num_alignments = 0;
     uint64_t num_alignments_performed = 0;
@@ -120,7 +132,7 @@ void wflign_affine_wavefront(
     // heuristic bound on the max mash dist, adaptive based on estimated
     // identity the goal here is to sparsify the set of alignments in the
     // wflambda layer we then patch up the gaps between them
-    const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity) * 5.0);
+    const float max_mash_dist = std::max(0.05, (1.0 - mashmap_identity));
 
     auto extend_match = [&](const int &v, const int &h) {
         bool aligned = false;
@@ -537,12 +549,37 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const uint64_t &i, const uint64_t &target_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
-                            wfa::wavefront_aligner_t *const wf_aligner,
+                            wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
 
-    // std::cerr << "do_wfa_patch " << j << " " << query_length << " " << i << "
-    // " << target_length << std::endl;
+    bool big_wave = (query_length > 256 || target_length > 256);
+    wfa::wavefront_aligner_t* const wf_aligner
+        = big_wave ?
+            get_wavefront_aligner(*affine_penalties,
+                                target_length,
+                                  query_length)
+        : _wf_aligner;
+
+    /*
+     std::cerr << "do_wfa_patch q:" << j << " qlen:" << query_length
+               << " t:" << i << " tlen:" << target_length << std::endl;
+
+     {
+         //std::hash
+         std::string query_seq(query+j, query_length);
+         //query + j, query_length
+         std::string target_seq(query+j, query_length);
+         //target + i, target_length
+         std::stringstream namess;
+         auto target_hash = std::hash<std::string>{}(target_seq);
+         auto query_hash = std::hash<std::string>{}(query_seq);
+         namess << "wfpatch_" << target_length << "x" << query_length << "_" << target_hash << "_" << query_hash << ".fa";
+         std::ofstream out(namess.str());
+         out << ">" << target_hash << std::endl << target_seq << std::endl
+             << ">" << query_hash << std::endl << query_seq << std::endl;
+     }
+    */
 
     // Reduction strategy
     if (query_length < max_distance_threshold &&
@@ -555,7 +592,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = (target_length + query_length) * 5;
+    const int max_score = (target_length + query_length);
 
     wfa::wavefront_aligner_clear__resize(wf_aligner, target_length,
                                          query_length);
@@ -593,6 +630,10 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
 
     // cleanup allocator to keep memory low
     // wfa::mm_allocator_clear(mm_allocator);
+
+    if (big_wave) {
+        wfa::wavefront_aligner_delete(wf_aligner);
+    }
 }
 
 EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
@@ -864,7 +905,7 @@ void write_merged_alignment(
     // patching parameters
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
-    const int min_wf_length = 128;
+    const int min_wf_length = 256;
     const int max_dist_threshold = 1024;
 
     // we need to get the start position in the query and target
