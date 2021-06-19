@@ -592,7 +592,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = (target_length + query_length);
+    const int max_score = (target_length + query_length) * 5;
 
     wfa::wavefront_aligner_clear__resize(wf_aligner, target_length,
                                          query_length);
