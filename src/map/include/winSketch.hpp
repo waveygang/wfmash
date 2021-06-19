@@ -23,7 +23,8 @@
 //External includes
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
-#include "common/sparsehash/dense_hash_map"
+//#include "common/sparsehash/dense_hash_map"
+#include "common/parallel-hashmap/parallel_hashmap/phmap.h"
 #include "common/seqiter.hpp"
 
 namespace skch
@@ -79,7 +80,8 @@ namespace skch
        * [minimizer #2] -> [pos1, pos2...]
        * ...
        */
-      using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      //using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
+      using MI_Map_t = phmap::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
       MI_Map_t minimizerPosLookupIndex;
 
       private:
@@ -207,17 +209,15 @@ namespace skch
       void index()
       {
         //Parse all the minimizers and push into the map
-        minimizerPosLookupIndex.set_empty_key(0);
+        //minimizerPosLookupIndex.set_empty_key(0);
 
         for(auto &e : minimizerIndex)
         {
           // [hash value -> info about minimizer]
-          if (e.hash != 0) {
-            minimizerPosLookupIndex[e.hash].push_back(
-                MinimizerMetaData{e.seqId, e.wpos, e.strand});
+          minimizerPosLookupIndex[e.hash].push_back(
+              MinimizerMetaData{e.seqId, e.wpos, e.strand});
 
-            //std::cout << "GREPME\t" << e.wpos << "\n";
-          }
+          //std::cout << "GREPME\t" << e.wpos << "\n";
         }
 
         std::cerr << "[wfmash::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
