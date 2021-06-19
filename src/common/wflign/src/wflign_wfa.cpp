@@ -57,7 +57,7 @@ void wflign_affine_wavefront(
     // Set penalties
     wflambda::affine_penalties_t wflambda_affine_penalties;
     wfa::affine_penalties_t wfa_affine_penalties;
-
+    float max_mash_dist_to_evaluate;
     if (mashmap_estimated_identity >= 0.995) {
         wflambda_affine_penalties = {
                 .match = 0,
@@ -71,6 +71,7 @@ void wflign_affine_wavefront(
                 .gap_opening = 38,
                 .gap_extension = 2,
         };
+        max_mash_dist_to_evaluate = 0.05;
     } else if (mashmap_estimated_identity >= 0.97) {
         wflambda_affine_penalties = {
                 .match = 0,
@@ -84,6 +85,7 @@ void wflign_affine_wavefront(
                 .gap_opening = 15,
                 .gap_extension = 1,
         };
+        max_mash_dist_to_evaluate = 0.1;
     } else if (mashmap_estimated_identity >= 0.9) {
         wflambda_affine_penalties = {
                 .match = 0,
@@ -97,6 +99,7 @@ void wflign_affine_wavefront(
                 .gap_opening = 5,
                 .gap_extension = 1,
         };
+        max_mash_dist_to_evaluate = 0.3;
     } else {
         wflambda_affine_penalties = {
                 .match = 0,
@@ -110,6 +113,7 @@ void wflign_affine_wavefront(
                 .gap_opening = 3,
                 .gap_extension = 1,
         };
+        max_mash_dist_to_evaluate = 0.5;
     }
 
     // Init Affine wflambda
@@ -160,7 +164,7 @@ void wflign_affine_wavefront(
     // heuristic bound on the max mash dist, adaptive based on estimated identity
     // the goal here is to sparsify the set of alignments in the wflambda layer
     // we then patch up the gaps between them
-    const float max_mash_dist = 0.6;//std::max(0.05, (1.0 - mashmap_estimated_identity) * 5.0);
+    //const float max_mash_dist = std::max(0.05, (1.0 - mashmap_estimated_identity) * 5.0);
 
     auto extend_match = [&](const int &v, const int &h) {
         bool aligned = false;
@@ -187,7 +191,7 @@ void wflign_affine_wavefront(
                     query_begin, target_name, target, target_sketches[h],
                     target_length, target_begin, segment_length_to_use,
                     step_size, minhash_kmer_size, wfa_min_wavefront_length,
-                    wfa_max_distance_threshold, max_mash_dist, mashmap_estimated_identity,
+                    wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
                     // wfa_mm_allocator,
                     wf_aligner, &wfa_affine_penalties, *aln);
                 // std::cerr << v << "\t" << h << "\t" << aln->score << "\t" <<
