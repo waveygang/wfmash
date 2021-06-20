@@ -496,11 +496,11 @@ bool do_wfa_segment_alignment(
             aln.query_length = segment_length;
             aln.target_length = segment_length;
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target,
+            if (!validate_cigar(wf_aligner->cigar, query, target,
                                 segment_length, segment_length, aln.j, aln.i)) {
                 std::cerr << "cigar failure at alignment " << aln.j << " "
                           << aln.i << std::endl;
-                unpack_display_cigar(affine_wavefronts->edit_cigar, query,
+                unpack_display_cigar(wf_aligner->cigar, query,
                                      target, segment_length, segment_length,
                                      aln.j, aln.i);
                 std::cerr << ">query" << std::endl
