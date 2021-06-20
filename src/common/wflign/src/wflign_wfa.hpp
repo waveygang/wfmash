@@ -57,7 +57,7 @@ struct alignment_t {
         std::cerr << j << " " << i << " " << query_length << " "
                   << target_length << " " << ok << std::endl;
         for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
-            std::cerr << edit_cigar.operations[x++];
+            std::cerr << edit_cigar.operations[x];
         }
         std::cerr << std::endl;
     }
