@@ -274,6 +274,7 @@ void wflign_affine_wavefront(
             // establish our last and curr alignments to consider when trimming
             auto &last = **x;
             auto &curr = **c;
+            bool full_overlap = last.j == curr.j || last.i == curr.i;
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (curr.ok && !curr.validate(query, target)) {
@@ -294,6 +295,8 @@ void wflign_affine_wavefront(
 
             // walk until they are matched at the query position
             while (!last_pos.at_end() && !curr_pos.at_end()) {
+                //std::cerr << "last_pos " << last_pos.j << " - " << last_pos.i << " - " << last_pos.offset << " - " << last_pos.curr() << std::endl;
+                //std::cerr << "curr_pos " << curr_pos.j << " - " << curr_pos.i << " - " << curr_pos.offset << " - " << curr_pos.curr() << std::endl;
                 if (last_pos.equal(curr_pos)) {
                     // they equal and we can splice them at the first match
                     match_pos = last_pos;
@@ -312,9 +315,10 @@ void wflign_affine_wavefront(
             // if we matched, we'll be able to splice the alignments together
             int trim_last = 0, trim_curr = 0;
             if (match_pos.assigned()) {
+                //std::cerr << "match_pos " << match_pos.j << " - " << match_pos.i << " - " << match_pos.offset << " - " << match_pos.curr() << std::endl;
                 // we'll use our match position to set up the trims
-                trim_last = (last.j + last.query_length) - match_pos.j;
-                trim_curr = match_pos.j - curr.j;
+                trim_last = (last.j + last.query_length) - match_pos.j - (full_overlap ? 1 : 0);
+                trim_curr = match_pos.j - curr.j + (full_overlap ? 1 : 0);
             } else {
                 // we want to remove any possible overlaps in query or target
                 // walk back last until we don't overlap in i or j
@@ -335,8 +339,11 @@ void wflign_affine_wavefront(
             }
 
             // assign our cigar trim
+            //last.display();
             if (trim_last > 0) {
+                //std::cerr << "trim_last " << trim_last << std::endl;
                 last.trim_back(trim_last);
+                //last.display();
 #ifdef VALIDATE_WFA_WFLIGN
                 if (last.ok && !last.validate(query, target)) {
                     std::cerr << "traceback is wrong after last trimming @ "
@@ -346,9 +353,11 @@ void wflign_affine_wavefront(
                 }
 #endif
             }
-
+            //curr.display();
             if (trim_curr > 0) {
+                //std::cerr << "trim_curr " << trim_curr << std::endl;
                 curr.trim_front(trim_curr);
+                //curr.display();
 #ifdef VALIDATE_WFA_WFLIGN
                 if (curr.ok && !curr.validate(query, target)) {
                     std::cerr << "traceback is wrong after curr trimming @ "
