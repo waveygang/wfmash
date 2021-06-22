@@ -23,10 +23,17 @@ struct Parameters {
 
     //wflambda
     uint16_t wflambda_segment_length;             //segment length for wflambda
+    int wfa_mismatch_score;
+    int wfa_gap_opening_score;
+    int wfa_gap_extension_score;
     int wflambda_min_wavefront_length;            //wavefront length to trigger reduction (how wide should it be)
     int wflambda_max_distance_threshold;          //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
 
     // wflign
+    int wflign_mismatch_score;
+    int wflign_gap_opening_score;
+    int wflign_gap_extension_score;
+    float wflign_max_mash_dist;
     uint64_t wflign_max_len_major;
     uint64_t wflign_max_len_minor;
     uint16_t wflign_erode_k;

@@ -58,11 +58,20 @@ void parse_args(int argc,
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::ValueFlag<uint16_t> wflambda_segment_length(parser, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
+    args::ValueFlag<std::string> wfa_score_params(parser, "mismatch,gap1,ext1",
+                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
+                                            {'g', "wfa-params"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
 
     //Unsupported
     //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
+
+    //wflign parameters
+    args::ValueFlag<std::string> wflign_score_params(parser, "mismatch,gap1,ext1",
+                                                       "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
+                                                       {'G', "wflign-params"});
+    args::ValueFlag<float> wflign_max_mash_dist(parser, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
 
     // patching parameter
     args::ValueFlag<uint64_t> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
@@ -135,6 +144,89 @@ void parse_args(int argc,
         }
     }
 
+    auto split = [](const string& s, const string& delimiter) {
+      size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+      string token;
+      vector<string> res;
+
+      while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+          token = s.substr (pos_start, pos_end - pos_start);
+          pos_start = pos_end + delim_len;
+          res.push_back (token);
+      }
+
+      res.push_back (s.substr (pos_start));
+      return res;
+    };
+
+    if (!args::get(wfa_score_params).empty()) {
+        const std::vector<std::string> params_str = split(args::get(wfa_score_params), ",");
+        if (params_str.size() != 3) {
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
+                      << std::endl;
+            exit(1);
+        }
+
+        std::vector<int> params(params_str.size());
+        std::transform(params_str.begin(), params_str.end(), params.begin(),
+                       [](const std::string &s) { return std::stoi(s); });
+
+        align_parameters.wfa_mismatch_score = params[0];
+        align_parameters.wfa_gap_opening_score = params[1];
+        align_parameters.wfa_gap_extension_score = params[2];
+
+        /*if (params.size() == 6) {
+            align_parameters.wflambda_mismatch_score = params[0];
+            align_parameters.wflambda_gap_opening_score = params[1];
+            align_parameters.wflambda_gap_extension_score = params[2];
+            xx = params[4];
+            xx = params[5];
+        }*/
+    } else {
+        align_parameters.wfa_mismatch_score = -1;
+        align_parameters.wfa_gap_opening_score = -1;
+        align_parameters.wfa_gap_extension_score = -1;
+    }
+
+    if (!args::get(wflign_score_params).empty()) {
+        const std::vector<std::string> params_str = split(args::get(wflign_score_params), ",");
+        if (params_str.size() != 3) {
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -G/--wflign-params"//either 3 or 5 scoring parameters must be given to -G/--wflign-params
+                      << std::endl;
+            exit(1);
+        }
+
+        std::vector<int> params(params_str.size());
+        std::transform(params_str.begin(), params_str.end(), params.begin(),
+                       [](const std::string &s) { return std::stoi(s); });
+
+        align_parameters.wflign_mismatch_score = params[0];
+        align_parameters.wflign_gap_opening_score = params[1];
+        align_parameters.wflign_gap_extension_score = params[2];
+
+        /*if (params.size() == 6) {
+            align_parameters.wflign_gap_opening_score = params[0];
+            align_parameters.wflign_gap_extension_score = params[1];
+            align_parameters.wflign_gap_extension_score = params[2];
+            xx = params[4];
+            xx = params[5];
+        }*/
+    } else {
+        align_parameters.wflign_mismatch_score = -1;
+        align_parameters.wflign_gap_opening_score = -1;
+        align_parameters.wflign_gap_extension_score = -1;
+    }
+
+    if (wflign_max_mash_dist) {
+        if (args::get(wflign_max_mash_dist) <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance has to be greater than 0" << std::endl;
+            exit(1);
+        }
+        align_parameters.wflign_max_mash_dist = args::get(wflign_max_mash_dist);
+    } else {
+        align_parameters.wflign_max_mash_dist = -1;
+    }
+
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     map_parameters.split = !args::get(no_split);
@@ -190,22 +282,7 @@ void parse_args(int argc,
     }
 
     if (spaced_seed_params) {
-        auto split = [](const string& s, const string& delimiter) {
-          size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-          string token;
-          vector<string> res;
-
-          while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
-              token = s.substr (pos_start, pos_end - pos_start);
-              pos_start = pos_end + delim_len;
-              res.push_back (token);
-          }
-
-          res.push_back (s.substr (pos_start));
-          return res;
-        };
-
-        std::string foobar = args::get(spaced_seed_params);
+        const std::string foobar = args::get(spaced_seed_params);
 
         // delimeters can be full colon (:) or a space
         char delimeter;
@@ -218,17 +295,17 @@ void parse_args(int argc,
             exit(1);
         }
 
-        std::string delimeter_str(1, delimeter);
-        std::vector<std::string> p = split(foobar, delimeter_str);
+        const std::string delimeter_str(1, delimeter);
+        const std::vector<std::string> p = split(foobar, delimeter_str);
         if (p.size() != 4) {
             std::cerr << "[mashz] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
             exit(1);
         }
 
-        uint32_t seed_weight   = stoi(p[0]);
-        uint32_t seed_count    = stoi(p[1]);
-        float similarity       = stof(p[2]);
-        uint32_t region_length = stoi(p[3]);
+        const uint32_t seed_weight   = stoi(p[0]);
+        const uint32_t seed_count    = stoi(p[1]);
+        const float similarity       = stof(p[2]);
+        const uint32_t region_length = stoi(p[3]);
 
         // Generate an ALeS params struct
         map_parameters.use_spaced_seeds = true;

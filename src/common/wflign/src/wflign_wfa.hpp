@@ -249,9 +249,16 @@ void wflign_affine_wavefront(
     const char *target, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length, const float &min_identity, const int& minhash_kmer_size,
+    const int &wfa_mismatch_score,
+    const int &wfa_gap_opening_score,
+    const int &wfa_gap_extension_score,
     const int &wflambda_min_wavefront_length, // with these set at 0 we do exact
                                               // WFA for wflambda
     const int &wflambda_max_distance_threshold, const double &mashmap_estimated_identity,
+    const int &wflign_mismatch_score,
+    const int &wflign_gap_opening_score,
+    const int &wflign_gap_extension_score,
+    const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const uint16_t &erode_k);
 // const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA

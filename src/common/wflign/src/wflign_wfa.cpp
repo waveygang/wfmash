@@ -42,9 +42,16 @@ void wflign_affine_wavefront(
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length, const float &min_identity,
     const int& minhash_kmer_size,
+    const int &wfa_mismatch_score,
+    const int &wfa_gap_opening_score,
+    const int &wfa_gap_extension_score,
     const int &wflambda_min_wavefront_length, // with these set at 0 we do exact
                                               // WFA for wflambda
     const int &wflambda_max_distance_threshold, const double &mashmap_estimated_identity,
+    const int &wflign_mismatch_score,
+    const int &wflign_gap_opening_score,
+    const int &wflign_gap_extension_score,
+    const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const uint16_t &erode_k) {
     // const int& wfa_min_wavefront_length, // with these set at 0 we do exact
@@ -79,67 +86,110 @@ void wflign_affine_wavefront(
     // Allocate MM for WFA and WF-lambda
     wflambda::mm_allocator_t *const wflambda_mm_allocator =
         wflambda::mm_allocator_new(BUFFER_SIZE_8M);
+
     // Set penalties
-    wflambda::affine_penalties_t wflambda_affine_penalties;
     wfa::affine_penalties_t wfa_affine_penalties;
-    float max_mash_dist_to_evaluate;
-    if (mashmap_estimated_identity >= 0.995) {
-        wflambda_affine_penalties = {
-                .match = 0,
-                .mismatch = 13,
-                .gap_opening = 21,
-                .gap_extension = 1,
-        };
+    if (wfa_mismatch_score > 0 && wfa_gap_opening_score > 0 && wfa_gap_extension_score > 0){
         wfa_affine_penalties = {
                 .match = 0,
-                .mismatch = 18,
-                .gap_opening = 38,
-                .gap_extension = 2,
+                .mismatch = wfa_mismatch_score,
+                .gap_opening = wfa_gap_opening_score,
+                .gap_extension = wfa_gap_extension_score
         };
-        max_mash_dist_to_evaluate = 0.05;
-    } else if (mashmap_estimated_identity >= 0.97) {
-        wflambda_affine_penalties = {
-                .match = 0,
-                .mismatch = 7,
-                .gap_opening = 13,
-                .gap_extension = 1,
-        };
-        wfa_affine_penalties = {
-                .match = 0,
-                .mismatch = 8,
-                .gap_opening = 15,
-                .gap_extension = 1,
-        };
-        max_mash_dist_to_evaluate = 0.1;
-    } else if (mashmap_estimated_identity >= 0.9) {
-        wflambda_affine_penalties = {
-                .match = 0,
-                .mismatch = 2,
-                .gap_opening = 4,
-                .gap_extension = 1,
-        };
-        wfa_affine_penalties = {
-                .match = 0,
-                .mismatch = 3,
-                .gap_opening = 5,
-                .gap_extension = 1,
-        };
-        max_mash_dist_to_evaluate = 0.3;
     } else {
+        if (mashmap_estimated_identity >= 0.995) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 18,
+                    .gap_opening = 38,
+                    .gap_extension = 2,
+            };
+        } else if (mashmap_estimated_identity >= 0.97) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 8,
+                    .gap_opening = 16,
+                    .gap_extension = 2,
+            };
+        } else if (mashmap_estimated_identity >= 0.9) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 4,
+                    .gap_opening = 6,
+                    .gap_extension = 2,
+            };
+        } else {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 1,
+                    .gap_opening = 3,
+                    .gap_extension = 1,
+            };
+        }
+    }
+
+    wflambda::affine_penalties_t wflambda_affine_penalties;
+    if (wfa_mismatch_score > 0 && wfa_gap_opening_score > 0 && wfa_gap_extension_score > 0){
         wflambda_affine_penalties = {
                 .match = 0,
-                .mismatch = 1,
-                .gap_opening = 3,
-                .gap_extension = 1,
+                .mismatch = wflign_mismatch_score,
+                .gap_opening = wflign_gap_opening_score,
+                .gap_extension = wflign_gap_extension_score
         };
-        wfa_affine_penalties = {
-                .match = 0,
-                .mismatch = 1,
-                .gap_opening = 3,
-                .gap_extension = 1,
-        };
-        max_mash_dist_to_evaluate = 0.5;
+    } else {
+        if (mashmap_estimated_identity >= 0.995) {
+            wflambda_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 12,
+                    .gap_opening = 20,
+                    .gap_extension = 2,
+            };
+        } else if (mashmap_estimated_identity >= 0.97) {
+            wflambda_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 8,
+                    .gap_opening = 14,
+                    .gap_extension = 2,
+            };
+        } else if (mashmap_estimated_identity >= 0.9) {
+            wflambda_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 2,
+                    .gap_opening = 4,
+                    .gap_extension = 2,
+            };
+        } else {
+            wflambda_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 1,
+                    .gap_opening = 3,
+                    .gap_extension = 1,
+            };
+        }
     }
+
+    float max_mash_dist_to_evaluate;
+    if (wflign_max_mash_dist > 0) {
+        max_mash_dist_to_evaluate = wflign_max_mash_dist;
+    } else {
+        if (mashmap_estimated_identity >= 0.995) {
+            max_mash_dist_to_evaluate = 0.05;
+        } else if (mashmap_estimated_identity >= 0.97) {
+            max_mash_dist_to_evaluate = 0.1;
+        } else if (mashmap_estimated_identity >= 0.9) {
+            max_mash_dist_to_evaluate = 0.3;
+        } else {
+            max_mash_dist_to_evaluate = 0.5;
+        }
+    }
+
+    //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
+    //std::cerr << "wfa_affine_penalties.gap_opening " << wfa_affine_penalties.gap_opening << std::endl;
+    //std::cerr << "wfa_affine_penalties.gap_extension " << wfa_affine_penalties.gap_extension << std::endl;
+    //std::cerr << "wflambda_affine_penalties.mismatch " << wflambda_affine_penalties.mismatch << std::endl;
+    //std::cerr << "wflambda_affine_penalties.gap_opening " << wflambda_affine_penalties.gap_opening << std::endl;
+    //std::cerr << "wflambda_affine_penalties.gap_extension " << wflambda_affine_penalties.gap_extension << std::endl;
+    //std::cerr << "max_mash_dist_to_evaluate " << max_mash_dist_to_evaluate << std::endl;
 
     // Init Affine wflambda
     wflambda::affine_wavefronts_t *affine_wavefronts;
