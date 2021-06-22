@@ -34,4 +34,4 @@ jobs:
       - name: Test aligning short reads (500 bps) to a reference (SAM output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reference.fa.gz data/reads.500bps.fa.gz -s 500 -W 500 -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head
       - name: Test with few very short reads (255bps) (PAF output)
-        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash wfmash data/reads.255bps.fa.gz data/reads.255bps.fa.gz -X > reads.255bps.paf && head reads.255bps.paf
+        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reads.255bps.fa.gz data/reads.255bps.fa.gz -X > reads.255bps.paf && head reads.255bps.paf
