@@ -396,7 +396,8 @@ void wflign_affine_wavefront(
                 out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
                 paf_format_else_sam, query, query_name, query_total_length,
                 query_offset, query_length, query_is_rev, target, target_name,
-                target_total_length, target_offset, target_length, min_identity,
+                target_total_length, target_offset, target_length,
+                segment_length_to_use, min_identity,
                 elapsed_time_wflambda_ms, num_alignments,
                 num_alignments_performed, mashmap_identity,
                 wflign_max_len_major, wflign_max_len_minor, erode_k);
@@ -547,13 +548,14 @@ bool do_wfa_segment_alignment(
 void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const uint64_t &query_length, const char *target,
                             const uint64_t &i, const uint64_t &target_length,
+                            const int &segment_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
                             wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
 
-    bool big_wave = (query_length > 256 || target_length > 256);
+    bool big_wave = (query_length > segment_length || target_length > segment_length);
     wfa::wavefront_aligner_t* const wf_aligner
         = big_wave ?
             get_wavefront_aligner(*affine_penalties,
@@ -892,6 +894,7 @@ void write_merged_alignment(
     const bool &query_is_rev, const char *target,
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
+    const uint16_t &segment_length,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     const double &mashmap_identity, const uint64_t &wflign_max_len_major,
@@ -998,7 +1001,9 @@ void write_merged_alignment(
                          &query_offset, &target, &target_name,
                          &target_length_mut, &target_start, &target_offset,
                          &target_total_length, &target_end,
-                         &target_pointer_shift, &wflign_max_len_major,
+                         &target_pointer_shift,
+                         &segment_length,
+                         &wflign_max_len_major,
                          &wflign_max_len_minor,
                          &distance_close_big_enough_indels, &min_wf_length,
                          &max_dist_threshold, &wf_aligner,
@@ -1499,6 +1504,7 @@ void write_merged_alignment(
                                     query, query_pos, query_delta,
                                     target - target_pointer_shift, target_pos,
                                     target_delta, min_wf_length,
+                                    segment_length,
                                     max_dist_threshold, wf_aligner,
                                     affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
