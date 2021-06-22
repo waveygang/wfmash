@@ -64,8 +64,10 @@ void wflign_affine_wavefront(
     const uint16_t step_size = segment_length_to_use / steps_per_segment;
 
     // Pattern & Text
-    const int pattern_length = (int)query_length / step_size;
-    const int text_length = (int)target_length / step_size;
+    // If the query_length/target_length are not multiple of step_size, we count
+    // a fragment less, and the last one will be longer than segment_length_to_use
+    const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
+    const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
 
     // uncomment to use reduced WFA locally
     // currently not supported due to issues with traceback when applying
@@ -144,26 +146,25 @@ void wflign_affine_wavefront(
             if (f != alignments.end()) {
                 aligned = true;
             } else {
-                const int query_begin =
-                    (int)(v < pattern_length - 1
-                              ? v * step_size
-                              : query_length - segment_length_to_use);
-                const int target_begin =
-                    (int)(h < text_length - 1
-                              ? h * step_size
-                              : target_length - segment_length_to_use);
+                const int query_begin = v * step_size;
+                const int target_begin = h * step_size;
+
+                // The last fragment can be longer than segment_length_to_use (max 2*segment_length_to_use - 1)
+                const auto segment_length_to_use_q = (uint16_t) (v == pattern_length - 1 ? query_length - query_begin : segment_length_to_use);
+                const auto segment_length_to_use_t = (uint16_t) (h == text_length - 1 ? target_length - target_begin : segment_length_to_use);
 
                 auto *aln = new alignment_t();
                 aligned = do_wfa_segment_alignment(
                     query_name, query, query_sketches[v], query_length,
                     query_begin, target_name, target, target_sketches[h],
-                    target_length, target_begin, segment_length_to_use,
+                    target_length, target_begin,
+                    segment_length_to_use_q,
+                    segment_length_to_use_t,
                     step_size, minhash_kmer_size, wfa_min_wavefront_length,
                     wfa_max_distance_threshold, max_mash_dist,
                     // wfa_mm_allocator,
                     wf_aligner, &wfa_affine_penalties, *aln);
-                // std::cerr << v << "\t" << h << "\t" << aln->score << "\t" <<
-                // aligned << std::endl;
+                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
                 ++num_alignments;
                 if (aln->score != std::numeric_limits<int>::max()) {
                     ++num_alignments_performed;
@@ -306,6 +307,8 @@ void wflign_affine_wavefront(
 
             // walk until they are matched at the query position
             while (!last_pos.at_end() && !curr_pos.at_end()) {
+                //std::cerr << "last_pos " << last_pos.j << " - " << last_pos.i << " - " << last_pos.offset << " - " << last_pos.curr() << std::endl;
+                //std::cerr << "curr_pos " << curr_pos.j << " - " << curr_pos.i << " - " << curr_pos.offset << " - " << curr_pos.curr() << std::endl;
                 if (last_pos.equal(curr_pos)) {
                     // they equal and we can splice them at the first match
                     match_pos = last_pos;
@@ -324,6 +327,7 @@ void wflign_affine_wavefront(
             // if we matched, we'll be able to splice the alignments together
             int trim_last = 0, trim_curr = 0;
             if (match_pos.assigned()) {
+                //std::cerr << "match_pos " << match_pos.j << " - " << match_pos.i << " - " << match_pos.offset << " - " << match_pos.curr() << std::endl;
                 // we'll use our match position to set up the trims
                 trim_last = (last.j + last.query_length) - match_pos.j;
                 trim_curr = match_pos.j - curr.j;
@@ -347,8 +351,11 @@ void wflign_affine_wavefront(
             }
 
             // assign our cigar trim
+            //last.display();
             if (trim_last > 0) {
+                //std::cerr << "trim_last " << trim_last << std::endl;
                 last.trim_back(trim_last);
+                //last.display();
 #ifdef VALIDATE_WFA_WFLIGN
                 if (last.ok && !last.validate(query, target)) {
                     std::cerr << "traceback is wrong after last trimming @ "
@@ -358,9 +365,11 @@ void wflign_affine_wavefront(
                 }
 #endif
             }
-
+            //curr.display();
             if (trim_curr > 0) {
+                //std::cerr << "trim_curr " << trim_curr << std::endl;
                 curr.trim_front(trim_curr);
+                //curr.display();
 #ifdef VALIDATE_WFA_WFLIGN
                 if (curr.ok && !curr.validate(query, target)) {
                     std::cerr << "traceback is wrong after curr trimming @ "
@@ -431,7 +440,9 @@ bool do_wfa_segment_alignment(
     std::vector<rkmh::hash_t> *&query_sketch, const uint64_t &query_length,
     const uint64_t &j, const std::string &target_name, const char *target,
     std::vector<rkmh::hash_t> *&target_sketch, const uint64_t &target_length,
-    const uint64_t &i, const uint16_t &segment_length,
+    const uint64_t &i,
+    const uint16_t &segment_length_q,
+    const uint16_t &segment_length_t,
     const uint16_t &step_size, const uint64_t &minhash_kmer_size,
     const uint32_t &min_wavefront_length,
     const uint32_t &max_distance_threshold, const float &max_mash_dist,
@@ -442,19 +453,19 @@ bool do_wfa_segment_alignment(
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
         *query_sketch = rkmh::hash_sequence(
-            query + j, segment_length, minhash_kmer_size, segment_length / 20);
+            query + j, segment_length_q, minhash_kmer_size, segment_length_q / 20);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
         *target_sketch = rkmh::hash_sequence(
-            target + i, segment_length, minhash_kmer_size, segment_length / 20);
+            target + i, segment_length_t, minhash_kmer_size, segment_length_t / 20);
     }
 
     // first check if our mash dist is inbounds
     const float mash_dist =
         rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    const int max_score = segment_length * (0.75 + mash_dist);
+    const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
 
     // this threshold is set low enough that we tend to randomly sample wflambda
     // matrix cells for alignment the threshold is adaptive, based on the mash
@@ -481,12 +492,12 @@ bool do_wfa_segment_alignment(
         }
         */
 
-        wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length,
-                                             segment_length);
+        wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
+                                             segment_length_q);
 
         aln.score =
-            wfa::wavefront_align_bounded(wf_aligner, target + i, segment_length,
-                                         query + j, segment_length, max_score);
+            wfa::wavefront_align_bounded(wf_aligner, target + i, segment_length_t,
+                                         query + j, segment_length_q, max_score);
 
         /*
         aln.score = wfa::affine_wavefronts_align_bounded(
@@ -506,21 +517,21 @@ bool do_wfa_segment_alignment(
 
         // fill the alignment info if we aligned
         if (aln.ok) {
-            aln.query_length = segment_length;
-            aln.target_length = segment_length;
+            aln.query_length = segment_length_q;
+            aln.target_length = segment_length_t;
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(affine_wavefronts->edit_cigar, query, target,
-                                segment_length, segment_length, aln.j, aln.i)) {
+            if (!validate_cigar(wf_aligner->cigar, query, target,
+                                segment_length_q, segment_length_t, aln.j, aln.i)) {
                 std::cerr << "cigar failure at alignment " << aln.j << " "
                           << aln.i << std::endl;
-                unpack_display_cigar(affine_wavefronts->edit_cigar, query,
-                                     target, segment_length, segment_length,
+                unpack_display_cigar(wf_aligner->cigar, query,
+                                     target, segment_length_q, segment_length_t,
                                      aln.j, aln.i);
                 std::cerr << ">query" << std::endl
-                          << std::string(query + j, segment_length)
+                          << std::string(query + j, segment_length_q)
                           << std::endl;
                 std::cerr << ">target" << std::endl
-                          << std::string(target + i, segment_length)
+                          << std::string(target + i, segment_length_t)
                           << std::endl;
                 assert(false);
             }
@@ -529,8 +540,8 @@ bool do_wfa_segment_alignment(
             wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(aln.edit_cigar, query, target, segment_length,
-                                segment_length, aln.j, aln.i)) {
+            if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
+                                segment_length_t, aln.j, aln.i)) {
                 std::cerr << "cigar failure after cigar copy in alignment "
                           << aln.j << " " << aln.i << std::endl;
                 assert(false);
