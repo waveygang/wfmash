@@ -108,15 +108,15 @@ void wflign_affine_wavefront(
             wfa_affine_penalties = {
                     .match = 0,
                     .mismatch = 8,
-                    .gap_opening = 16,
-                    .gap_extension = 2,
+                    .gap_opening = 15,
+                    .gap_extension = 1,
             };
         } else if (mashmap_estimated_identity >= 0.9) {
             wfa_affine_penalties = {
                     .match = 0,
-                    .mismatch = 4,
-                    .gap_opening = 6,
-                    .gap_extension = 2,
+                    .mismatch = 3,
+                    .gap_opening = 5,
+                    .gap_extension = 1,
             };
         } else {
             wfa_affine_penalties = {
@@ -140,23 +140,23 @@ void wflign_affine_wavefront(
         if (mashmap_estimated_identity >= 0.995) {
             wflambda_affine_penalties = {
                     .match = 0,
-                    .mismatch = 12,
-                    .gap_opening = 20,
-                    .gap_extension = 2,
+                    .mismatch = 13,
+                    .gap_opening = 21,
+                    .gap_extension = 1,
             };
         } else if (mashmap_estimated_identity >= 0.97) {
             wflambda_affine_penalties = {
                     .match = 0,
-                    .mismatch = 8,
-                    .gap_opening = 14,
-                    .gap_extension = 2,
+                    .mismatch = 7,
+                    .gap_opening = 13,
+                    .gap_extension = 1,
             };
         } else if (mashmap_estimated_identity >= 0.9) {
             wflambda_affine_penalties = {
                     .match = 0,
                     .mismatch = 2,
                     .gap_opening = 4,
-                    .gap_extension = 2,
+                    .gap_extension = 1,
             };
         } else {
             wflambda_affine_penalties = {
