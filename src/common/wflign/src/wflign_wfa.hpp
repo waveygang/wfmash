@@ -238,7 +238,8 @@ inline uint64_t encode_pair(int v, int h) {
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
     const uint64_t& target_length,
-    const uint64_t& query_length);
+    const uint64_t& query_length,
+    const wfa::alignment_scope_t scope);
 
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,

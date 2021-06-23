@@ -11,7 +11,8 @@ namespace wavefront {
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
     const uint64_t& target_length,
-    const uint64_t& query_length) {
+    const uint64_t& query_length,
+    const wfa::alignment_scope_t scope) {
     // Configure the attributes of the wf-aligner
     wfa::wavefront_aligner_attr_t attributes =
         wfa::wavefront_aligner_attr_default;
@@ -23,8 +24,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
         wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
     // attributes.reduction.min_wavefront_length = 10;
     // attributes.reduction.max_distance_threshold = 50;
-    attributes.alignment_scope =
-        wfa::alignment_scope_alignment; // alignment_scope_score
+    attributes.alignment_scope = scope;
     attributes.low_memory = true;
     //wfa::wavefront_aligner_t *const wf_aligner =
     return wfa::wavefront_aligner_new(
@@ -216,7 +216,8 @@ void wflign_affine_wavefront(
     wfa::wavefront_aligner_t* const wf_aligner
             = get_wavefront_aligner(wfa_affine_penalties,
                                     segment_length_to_use,
-                                    segment_length_to_use);
+                                    segment_length_to_use,
+                                    wfa::alignment_scope_score);
 
     uint64_t num_alignments = 0;
     uint64_t num_alignments_performed = 0;
@@ -363,6 +364,10 @@ void wflign_affine_wavefront(
     // todo: implement alignment identifier based on hash of the input, params,
     // and commit annotate each PAF record with it and the full alignment score
 
+    // clean up our WFA allocator
+    // wfa::mm_allocator_delete(wfa_mm_allocator);
+    wfa::wavefront_aligner_delete(wf_aligner);
+
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
 //#define VALIDATE_WFA_WFLIGN
@@ -374,12 +379,52 @@ void wflign_affine_wavefront(
         }
 #endif
 
+        wfa::wavefront_aligner_t* const wf_aligner_cigar
+                = get_wavefront_aligner(wfa_affine_penalties,
+                                        target_length,
+                                        query_length,
+                                        wfa::alignment_scope_alignment);
+
+        auto align_and_get_cigar = [&](alignment_t& aln) {
+            wfa::wavefront_aligner_clear__resize(wf_aligner_cigar, aln.target_length,
+                                                 aln.query_length);
+
+            aln.score =
+                    wfa::wavefront_align(wf_aligner_cigar, target + aln.i, aln.target_length,
+                                         query + aln.j, aln.query_length);
+
+            // correct X/M errors in the cigar
+            hack_cigar(wf_aligner_cigar->cigar, query, target, query_length,
+                       target_length, aln.j, aln.i);
+
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!validate_cigar(wf_aligner_cigar->cigar, query, target, query_length,
+                            target_length, aln.j, aln.i)) {
+            std::cerr << "cigar failure at alignment " << aln.j << " " << aln.i
+                      << std::endl;
+            unpack_display_cigar(wf_aligner_cigar->cigar, query, target, query_length,
+                                 target_length, aln.j, aln.i);
+            std::cerr << ">query" << std::endl
+                      << std::string(query + aln.j, query_length) << std::endl;
+            std::cerr << ">target" << std::endl
+                      << std::string(target + aln.i, target_length) << std::endl;
+            assert(false);
+        }
+#endif
+
+            wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner_cigar->cigar);
+        };
+
         auto x = trace.rbegin();
+        align_and_get_cigar(**x);
+
         auto c = x + 1;
         while (x != trace.rend() && c != trace.rend()) {
             // establish our last and curr alignments to consider when trimming
             auto &last = **x;
             auto &curr = **c;
+
+            align_and_get_cigar(curr);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (curr.ok && !curr.validate(query, target)) {
@@ -495,7 +540,7 @@ void wflign_affine_wavefront(
         if (merge_alignments) {
             // write a merged alignment
             write_merged_alignment(
-                out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
+                out, trace, wf_aligner_cigar, &wfa_affine_penalties, emit_md_tag,
                 paf_format_else_sam, query, query_name, query_total_length,
                 query_offset, query_length, query_is_rev, target, target_name,
                 target_total_length, target_offset, target_length,
@@ -512,11 +557,9 @@ void wflign_affine_wavefront(
                                 target_length, min_identity, mashmap_estimated_identity);
             }
         }
-    }
 
-    // clean up our WFA allocator
-    // wfa::mm_allocator_delete(wfa_mm_allocator);
-    wfa::wavefront_aligner_delete(wf_aligner);
+        wfa::wavefront_aligner_delete(wf_aligner_cigar);
+    }
 
     // Free
     wflambda::affine_wavefronts_delete(affine_wavefronts);
@@ -636,7 +679,8 @@ bool do_wfa_segment_alignment(
             }
 #endif
 
-            wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
+            // Compte only the score
+            //wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
@@ -670,7 +714,8 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
         = big_wave ?
             get_wavefront_aligner(*affine_penalties,
                                 target_length,
-                                  query_length)
+                                  query_length,
+                                  wfa::alignment_scope_alignment)
         : _wf_aligner;
 
     /*
