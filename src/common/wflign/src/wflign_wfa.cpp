@@ -333,11 +333,6 @@ void wflign_affine_wavefront(
         }
     }
 
-    const long elapsed_time_wflambda_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start_time)
-            .count();
-
 //#define WFLIGN_DEBUG
 #ifdef WFLIGN_DEBUG
     // get alignment score
@@ -536,6 +531,11 @@ void wflign_affine_wavefront(
             }
 #endif
         }
+
+        const long elapsed_time_wflambda_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start_time)
+                        .count();
 
         if (merge_alignments) {
             // write a merged alignment
