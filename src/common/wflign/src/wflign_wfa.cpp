@@ -618,44 +618,22 @@ bool do_wfa_segment_alignment(
         return false;
     } else {
         // if it is, we'll align
-        /*
-        wfa::affine_wavefronts_t* affine_wavefronts;
-        if (min_wavefront_length || max_distance_threshold) {
-            // adaptive affine WFA setup
-            affine_wavefronts = affine_wavefronts_new_reduced(
-                    segment_length, segment_length, affine_penalties,
-                    min_wavefront_length, max_distance_threshold,
-                    NULL, mm_allocator);
-        } else {
-            // exact WFA
-            affine_wavefronts = affine_wavefronts_new_complete(
-                    segment_length, segment_length, affine_penalties, NULL,
-        mm_allocator);
-        }
-        */
-
-        wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
-                                             segment_length_q);
-
-        aln.score =
-            wfa::wavefront_align_bounded(wf_aligner, target + i, segment_length_t,
-                                         query + j, segment_length_q, max_score);
-
-        /*
-        aln.score = wfa::affine_wavefronts_align_bounded(
-                affine_wavefronts,
-                target+i,
-                segment_length,
-                query+j,
-                segment_length,
-                max_score);
-        */
-
         aln.j = j;
         aln.i = i;
 
         // aln.mash_dist = mash_dist;
-        aln.ok = aln.score < max_score;
+
+        if (mash_dist > max_mash_dist / 10.0) {
+            wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
+                                                 segment_length_q);
+
+            aln.score =
+                    wfa::wavefront_align_bounded(wf_aligner, target + i, segment_length_t,
+                                                 query + j, segment_length_q, max_score);
+            aln.ok = aln.score < max_score;
+        } else {
+            aln.score = true;
+        }
 
         // fill the alignment info if we aligned
         if (aln.ok) {
@@ -679,7 +657,7 @@ bool do_wfa_segment_alignment(
             }
 #endif
 
-            // Compte only the score
+            // Compute only the score
             //wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
 
 #ifdef VALIDATE_WFA_WFLIGN
