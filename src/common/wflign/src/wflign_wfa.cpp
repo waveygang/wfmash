@@ -558,14 +558,6 @@ bool do_wfa_segment_alignment(
     const float mash_dist =
         rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
 
-    //const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
-    // Worst case acceptable as a match: seg_len/4 Is/Ds + seg_len * 3/4 long good enough alignment + seg_len/4 Ds/Is
-    int segment_length_div_4 = std::max(segment_length_q, segment_length_t) / 4;
-    const int max_score = (int) ((1.0 + mash_dist) *
-            (float) (affine_penalties->gap_opening + (segment_length_div_4 - 1) * affine_penalties->gap_extension) * 2 +
-            ceil((float) segment_length_div_4 * 3 * (1.0 - mashmap_estimated_identity)) *
-            (float) (affine_penalties->gap_opening + affine_penalties->gap_extension + affine_penalties->mismatch));
-
     // this threshold is set low enough that we tend to randomly sample wflambda
     // matrix cells for alignment the threshold is adaptive, based on the mash
     // distance of the mapping we are aligning we should obtain enough
@@ -590,6 +582,14 @@ bool do_wfa_segment_alignment(
         mm_allocator);
         }
         */
+
+        //const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
+        // Worst case acceptable as a match: seg_len/4 Is/Ds + seg_len * 3/4 long good enough alignment + seg_len/4 Ds/Is
+        int segment_length_div_4 = std::max(segment_length_q, segment_length_t) / 4;
+        const int max_score = (int) ((1.0 + mash_dist) *
+                                     (float) (affine_penalties->gap_opening + (segment_length_div_4 - 1) * affine_penalties->gap_extension) * 2 +
+                                     ceil((float) segment_length_div_4 * 3 * (1.0 - mashmap_estimated_identity)) *
+                                     (float) (affine_penalties->gap_opening + affine_penalties->gap_extension + affine_penalties->mismatch));
 
         wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
                                              segment_length_q);
