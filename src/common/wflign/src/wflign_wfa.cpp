@@ -665,8 +665,8 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
-
-    bool big_wave = (query_length > segment_length || target_length > segment_length);
+    const long max_seg_len = 2 * segment_length;
+    const bool big_wave = (query_length > max_seg_len || target_length > max_seg_len);
     wfa::wavefront_aligner_t* const wf_aligner
         = big_wave ?
             get_wavefront_aligner(*affine_penalties,
