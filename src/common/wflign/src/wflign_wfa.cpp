@@ -11,7 +11,8 @@ namespace wavefront {
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
     const uint64_t& target_length,
-    const uint64_t& query_length) {
+    const uint64_t& query_length,
+    const bool& low_memory) {
     // Configure the attributes of the wf-aligner
     wfa::wavefront_aligner_attr_t attributes =
         wfa::wavefront_aligner_attr_default;
@@ -25,7 +26,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     // attributes.reduction.max_distance_threshold = 50;
     attributes.alignment_scope =
         wfa::alignment_scope_alignment; // alignment_scope_score
-    attributes.low_memory = true;
+    attributes.low_memory = low_memory;
     //wfa::wavefront_aligner_t *const wf_aligner =
     return wfa::wavefront_aligner_new(
         target_length, query_length, &attributes);
@@ -216,7 +217,7 @@ void wflign_affine_wavefront(
     wfa::wavefront_aligner_t* const wf_aligner
             = get_wavefront_aligner(wfa_affine_penalties,
                                     segment_length_to_use,
-                                    segment_length_to_use);
+                                    segment_length_to_use, false);
 
     uint64_t num_alignments = 0;
     uint64_t num_alignments_performed = 0;
@@ -670,7 +671,8 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
         = big_wave ?
             get_wavefront_aligner(*affine_penalties,
                                 target_length,
-                                  query_length)
+                                  query_length,
+                                  true)
         : _wf_aligner;
 
     /*
