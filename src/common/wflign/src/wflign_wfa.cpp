@@ -122,7 +122,7 @@ void wflign_affine_wavefront(
         } else {
             wfa_affine_penalties = {
                     .match = 0,
-                    .mismatch = 1,
+                    .mismatch = 2,
                     .gap_opening = 3,
                     .gap_extension = 1,
             };
