@@ -84,10 +84,6 @@ void wflign_affine_wavefront(
     const int wfa_min_wavefront_length = 0; // segment_length_to_use / 16;
     const int wfa_max_distance_threshold = 0; // segment_length_to_use / 8;
 
-    // Allocate MM for WFA and WF-lambda
-    wflambda::mm_allocator_t *const wflambda_mm_allocator =
-        wflambda::mm_allocator_new(BUFFER_SIZE_8M);
-
     // Set penalties
     wfa::affine_penalties_t wfa_affine_penalties;
     if (wfa_mismatch_score > 0 && wfa_gap_opening_score > 0 && wfa_gap_extension_score > 0){
@@ -192,18 +188,31 @@ void wflign_affine_wavefront(
     //std::cerr << "wflambda_affine_penalties.gap_extension " << wflambda_affine_penalties.gap_extension << std::endl;
     //std::cerr << "max_mash_dist_to_evaluate " << max_mash_dist_to_evaluate << std::endl;
 
-    // Init Affine wflambda
-    wflambda::affine_wavefronts_t *affine_wavefronts;
+
+    // Configure the attributes of the wflambda-aligner
+    wflambda::wavefront_aligner_attr_t attributes =
+            wflambda::wavefront_aligner_attr_default;
+    attributes.distance_metric = wflambda::gap_affine;
+    attributes.affine_penalties = wflambda_affine_penalties;
+    // attributes.distance_metric = gap_affine2p;
+    // attributes.affine2p_penalties = affine2p_penalties;
     if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
-        affine_wavefronts = wflambda::affine_wavefronts_new_reduced(
-            pattern_length + 1, text_length + 1, &wflambda_affine_penalties,
-            wflambda_min_wavefront_length, wflambda_max_distance_threshold,
-            NULL, wflambda_mm_allocator);
+        attributes.reduction.reduction_strategy =
+                wflambda::wavefront_reduction_none; // wavefront_reduction_dynamic
+        // attributes.reduction.min_wavefront_length = 10;
+        // attributes.reduction.max_distance_threshold = 50;
     } else {
-        affine_wavefronts = wflambda::affine_wavefronts_new_complete(
-            pattern_length + 1, text_length + 1, &wflambda_affine_penalties,
-            NULL, wflambda_mm_allocator);
+        attributes.reduction.reduction_strategy =
+                wflambda::wavefront_reduction_dynamic; // wavefront_reduction_dynamic
+        attributes.reduction.min_wavefront_length = wflambda_min_wavefront_length;
+        attributes.reduction.max_distance_threshold = wflambda_max_distance_threshold;
     }
+    attributes.alignment_scope =
+            wflambda::alignment_scope_alignment; // alignment_scope_score
+    attributes.low_memory = false;
+    wflambda::wavefront_aligner_t *const wflambda_aligner = wflambda::wavefront_aligner_new(
+            pattern_length, text_length, &attributes);
+
 
     // save computed alignments in a pair-indexed patchmap
     whash::patchmap<uint64_t, alignment_t *> alignments;
@@ -323,7 +332,11 @@ void wflign_affine_wavefront(
     const auto start_time = std::chrono::steady_clock::now();
 
     // Align
-    wflambda::affine_wavefronts_align(affine_wavefronts, extend_match,
+
+    wflambda::wavefront_aligner_clear__resize(wflambda_aligner, pattern_length,
+                                              text_length);
+
+    wflambda::wavefront_align(wflambda_aligner, extend_match,
                                       trace_match, pattern_length, text_length);
 
     for (const auto &p : alignments) {
@@ -515,13 +528,9 @@ void wflign_affine_wavefront(
         }
     }
 
-    // clean up our WFA allocator
-    // wfa::mm_allocator_delete(wfa_mm_allocator);
-    wfa::wavefront_aligner_delete(wf_aligner);
-
     // Free
-    wflambda::affine_wavefronts_delete(affine_wavefronts);
-    wflambda::mm_allocator_delete(wflambda_mm_allocator);
+    wfa::wavefront_aligner_delete(wf_aligner);
+    wflambda::wavefront_aligner_delete(wflambda_aligner);
 }
 
 // accumulate alignment objects

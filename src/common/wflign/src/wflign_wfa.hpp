@@ -20,8 +20,11 @@
 //#include "wfa_edit_callback.hpp"
 #include "dna.hpp"
 #include "rkmh.hpp"
-#include "wflambda/gap_affine/affine_wavefront_align.hpp"
-#include "wflambda/gap_affine/affine_wavefront_backtrace.hpp"
+#include "wflambda/utils/commons.h"
+#include "wflambda/gap_affine/affine_matrix.h"
+#include "wflambda/gap_affine/swg.h"
+#include "wflambda/wavefront/wavefront_align.h"
+#include "wflambda/wavefront/wavefront_reduction.h"
 
 //#define WFLIGN_DEBUG true // for debugging messages
 

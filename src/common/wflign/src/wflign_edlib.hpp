@@ -6,8 +6,10 @@
 #include "edlib.h"
 #include "patchmap.hpp"
 #include "wfa_edit_callback.hpp"
-#include "wflambda/gap_affine/affine_wavefront_align.hpp"
-#include "wflambda/gap_affine/affine_wavefront_backtrace.hpp"
+#include "wflambda/gap_affine/affine_matrix.h"
+#include "wflambda/gap_affine/swg.h"
+#include "wflambda/wavefront/wavefront_align.h"
+#include "wflambda/wavefront/wavefront_reduction.h"
 #include "dna.hpp"
 
 //#define WFLIGN_DEBUG true // for debugging messages
