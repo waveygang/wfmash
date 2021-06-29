@@ -198,14 +198,14 @@ void wflign_affine_wavefront(
     // attributes.affine2p_penalties = affine2p_penalties;
     if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
         attributes.reduction.reduction_strategy =
-                wflambda::wavefront_reduction_none; // wavefront_reduction_dynamic
-        // attributes.reduction.min_wavefront_length = 10;
-        // attributes.reduction.max_distance_threshold = 50;
-    } else {
-        attributes.reduction.reduction_strategy =
                 wflambda::wavefront_reduction_dynamic; // wavefront_reduction_dynamic
         attributes.reduction.min_wavefront_length = wflambda_min_wavefront_length;
         attributes.reduction.max_distance_threshold = wflambda_max_distance_threshold;
+    } else {
+        attributes.reduction.reduction_strategy =
+                wflambda::wavefront_reduction_none; // wavefront_reduction_dynamic
+        // attributes.reduction.min_wavefront_length = 10;
+        // attributes.reduction.max_distance_threshold = 50;
     }
     attributes.alignment_scope =
             wflambda::alignment_scope_alignment; // alignment_scope_score
