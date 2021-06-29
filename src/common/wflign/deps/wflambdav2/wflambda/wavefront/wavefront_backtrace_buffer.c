@@ -133,9 +133,8 @@ void wf_backtrace_buffer_recover_cigar(
     wf_backtrace_buffer_t* const bt_buffer,
     const pcigar_t pcigar_last,
     const block_idx_t prev_idx_last,
-    char* const pattern,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
     const int pattern_length,
-    char* const text,
     const int text_length,
     cigar_t* const cigar) {
   // Clear temporal buffer
@@ -164,8 +163,9 @@ void wf_backtrace_buffer_recover_cigar(
     // Recover block
     pcigar_recover(
         palignment_blocks[i],
-        pattern,pattern_length,
-        text,text_length,
+        traceback_lambda,
+        pattern_length,
+        text_length,
         &v,&h,
         cigar_buffer,&cigar_block_length,
         &current_matrix_type);
@@ -174,7 +174,7 @@ void wf_backtrace_buffer_recover_cigar(
   }
   // Account for last stroke of matches
   const int num_matches = pcigar_recover_extend(
-      pattern,pattern_length,text,text_length,v,h,cigar_buffer);
+      traceback_lambda,pattern_length,text_length,v,h,cigar_buffer);
   v += num_matches;
   h += num_matches;
   cigar_buffer += num_matches;

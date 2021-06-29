@@ -209,7 +209,7 @@ void wflign_affine_wavefront(
     }
     attributes.alignment_scope =
             wflambda::alignment_scope_alignment; // alignment_scope_score
-    attributes.low_memory = false;
+    attributes.low_memory = true;
     wflambda::wavefront_aligner_t *const wflambda_aligner = wflambda::wavefront_aligner_new(
             pattern_length, text_length, &attributes);
 
@@ -267,7 +267,7 @@ void wflign_affine_wavefront(
                     wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
                     // wfa_mm_allocator,
                     wf_aligner, &wfa_affine_penalties, *aln);
-                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                //std::cerr << target_name << " - " << query_name << "\t" << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
                 ++num_alignments;
                 if (aln->score != std::numeric_limits<int>::max()) {
                     ++num_alignments_performed;
@@ -318,12 +318,15 @@ void wflign_affine_wavefront(
     auto trace_match = [&](const int &v, const int &h) {
         if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
             const uint64_t k = encode_pair(v, h);
-            auto *aln = alignments[k];
-            if (aln->ok) {
+            const auto f = alignments.find(k);
+            if (f != alignments.end()) {
+                auto *aln = alignments[k];
                 trace.push_back(aln);
                 aln->keep = true;
+                ++num_alignments;
+                return true;
             }
-            return true;
+            return false;
         } else {
             return false;
         }
@@ -388,9 +391,15 @@ void wflign_affine_wavefront(
         }
 #endif
 
+        if(attributes.low_memory) {
+            std::reverse(trace.begin(), trace.end());
+        }
+
         auto x = trace.rbegin();
+        auto end_trace = trace.rend();
+
         auto c = x + 1;
-        while (x != trace.rend() && c != trace.rend()) {
+        while (x != end_trace && c != end_trace) {
             // establish our last and curr alignments to consider when trimming
             auto &last = **x;
             auto &curr = **c;

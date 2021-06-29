@@ -9,6 +9,7 @@
 #include <sstream>
 #include <functional>
 #include <fstream>
+
 //#include "WFA/gap_affine/affine_wavefront.hpp"
 //#include "WFA/gap_affine/affine_wavefront_align.h"
 #include "WFA/gap_affine/affine_matrix.h"

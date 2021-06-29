@@ -51,6 +51,9 @@ pcigar_op_t pcigar_lut[4] = {
     { .operation = 'I', .inc_v = 0, .inc_h = 1, .matrix_type = affine_matrix_I }, // 11 - INSERTION
 };
 // Precomputed string of Matches
+char matches_lut_1[2] = "M";
+#define CIGAR_8MATCHES_UINT8 *((uint8_t*)matches_lut_1)
+
 char matches_lut[9] = "MMMMMMMM";
 #define CIGAR_8MATCHES_UINT64 *((uint64_t*)matches_lut)
 
@@ -92,40 +95,24 @@ int pcigar_unpack(
  * PCIGAR extend exact-matches
  */
 int pcigar_recover_extend(
-    char* const pattern,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
     const int pattern_length,
-    char* const text,
     const int text_length,
     int v,
     int h,
     char* cigar_buffer) {
   int num_matches = 0;
-  // Fetch pattern/text blocks
-  uint64_t* pattern_blocks = (uint64_t*)(pattern+v);
-  uint64_t* text_blocks = (uint64_t*)(text+h);
-  uint64_t pattern_block = *pattern_blocks;
-  uint64_t text_block = *text_blocks;
-  // Compare 64-bits blocks
-  uint64_t cmp = pattern_block ^ text_block;
-  while (cmp==0 && (v+8) < pattern_length && (h+8) < text_length) {
-    // Increment offset
-    v += 8;
-    h += 8;
-    num_matches += 8;
-    // Dump matches in block
-    *((uint64_t*)cigar_buffer) = CIGAR_8MATCHES_UINT64;
-    cigar_buffer += 8;
-    // Next blocks
-    ++pattern_blocks;
-    ++text_blocks;
-    // Fetch & Compare
-    pattern_block = *pattern_blocks;
-    text_block = *text_blocks;
-    cmp = pattern_block ^ text_block;
+
+  while (h < text_length && v < pattern_length && traceback_lambda(v,h)) {
+      // Increment offset
+      ++v;
+      ++h;
+      ++num_matches;
+
+      *((uint64_t*)cigar_buffer) = CIGAR_8MATCHES_UINT8;
+      cigar_buffer += 1;
   }
-  // Count equal characters
-  num_matches += __builtin_ctzl(cmp)/8;
-  *((uint64_t*)cigar_buffer) = CIGAR_8MATCHES_UINT64;
+
   // Return total matches
   return num_matches;
 }
@@ -134,9 +121,8 @@ int pcigar_recover_extend(
  */
 void pcigar_recover(
     pcigar_t pcigar,
-    char* const pattern,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
     const int pattern_length,
-    char* const text,
     const int text_length,
     int* const v_pos,
     int* const h_pos,
@@ -159,7 +145,7 @@ void pcigar_recover(
     // Extend exact-matches
     if (matrix_type == affine_matrix_M) { // Extend only on the M-wavefront
       const int num_matches = pcigar_recover_extend(
-          pattern,pattern_length,text,text_length,v,h,cigar_buffer);
+          traceback_lambda,pattern_length,text_length,v,h,cigar_buffer);
       // Update location
       v += num_matches;
       h += num_matches;

@@ -88,9 +88,8 @@ void wf_backtrace_buffer_recover_cigar(
     wf_backtrace_buffer_t* const bt_buffer,
     const pcigar_t pcigar_last,
     const block_idx_t prev_idx_last,
-    char* const pattern,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
     const int pattern_length,
-    char* const text,
     const int text_length,
     cigar_t* const cigar);
 

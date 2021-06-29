@@ -31,6 +31,7 @@
 
 #pragma once
 
+#include <functional>
 #include "wflambda/utils/commons.h"
 #include "wflambda/gap_affine/affine_matrix.h"
 
@@ -105,18 +106,16 @@ int pcigar_unpack(
  * PCIGAR recover
  */
 int pcigar_recover_extend(
-    char* const pattern,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
     const int pattern_length,
-    char* const text,
     const int text_length,
     int v,
     int h,
     char* cigar_buffer);
 void pcigar_recover(
     pcigar_t pcigar,
-    char* const pattern,
+    const std::function<bool(const int&, const int&)>& traceback_lambda,
     const int pattern_length,
-    char* const text,
     const int text_length,
     int* const v_pos,
     int* const h_pos,

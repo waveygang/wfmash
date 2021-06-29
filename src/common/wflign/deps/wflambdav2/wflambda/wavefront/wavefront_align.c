@@ -73,12 +73,12 @@ bool wavefront_align_global_terminate(
     if (wf_aligner->bt_piggyback) {
       // Fetch backtrace from buffer and recover alignment
       //ToDo
-//      wf_backtrace_buffer_recover_cigar(
-//          wf_aligner->bt_buffer,
-//          mwavefront->bt_pcigar[alignment_k],
-//          mwavefront->bt_prev[alignment_k],
-//          sequences->pattern_padded,pattern_length,
-//          sequences->text_padded,text_length,&wf_aligner->cigar);
+      wf_backtrace_buffer_recover_cigar(
+          wf_aligner->bt_buffer,
+          mwavefront->bt_pcigar[alignment_k],
+          mwavefront->bt_prev[alignment_k],
+          traceback_lambda,
+          pattern_length,text_length,&wf_aligner->cigar);
     } else {
       // Backtrace alignment
       wavefront_backtrace_affine(wf_aligner,
