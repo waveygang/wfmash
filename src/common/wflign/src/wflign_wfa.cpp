@@ -240,14 +240,14 @@ void wflign_affine_wavefront(
     //const float max_mash_dist = std::max(0.05, (1.0 - mashmap_estimated_identity));
 
     auto extend_match = [&](const int &v, const int &h) {
-        bool aligned = false;
+        bool is_a_match = false;
         if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
             const uint64_t k = encode_pair(v, h);
             const auto f = alignments.find(
                 k); // TODO: it can be removed using an edit-distance mode as
                     // high-level of WF-inception
             if (f != alignments.end()) {
-                aligned = true;
+                is_a_match = (alignments[k] != nullptr);
             } else {
                 const int query_begin = v * step_size;
                 const int target_begin = h * step_size;
@@ -257,7 +257,7 @@ void wflign_affine_wavefront(
                 const auto segment_length_to_use_t = (uint16_t) (h == text_length - 1 ? target_length - target_begin : segment_length_to_use);
 
                 auto *aln = new alignment_t();
-                aligned = do_wfa_segment_alignment(
+                const bool alignment_performed = do_wfa_segment_alignment(
                     query_name, query, query_sketches[v], query_length,
                     query_begin, target_name, target, target_sketches[h],
                     target_length, target_begin,
@@ -265,18 +265,25 @@ void wflign_affine_wavefront(
                     segment_length_to_use_t,
                     step_size, minhash_kmer_size, wfa_min_wavefront_length,
                     wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
-                    // wfa_mm_allocator,
                     wf_aligner, &wfa_affine_penalties, *aln);
-                //std::cerr << target_name << " - " << query_name << "\t" << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
                 ++num_alignments;
                 if (aln->score != std::numeric_limits<int>::max()) {
                     ++num_alignments_performed;
                 }
-                if (aligned) {
-                    alignments[k] = aln;
-                } else {
+
+                if (alignment_performed) {
+                    if (aln->ok){
+                        is_a_match = true;
+                        alignments[k] = aln;
+                    } else {
+                        alignments[k] = nullptr;
+                    }
+                }
+                if (!is_a_match) {
                     delete aln;
                 }
+
                 // cleanup old sketches
                 if (v > v_max) {
                     v_max = v;
@@ -305,9 +312,9 @@ void wflign_affine_wavefront(
         } else if (h < 0 ||
                    v < 0) { // TODO: it can be removed using an edit-distance
                             // mode as high-level of WF-inception
-            aligned = true;
+            is_a_match = true;
         }
-        return aligned;
+        return is_a_match;
     };
 
     // accumulate runs of matches in reverse order
@@ -319,7 +326,7 @@ void wflign_affine_wavefront(
         if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
             const uint64_t k = encode_pair(v, h);
             const auto f = alignments.find(k);
-            if (f != alignments.end()) {
+            if (f != alignments.end() && alignments[k] != nullptr) {
                 auto *aln = alignments[k];
                 trace.push_back(aln);
                 aln->keep = true;
@@ -343,7 +350,7 @@ void wflign_affine_wavefront(
                                       trace_match, pattern_length, text_length);
 
     for (const auto &p : alignments) {
-        if (!p.second->keep) {
+        if (p.second != nullptr && !p.second->keep) {
             delete p.second;
             p.second = nullptr;
         }
@@ -670,7 +677,7 @@ bool do_wfa_segment_alignment(
         // cleanup wavefronts to keep memory low
         // affine_wavefronts_delete(affine_wavefronts);
 
-        return aln.ok;
+        return true;
     }
 }
 
