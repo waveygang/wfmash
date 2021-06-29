@@ -50,7 +50,7 @@ add_library(libwflign_static STATIC
 set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
 target_include_directories(libwflign_static PRIVATE
   deps/
-  deps/patchmap
+  deps/robin-hood-hashing
   deps/wflambdav2
   deps/WFAv2
   deps/edlib/edlib/include)

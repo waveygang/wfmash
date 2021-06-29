@@ -17,7 +17,8 @@
 #include "WFA/wavefront/wavefront_align.h"
 #include "WFA/wavefront/wavefront_reduction.h"
 #include "edlib.h"
-#include "patchmap.hpp"
+#include "robin-hood-hashing/robin_hood.h"
+
 //#include "wfa_edit_callback.hpp"
 #include "dna.hpp"
 #include "rkmh.hpp"

@@ -215,7 +215,7 @@ void wflign_affine_wavefront(
 
 
     // save computed alignments in a pair-indexed patchmap
-    whash::patchmap<uint64_t, alignment_t *> alignments;
+    robin_hood::unordered_flat_map<uint64_t, alignment_t *> alignments;
 
     // allocate vectors to store our sketches
     std::vector<std::vector<rkmh::hash_t> *> query_sketches(pattern_length,
@@ -352,7 +352,7 @@ void wflign_affine_wavefront(
     for (const auto &p : alignments) {
         if (p.second != nullptr && !p.second->keep) {
             delete p.second;
-            p.second = nullptr;
+            //p.second = nullptr;
         }
     }
 
