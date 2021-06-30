@@ -40,6 +40,7 @@ These parameters affect the structure of the alignments:
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
 
+
 ## examples
 
 Map a set of query sequences against a reference genome:
@@ -68,19 +69,32 @@ This depends on determining the total query sequence length.
 To prevent lags when starting a mapping process, users should apply `samtools index` to index query and target FASTA sequences.
 The `.fai` indexes are then used to quickly compute the sum of query lengths.
 
+
 ## installation
 
-The build is orchestrated with cmake:
+### building from source
+
+The build is orchestrated with `cmake`. At least GCC version 9.3.0 is required for compilation. You can check your 
+version via:
+
+``` bash
+gcc --version
+g++ --version
+```
+
+Clone the `wfmash` git repository and build with:
 
 ```
 sudo apt install libjemalloc-dev # ubuntu
 sudo pacman -S jemalloc          # archlinux
 
+git clone --recursive https://github.com/ekg/wfmash.git
+cd wfmash
 cmake -H. -Bbuild && cmake --build build -- -j 16
 ```
 
-The `wfmash` binary will be in `build/bin`.
-To clean up, just remove the build directory.
+The `wfmash` binary will be in `build/bin`. To clean up, just remove the build directory.
+
 
 ## <a name=“publications”></a>publications
 
