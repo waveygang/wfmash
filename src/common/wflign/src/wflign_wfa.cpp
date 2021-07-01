@@ -587,10 +587,11 @@ void wflign_affine_wavefront(
                                 target_length, min_identity, mashmap_estimated_identity);
             }
         }
+
+        wfa::wavefront_aligner_delete(wf_aligner_cigar);
     }
 
     // Free
-    wfa::wavefront_aligner_delete(wf_aligner);
     wflambda::wavefront_aligner_delete(wflambda_aligner);
 }
 
