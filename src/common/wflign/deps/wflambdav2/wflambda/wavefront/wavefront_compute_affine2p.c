@@ -508,7 +508,6 @@ void wavefront_compute_affine2p_idm_piggyback(
  */
 void wavefront_compute_affine2p(
     wavefront_aligner_t* const wf_aligner,
-    const std::function<bool(const int&, const int&)>& match_lambda,
     const int pattern_length,
     const int text_length,
     const int score) {
