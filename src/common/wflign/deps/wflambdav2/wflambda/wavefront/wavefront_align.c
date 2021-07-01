@@ -138,12 +138,12 @@ int wavefront_align_global(
     ++score;
     switch (distance_metric) {
       case gap_affine:
-        wavefront_compute_affine(wf_aligner, match_lambda,
+        wavefront_compute_affine(wf_aligner,
                                  pattern_length, text_length,
                                  score);
         break;
       case gap_affine_2p:
-        wavefront_compute_affine2p(wf_aligner, match_lambda,
+        wavefront_compute_affine2p(wf_aligner,
                                    pattern_length,text_length,
                                    score);
         break;
@@ -188,12 +188,12 @@ int wavefront_align_global_bounded(
     }
     switch (distance_metric) {
       case gap_affine:
-        wavefront_compute_affine(wf_aligner,match_lambda,
+        wavefront_compute_affine(wf_aligner,
                                  pattern_length,text_length,
                                  score);
         break;
       case gap_affine_2p:
-        wavefront_compute_affine2p(wf_aligner,match_lambda,
+        wavefront_compute_affine2p(wf_aligner,
                                    pattern_length,text_length,
                                    score);
         break;
