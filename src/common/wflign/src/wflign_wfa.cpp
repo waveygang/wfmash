@@ -13,7 +13,8 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     const uint64_t& target_length,
     const uint64_t& query_length,
     const wfa::alignment_scope_t scope,
-    const bool& low_memory) {
+    const bool& low_memory,
+    const int& max_offset) {
     // Configure the attributes of the wf-aligner
     wfa::wavefront_aligner_attr_t attributes =
         wfa::wavefront_aligner_attr_default;
@@ -27,6 +28,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     // attributes.reduction.max_distance_threshold = 50;
     attributes.alignment_scope = scope;
     attributes.low_memory = low_memory;
+    attributes.max_offset = max_offset;
     //wfa::wavefront_aligner_t *const wf_aligner =
     return wfa::wavefront_aligner_new(
         target_length, query_length, &attributes);
@@ -228,7 +230,7 @@ void wflign_affine_wavefront(
                                     segment_length_to_use,
                                     segment_length_to_use,
                                     wfa::alignment_scope_score,
-                                    false);
+                                    false, -1);
 
     uint64_t num_alignments = 0;
     uint64_t num_alignments_performed = 0;
@@ -268,7 +270,7 @@ void wflign_affine_wavefront(
                     step_size, minhash_kmer_size, wfa_min_wavefront_length,
                     wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
                     wf_aligner, &wfa_affine_penalties, *aln);
-                //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << aligned << std::endl;
+                //std::cout << v << "\t" << h << "\t" << aln->score << "\t" << alignment_performed << "\t" << aln->ok << std::endl;
                 ++num_alignments;
                 if (aln->score != std::numeric_limits<int>::max()) {
                     ++num_alignments_performed;
@@ -406,7 +408,7 @@ void wflign_affine_wavefront(
                                         target_length,
                                         query_length,
                                         wfa::alignment_scope_alignment,
-                                        false);
+                                        false, -1);
 
         auto align_and_get_cigar = [&](alignment_t& aln) {
             wfa::wavefront_aligner_clear__resize(wf_aligner_cigar, aln.target_length,
@@ -644,7 +646,7 @@ bool do_wfa_segment_alignment(
 
         // aln.mash_dist = mash_dist;
 
-        if (mash_dist > max_mash_dist / 10.0) {
+        if (true || mash_dist > max_mash_dist / 10.0) {
             wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
                                                  segment_length_q);
         //const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
@@ -725,7 +727,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                 target_length,
                                   query_length,
                                   wfa::alignment_scope_alignment,
-                                  true)
+                                  true, -1)
         : _wf_aligner;
 
     /*

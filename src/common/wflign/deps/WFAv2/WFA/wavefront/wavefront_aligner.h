@@ -80,6 +80,7 @@ typedef struct {
   wavefront_reduction_t reduction;         // Wavefront reduction
   // Memory model
   bool low_memory;                         // Use low-memory strategy (modular wavefronts and piggyback)
+  int max_offset;                          // Maximum offset to explore (for banded alignments)
   // External MM (instead of allocating one inside)
   mm_allocator_t* mm_allocator;            // MM-Allocator
 } wavefront_aligner_attr_t;
@@ -101,6 +102,7 @@ typedef struct {
   bool memory_modular;                         // Memory strategy (modular wavefronts)
   bool bt_piggyback;                           // Backtrace Piggyback
   int max_score_scope;                         // Maximum score-difference between dependent wavefronts
+  int max_offset;                              // Maximum offset to explore (for banded alignments)
   // Wavefront components
   int num_wavefronts;                          // Total number of allocated wavefronts
   wavefront_t** mwavefronts;                   // M-wavefronts

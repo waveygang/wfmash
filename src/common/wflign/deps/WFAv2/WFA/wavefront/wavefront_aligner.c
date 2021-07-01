@@ -80,6 +80,7 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     },
     // Memory model
     .low_memory = false,  // TODO: DU wants (low_memory if length >= 10000) // FIXME
+    .max_offset = INT_MAX,
     // MM
     .mm_allocator = NULL, // Use private MM
 };
@@ -154,6 +155,7 @@ wavefront_aligner_t* wavefront_aligner_new(
   } else { // wavefront_reduction_none
     wavefront_reduction_set_none(&wf_aligner->reduction);
   }
+  wf_aligner->max_offset = attributes->max_offset > 0 ? attributes->max_offset : INT_MAX;
   // Allocate victim wavefront
   wavefront_t* const wavefront_victim = mm_allocator_alloc(mm_allocator,wavefront_t);
   wavefront_allocate(wavefront_victim,WF_NULL_INIT_LENGTH,bt_piggyback,mm_allocator);

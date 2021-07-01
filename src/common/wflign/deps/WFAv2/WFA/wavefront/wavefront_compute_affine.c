@@ -368,6 +368,8 @@ void wavefront_compute_affine(
   // Set limits
   int hi, lo;
   wavefront_compute_limits(&wavefront_set,gap_affine,&lo,&hi);
+  lo = MAX(-wf_aligner->max_offset, lo);
+  hi = MIN(wf_aligner->max_offset, hi);
   // Allocate wavefronts
   wavefront_aligner_allocate_output(wf_aligner,&wavefront_set,score,lo,hi);
   // Compute next wavefront

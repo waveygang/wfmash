@@ -245,7 +245,8 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     const uint64_t& target_length,
     const uint64_t& query_length,
     const wfa::alignment_scope_t scope,
-    const bool& low_memory);
+    const bool& low_memory,
+    const int& max_offset);
 
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
