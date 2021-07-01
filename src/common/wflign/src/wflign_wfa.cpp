@@ -724,7 +724,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                 target_length,
                                   query_length,
                                   wfa::alignment_scope_alignment,
-                                  true);
+                                  true)
         : _wf_aligner;
 
     /*
