@@ -9,6 +9,7 @@
 #include <sstream>
 #include <functional>
 #include <fstream>
+
 //#include "WFA/gap_affine/affine_wavefront.hpp"
 //#include "WFA/gap_affine/affine_wavefront_align.h"
 #include "WFA/gap_affine/affine_matrix.h"
@@ -16,12 +17,16 @@
 #include "WFA/wavefront/wavefront_align.h"
 #include "WFA/wavefront/wavefront_reduction.h"
 #include "edlib.h"
-#include "patchmap.hpp"
+#include "robin-hood-hashing/robin_hood.h"
+
 //#include "wfa_edit_callback.hpp"
 #include "dna.hpp"
 #include "rkmh.hpp"
-#include "wflambda/gap_affine/affine_wavefront_align.hpp"
-#include "wflambda/gap_affine/affine_wavefront_backtrace.hpp"
+#include "wflambda/utils/commons.h"
+#include "wflambda/gap_affine/affine_matrix.h"
+#include "wflambda/gap_affine/swg.h"
+#include "wflambda/wavefront/wavefront_align.h"
+#include "wflambda/wavefront/wavefront_reduction.h"
 
 //#define WFLIGN_DEBUG true // for debugging messages
 
@@ -239,7 +244,8 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
     const uint64_t& target_length,
     const uint64_t& query_length,
-    const wfa::alignment_scope_t scope);
+    const wfa::alignment_scope_t scope,
+    const bool& low_memory);
 
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
