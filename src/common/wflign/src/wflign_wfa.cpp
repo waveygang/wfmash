@@ -405,8 +405,8 @@ void wflign_affine_wavefront(
 
         wfa::wavefront_aligner_t* const wf_aligner_cigar
                 = get_wavefront_aligner(wfa_affine_penalties,
-                                        target_length,
-                                        query_length,
+                                        segment_length_to_use,
+                                        segment_length_to_use,
                                         wfa::alignment_scope_alignment,
                                         false, -1);
 
@@ -564,15 +564,24 @@ void wflign_affine_wavefront(
 #endif
         }
 
+        wfa::wavefront_aligner_delete(wf_aligner_cigar);
+
         const long elapsed_time_wflambda_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time)
                         .count();
 
         if (merge_alignments) {
+            wfa::wavefront_aligner_t* const wf_aligner_patching
+                    = get_wavefront_aligner(wfa_affine_penalties,
+                                            segment_length_to_use,
+                                            segment_length_to_use,
+                                            wfa::alignment_scope_alignment,
+                                            false, -1);
+
             // write a merged alignment
             write_merged_alignment(
-                out, trace, wf_aligner_cigar, &wfa_affine_penalties, emit_md_tag,
+                out, trace, wf_aligner_patching, &wfa_affine_penalties, emit_md_tag,
                 paf_format_else_sam, query, query_name, query_total_length,
                 query_offset, query_length, query_is_rev, target, target_name,
                 target_total_length, target_offset, target_length,
@@ -580,6 +589,8 @@ void wflign_affine_wavefront(
                 elapsed_time_wflambda_ms, num_alignments,
                 num_alignments_performed, mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor, erode_k);
+
+            wfa::wavefront_aligner_delete(wf_aligner_patching);
         } else {
             for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                 // std::cerr << "on alignment" << std::endl;
@@ -589,8 +600,6 @@ void wflign_affine_wavefront(
                                 target_length, min_identity, mashmap_estimated_identity);
             }
         }
-
-        wfa::wavefront_aligner_delete(wf_aligner_cigar);
     }
 
     // Free
