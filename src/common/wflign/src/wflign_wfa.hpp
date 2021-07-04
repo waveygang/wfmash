@@ -54,8 +54,8 @@ bool unpack_display_cigar(const wfa::cigar_t &cigar, const char *query,
 struct alignment_t {
     int j = 0;
     int i = 0;
-    uint16_t query_length = 0;
-    uint16_t target_length = 0;
+    int query_length = 0;
+    int target_length = 0;
     bool ok = false;
     bool keep = false;
     int score = std::numeric_limits<int>::max();
