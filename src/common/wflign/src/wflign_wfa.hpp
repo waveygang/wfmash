@@ -58,7 +58,7 @@ struct alignment_t {
     int target_length = 0;
     bool ok = false;
     bool keep = false;
-    int score = std::numeric_limits<int>::max();
+    //int score = std::numeric_limits<int>::max();
     // float mash_dist = 1;
     wfa::cigar_t edit_cigar{};
     void display(void) {

@@ -272,11 +272,9 @@ void wflign_affine_wavefront(
                     wf_aligner, &wfa_affine_penalties, *aln);
                 //std::cerr << v << "\t" << h << "\t" << aln->score << "\t" << alignment_performed << "\t" << aln->ok << std::endl;
                 ++num_alignments;
-                if (aln->score != std::numeric_limits<int>::max()) {
-                    ++num_alignments_performed;
-                }
-
                 if (alignment_performed) {
+                    ++num_alignments_performed;
+
                     if (aln->ok){
                         is_a_match = true;
                         alignments[k] = aln;
@@ -415,8 +413,7 @@ void wflign_affine_wavefront(
             wfa::wavefront_aligner_clear__resize(wf_aligner_cigar, aln.target_length,
                                                  aln.query_length);
 
-            aln.score =
-                    wfa::wavefront_align(wf_aligner_cigar, target + aln.i, aln.target_length,
+            wfa::wavefront_align(wf_aligner_cigar, target + aln.i, aln.target_length,
                                          query + aln.j, aln.query_length);
 
             // correct X/M errors in the cigar
@@ -720,10 +717,10 @@ bool do_wfa_segment_alignment(
         wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
                                              segment_length_q);
 
-            aln.score =
+            const int score =
                     wfa::wavefront_align_bounded(wf_aligner, target + i, segment_length_t,
                                                  query + j, segment_length_q, max_score);
-            aln.ok = aln.score < max_score;
+            aln.ok = score < max_score;
         } else {
             aln.ok = true;
         }
@@ -826,11 +823,11 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     wfa::wavefront_aligner_clear__resize(wf_aligner, target_length,
                                          query_length);
 
-    aln.score =
+    const int score =
         wfa::wavefront_align_bounded(wf_aligner, target + i, target_length,
                                      query + j, query_length, max_score);
 
-    aln.ok = aln.score < max_score;
+    aln.ok = score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
         hack_cigar(wf_aligner->cigar, query, target, query_length,
@@ -2538,7 +2535,7 @@ void write_alignment(
                 << target_offset + alignmentRefPos + refAlignedLength << "\t"
                 << matches << "\t" << std::max(refAlignedLength, qAlignedLength)
                 << "\t" << std::round(float2phred(1.0 - block_identity)) << "\t"
-                << "as:i:" << aln.score << "\t"
+                //<< "as:i:" << aln.score << "\t"
                 << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:"
                 << block_identity
