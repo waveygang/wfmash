@@ -1277,14 +1277,26 @@ void write_merged_alignment(
                         }
                         std::cerr << std::endl;*/
 
-                        auto result = do_edlib_patch_alignment(
-                            query_rev.c_str(), 0, query_rev.size(),
-                            target_rev.c_str(), 0, target_rev.size(),
-                            EDLIB_MODE_SHW);
-                        if (result.status == EDLIB_STATUS_OK &&
-                            result.alignmentLength != 0 &&
-                            result.editDistance >= 0) {
-                            // std::cerr << "Head patching\n";
+                        wfa::wavefront_aligner_t* const wf_aligner_heads
+                                = get_wavefront_aligner(*affine_penalties,
+                                                        target_rev.size(),
+                                                        query_rev.size(), false);
+                        wavefront_aligner_set_alignment_free_ends(
+                                wf_aligner_heads,
+                                0,
+                                0,
+                                0,
+                                query_rev.size());
+                        const int status =
+                                wfa::wavefront_align(wf_aligner_heads, target_rev.c_str(), target_rev.size(),
+                                                     query_rev.c_str(), query_rev.size());
+
+                        //auto result = do_edlib_patch_alignment(
+                        //    query_rev.c_str(), 0, query_rev.size(),
+                        //    target_rev.c_str(), 0, target_rev.size(),
+                        //    EDLIB_MODE_SHW);
+                        if (status == WF_ALIGN_SUCCESSFUL) {
+                            //std::cerr << "Head patching\n";
                             got_alignment = true;
 
                             target_pos = target_pos_x;
@@ -1294,9 +1306,15 @@ void write_merged_alignment(
                             target_start = target_start_x;
                             target_length_mut += target_delta_to_shift;
 
-                            for (int i = *result.endLocations + 1;
-                                 i < target_delta; ++i) {
-                                // std::cerr << "D";
+                            for(int xxx = wf_aligner_heads->cigar.end_offset - 1; xxx >= wf_aligner_heads->cigar.begin_offset; --xxx) {
+                                //std::cerr << wf_aligner_heads->cigar.operations[xxx];
+                                patched.push_back(wf_aligner_heads->cigar.operations[xxx]);
+                            }
+                            //std::cerr << "\n";
+
+                            /*
+                            for (int i = *result.endLocations + 1; i < target_delta; ++i) {
+                                //std::cerr << "D";
                                 patched.push_back('D');
                             }
 
@@ -1304,19 +1322,20 @@ void write_merged_alignment(
                             char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                             auto &end_idx = result.alignmentLength;
                             for (int i = end_idx - 1; i >= 0; --i) {
-                                // std::cerr <<
-                                // moveCodeToChar[result.alignment[i]];
+                                //std::cerr << moveCodeToChar[result.alignment[i]];
                                 patched.push_back(
                                     moveCodeToChar[result.alignment[i]]);
                             }
 
                             for (int i = 0; i < *result.startLocations; ++i) {
-                                // std::cerr << "D";
+                                //std::cerr << "D";
                                 patched.push_back('D');
                             }
-                            // std::cerr << "\n";
+                            //std::cerr << "\n";
+                             */
                         }
-                        edlibFreeAlignResult(result);
+                        //edlibFreeAlignResult(result);
+                        wfa::wavefront_aligner_delete(wf_aligner_heads);
                     }
                 }
 
