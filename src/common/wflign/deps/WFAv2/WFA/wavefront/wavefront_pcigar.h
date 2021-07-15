@@ -65,7 +65,7 @@ namespace wfa {
   ((pcigar<<2) | PCIGAR_MISMATCH)
 
 #ifdef PCIGAR_32BITS
-  typedef uint32_t pcigar_t;
+    typedef uint32_t pcigar_t;
 
   #define PCIGAR_MAX_LENGTH               16
   #define PCIGAR_FULL_MASK        0x40000000u /* Completely full */
@@ -78,51 +78,58 @@ namespace wfa {
     ((pcigar) >> 30)
   #define PCIGAR_FREE_SLOTS(pcigar) ((pcigar)!=0) ? __builtin_clz(pcigar)/2 : PCIGAR_MAX_LENGTH;
 #else
-  typedef uint64_t pcigar_t;
+    typedef uint64_t pcigar_t;
 
-  #define PCIGAR_MAX_LENGTH                       32
-  #define PCIGAR_FULL_MASK        0x4000000000000000ul /* Completely full */
-  #define PCIGAR_ALMOST_FULL_MASK 0x1000000000000000ul /* 1-slot free */
-  #define PCIGAR_IS_FULL(pcigar) \
+#define PCIGAR_MAX_LENGTH                       32
+#define PCIGAR_FULL_MASK        0x4000000000000000ul /* Completely full */
+#define PCIGAR_ALMOST_FULL_MASK 0x1000000000000000ul /* 1-slot free */
+#define PCIGAR_IS_FULL(pcigar) \
     ((pcigar) >= PCIGAR_FULL_MASK)
-  #define PCIGAR_IS_ALMOST_FULL(pcigar) \
+#define PCIGAR_IS_ALMOST_FULL(pcigar) \
     ((pcigar) >= PCIGAR_ALMOST_FULL_MASK)
-  #define PCIGAR_EXTRACT(pcigar) \
+#define PCIGAR_EXTRACT(pcigar) \
     ((pcigar) >> 62)
-  #define PCIGAR_FREE_SLOTS(pcigar) ((pcigar)!=0) ? __builtin_clzl(pcigar)/2 : PCIGAR_MAX_LENGTH;
+#define PCIGAR_FREE_SLOTS(pcigar) ((pcigar)!=0) ? __builtin_clzl(pcigar)/2 : PCIGAR_MAX_LENGTH;
 #endif
 
 /*
  * Accessors
  */
-int pcigar_get_length(
-    const pcigar_t pcigar);
-int pcigar_unpack(
-    pcigar_t pcigar,
-    char* cigar_buffer);
+    int pcigar_get_length(
+            const pcigar_t pcigar);
+    int pcigar_unpack(
+            pcigar_t pcigar,
+            char* cigar_buffer);
 
 /*
  * PCIGAR recover
  */
-int pcigar_recover_extend(
-    char* const pattern,
-    const int pattern_length,
-    char* const text,
-    const int text_length,
-    int v,
-    int h,
-    char* cigar_buffer);
-void pcigar_recover(
-    pcigar_t pcigar,
-    char* const pattern,
-    const int pattern_length,
-    char* const text,
-    const int text_length,
-    int* const v_pos,
-    int* const h_pos,
-    char* cigar_buffer,
-    int* const cigar_length,
-    affine_matrix_type* const current_matrix_type);
+    int pcigar_recover_extend(
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            int v,
+            int h,
+            char* cigar_buffer);
+    void pcigar_recover(
+            pcigar_t pcigar,
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            int* const v_pos,
+            int* const h_pos,
+            char* cigar_buffer,
+            int* const cigar_length,
+            affine_matrix_type* const current_matrix_type);
+
+/*
+ * Display
+ */
+    void pcigar_print(
+            FILE* const stream,
+            pcigar_t pcigar);
 
 #ifdef WFA_NAMESPACE
 }

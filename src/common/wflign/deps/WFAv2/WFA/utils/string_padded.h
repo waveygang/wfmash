@@ -44,35 +44,38 @@ namespace wfa {
 /*
  * Strings Padded
  */
-typedef struct {
-  // Strings
-  char* pattern_padded_buffer;
-  char* pattern_padded;
-  char* text_padded_buffer;
-  char* text_padded;
-  // MM
-  mm_allocator_t* mm_allocator;
-} strings_padded_t;
+    typedef struct {
+        // Dimensions
+        int pattern_length;
+        int text_length;
+        // Padded strings
+        char* pattern_padded;
+        char* text_padded;
+        // MM
+        char* pattern_padded_buffer;
+        char* text_padded_buffer;
+        mm_allocator_t* mm_allocator;
+    } strings_padded_t;
 
 /*
  * Strings (text/pattern) padded
  */
-strings_padded_t* strings_padded_new(
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    const int padding_length,
-    mm_allocator_t* const mm_allocator);
-strings_padded_t* strings_padded_new_rhomb(
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    const int padding_length,
-    mm_allocator_t* const mm_allocator);
-void strings_padded_delete(
-    strings_padded_t* const strings_padded);
+    strings_padded_t* strings_padded_new(
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            const int padding_length,
+            mm_allocator_t* const mm_allocator);
+    strings_padded_t* strings_padded_new_rhomb(
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            const int padding_length,
+            mm_allocator_t* const mm_allocator);
+    void strings_padded_delete(
+            strings_padded_t* const strings_padded);
 
 #ifdef WFA_NAMESPACE
 }

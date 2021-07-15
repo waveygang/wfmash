@@ -25,7 +25,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     // attributes.reduction.min_wavefront_length = 10;
     // attributes.reduction.max_distance_threshold = 50;
     attributes.alignment_scope =
-        wfa::alignment_scope_alignment; // alignment_scope_score
+        wfa::compute_alignment; // alignment_scope_score
     attributes.low_memory = low_memory;
     //wfa::wavefront_aligner_t *const wf_aligner =
     return wfa::wavefront_aligner_new(
@@ -614,28 +614,19 @@ bool do_wfa_segment_alignment(
                                      ceil((float) segment_length_div_4 * 3 * (1.0 - mashmap_estimated_identity)) *
                                      (float) (affine_penalties->gap_opening + affine_penalties->gap_extension + affine_penalties->mismatch));
 
-        wfa::wavefront_aligner_clear__resize(wf_aligner, segment_length_t,
+        wfa::wavefront_aligner_resize(wf_aligner, segment_length_t,
                                              segment_length_q);
 
-        const int score =
-            wfa::wavefront_align_bounded(wf_aligner, target + i, segment_length_t,
-                                         query + j, segment_length_q, max_score);
-
-        /*
-        aln.score = wfa::affine_wavefronts_align_bounded(
-                affine_wavefronts,
-                target+i,
-                segment_length,
-                query+j,
-                segment_length,
-                max_score);
-        */
+        wfa::wavefront_aligner_set_max_alignment_score(wf_aligner, max_score);
+        const int status =
+            wfa::wavefront_align(wf_aligner, target + i, segment_length_t,
+                                         query + j, segment_length_q);
 
         aln.j = j;
         aln.i = i;
 
         // aln.mash_dist = mash_dist;
-        aln.ok = score < max_score;
+        aln.ok = status == WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
 
         // fill the alignment info if we aligned
         if (aln.ok) {
@@ -723,21 +714,22 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
         // wavefront_reduction_none
         wfa::wavefront_reduction_set_none(&wf_aligner->reduction);
     } else {
-        wfa::wavefront_reduction_set_dynamic(&wf_aligner->reduction,
+        wfa::wavefront_reduction_set_adaptive(&wf_aligner->reduction,
                                              min_wavefront_length,
                                              max_distance_threshold);
     }
 
     const int max_score = 2 * std::max(target_length, query_length);
 
-    wfa::wavefront_aligner_clear__resize(wf_aligner, target_length,
+    wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
 
-    const int score =
-        wfa::wavefront_align_bounded(wf_aligner, target + i, target_length,
-                                     query + j, query_length, max_score);
+    wfa::wavefront_aligner_set_max_alignment_score(wf_aligner, max_score);
+    const int status =
+        wfa::wavefront_align(wf_aligner, target + i, target_length,
+                                     query + j, query_length);
 
-    aln.ok = score < max_score;
+    aln.ok =  WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
         hack_cigar(wf_aligner->cigar, query, target, query_length,

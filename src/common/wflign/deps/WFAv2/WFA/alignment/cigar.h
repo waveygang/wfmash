@@ -44,100 +44,103 @@ namespace wfa {
 /*
  * CIGAR
  */
-typedef struct {
-  // Operations buffer
-  char* operations;
-  int max_operations;
-  int begin_offset;
-  int end_offset;
-  // Score
-  int score;
-  // MM
-  mm_allocator_t* mm_allocator;
-} cigar_t;
+    typedef struct {
+        // Operations buffer
+        char* operations;
+        int max_operations;
+        int begin_offset;
+        int end_offset;
+        // Score
+        int score;
+        // MM
+        mm_allocator_t* mm_allocator;
+    } cigar_t;
 
 /*
  * Distance metrics
  */
-typedef enum {
-  edit          = 0,
-  gap_lineal    = 1,
-  gap_affine    = 2,
-  gap_affine_2p = 3
-} distance_metric_t;
+    typedef enum {
+        edit          = 0,
+        gap_lineal    = 1,
+        gap_affine    = 2,
+        gap_affine_2p = 3
+    } distance_metric_t;
 
 /*
  * Setup
  */
-void cigar_allocate(
-    cigar_t* const cigar,
-    const int max_operations,
-    mm_allocator_t* const mm_allocator);
-void cigar_clear(
-    cigar_t* const cigar);
-void cigar_free(
-    cigar_t* const cigar);
+    void cigar_allocate(
+            cigar_t* const cigar,
+            const int max_operations,
+            mm_allocator_t* const mm_allocator);
+    void cigar_clear(
+            cigar_t* const cigar);
+    void cigar_resize(
+            cigar_t* const cigar,
+            const int max_operations);
+    void cigar_free(
+            cigar_t* const cigar);
 
 /*
  * Accessors
  */
-int cigar_get_matches(
-    cigar_t* const cigar);
-void cigar_add_mismatches(
-    char* const pattern,
-    const int pattern_length,
-    char* const text,
-    const int text_length,
-    cigar_t* const cigar);
+    int cigar_get_matches(
+            cigar_t* const cigar);
+    void cigar_add_mismatches(
+            char* const pattern,
+            const int pattern_length,
+            char* const text,
+            const int text_length,
+            cigar_t* const cigar);
 
 /*
  * Score
  */
-int cigar_score_edit(
-    cigar_t* const cigar);
-int cigar_score_gap_lineal(
-    cigar_t* const cigar,
-    lineal_penalties_t* const penalties);
-int cigar_score_gap_affine(
-    cigar_t* const cigar,
-    affine_penalties_t* const penalties);
-int cigar_score_gap_affine2p(
-    cigar_t* const cigar,
-    affine2p_penalties_t* const penalties);
+    int cigar_score_edit(
+            cigar_t* const cigar);
+    int cigar_score_gap_lineal(
+            cigar_t* const cigar,
+            lineal_penalties_t* const penalties);
+    int cigar_score_gap_affine(
+            cigar_t* const cigar,
+            affine_penalties_t* const penalties);
+    int cigar_score_gap_affine2p(
+            cigar_t* const cigar,
+            affine2p_penalties_t* const penalties);
 
 /*
  * Utils
  */
-int cigar_cmp(
-    cigar_t* const cigar_a,
-    cigar_t* const cigar_b);
-void cigar_copy(
-    cigar_t* const cigar_dst,
-    cigar_t* const cigar_src);
-bool cigar_check_alignment(
-    FILE* const stream,
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    cigar_t* const cigar,
-    const bool verbose);
+    int cigar_cmp(
+            cigar_t* const cigar_a,
+            cigar_t* const cigar_b);
+    void cigar_copy(
+            cigar_t* const cigar_dst,
+            cigar_t* const cigar_src);
+    bool cigar_check_alignment(
+            FILE* const stream,
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            cigar_t* const cigar,
+            const bool verbose);
 
 /*
  * Display
  */
-void cigar_print(
-    FILE* const stream,
-    cigar_t* const cigar,
-    const bool print_matches);
-void cigar_print_pretty(
-    FILE* const stream,
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    cigar_t* const cigar,
-    mm_allocator_t* const mm_allocator);
+    void cigar_print(
+            FILE* const stream,
+            cigar_t* const cigar,
+            const bool print_matches);
+    void cigar_print_pretty(
+            FILE* const stream,
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            cigar_t* const cigar,
+            mm_allocator_t* const mm_allocator);
 
 #ifdef WFA_NAMESPACE
 }

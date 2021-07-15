@@ -38,116 +38,130 @@ namespace wfa {
 /*
  * Setup
  */
-void wavefront_allocate(
-    wavefront_t* const wavefront,
-    const int max_wavefront_elements,
-    const bool allocate_backtrace,
-    mm_allocator_t* const mm_allocator) {
-  // Allocate memory
-  wavefront->max_wavefront_elements = max_wavefront_elements;
-  wavefront->offsets_mem = mm_allocator_calloc(
-      mm_allocator,max_wavefront_elements,wf_offset_t,false);
-  if (allocate_backtrace) {
-    wavefront->bt_pcigar_mem = mm_allocator_calloc(
-        mm_allocator,max_wavefront_elements,pcigar_t,false);
-    wavefront->bt_prev_mem = mm_allocator_calloc(
-        mm_allocator,max_wavefront_elements,block_idx_t,false);
-  } else {
-    wavefront->bt_pcigar_mem = NULL;
-  }
-}
-void wavefront_resize(
-    wavefront_t* const wavefront,
-    const int max_wavefront_elements,
-    mm_allocator_t* const mm_allocator) {
-  // Set new size
-  wavefront->max_wavefront_elements = max_wavefront_elements;
-  // Reallocate offsets (Content is lost)
-  mm_allocator_free(mm_allocator,wavefront->offsets_mem);
-  wavefront->offsets_mem = mm_allocator_calloc(
-      mm_allocator,max_wavefront_elements,wf_offset_t,false);
-  // Reallocate backtrace (Content is lost)
-  if (wavefront->bt_pcigar_mem) {
-    mm_allocator_free(mm_allocator,wavefront->bt_pcigar_mem);
-    mm_allocator_free(mm_allocator,wavefront->bt_prev_mem);
-    wavefront->bt_pcigar_mem = mm_allocator_calloc(
-        mm_allocator,max_wavefront_elements,pcigar_t,false);
-    wavefront->bt_prev_mem = mm_allocator_calloc(
-        mm_allocator,max_wavefront_elements,block_idx_t,false);
-  }
-}
-void wavefront_free(
-    wavefront_t* const wavefront,
-    mm_allocator_t* const mm_allocator) {
-  mm_allocator_free(mm_allocator,wavefront->offsets_mem);
-  if (wavefront->bt_pcigar_mem) {
-    mm_allocator_free(mm_allocator,wavefront->bt_pcigar_mem);
-    mm_allocator_free(mm_allocator,wavefront->bt_prev_mem);
-  }
-}
+    void wavefront_allocate(
+            wavefront_t* const wavefront,
+            const int max_wavefront_elements,
+            const bool allocate_backtrace,
+            mm_allocator_t* const mm_allocator) {
+        // Allocate memory
+        wavefront->max_wavefront_elements = max_wavefront_elements;
+        wavefront->offsets_mem = mm_allocator_calloc(
+                mm_allocator,max_wavefront_elements,wf_offset_t,false);
+        if (allocate_backtrace) {
+            wavefront->bt_pcigar_mem = mm_allocator_calloc(
+                    mm_allocator,max_wavefront_elements,pcigar_t,false);
+            wavefront->bt_prev_mem = mm_allocator_calloc(
+                    mm_allocator,max_wavefront_elements,block_idx_t,false);
+        } else {
+            wavefront->bt_pcigar_mem = NULL;
+        }
+    }
+    void wavefront_resize(
+            wavefront_t* const wavefront,
+            const int max_wavefront_elements,
+            mm_allocator_t* const mm_allocator) {
+        // Set new size
+        wavefront->max_wavefront_elements = max_wavefront_elements;
+        // Reallocate offsets (Content is lost)
+        mm_allocator_free(mm_allocator,wavefront->offsets_mem);
+        wavefront->offsets_mem = mm_allocator_calloc(
+                mm_allocator,max_wavefront_elements,wf_offset_t,false);
+        // Reallocate backtrace (Content is lost)
+        if (wavefront->bt_pcigar_mem) {
+            mm_allocator_free(mm_allocator,wavefront->bt_pcigar_mem);
+            mm_allocator_free(mm_allocator,wavefront->bt_prev_mem);
+            wavefront->bt_pcigar_mem = mm_allocator_calloc(
+                    mm_allocator,max_wavefront_elements,pcigar_t,false);
+            wavefront->bt_prev_mem = mm_allocator_calloc(
+                    mm_allocator,max_wavefront_elements,block_idx_t,false);
+        }
+    }
+    void wavefront_free(
+            wavefront_t* const wavefront,
+            mm_allocator_t* const mm_allocator) {
+        mm_allocator_free(mm_allocator,wavefront->offsets_mem);
+        if (wavefront->bt_pcigar_mem) {
+            mm_allocator_free(mm_allocator,wavefront->bt_pcigar_mem);
+            mm_allocator_free(mm_allocator,wavefront->bt_prev_mem);
+        }
+    }
 /*
  * Initialization
  */
-void wavefront_init(
-    wavefront_t* const wavefront,
-    const int lo,
-    const int hi) {
-  // Configure limits
-  wavefront->null = false;
-  wavefront->lo = lo;
-  wavefront->hi = hi;
-  wavefront->lo_base = lo;
-  wavefront->hi_base = hi;
-  // Setup offsets
-  wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
-  if (wavefront->bt_pcigar_mem) {
-    wavefront->bt_pcigar = wavefront->bt_pcigar_mem - lo; // Center at k=0
-    wavefront->bt_prev = wavefront->bt_prev_mem - lo; // Center at k=0
-  }
-}
-void wavefront_init_null(
-    wavefront_t* const wavefront,
-    const int lo,
-    const int hi) {
-  // Configure limits
-  wavefront->null = true;
-  wavefront->lo =  1;
-  wavefront->hi = -1;
-  wavefront->lo_base = lo; // To keep track of limits
-  wavefront->hi_base = hi; // To keep track of limits
-  // Setup offsets
-  wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
-  if (wavefront->bt_pcigar_mem) {
-    wavefront->bt_pcigar = wavefront->bt_pcigar_mem - lo; // Center at k=0
-    wavefront->bt_prev = wavefront->bt_prev_mem - lo; // Center at k=0
-  }
-  // Initialize
-  const int max_wavefront_elements = wavefront->max_wavefront_elements;
-  int i;
-  for (i=0;i<max_wavefront_elements;++i) {
-    wavefront->offsets_mem[i] = WAVEFRONT_OFFSET_NULL;
-  }
-  if (wavefront->bt_pcigar_mem) {
-    memset(wavefront->bt_pcigar_mem,0,wavefront->max_wavefront_elements*sizeof(pcigar_t));
-  }
-}
-void wavefront_init_victim(
-    wavefront_t* const wavefront,
-    const int lo,
-    const int hi) {
-  // Configure limits
-  wavefront->null = true;
-  wavefront->lo =  1;
-  wavefront->hi = -1;
-  wavefront->lo_base = lo; // To keep track of limits
-  wavefront->hi_base = hi; // To keep track of limits
-  // Setup offsets
-  wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
-  if (wavefront->bt_pcigar_mem) {
-    wavefront->bt_pcigar = wavefront->bt_pcigar_mem - lo; // Center at k=0
-    wavefront->bt_prev = wavefront->bt_prev_mem - lo; // Center at k=0
-  }
-}
+    void wavefront_init(
+            wavefront_t* const wavefront,
+            const int lo,
+            const int hi) {
+        // Configure limits
+        wavefront->null = false;
+        wavefront->lo = lo;
+        wavefront->hi = hi;
+        wavefront->lo_base = lo;
+        wavefront->hi_base = hi;
+        wavefront->k_alignment_end = WAVEFRONT_DIAGONAL_NULL;
+        // Setup offsets
+        wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
+        if (wavefront->bt_pcigar_mem) {
+            wavefront->bt_pcigar = wavefront->bt_pcigar_mem - lo; // Center at k=0
+            wavefront->bt_prev = wavefront->bt_prev_mem - lo; // Center at k=0
+        }
+    }
+    void wavefront_init_null(
+            wavefront_t* const wavefront,
+            const int lo,
+            const int hi) {
+        // Configure limits
+        wavefront->null = true;
+        wavefront->lo =  1;
+        wavefront->hi = -1;
+        wavefront->lo_base = lo; // To keep track of limits
+        wavefront->hi_base = hi; // To keep track of limits
+        wavefront->k_alignment_end = WAVEFRONT_DIAGONAL_NULL;
+        // Setup offsets
+        wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
+        if (wavefront->bt_pcigar_mem) {
+            wavefront->bt_pcigar = wavefront->bt_pcigar_mem - lo; // Center at k=0
+            wavefront->bt_prev = wavefront->bt_prev_mem - lo; // Center at k=0
+        }
+        // Initialize
+        const int max_wavefront_elements = wavefront->max_wavefront_elements;
+        int i;
+        for (i=0;i<max_wavefront_elements;++i) {
+            wavefront->offsets_mem[i] = WAVEFRONT_OFFSET_NULL;
+        }
+        if (wavefront->bt_pcigar_mem) {
+            memset(wavefront->bt_pcigar_mem,0,wavefront->max_wavefront_elements*sizeof(pcigar_t));
+        }
+    }
+    void wavefront_init_victim(
+            wavefront_t* const wavefront,
+            const int lo,
+            const int hi) {
+        // Configure limits
+        wavefront->null = true;
+        wavefront->lo =  1;
+        wavefront->hi = -1;
+        wavefront->lo_base = lo; // To keep track of limits
+        wavefront->hi_base = hi; // To keep track of limits
+        wavefront->k_alignment_end = WAVEFRONT_DIAGONAL_NULL;
+        // Setup offsets
+        wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
+        if (wavefront->bt_pcigar_mem) {
+            wavefront->bt_pcigar = wavefront->bt_pcigar_mem - lo; // Center at k=0
+            wavefront->bt_prev = wavefront->bt_prev_mem - lo; // Center at k=0
+        }
+    }
+/*
+ * Utils
+ */
+    uint64_t wavefront_get_size(
+            wavefront_t* const wavefront) {
+        uint64_t total_size = wavefront->max_wavefront_elements*sizeof(wf_offset_t);
+        if (wavefront->bt_pcigar_mem) {
+            total_size += wavefront->max_wavefront_elements*(sizeof(pcigar_t)+sizeof(block_idx_t));
+        }
+        return total_size;
+    }
 
 #ifdef WFA_NAMESPACE
 }

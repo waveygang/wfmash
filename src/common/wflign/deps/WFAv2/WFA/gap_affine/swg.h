@@ -40,29 +40,45 @@ namespace wfa {
 #endif
 
 /*
- * SWG distance computation using dynamic-programming matrix
+ * SWG alignment
  */
-void swg_compute(
-    affine_matrix_t* const affine_matrix,
-    affine_penalties_t* const penalties,
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    cigar_t* const cigar);
+    void swg_compute(
+            affine_matrix_t* const affine_matrix,
+            affine_penalties_t* const penalties,
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            cigar_t* const cigar);
 
 /*
- * SWG distance computation using dynamic-programming matrix (banded)
+ * SWG alignment (ends-free)
  */
-void swg_compute_banded(
-    affine_matrix_t* const affine_matrix,
-    affine_penalties_t* const penalties,
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    const int bandwidth,
-    cigar_t* const cigar);
+    void swg_compute_endsfree(
+            affine_matrix_t* const affine_matrix,
+            affine_penalties_t* const penalties,
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            const int pattern_begin_free,
+            const int pattern_end_free,
+            const int text_begin_free,
+            const int text_end_free,
+            cigar_t* const cigar);
+
+/*
+ * SWG alignment (banded)
+ */
+    void swg_compute_banded(
+            affine_matrix_t* const affine_matrix,
+            affine_penalties_t* const penalties,
+            const char* const pattern,
+            const int pattern_length,
+            const char* const text,
+            const int text_length,
+            const int bandwidth,
+            cigar_t* const cigar);
 
 #ifdef WFA_NAMESPACE
 }
