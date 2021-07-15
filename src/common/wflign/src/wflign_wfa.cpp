@@ -1665,7 +1665,7 @@ void write_merged_alignment(
                             // problem long enough For affine WFA to be correct
                             // (to avoid trace-back errors), it must be at least
                             // 10 nt
-                            if (query_delta >= 10 && target_delta >= 10) {
+                            //if (query_delta >= 10 && target_delta >= 10) {
                                 alignment_t patch_aln;
                                 // WFA is only global
                                 do_wfa_patch_alignment(
@@ -1732,7 +1732,7 @@ void write_merged_alignment(
                                         size_region_to_repatch = 0;
                                     }
                                 }
-                            }
+                            //}
                         }
                     }
 
