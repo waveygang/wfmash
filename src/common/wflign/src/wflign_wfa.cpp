@@ -1259,6 +1259,17 @@ void write_merged_alignment(
                         target_delta + target_delta_to_shift;
 
                     if (target_delta_x > 0) {
+//                        std::cerr << "B HEAD patching in"
+//                                  << query_name << " "
+//                                  << query_offset << "@ " << query_pos <<
+//                                  " - " << query_delta
+//                                << " --- "
+//                                << target_name << " " << target_offset
+//                                << " @ " <<
+//                                target_pos << " - "
+//                                << target_delta_x
+//                                << std::endl;
+
                         std::string query_rev(query + query_pos, query_delta);
                         std::reverse(query_rev.begin(), query_rev.end());
 
@@ -1267,26 +1278,29 @@ void write_merged_alignment(
                                                target_delta_x);
                         std::reverse(target_rev.begin(), target_rev.end());
 
-                        /*std::cerr << "query: ";
-                        for (int i = 0; i < query_delta; ++i) {
-                            std::cerr << query_rev[i];
-                        }
-                        std::cerr << "\ntarget: ";;
-                        for (int i = 0; i < target_delta_x; ++i) {
-                            std::cerr << target_rev[i];
-                        }
-                        std::cerr << std::endl;*/
+//                        std::cerr << "query: ";
+//                        for (int i = 0; i < query_delta; ++i) {
+//                            std::cerr << query_rev[i];
+//                        }
+//                        std::cerr << "\ntarget: ";;
+//                        for (int i = 0; i < target_delta_x; ++i) {
+//                            std::cerr << target_rev[i];
+//                        }
+//                        std::cerr << std::endl;
 
                         wfa::wavefront_aligner_t* const wf_aligner_heads
                                 = get_wavefront_aligner(*affine_penalties,
-                                                        target_rev.size(),
-                                                        query_rev.size(), false);
+                                                        target_rev.size()+1,
+                                                        query_rev.size()+1, true);
                         wavefront_aligner_set_alignment_free_ends(
                                 wf_aligner_heads,
                                 0,
                                 0,
                                 0,
                                 query_rev.size());
+                        wfa::wavefront_reduction_set_adaptive(&wf_aligner_heads->reduction,
+                                                              min_wf_length,
+                                                              max_dist_threshold);
                         const int status =
                                 wfa::wavefront_align(wf_aligner_heads, target_rev.c_str(), target_rev.size(),
                                                      query_rev.c_str(), query_rev.size());
@@ -1786,16 +1800,16 @@ void write_merged_alignment(
                 got_alignment = false;
 
                 if (query_delta > 0 && query_delta < wflign_max_len_minor) {
-                    //                        std::cerr << "TAIL patching in "
-                    //                                  << query_name << " " <<
-                    //                                  query_offset << " @ " <<
-                    //                                  query_pos << " - " <<
-                    //                                  query_delta << " "
-                    //                                  << target_name << " " <<
-                    //                                  target_offset << " @ "
-                    //                                  << target_pos << " - "
-                    //                                  << target_delta
-                    //                                  << std::endl;
+//                                            std::cerr << "A TAIL patching in "
+//                                                      << query_name << " " <<
+//                                                      query_offset << " @ " <<
+//                                                      query_pos << " - " <<
+//                                                      query_delta << " "
+//                                                      << target_name << " " <<
+//                                                      target_offset << " @ "
+//                                                      << target_pos - target_pointer_shift << " - "
+//                                                      << target_delta
+//                                                      << std::endl;
 
                     // there is a piece of query
                     auto target_delta_x =
@@ -1809,15 +1823,40 @@ void write_merged_alignment(
                                     target_pos + target_delta));
 
                     if (target_delta_x > 0) {
-                        auto result = do_edlib_patch_alignment(
-                            query, query_pos, query_delta,
-                            target - target_pointer_shift, target_pos,
-                            target_delta_x, EDLIB_MODE_SHW);
+//                        std::cerr << "B TAIL patching in "
+//                                  << query_name << " " <<
+//                                  query_offset << " @ " <<
+//                                  query_pos << " - " <<
+//                                  query_delta << " "
+//                                  << target_name << " " <<
+//                                  target_offset << " @ "
+//                                  << target_pos - target_pointer_shift << " - "
+//                                  << target_delta_x
+//                                  << std::endl;
+                        wfa::wavefront_aligner_t* const wf_aligner_tails
+                                = get_wavefront_aligner(*affine_penalties,
+                                                        target_delta_x+1,
+                                                        query_delta+1, true);
+                        wavefront_aligner_set_alignment_free_ends(
+                                wf_aligner_tails,
+                                0,
+                                0,
+                                0,
+                                query_delta);
+                        wfa::wavefront_reduction_set_adaptive(&wf_aligner_tails->reduction,
+                                                              min_wf_length,
+                                                              max_dist_threshold);
+                        const int status =
+                                wfa::wavefront_align(wf_aligner_tails, target - target_pointer_shift + target_pos, target_delta_x,
+                                                     query + query_pos, query_delta);
 
-                        if (result.status == EDLIB_STATUS_OK &&
-                            result.alignmentLength != 0 &&
-                            result.editDistance >= 0) {
-                            // std::cerr << "Tail patching\n";
+                        //auto result = do_edlib_patch_alignment(
+                        //    query, query_pos, query_delta,
+                        //    target - target_pointer_shift, target_pos,
+                        //    target_delta_x, EDLIB_MODE_SHW);
+
+                        if (status == WF_ALIGN_SUCCESSFUL) {
+                            //std::cerr << "Tail patching\n";
                             got_alignment = true;
 
                             {
@@ -1835,8 +1874,14 @@ void write_merged_alignment(
 
                             target_delta = target_delta_x;
 
-                            for (int i = 0; i < *result.startLocations; ++i) {
-                                // std::cerr << "D";
+                            for(int xxx = wf_aligner_tails->cigar.begin_offset; xxx < wf_aligner_tails->cigar.end_offset; ++xxx) {
+                                //std::cerr << wf_aligner_tails->cigar.operations[xxx];
+                                patched.push_back(wf_aligner_tails->cigar.operations[xxx]);
+                            }
+                            //std::cerr << "\n";
+
+                            /*for (int i = 0; i < *result.startLocations; ++i) {
+                                //std::cerr << "D";
                                 patched.push_back('D');
                             }
 
@@ -1844,22 +1889,21 @@ void write_merged_alignment(
                             char moveCodeToChar[] = {'M', 'I', 'D', 'X'};
                             auto &end_idx = result.alignmentLength;
                             for (int i = 0; i < end_idx; ++i) {
-                                // std::cerr <<
-                                // moveCodeToChar[result.alignment[i]];
-                                patched.push_back(
-                                    moveCodeToChar[result.alignment[i]]);
+                                //std::cerr << moveCodeToChar[result.alignment[i]];
+                                patched.push_back(moveCodeToChar[result.alignment[i]]);
                             }
 
                             for (int i = *result.startLocations +
                                          result.alignmentLength;
                                  i < target_delta; ++i) {
-                                // std::cerr << "D";
+                                //std::cerr << "D";
                                 patched.push_back('D');
                             }
-                            // std::cerr << "\n";
+                            //std::cerr << "\n";*/
                         }
 
-                        edlibFreeAlignResult(result);
+                        //edlibFreeAlignResult(result);
+                        wfa::wavefront_aligner_delete(wf_aligner_tails);
                     }
                 }
 
@@ -1879,7 +1923,7 @@ void write_merged_alignment(
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] got unsorted "
                          "patched traceback: ";
-            for (auto c : tracev) {
+            for (auto c : patched) {
                 std::cerr << c;
             }
             std::cerr << std::endl;
