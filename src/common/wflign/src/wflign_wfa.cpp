@@ -729,7 +729,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
         wfa::wavefront_align(wf_aligner, target + i, target_length,
                                      query + j, query_length);
 
-    aln.ok =  WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
+    aln.ok = status == WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
         hack_cigar(wf_aligner->cigar, query, target, query_length,
