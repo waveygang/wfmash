@@ -1310,6 +1310,9 @@ void write_merged_alignment(
                         //    target_rev.c_str(), 0, target_rev.size(),
                         //    EDLIB_MODE_SHW);
                         if (status == WF_ALIGN_SUCCESSFUL) {
+                            hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
+                                       target_rev.size(), 0, 0);
+
                             //std::cerr << "Head patching\n";
                             got_alignment = true;
 
@@ -1856,6 +1859,9 @@ void write_merged_alignment(
                         //    target_delta_x, EDLIB_MODE_SHW);
 
                         if (status == WF_ALIGN_SUCCESSFUL) {
+                            hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
+                                       target_delta_x, 0, 0);
+
                             //std::cerr << "Tail patching\n";
                             got_alignment = true;
 
