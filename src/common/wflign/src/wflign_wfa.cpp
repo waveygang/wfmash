@@ -903,46 +903,65 @@ bool validate_trace(const std::vector<char> &tracev, const char *query,
      //std::cerr << "j_max " << j_max << " - i_max " << i_max << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
         // if new sequence of same moves started
-        if (j < j_max && i < i_max) {
-            switch (tracev[c]) {
-                case 'M':
+        switch (tracev[c]) {
+            case 'M':
+                if (j < j_max && i < i_max) {
                     // check that we match
                     if (query[j] != target[i]) {
                         std::cerr << "mismatch @ " << tracev[c] << " " << j << " " << i
                                   << " " << query[j] << " " << target[i] << std::endl;
                         ok = false;
                     }
+                } else  {
+                    if (j >= j_max) {
+                        std::cerr << "M - query out of bounds @ " << j << " " << i << std::endl;//" "
+                        //<< query[j] << " " << target[i] << std::endl;
+                        ok = false;
+                    }
 
-                    ++j;
-                    ++i;
-                    break;
-                case 'X':
+                    if (i >= i_max) {
+                        std::cerr << "M - target out of bounds @ " << j << " " << i << std::endl;//" "
+                        //<< query[j] << " " << target[i] << std::endl;
+                        ok = false;
+                    }
+                }
+
+                ++j;
+                ++i;
+                break;
+            case 'X':
+                if (j < j_max && i < i_max) {
                     // check that we don't match
                     if (query[j] == target[i]) {
                         std::cerr << "match @ " << tracev[c] << " " << j << " " << i
                                   << " " << query[j] << " " << target[i] << std::endl;
                         ok = false;
                     }
-                    ++j;
-                    ++i;
-                    break;
-                case 'I':
-                    ++j;
-                    break;
-                case 'D':
-                    ++i;
-                    break;
-                default:
-                    break;
-            }
-        } else if (j >= j_max) {
-            std::cerr << "query out of bounds @ " << j << " " << i << std::endl;//" "
-            //<< query[j] << " " << target[i] << std::endl;
-            ok = false;
-        } else {
-            std::cerr << "target out of bounds @ " << j << " " << i << std::endl;//" "
-            //<< query[j] << " " << target[i] << std::endl;
-            ok = false;
+                } else {
+                    if (j >= j_max) {
+                        std::cerr << "X - query out of bounds @ " << j << " " << i << std::endl;//" "
+                        //<< query[j] << " " << target[i] << std::endl;
+                        ok = false;
+                    }
+
+                    if (i >= i_max) {
+                        std::cerr << "X - target out of bounds @ " << j << " " << i << std::endl;//" "
+                        //<< query[j] << " " << target[i] << std::endl;
+                        ok = false;
+                    }
+                }
+
+                ++j;
+                ++i;
+                break;
+            case 'I':
+                ++j;
+                break;
+            case 'D':
+                ++i;
+                break;
+            default:
+                break;
         }
     }
     return ok;
