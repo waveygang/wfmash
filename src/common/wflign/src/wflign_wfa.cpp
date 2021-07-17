@@ -732,8 +732,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     aln.ok = status == WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
-        hack_cigar(wf_aligner->cigar, query, target, query_length,
-                   target_length, j, i);
+        //hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);
 
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(wf_aligner->cigar, query, target, query_length,
@@ -780,66 +779,66 @@ EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
                       edlib_config);
 }
 
-bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
-                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
-                uint64_t j, uint64_t i) {
-    const int start_idx = cigar.begin_offset;
-    const int end_idx = cigar.end_offset;
-    const uint64_t j_max = j + query_aln_len;
-    const uint64_t i_max = i + target_aln_len;
-    bool ok = true;
-    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-    for (int c = start_idx; c < end_idx; c++) {
-        if (j >= j_max && i >= i_max) {
-            cigar.end_offset = c;
-            ok = false;
-            break;
-        }
-        // if new sequence of same moves started
-        switch (cigar.operations[c]) {
-        case 'M':
-            // check that we match
-            if (j < j_max && i < i_max && query[j] != target[i]) {
-                // std::cerr << "mismatch @ " << j << " " << i << " " <<
-                // query[j] << " " << target[i] << std::endl;
-                cigar.operations[c] = 'X';
-                ok = false;
-            }
-            if (j >= j_max) {
-                // std::cerr << "query out of bounds @ " << j << " " << i << " "
-                // << query[j] << " " << target[i] << std::endl;
-                cigar.operations[c] = 'D';
-                ok = false;
-            }
-            if (i >= i_max) {
-                // std::cerr << "target out of bounds @ " << j << " " << i << "
-                // " << query[j] << " " << target[i] << std::endl;
-                cigar.operations[c] = 'I';
-                ok = false;
-            }
-            ++j;
-            ++i;
-            break;
-        case 'X':
-            if (j < j_max && i < i_max && query[j] == target[i]) {
-                cigar.operations[c] = 'M';
-                ok = false;
-            }
-            ++j;
-            ++i;
-            break;
-        case 'I':
-            ++j;
-            break;
-        case 'D':
-            ++i;
-            break;
-        default:
-            break;
-        }
-    }
-    return ok;
-}
+//bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
+//                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
+//                uint64_t j, uint64_t i) {
+//    const int start_idx = cigar.begin_offset;
+//    const int end_idx = cigar.end_offset;
+//    const uint64_t j_max = j + query_aln_len;
+//    const uint64_t i_max = i + target_aln_len;
+//    bool ok = true;
+//    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+//    for (int c = start_idx; c < end_idx; c++) {
+//        if (j >= j_max && i >= i_max) {
+//            cigar.end_offset = c;
+//            ok = false;
+//            break;
+//        }
+//        // if new sequence of same moves started
+//        switch (cigar.operations[c]) {
+//        case 'M':
+//            // check that we match
+//            if (j < j_max && i < i_max && query[j] != target[i]) {
+//                // std::cerr << "mismatch @ " << j << " " << i << " " <<
+//                // query[j] << " " << target[i] << std::endl;
+//                cigar.operations[c] = 'X';
+//                ok = false;
+//            }
+//            if (j >= j_max) {
+//                // std::cerr << "query out of bounds @ " << j << " " << i << " "
+//                // << query[j] << " " << target[i] << std::endl;
+//                cigar.operations[c] = 'D';
+//                ok = false;
+//            }
+//            if (i >= i_max) {
+//                // std::cerr << "target out of bounds @ " << j << " " << i << "
+//                // " << query[j] << " " << target[i] << std::endl;
+//                cigar.operations[c] = 'I';
+//                ok = false;
+//            }
+//            ++j;
+//            ++i;
+//            break;
+//        case 'X':
+//            if (j < j_max && i < i_max && query[j] == target[i]) {
+//                cigar.operations[c] = 'M';
+//                ok = false;
+//            }
+//            ++j;
+//            ++i;
+//            break;
+//        case 'I':
+//            ++j;
+//            break;
+//        case 'D':
+//            ++i;
+//            break;
+//        default:
+//            break;
+//        }
+//    }
+//    return ok;
+//}
 
 bool validate_cigar(const wfa::cigar_t &cigar, const char *query,
                     const char *target, const uint64_t &query_aln_len,
@@ -900,48 +899,50 @@ bool validate_trace(const std::vector<char> &tracev, const char *query,
     const uint64_t j_max = j + query_aln_len;
     const uint64_t i_max = i + target_aln_len;
     bool ok = true;
-    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+     //std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+     //std::cerr << "j_max " << j_max << " - i_max " << i_max << std::endl;
     for (int c = start_idx; c < end_idx; c++) {
         // if new sequence of same moves started
-        switch (tracev[c]) {
-        case 'M':
-            // check that we match
-            if (query[j] != target[i]) {
-                std::cerr << "mismatch @ " << tracev[c] << " " << j << " " << i
-                          << " " << query[j] << " " << target[i] << std::endl;
-                ok = false;
+        if (j < j_max && i < i_max) {
+            switch (tracev[c]) {
+                case 'M':
+                    // check that we match
+                    if (query[j] != target[i]) {
+                        std::cerr << "mismatch @ " << tracev[c] << " " << j << " " << i
+                                  << " " << query[j] << " " << target[i] << std::endl;
+                        ok = false;
+                    }
+
+                    ++j;
+                    ++i;
+                    break;
+                case 'X':
+                    // check that we don't match
+                    if (query[j] == target[i]) {
+                        std::cerr << "match @ " << tracev[c] << " " << j << " " << i
+                                  << " " << query[j] << " " << target[i] << std::endl;
+                        ok = false;
+                    }
+                    ++j;
+                    ++i;
+                    break;
+                case 'I':
+                    ++j;
+                    break;
+                case 'D':
+                    ++i;
+                    break;
+                default:
+                    break;
             }
-            if (j >= j_max) {
-                std::cerr << "query out of bounds @ " << j << " " << i << " "
-                          << query[j] << " " << target[i] << std::endl;
-                ok = false;
-            }
-            if (i >= i_max) {
-                std::cerr << "target out of bounds @ " << j << " " << i << " "
-                          << query[j] << " " << target[i] << std::endl;
-                ok = false;
-            }
-            ++j;
-            ++i;
-            break;
-        case 'X':
-            // check that we don't match
-            if (query[j] == target[i]) {
-                std::cerr << "match @ " << tracev[c] << " " << j << " " << i
-                          << " " << query[j] << " " << target[i] << std::endl;
-                ok = false;
-            }
-            ++j;
-            ++i;
-            break;
-        case 'I':
-            ++j;
-            break;
-        case 'D':
-            ++i;
-            break;
-        default:
-            break;
+        } else if (j >= j_max) {
+            std::cerr << "query out of bounds @ " << j << " " << i << std::endl;//" "
+            //<< query[j] << " " << target[i] << std::endl;
+            ok = false;
+        } else {
+            std::cerr << "target out of bounds @ " << j << " " << i << std::endl;//" "
+            //<< query[j] << " " << target[i] << std::endl;
+            ok = false;
         }
     }
     return ok;
@@ -1310,8 +1311,21 @@ void write_merged_alignment(
                         //    target_rev.c_str(), 0, target_rev.size(),
                         //    EDLIB_MODE_SHW);
                         if (status == WF_ALIGN_SUCCESSFUL) {
-                            hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
-                                       target_rev.size(), 0, 0);
+                            //hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(), target_rev.size(), 0, 0);
+
+#ifdef VALIDATE_WFA_WFLIGN
+                            if (!validate_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
+                                                target_rev.size(), 0, 0)) {
+                                std::cerr << "cigar failure at head alignment " << std::endl;
+                                unpack_display_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
+                                                     target_rev.size(), 0, 0);
+                                std::cerr << ">query" << std::endl
+                                          << std::string(query_rev.c_str(), query_rev.size()) << std::endl;
+                                std::cerr << ">target" << std::endl
+                                          << std::string(target_rev.c_str(), target_rev.size()) << std::endl;
+                                assert(false);
+                            }
+#endif
 
                             //std::cerr << "Head patching\n";
                             got_alignment = true;
@@ -1859,8 +1873,21 @@ void write_merged_alignment(
                         //    target_delta_x, EDLIB_MODE_SHW);
 
                         if (status == WF_ALIGN_SUCCESSFUL) {
-                            hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
-                                       target_delta_x, 0, 0);
+                            //hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta, target_delta_x, 0, 0);
+
+#ifdef VALIDATE_WFA_WFLIGN
+                            if (!validate_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
+                                                target_delta_x, 0, 0)) {
+                                std::cerr << "cigar failure at head alignment " << std::endl;
+                                unpack_display_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
+                                                     target_delta_x, 0, 0);
+                                std::cerr << ">query" << std::endl
+                                          << std::string(query + query_pos, query_delta) << std::endl;
+                                std::cerr << ">target" << std::endl
+                                          << std::string(target - target_pointer_shift + target_pos, target_delta_x) << std::endl;
+                                assert(false);
+                            }
+#endif
 
                             //std::cerr << "Tail patching\n";
                             got_alignment = true;
@@ -2099,7 +2126,7 @@ void write_merged_alignment(
             if (!validate_trace(pre_tracev, query,
                                 target - target_pointer_shift, query_length,
                                 target_length_mut, query_start, target_start)) {
-                std::cerr << "cigar failure in erodev "
+                std::cerr << "cigar failure in pre_tracev "
                           << "\t" << query_name << "\t" << query_total_length
                           << "\t"
                           << query_offset + (query_is_rev
