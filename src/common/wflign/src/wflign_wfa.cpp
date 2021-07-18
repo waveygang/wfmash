@@ -662,9 +662,6 @@ bool do_wfa_segment_alignment(
 #endif
         }
 
-        // cleanup wavefronts to keep memory low
-        // affine_wavefronts_delete(affine_wavefronts);
-
         return true;
     }
 }
@@ -752,18 +749,12 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
         wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
     }
 
-    // cleanup wavefronts to keep memory low
-    // affine_wavefronts_delete(affine_wavefronts);
-
-    // cleanup allocator to keep memory low
-    // wfa::mm_allocator_clear(mm_allocator);
-
     if (big_wave) {
         wfa::wavefront_aligner_delete(wf_aligner);
     }
 }
 
-EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
+/*EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
                                           const uint64_t &query_length,
                                           const char *target, const uint64_t &i,
                                           const uint64_t &target_length,
@@ -777,68 +768,68 @@ EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
 
     return edlibAlign(query + j, query_length, target + i, target_length,
                       edlib_config);
-}
+}*/
 
-//bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
-//                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
-//                uint64_t j, uint64_t i) {
-//    const int start_idx = cigar.begin_offset;
-//    const int end_idx = cigar.end_offset;
-//    const uint64_t j_max = j + query_aln_len;
-//    const uint64_t i_max = i + target_aln_len;
-//    bool ok = true;
-//    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-//    for (int c = start_idx; c < end_idx; c++) {
-//        if (j >= j_max && i >= i_max) {
-//            cigar.end_offset = c;
-//            ok = false;
-//            break;
-//        }
-//        // if new sequence of same moves started
-//        switch (cigar.operations[c]) {
-//        case 'M':
-//            // check that we match
-//            if (j < j_max && i < i_max && query[j] != target[i]) {
-//                // std::cerr << "mismatch @ " << j << " " << i << " " <<
-//                // query[j] << " " << target[i] << std::endl;
-//                cigar.operations[c] = 'X';
-//                ok = false;
-//            }
-//            if (j >= j_max) {
-//                // std::cerr << "query out of bounds @ " << j << " " << i << " "
-//                // << query[j] << " " << target[i] << std::endl;
-//                cigar.operations[c] = 'D';
-//                ok = false;
-//            }
-//            if (i >= i_max) {
-//                // std::cerr << "target out of bounds @ " << j << " " << i << "
-//                // " << query[j] << " " << target[i] << std::endl;
-//                cigar.operations[c] = 'I';
-//                ok = false;
-//            }
-//            ++j;
-//            ++i;
-//            break;
-//        case 'X':
-//            if (j < j_max && i < i_max && query[j] == target[i]) {
-//                cigar.operations[c] = 'M';
-//                ok = false;
-//            }
-//            ++j;
-//            ++i;
-//            break;
-//        case 'I':
-//            ++j;
-//            break;
-//        case 'D':
-//            ++i;
-//            break;
-//        default:
-//            break;
-//        }
-//    }
-//    return ok;
-//}
+/*bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
+                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
+                uint64_t j, uint64_t i) {
+    const int start_idx = cigar.begin_offset;
+    const int end_idx = cigar.end_offset;
+    const uint64_t j_max = j + query_aln_len;
+    const uint64_t i_max = i + target_aln_len;
+    bool ok = true;
+    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
+    for (int c = start_idx; c < end_idx; c++) {
+        if (j >= j_max && i >= i_max) {
+            cigar.end_offset = c;
+            ok = false;
+            break;
+        }
+        // if new sequence of same moves started
+        switch (cigar.operations[c]) {
+        case 'M':
+            // check that we match
+            if (j < j_max && i < i_max && query[j] != target[i]) {
+                // std::cerr << "mismatch @ " << j << " " << i << " " <<
+                // query[j] << " " << target[i] << std::endl;
+                cigar.operations[c] = 'X';
+                ok = false;
+            }
+            if (j >= j_max) {
+                // std::cerr << "query out of bounds @ " << j << " " << i << " "
+                // << query[j] << " " << target[i] << std::endl;
+                cigar.operations[c] = 'D';
+                ok = false;
+            }
+            if (i >= i_max) {
+                // std::cerr << "target out of bounds @ " << j << " " << i << "
+                // " << query[j] << " " << target[i] << std::endl;
+                cigar.operations[c] = 'I';
+                ok = false;
+            }
+            ++j;
+            ++i;
+            break;
+        case 'X':
+            if (j < j_max && i < i_max && query[j] == target[i]) {
+                cigar.operations[c] = 'M';
+                ok = false;
+            }
+            ++j;
+            ++i;
+            break;
+        case 'I':
+            ++j;
+            break;
+        case 'D':
+            ++i;
+            break;
+        default:
+            break;
+        }
+    }
+    return ok;
+}*/
 
 bool validate_cigar(const wfa::cigar_t &cigar, const char *query,
                     const char *target, const uint64_t &query_aln_len,
@@ -1192,21 +1183,19 @@ void write_merged_alignment(
                     // ...
                     // TODO: when we will have semi-global WFA
 
-                    //                            std::cerr << "HEAD patching in
-                    //                            "
-                    //                                      << query_name << " "
-                    //                                      << query_offset << "
-                    //                                      @ " << query_pos <<
-                    //                                      " - " << query_delta
-                    //                                      << " --- "
-                    //                                      << target_name << "
-                    //                                      " << target_offset
-                    //                                      << " @ " <<
-                    //                                      target_pos << " - "
-                    //                                      << target_delta
-                    //                                      << std::endl;
+//                    std::cerr << "HEAD patching in"
+//                              << query_name << " "
+//                              << query_offset << "@ " << query_pos <<
+//                              " - " << query_delta
+//                              << " --- "
+//                              << target_name << " " << target_offset
+//                              << " @ " <<
+//                              target_pos << " - "
+//                              << target_delta
+//                              << std::endl;
 
-                    const uint64_t delta_to_ask = query_delta + target_delta;
+                    // 32bps of margins to manage insertions in the query
+                    const uint64_t delta_to_ask = query_delta + 32 <= target_delta ? 0 : query_delta + 32 - target_delta;
 
                     uint64_t target_delta_to_shift = 0;
                     uint64_t target_pos_x, target_start_x;
@@ -1847,13 +1836,16 @@ void write_merged_alignment(
 //                                                      << target_delta
 //                                                      << std::endl;
 
+                    // 32bps of margins to manage insertions in the query
+                    const uint64_t delta_to_ask = query_delta + 32 <= target_delta ? 0 : query_delta + 32 - target_delta;
+
                     // there is a piece of query
                     auto target_delta_x =
                         target_delta +
                         ((target_offset - target_pointer_shift) + target_pos +
-                                     target_delta + query_delta <
+                                     target_delta + delta_to_ask <
                                  target_total_length
-                             ? query_delta
+                             ? delta_to_ask
                              : target_total_length -
                                    ((target_offset - target_pointer_shift) +
                                     target_pos + target_delta));

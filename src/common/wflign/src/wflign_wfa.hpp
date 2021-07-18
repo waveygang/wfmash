@@ -294,11 +294,11 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln);
 
-EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
-                                          const uint64_t &query_length,
-                                          const char *target, const uint64_t &i,
-                                          const uint64_t &target_length,
-                                          const EdlibAlignMode &align_mode);
+//EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
+//                                          const uint64_t &query_length,
+//                                          const char *target, const uint64_t &i,
+//                                          const uint64_t &target_length,
+//                                          const EdlibAlignMode &align_mode);
 
 void write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
