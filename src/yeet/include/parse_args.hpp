@@ -278,8 +278,7 @@ void parse_args(int argc,
         // genomes due to chance k-mer collisions. However, too large of a k-mer will reduce sensitivity
         // and so choosing the smallest k that avoids chance collisions is recommended.
 
-        map_parameters.kmerSize = map_parameters.percentageIdentity >= 0.995 ? 19 :
-                                  (map_parameters.percentageIdentity >= 0.97 ? 18 :
+        map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
     }
 
@@ -416,9 +415,8 @@ void parse_args(int argc,
                     map_parameters.referenceSize);
 
             map_parameters.windowSize = std::min(
-                    map_parameters.percentageIdentity >= 0.995 ? 256 :
-                    (map_parameters.percentageIdentity >= 0.97 ? 224 :
-                    (map_parameters.percentageIdentity >= 0.9 ? 192 : 160)),
+                    map_parameters.percentageIdentity >= 0.97 ? 192 :
+                    (map_parameters.percentageIdentity >= 0.9 ? 160 : 128),
                     windowSize);
         }
     }
