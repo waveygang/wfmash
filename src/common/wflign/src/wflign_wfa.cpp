@@ -649,7 +649,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
-    const long max_seg_len = 2 * segment_length;
+    const long max_seg_len = 3 * segment_length;
     const bool big_wave = (query_length > max_seg_len || target_length > max_seg_len);
     wfa::wavefront_aligner_t* const wf_aligner
         = big_wave ?
@@ -1020,7 +1020,7 @@ void write_merged_alignment(
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 256;
-    const int max_dist_threshold = 768;
+    const int max_dist_threshold = 1024;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
