@@ -1020,7 +1020,7 @@ void write_merged_alignment(
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
     const int min_wf_length = 256;
-    const int max_dist_threshold = 1024;
+    const int max_dist_threshold = 768;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
