@@ -414,10 +414,7 @@ void parse_args(int argc,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
 
-            map_parameters.windowSize = std::min(
-                    map_parameters.percentageIdentity >= 0.97 ? 192 :
-                    (map_parameters.percentageIdentity >= 0.9 ? 160 : 128),
-                    windowSize);
+            map_parameters.windowSize = std::min(256, windowSize);
         }
     }
 
