@@ -34,9 +34,9 @@ namespace wflign {
 
 namespace wavefront {
 
-bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
-                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
-                uint64_t j, uint64_t i);
+//bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
+//                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
+//                uint64_t j, uint64_t i);
 
 bool validate_cigar(const wfa::cigar_t &cigar, const char *query,
                     const char *target, const uint64_t &query_aln_len,
@@ -262,7 +262,7 @@ void wflign_affine_wavefront(
     const int &wfa_gap_extension_score,
     const int &wflambda_min_wavefront_length, // with these set at 0 we do exact
                                               // WFA for wflambda
-    const int &wflambda_max_distance_threshold, const double &mashmap_estimated_identity,
+    const int &wflambda_max_distance_threshold, const float &mashmap_estimated_identity,
     const int &wflign_mismatch_score,
     const int &wflign_gap_opening_score,
     const int &wflign_gap_extension_score,
@@ -282,7 +282,7 @@ bool do_wfa_segment_alignment(
     const uint16_t &segment_length_t,
     const uint16_t &step_size, const uint64_t &minhash_kmer_size,
     const int &min_wavefront_length,
-    const int &max_distance_threshold, const float &max_mash_dist, const double& mashmap_estimated_identity,
+    const int &max_distance_threshold, const float &max_mash_dist, const float& mashmap_estimated_identity,
     wfa::wavefront_aligner_t *const wf_aligner,
     wfa::affine_penalties_t *const affine_penalties, alignment_t &aln);
 
@@ -296,11 +296,11 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln);
 
-EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
-                                          const uint64_t &query_length,
-                                          const char *target, const uint64_t &i,
-                                          const uint64_t &target_length,
-                                          const EdlibAlignMode &align_mode);
+//EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
+//                                          const uint64_t &query_length,
+//                                          const char *target, const uint64_t &i,
+//                                          const uint64_t &target_length,
+//                                          const EdlibAlignMode &align_mode);
 
 void write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
@@ -315,7 +315,7 @@ void write_merged_alignment(
     const uint16_t &segment_length,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
-    const double &mashmap_estimated_identity, const uint64_t &wflign_max_len_major,
+    const float &mashmap_estimated_identity, const uint64_t &wflign_max_len_major,
     const uint64_t &wflign_max_len_minor, const uint16_t &erode_k,
     const bool &with_endline = true);
 
@@ -327,7 +327,7 @@ void write_alignment(std::ostream &out, const alignment_t &aln,
                      const uint64_t &target_total_length,
                      const uint64_t &target_offset,
                      const uint64_t &target_length, const float &min_identity,
-                     const double &mashmap_estimated_identity,
+                     const float &mashmap_estimated_identity,
                      const bool &with_endline = true);
 
 char *alignment_to_cigar(const std::vector<char> &edit_cigar,

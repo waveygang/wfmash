@@ -40,6 +40,7 @@ set(SOURCES
   WFA/wavefront/wavefront.c
   WFA/wavefront/wavefront_align.c
   WFA/wavefront/wavefront_aligner.c
+  WFA/wavefront/wavefront_attributes.c
   WFA/wavefront/wavefront_backtrace.c
   WFA/wavefront/wavefront_backtrace_buffer.c
   WFA/wavefront/wavefront_components.c

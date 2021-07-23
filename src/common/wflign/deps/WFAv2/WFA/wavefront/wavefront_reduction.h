@@ -41,21 +41,21 @@ namespace wfa {
 /*
  * Setup
  */
-void wavefront_reduction_set_none(
-    wavefront_reduction_t* const wavefront_reduction);
-void wavefront_reduction_set_dynamic(
-    wavefront_reduction_t* const wavefront_reduction,
-    const int min_wavefront_length,
-    const int max_distance_threshold);
+    void wavefront_reduction_set_none(
+            wavefront_reduction_t* const wavefront_reduction);
+    void wavefront_reduction_set_adaptive(
+            wavefront_reduction_t* const wavefront_reduction,
+            const int min_wavefront_length,
+            const int max_distance_threshold);
 
 /*
  * Reduce wavefront
  */
-void wavefront_reduce(
-    wavefront_aligner_t* const wf_aligner,
-    const int pattern_length,
-    const int text_length,
-    const int score);
+    void wavefront_reduce(
+            wavefront_aligner_t* const wf_aligner,
+            const int pattern_length,
+            const int text_length,
+            const int score);
 
 #ifdef WFA_NAMESPACE
 }

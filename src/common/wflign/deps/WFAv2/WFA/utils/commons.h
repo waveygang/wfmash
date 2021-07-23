@@ -193,6 +193,9 @@ namespace wfa {
 #define UINT32_ZERO_MASK       0xFFFFFFFEul
 #define UINT32_ONE_LAST_MASK   0x80000000ul
 #define UINT32_ZERO_LAST_MASK  0x7FFFFFFFul
+// Conversions/Extractions
+#define UINT64_TO_UINT32_LSB(value) ((uint32_t)((value) & 0x00000000FFFFFFFFul))
+#define UINT64_TO_UINT32_MSB(value) ((uint32_t)((value) >> 32))
 
 /*
  * Common numerical data processing/formating
@@ -207,7 +210,7 @@ namespace wfa {
 #define rand_init() srand(time(0))
 #define rand_i(min,max) ( min + ( rand()%(max-min+1) ) )
 #define rand_f(min,max) ( min + ((double)rand()/(double)(RAND_MAX+1)) * (max-min+1) )
-uint64_t rand_iid(const uint64_t min,const uint64_t max);
+    uint64_t rand_iid(const uint64_t min,const uint64_t max);
 
 /*
  * Parsing
@@ -252,11 +255,11 @@ uint64_t rand_iid(const uint64_t min,const uint64_t max);
  * Vectorize
  */
 #if defined(__clang__)
-  #define PRAGMA_LOOP_VECTORIZE _Pragma("clang loop vectorize(enable)")
+#define PRAGMA_LOOP_VECTORIZE _Pragma("clang loop vectorize(enable)")
 #elif defined(__GNUC__)
-  #define PRAGMA_LOOP_VECTORIZE _Pragma("GCC ivdep")
+#define PRAGMA_LOOP_VECTORIZE _Pragma("GCC ivdep")
 #else
-  #define PRAGMA_LOOP_VECTORIZE _Pragma("ivdep")
+#define PRAGMA_LOOP_VECTORIZE _Pragma("ivdep")
 #endif
 
 #ifdef WFA_NAMESPACE

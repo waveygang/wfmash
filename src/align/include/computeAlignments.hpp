@@ -458,7 +458,10 @@ namespace align
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
             param.min_identity,
-            param.kmerSize,
+
+            //ToDo to explore
+            17,//param.kmerSize,
+
             param.wfa_mismatch_score,
             param.wfa_gap_opening_score,
             param.wfa_gap_extension_score,

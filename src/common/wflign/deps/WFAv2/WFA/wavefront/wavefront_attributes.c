@@ -26,31 +26,66 @@
  *
  * PROJECT: Wavefront Alignments Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
- * DESCRIPTION: WaveFront alignment module for sequence pairwise alignment
+ * DESCRIPTION: WaveFront aligner data structure attributes
  */
 
-#pragma once
+#include "WFA/wavefront/wavefront_attributes.h"
 
-#include "WFA/wavefront/wavefront_aligner.h"
-#include "WFA/wavefront/wavefront_display.h" // For convenience
 
 #ifdef WFA_NAMESPACE
 namespace wfa {
 #endif
 
-#define WF_ALIGN_SUCCESSFUL   0
-#define WF_ALIGN_MAX_SCORE   -1
-#define WF_ALIGN_OOM         -2
 
 /*
- * Wavefront Alignment
+ * Default parameters
  */
-    int wavefront_align(
-            wavefront_aligner_t* const wf_aligner,
-            const char* const pattern,
-            const int pattern_length,
-            const char* const text,
-            const int text_length);
+wavefront_aligner_attr_t wavefront_aligner_attr_default = {
+    // Distance model & Penalties
+    .distance_metric = gap_affine, // TODO: DU wants lineal
+    .alignment_scope = compute_alignment, // TODO: I don't know what DU wants, honestly
+    .alignment_form = {
+        .span = alignment_end2end,
+        .pattern_begin_free = 0,
+        .pattern_end_free = 0,
+        .text_begin_free = 0,
+        .text_end_free = 0,
+        .max_alignment_score = WF_MAX_SCORE, // Unlimited
+    },
+    // Penalties
+    .lineal_penalties = {
+        .match = 0,
+        .mismatch = 4,
+        .insertion = 2,
+        .deletion  = 2,
+    },
+    .affine_penalties = {
+        .match = 0,
+        .mismatch = 4,
+        .gap_opening = 6,
+        .gap_extension = 2, // 1
+    },
+    .affine2p_penalties = {
+        .match = 0,
+        .mismatch = 4,
+        .gap_opening1 = 6,
+        .gap_extension1 = 2,
+        .gap_opening2 = 24,
+        .gap_extension2 = 1,
+    },
+    // Reduction
+    .reduction = {
+        .reduction_strategy = wavefront_reduction_adaptive,
+        .min_wavefront_length = 10,
+        .max_distance_threshold = 50,
+    },
+    // Memory model
+    .low_memory = false,
+    // MM
+    .mm_allocator = NULL, // Use private MM
+    // Limits
+    .max_memory_used = WF_MAX_MEMORY_DEFAULT // Unlimited
+};
 
 #ifdef WFA_NAMESPACE
 }
