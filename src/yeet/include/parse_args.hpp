@@ -151,14 +151,14 @@ void parse_args(int argc,
       } else if (foobar.find(':') !=  std::string::npos) {
         delimeter = ':';
       } else {
-        std::cerr << "[mashz] ERROR, skch::parseandSave, mashz expects either space or : for to seperate spaced seed params" << std::endl;
+        std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params" << std::endl;
         exit(1);
       }
 
       std::string delimeter_str(1, delimeter);
       std::vector<std::string> p = split(foobar, delimeter_str);
       if (p.size() != 4) {
-        std::cerr << "[mashz] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
+        std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
         exit(1);
       }
 
