@@ -34,8 +34,8 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<int> segment_length(parser, "N", "segment length for mapping [default: 5000]", {'s', "segment-length"});
-    args::ValueFlag<int> block_length_min(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length-min"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping (1k = 1000, 1m = 10^6, 1g = 10^9) [default: 5000]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length_min(parser, "N", "keep mappings with at least this block length (1k = 1000, 1m = 10^6, 1g = 10^9) [default: 3*segment-length]", {'l', "block-length-min"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
@@ -201,19 +201,52 @@ void parse_args(int argc,
 
     map_parameters.mergeMappings = !args::get(no_merge);
 
+    auto handy_parameter = [](const std::string& value) {
+        auto is_a_float = [](const std::string s) {
+            return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
+        };
+
+        uint64_t str_len = value.length();
+        uint8_t exp = 0;
+        if (value[str_len-1] == 'k') {
+            exp = 3;
+            --str_len;
+        } else if (value[str_len-1] == 'm') {
+            exp = 6;
+            --str_len;
+        }
+
+        const std::string tmp = value.substr(0, str_len);
+        return is_a_float(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
+    };
+
     if (segment_length) {
-        map_parameters.segLength = args::get(segment_length);
-        if (map_parameters.segLength < 100) {
+        int s = handy_parameter(args::get(segment_length));
+
+        if (s <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length has to be a float value greater than 0." << std::endl;
+            exit(1);
+        }
+
+        if (s < 100) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 100 bp." << std::endl
                       << "[wfmash] This is because Mashmap is not designed for computing short local alignments." << std::endl;
             exit(1);
         }
+        map_parameters.segLength = s;
     } else {
         map_parameters.segLength = 5000;
     }
 
     if (block_length_min) {
-        map_parameters.block_length_min = args::get(block_length_min);
+        int l = handy_parameter(args::get(block_length_min));
+
+        if (l < 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
+            exit(1);
+        }
+
+        map_parameters.block_length_min = l;
     } else {
         map_parameters.block_length_min = 3 * map_parameters.segLength;
     }
