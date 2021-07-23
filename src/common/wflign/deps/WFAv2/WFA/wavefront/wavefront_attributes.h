@@ -102,6 +102,8 @@ typedef struct {
   wavefront_reduction_t reduction;         // Wavefront reduction
   // Memory model
   bool low_memory;                         // Use low-memory strategy (modular wavefronts and piggyback)
+  // Banding
+  int max_offset;
   // External MM (instead of allocating one inside)
   mm_allocator_t* mm_allocator;            // MM-Allocator
   // Limits

@@ -139,6 +139,8 @@ namespace wfa {
         wf_aligner->limit_probe_interval = WF_LIMIT_PROBE_INTERVAL_DEFAULT;
         wf_aligner->max_memory_used = attributes->max_memory_used;
         wf_aligner->max_resident_memory = WF_MAX_MEMORY_RESIDENT_DEFAULT;
+        // Banding
+        wf_aligner->max_offset = attributes->max_offset > 0 ? attributes->max_offset : INT_MAX;
         // Return
         return wf_aligner;
     }

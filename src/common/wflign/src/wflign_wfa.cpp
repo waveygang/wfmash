@@ -13,7 +13,8 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     const uint64_t& target_length,
     const uint64_t& query_length,
     const wfa::alignment_scope_t scope,
-    const bool& low_memory) {
+    const bool& low_memory,
+    const int& max_offset) {
     // Configure the attributes of the wf-aligner
     wfa::wavefront_aligner_attr_t attributes =
         wfa::wavefront_aligner_attr_default;
@@ -27,6 +28,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     // attributes.reduction.max_distance_threshold = 50;
     attributes.alignment_scope = scope;
     attributes.low_memory = low_memory;
+    attributes.max_offset = max_offset;
     //wfa::wavefront_aligner_t *const wf_aligner =
     return wfa::wavefront_aligner_new(
         target_length, query_length, &attributes);
@@ -187,26 +189,26 @@ void wflign_affine_wavefront(
     //std::cerr << "max_mash_dist_to_evaluate " << max_mash_dist_to_evaluate << std::endl;
 
     // Configure the attributes of the wflambda-aligner
-    wflambda::wavefront_aligner_attr_t attributes =
+    wflambda::wavefront_aligner_attr_t wflambda_attributes =
             wflambda::wavefront_aligner_attr_default;
-    attributes.distance_metric = wflambda::gap_affine;
-    attributes.affine_penalties = wflambda_affine_penalties;
+    wflambda_attributes.distance_metric = wflambda::gap_affine;
+    wflambda_attributes.affine_penalties = wflambda_affine_penalties;
     // attributes.distance_metric = gap_affine2p;
     // attributes.affine2p_penalties = affine2p_penalties;
     if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
-        attributes.reduction.reduction_strategy =
+        wflambda_attributes.reduction.reduction_strategy =
                 wflambda::wavefront_reduction_dynamic; // wavefront_reduction_dynamic
-        attributes.reduction.min_wavefront_length = wflambda_min_wavefront_length;
-        attributes.reduction.max_distance_threshold = wflambda_max_distance_threshold;
+        wflambda_attributes.reduction.min_wavefront_length = wflambda_min_wavefront_length;
+        wflambda_attributes.reduction.max_distance_threshold = wflambda_max_distance_threshold;
     } else {
-        attributes.reduction.reduction_strategy =
+        wflambda_attributes.reduction.reduction_strategy =
                 wflambda::wavefront_reduction_none; // wavefront_reduction_dynamic
     }
-    attributes.alignment_scope =
+    wflambda_attributes.alignment_scope =
             wflambda::alignment_scope_alignment; // alignment_scope_score
-    attributes.low_memory = true;
+    wflambda_attributes.low_memory = true;
     wflambda::wavefront_aligner_t *const wflambda_aligner = wflambda::wavefront_aligner_new(
-            pattern_length, text_length, &attributes);
+            pattern_length, text_length, &wflambda_attributes);
 
 
     // save computed alignments in a pair-indexed patchmap
@@ -223,7 +225,7 @@ void wflign_affine_wavefront(
                                     segment_length_to_use,
                                     segment_length_to_use,
                                     wfa::compute_score,
-                                    false);
+                                    false, -1);
 
     uint64_t num_alignments = 0;
     uint64_t num_alignments_performed = 0;
@@ -375,7 +377,7 @@ void wflign_affine_wavefront(
 
     // Trim alignments that overlap in the query
     if (!trace.empty()) {
-        if(attributes.low_memory) {
+        if(wflambda_attributes.low_memory) {
             std::reverse(trace.begin(), trace.end());
         }
 
@@ -768,7 +770,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                 target_length,
                                   query_length,
                                   wfa::compute_alignment,
-                                  true)
+                                  true, -1)
         : _wf_aligner;
 
     /*
@@ -1388,7 +1390,7 @@ void write_merged_alignment(
                                                         target_rev.size()+1,
                                                         query_rev.size()+1,
                                                         wfa::compute_alignment,
-                                                        true);
+                                                        true, -1);
                         wavefront_aligner_set_alignment_free_ends(
                                 wf_aligner_heads,
                                 0,
@@ -1959,7 +1961,7 @@ void write_merged_alignment(
                                                         target_delta_x+1,
                                                         query_delta+1,
                                                         wfa::compute_alignment,
-                                                        true);
+                                                        true, -1);
                         wavefront_aligner_set_alignment_free_ends(
                                 wf_aligner_tails,
                                 0,

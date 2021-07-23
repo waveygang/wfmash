@@ -75,6 +75,8 @@ namespace wfa {
         // CIGAR
         cigar_t cigar;                               // Alignment CIGAR
         wf_backtrace_buffer_t* bt_buffer;            // Backtrace Buffer
+        // Banding
+        int max_offset;                              // Maximum offset to explore
         // MM
         bool mm_allocator_own;                       // Ownership of MM-Allocator
         mm_allocator_t* mm_allocator;                // MM-Allocator
