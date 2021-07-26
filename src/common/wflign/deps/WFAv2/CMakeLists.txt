@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard it not allowed.
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 
-set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcx16 -march=native -g -Wno-pointer-arith")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcx16 -march=native -g -Wno-pointer-arith")
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcx16 -march=native -g -Wno-pointer-arith -D__STDC_FORMAT_MACROS")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcx16 -march=native -g -Wno-pointer-arith -D__STDC_FORMAT_MACROS")
 
 # Build wfa as static library by default
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build all libraries as shared")
