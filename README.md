@@ -95,6 +95,61 @@ cmake -H. -Bbuild && cmake --build build -- -j 16
 
 The `wfmash` binary will be in `build/bin`. To clean up, just remove the build directory.
 
+### Bioconda
+
+`wfmash` recipes for Bioconda are available at https://bioconda.github.io/recipes/wfmash/README.html.
+To install the latest version using `Conda` execute:
+
+``` bash
+conda install -c bioconda wfmash
+```
+
+### Guix
+
+#### installing via the guix-genomics git repository
+
+First, clone the guix-genomics repository:
+
+``` bash
+git clone https://github.com/ekg/guix-genomics
+```
+
+And install the `wfmash` package to your default GUIX environment:
+
+``` bash
+GUIX_PACKAGE_PATH=. guix package -i wfmash
+```
+
+Now `wfmash` is available as a global binary installation.
+
+#### installing via the guix-genomics channel
+
+Add the following to your ~/.config/guix/channels.scm:
+
+``` scm
+  (cons*
+(channel
+  (name 'guix-genomics)
+  (url "https://github.com/ekg/guix-genomics.git")
+  (branch "master"))
+%default-channels)
+```
+
+First, pull all the packages, then install `wfmash` to your default GUIX environment:
+
+``` bash
+guix pull
+guix package -i wfmash
+```
+
+If you want to build an environment only consisting of the `wfmash` binary, you can do:
+
+``` bash
+guix environment --ad-hoc wfmash
+```
+
+For more details about how to handle Guix channels, go to https://git.genenetwork.org/guix-bioinformatics/guix-bioinformatics.git.
+
 
 ## <a name=“publications”></a>publications
 
