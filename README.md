@@ -40,6 +40,7 @@ These parameters affect the structure of the alignments:
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
 
+
 ## examples
 
 Map a set of query sequences against a reference genome:
@@ -68,19 +69,87 @@ This depends on determining the total query sequence length.
 To prevent lags when starting a mapping process, users should apply `samtools index` to index query and target FASTA sequences.
 The `.fai` indexes are then used to quickly compute the sum of query lengths.
 
+
 ## installation
 
-The build is orchestrated with cmake:
+### building from source
+
+The build is orchestrated with `cmake`. At least GCC version 9.3.0 is required for compilation. You can check your 
+version via:
+
+``` bash
+gcc --version
+g++ --version
+```
+
+Clone the `wfmash` git repository and build with:
 
 ```
 sudo apt install libjemalloc-dev # ubuntu
 sudo pacman -S jemalloc          # archlinux
 
+git clone --recursive https://github.com/ekg/wfmash.git
+cd wfmash
 cmake -H. -Bbuild && cmake --build build -- -j 16
 ```
 
-The `wfmash` binary will be in `build/bin`.
-To clean up, just remove the build directory.
+The `wfmash` binary will be in `build/bin`. To clean up, just remove the build directory.
+
+### Bioconda
+
+`wfmash` recipes for Bioconda are available at https://bioconda.github.io/recipes/wfmash/README.html.
+To install the latest version using `Conda` execute:
+
+``` bash
+conda install -c bioconda wfmash
+```
+
+### Guix
+
+#### installing via the guix-genomics git repository
+
+First, clone the guix-genomics repository:
+
+``` bash
+git clone https://github.com/ekg/guix-genomics
+```
+
+And install the `wfmash` package to your default GUIX environment:
+
+``` bash
+GUIX_PACKAGE_PATH=. guix package -i wfmash
+```
+
+Now `wfmash` is available as a global binary installation.
+
+#### installing via the guix-genomics channel
+
+Add the following to your ~/.config/guix/channels.scm:
+
+``` scm
+  (cons*
+(channel
+  (name 'guix-genomics)
+  (url "https://github.com/ekg/guix-genomics.git")
+  (branch "master"))
+%default-channels)
+```
+
+First, pull all the packages, then install `wfmash` to your default GUIX environment:
+
+``` bash
+guix pull
+guix package -i wfmash
+```
+
+If you want to build an environment only consisting of the `wfmash` binary, you can do:
+
+``` bash
+guix environment --ad-hoc wfmash
+```
+
+For more details about how to handle Guix channels, go to https://git.genenetwork.org/guix-bioinformatics/guix-bioinformatics.git.
+
 
 ## <a name=“publications”></a>publications
 
