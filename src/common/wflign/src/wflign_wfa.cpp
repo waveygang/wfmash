@@ -397,13 +397,17 @@ void wflign_affine_wavefront(
                                         wfa::compute_alignment,
                                         false, segment_length_to_use);
 
+        uint64_t max_wf_memory_used = 0;
+
         auto align_and_get_cigar = [&](alignment_t& aln) {
-//            std::cerr << "\t\talign_and_get_cigar: (" << aln.i << ", " << aln.j << ") - (" << aln.query_length << "," << aln.target_length << ")" << std::endl;
             wfa::wavefront_aligner_resize(wf_aligner_cigar, aln.target_length,
                                                  aln.query_length);
 
             wfa::wavefront_align(wf_aligner_cigar, target + aln.i, aln.target_length,
                                          query + aln.j, aln.query_length);
+            max_wf_memory_used = std::max(max_wf_memory_used, wfa::wavefront_aligner_get_size(wf_aligner_cigar));
+
+            //std::cerr << "\t\talign_and_get_cigar: (" << aln.i << ", " << aln.j << ") - (" << aln.query_length << "," << aln.target_length << ")" << " -- " << wfa::wavefront_aligner_get_size(wf_aligner_cigar) << std::endl;
 
             // correct X/M errors in the cigar
             //hack_cigar(wf_aligner_cigar->cigar, query, target, query_length, target_length, aln.j, aln.i);
@@ -623,7 +627,7 @@ void wflign_affine_wavefront(
                 target_total_length, target_offset, target_length,
                 segment_length_to_use, min_identity,
                 elapsed_time_wflambda_ms, num_alignments,
-                num_alignments_performed, mashmap_estimated_identity,
+                num_alignments_performed, max_wf_memory_used, mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor, erode_k);
 
             wfa::wavefront_aligner_delete(wf_aligner_patching);
@@ -691,6 +695,7 @@ bool do_wfa_segment_alignment(
 
         // aln.mash_dist = mash_dist;
 
+        //ToDo to evaluate
         if (true || mash_dist > 0) {
             const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
 //        // Worst case acceptable as a match: seg_len/4 Is/Ds + seg_len * 3/4 long good enough alignment + seg_len/4 Ds/Is
@@ -759,6 +764,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const int &segment_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
+                            uint64_t &max_wf_memory_used,
                             wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
@@ -813,6 +819,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     const int status =
         wfa::wavefront_align(wf_aligner, target + i, target_length,
                                      query + j, query_length);
+    max_wf_memory_used = std::max(max_wf_memory_used, wfa::wavefront_aligner_get_size(wf_aligner));
 
     aln.ok = status == WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
     if (aln.ok) {
@@ -1110,21 +1117,22 @@ bool unpack_display_cigar(const wfa::cigar_t &cigar, const char *query,
 }
 
 void write_merged_alignment(
-    std::ostream &out, const std::vector<alignment_t *> &trace,
-    wfa::wavefront_aligner_t *const wf_aligner,
-    wfa::affine_penalties_t *const affine_penalties, const bool &emit_md_tag,
-    const bool &paf_format_else_sam, const char *query,
-    const std::string &query_name, const uint64_t &query_total_length,
-    const uint64_t &query_offset, const uint64_t &query_length,
-    const bool &query_is_rev, const char *target,
-    const std::string &target_name, const uint64_t &target_total_length,
-    const uint64_t &target_offset, const uint64_t &target_length,
-    const uint16_t &segment_length,
-    const float &min_identity, const long &elapsed_time_wflambda_ms,
-    const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
-    const float &mashmap_estimated_identity, const uint64_t &wflign_max_len_major,
-    const uint64_t &wflign_max_len_minor, const uint16_t &erode_k,
-    const bool &with_endline) {
+        std::ostream &out, const std::vector<alignment_t *> &trace,
+        wfa::wavefront_aligner_t *const wf_aligner,
+        wfa::affine_penalties_t *const affine_penalties, const bool &emit_md_tag,
+        const bool &paf_format_else_sam, const char *query,
+        const std::string &query_name, const uint64_t &query_total_length,
+        const uint64_t &query_offset, const uint64_t &query_length,
+        const bool &query_is_rev, const char *target,
+        const std::string &target_name, const uint64_t &target_total_length,
+        const uint64_t &target_offset, const uint64_t &target_length,
+        const uint16_t &segment_length,
+        const float &min_identity, const long &elapsed_time_wflambda_ms,
+        const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
+        uint64_t &max_wf_memory_used,
+        const float &mashmap_estimated_identity, const uint64_t &wflign_max_len_major,
+        const uint64_t &wflign_max_len_minor, const uint16_t &erode_k,
+        const bool &with_endline) {
 
     int64_t target_pointer_shift = 0;
 
@@ -1239,7 +1247,7 @@ void write_merged_alignment(
                          &wflign_max_len_minor,
                          &distance_close_big_enough_indels, &min_wf_length,
                          &max_dist_threshold, &wf_aligner,
-                         &affine_penalties](std::vector<char> &unpatched,
+                         &affine_penalties, &max_wf_memory_used](std::vector<char> &unpatched,
                                             std::vector<char> &patched) {
             auto q = unpatched.begin();
 
@@ -1403,6 +1411,7 @@ void write_merged_alignment(
                         const int status =
                                 wfa::wavefront_align(wf_aligner_heads, target_rev.c_str(), target_rev.size(),
                                                      query_rev.c_str(), query_rev.size());
+                        max_wf_memory_used = std::max(max_wf_memory_used, wfa::wavefront_aligner_get_size(wf_aligner_heads));
 
                         /*auto result = do_edlib_patch_alignment(
                             query_rev.c_str(), 0, query_rev.size(),
@@ -1792,8 +1801,11 @@ void write_merged_alignment(
                                     target - target_pointer_shift, target_pos,
                                     target_delta, min_wf_length,
                                     segment_length,
-                                    max_dist_threshold, wf_aligner,
-                                    affine_penalties, patch_aln);
+                                    max_dist_threshold,
+                                    max_wf_memory_used,
+                                    wf_aligner,
+                                    affine_penalties,
+                                    patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;
@@ -1974,6 +1986,7 @@ void write_merged_alignment(
                         const int status =
                                 wfa::wavefront_align(wf_aligner_tails, target - target_pointer_shift + target_pos, target_delta_x,
                                                      query + query_pos, query_delta);
+                        max_wf_memory_used = std::max(max_wf_memory_used, wfa::wavefront_aligner_get_size(wf_aligner_tails));
 
                         /*auto result = do_edlib_patch_alignment(
                             query, query_pos, query_delta,
@@ -2451,12 +2464,13 @@ query_start : query_end)
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - start_time)
                 .count();
-
+        const float max_wf_memory_used_kbytes = float(max_wf_memory_used) / 1024;
         const std::string timings_and_num_alignements =
             "wt:i:" + std::to_string(elapsed_time_wflambda_ms) +
             "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
             "\taa:i:" + std::to_string(num_alignments) +
-            "\tap:i:" + std::to_string(num_alignments_performed);
+            "\tap:i:" + std::to_string(num_alignments_performed) +
+            "\twm:f:" + std::to_string(max_wf_memory_used_kbytes).substr(0, std::to_string(max_wf_memory_used_kbytes).find('.') + 2 + 1);
 
         if (paf_format_else_sam) {
             out << query_name << "\t" << query_total_length << "\t"
