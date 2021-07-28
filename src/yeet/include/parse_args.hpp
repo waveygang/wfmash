@@ -224,7 +224,7 @@ void parse_args(int argc,
     map_parameters.mergeMappings = !args::get(no_merge);
 
     if (segment_length) {
-        int s = handy_parameter(args::get(segment_length));
+        int64_t s = handy_parameter(args::get(segment_length));
 
         if (s <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length has to be a float value greater than 0." << std::endl;
@@ -242,7 +242,7 @@ void parse_args(int argc,
     }
 
     if (block_length_min) {
-        int l = handy_parameter(args::get(block_length_min));
+        int64_t l = handy_parameter(args::get(block_length_min));
 
         if (l < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
