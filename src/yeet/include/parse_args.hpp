@@ -11,6 +11,7 @@
 #include "align/include/align_parameters.hpp"
 
 #include "yeet/include/temp_file.hpp"
+#include "common/utils.hpp"
 
 namespace yeet {
 
@@ -19,28 +20,6 @@ struct Parameters {
     bool remapping = false;
     //bool align_input_paf = false;
 };
-
-int64_t handy_parameter(const std::string& value) {
-    auto is_a_float = [](const std::string s) {
-        return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
-    };
-
-    uint64_t str_len = value.length();
-    uint8_t exp = 0;
-    if (value[str_len-1] == 'k' || value[str_len-1] == 'K') {
-        exp = 3;
-        --str_len;
-    } else if (value[str_len-1] == 'm' || value[str_len-1] == 'M') {
-        exp = 6;
-        --str_len;
-    } else if (value[str_len-1] == 'g' || value[str_len-1] == 'G') {
-        exp = 9;
-        --str_len;
-    }
-
-    const std::string tmp = value.substr(0, str_len);
-    return is_a_float(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
-}
 
 void parse_args(int argc,
                 char** argv,
@@ -224,7 +203,7 @@ void parse_args(int argc,
     map_parameters.mergeMappings = !args::get(no_merge);
 
     if (segment_length) {
-        int64_t s = handy_parameter(args::get(segment_length));
+        const int64_t s = wfmash::handy_parameter(args::get(segment_length));
 
         if (s <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length has to be a float value greater than 0." << std::endl;
@@ -242,7 +221,7 @@ void parse_args(int argc,
     }
 
     if (block_length_min) {
-        int64_t l = handy_parameter(args::get(block_length_min));
+        const int64_t l = wfmash::handy_parameter(args::get(block_length_min));
 
         if (l < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
@@ -305,7 +284,7 @@ void parse_args(int argc,
     }
 
     if (wflambda_max_distance_threshold) {
-        int wflambda_max_distance_threshold_ = (int)handy_parameter(args::get(wflambda_max_distance_threshold));
+        const int wflambda_max_distance_threshold_ = (int)wfmash::handy_parameter(args::get(wflambda_max_distance_threshold));
 
         if (wflambda_max_distance_threshold_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum distance that a wavefront may be behind the best wavefront has to be a float value greater than 0." << std::endl;
@@ -319,7 +298,7 @@ void parse_args(int argc,
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
     if (wflign_max_len_major) {
-        const uint64_t wflign_max_len_major_ = handy_parameter(args::get(wflign_max_len_major));
+        const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
 
         if (wflign_max_len_major_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the major axis has to be a float value greater than 0." << std::endl;
@@ -332,7 +311,7 @@ void parse_args(int argc,
     }
 
     if (wflign_max_len_minor) {
-        const uint64_t wflign_max_len_minor_ = handy_parameter(args::get(wflign_max_len_minor));
+        const uint64_t wflign_max_len_minor_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_minor));
 
         if (wflign_max_len_minor_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the minor axis has to be a float value greater than 0." << std::endl;

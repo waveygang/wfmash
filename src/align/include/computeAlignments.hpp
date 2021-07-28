@@ -27,7 +27,7 @@
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
-
+#include "common/utils.hpp"
 #include "common/wflign/src/wflign_wfa.hpp"
 
 namespace align
@@ -383,7 +383,7 @@ namespace align
         char delimiter = ':';
         std::string delimeter_str(1, delimiter);
         vector<string> mm_id_vec = split(tokens[12], delimeter_str);
-        double mm_id = std::stod(mm_id_vec.back())/100; // divide by 100 for consistency with block alignment
+        double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
 
         //Save words into currentRecord
         {
