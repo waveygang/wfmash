@@ -305,7 +305,7 @@ void parse_args(int argc,
     }
 
     if (wflambda_max_distance_threshold) {
-        int wflambda_max_distance_threshold_ = handy_parameter(args::get(wflambda_max_distance_threshold));
+        int wflambda_max_distance_threshold_ = (int)handy_parameter(args::get(wflambda_max_distance_threshold));
 
         if (wflambda_max_distance_threshold_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum distance that a wavefront may be behind the best wavefront has to be a float value greater than 0." << std::endl;
