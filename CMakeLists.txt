@@ -30,7 +30,7 @@ add_executable(wfmash
 target_include_directories(wfmash PRIVATE
   src
   src/common/wflign/deps
-  src/common/wflign/deps/wflambda
+  src/common/wflign/deps/wflambdav2
   src/common/wflign/deps/patchmap
   src/common/wflign/deps/WFAv2
   #src/common/wflign/abseil-cpp
