@@ -96,9 +96,7 @@ int main(int argc, char** argv) {
         robin_hood::unordered_flat_map< std::string, skch::seqno_t > seqName_to_seqCounter;
         robin_hood::unordered_flat_map< std::string, uint64_t > seqName_to_seqLen;
 
-        //sequence counter while parsing file
         skch::seqno_t seqCounter = 0;
-
         for(const auto &fileName : map_parameters.refSequences)
         {
             seqiter::for_each_seq_in_file(
@@ -113,7 +111,7 @@ int main(int argc, char** argv) {
         std::ifstream mappingListStream(map_parameters.outFileName);
         std::string mappingRecordLine;
         align::MappingBoundaryRow currentRecord;
-        std::vector<align::MappingBoundaryRow> allReadMappings;  //Aggregate mapping results for the complete run
+        std::vector<align::MappingBoundaryRow> allReadMappings;
 
         while (!mappingListStream.eof()){
             std::getline(mappingListStream, mappingRecordLine);

@@ -82,7 +82,7 @@ gcc --version
 g++ --version
 ```
 
-It may be necessary to install several system-level libraries to build `wfmash`.  On `Ubuntu 20.04`, these can be 
+It may be necessary to install several system-level libraries to build `wfmash`. On `Ubuntu 20.04`, these can be 
 installed using apt:
 
 ```
