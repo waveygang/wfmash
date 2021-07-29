@@ -265,7 +265,7 @@ bool do_wfa_segment_alignment(
     const uint64_t &i,
     const uint16_t &segment_length_q,
     const uint16_t &segment_length_t,
-    const uint16_t &step_size, const uint64_t &minhash_kmer_size,
+    const uint64_t &minhash_kmer_size,
     const uint32_t &min_wavefront_length,
     const uint32_t &max_distance_threshold, const float &max_mash_dist,
     wfa::wavefront_aligner_t *const wf_aligner,
