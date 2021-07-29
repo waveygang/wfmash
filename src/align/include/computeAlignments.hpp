@@ -59,6 +59,58 @@ namespace align
   typedef atomic_queue::AtomicQueue<std::string*, 2 << 16> paf_atomic_queue_t;
 
   /**
+ * @brief                         parse mashmap row sequence
+ * @param[in]   mappingRecordLine
+ * @param[out]  currentRecord
+ */
+  inline void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord)
+      {
+      std::stringstream ss(mappingRecordLine); // Insert the string into a stream
+        std::string word; // Have a buffer string
+
+        vector<std::string> tokens; // Create vector to hold our words
+
+        while (ss >> word)
+            tokens.push_back(word);
+
+        //We expect and need at least these many values in a mashmap mapping
+        assert(tokens.size() >= 9);
+
+        // Extract the mashmap identity from the string
+        auto split = [](const string& s, const string& delimiter) {
+            size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+            string token;
+            vector<string> res;
+
+            while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+                token = s.substr (pos_start, pos_end - pos_start);
+                pos_start = pos_end + delim_len;
+                res.push_back (token);
+            }
+
+            res.push_back (s.substr (pos_start));
+            return res;
+        };
+
+        char delimiter = ':';
+        std::string delimeter_str(1, delimiter);
+        vector<string> mm_id_vec = split(tokens[12], delimeter_str);
+        double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
+
+        //Save words into currentRecord
+        {
+            currentRecord.qId = tokens[0];
+            currentRecord.qStartPos = std::stoi(tokens[2]);
+            currentRecord.qEndPos = std::stoi(tokens[3]);
+            currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
+            currentRecord.refId = tokens[5];
+            currentRecord.rStartPos = std::stoi(tokens[7]);
+            currentRecord.rEndPos = std::stoi(tokens[8]);
+            currentRecord.mashmap_identity = mm_id;
+        }
+      }
+
+  /**
    * @class     align::Aligner
    * @brief     compute alignments and generate sam output
    *            from mashmap mappings
@@ -146,7 +198,7 @@ namespace align
                       }
 
                       if( !mappingRecordLine.empty() ) {
-                          this->parseMashmapRow(mappingRecordLine, currentRecord);
+                          parseMashmapRow(mappingRecordLine, currentRecord);
 
                           if(currentRecord.qId == qSeqId) {
                               //auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
@@ -155,7 +207,7 @@ namespace align
                               ++total_paf_records;
                               //Check if more mappings have same query sequence id
                               while(std::getline(mappingListStream, mappingRecordLine)) {
-                                  this->parseMashmapRow(mappingRecordLine, currentRecord);
+                                  parseMashmapRow(mappingRecordLine, currentRecord);
                                   if(currentRecord.qId != qSeqId) {
                                       break;
                                   } else {
@@ -224,7 +276,7 @@ namespace align
                               }
 
                               if( !mappingRecordLine.empty() ) {
-                                  this->parseMashmapRow(mappingRecordLine, currentRecord);
+                                  parseMashmapRow(mappingRecordLine, currentRecord);
 
                                   //Check if mapping query id matches current query sequence id
                                   if(currentRecord.qId == qSeqId)
@@ -236,7 +288,7 @@ namespace align
                                       //Check if more mappings have same query sequence id
                                       while(std::getline(mappingListStream, mappingRecordLine))
                                       {
-                                          this->parseMashmapRow(mappingRecordLine, currentRecord);
+                                          parseMashmapRow(mappingRecordLine, currentRecord);
 
                                           if(currentRecord.qId != qSeqId)
                                           {
@@ -344,58 +396,6 @@ namespace align
                     << "count of mapped reads = " << total_seqs
                     << ", total aligned bp = " << total_alignment_length << std::endl;
 
-      }
-
-      /**
-       * @brief                         parse mashmap row sequence 
-       * @param[in]   mappingRecordLine
-       * @param[out]  currentRecord
-       */
-      inline void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord)
-      {
-        std::stringstream ss(mappingRecordLine); // Insert the string into a stream
-        std::string word; // Have a buffer string
-
-        vector<std::string> tokens; // Create vector to hold our words
-
-        while (ss >> word)
-          tokens.push_back(word);
-
-        //We expect and need at least these many values in a mashmap mapping
-        assert(tokens.size() >= 9);
-
-        // Extract the mashmap identity from the string
-        auto split = [](const string& s, const string& delimiter) {
-          size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-          string token;
-          vector<string> res;
-
-          while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
-            token = s.substr (pos_start, pos_end - pos_start);
-            pos_start = pos_end + delim_len;
-            res.push_back (token);
-          }
-
-          res.push_back (s.substr (pos_start));
-          return res;
-        };
-
-        char delimiter = ':';
-        std::string delimeter_str(1, delimiter);
-        vector<string> mm_id_vec = split(tokens[12], delimeter_str);
-        double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
-
-        //Save words into currentRecord
-        {
-          currentRecord.qId = tokens[0];
-          currentRecord.qStartPos = std::stoi(tokens[2]);
-          currentRecord.qEndPos = std::stoi(tokens[3]);
-          currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
-          currentRecord.refId = tokens[5];
-          currentRecord.rStartPos = std::stoi(tokens[7]);
-          currentRecord.rEndPos = std::stoi(tokens[8]);
-          currentRecord.mashmap_identity = mm_id;
-        }
       }
 
       /**
