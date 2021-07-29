@@ -25,15 +25,13 @@ add_subdirectory(deps/WFAv2 EXCLUDE_FROM_ALL)
 
 add_executable(wflign
   src/main.cpp
-  #src/wflign_edlib.cpp
   src/wflign_wfa.cpp
   src/wfa_edit_callback.cpp
   src/rkmh.cpp
   src/murmur3.cpp)
 
 target_include_directories(wflign PRIVATE
-  deps/
-  deps/patchmap)
+  deps/)
 
 target_link_libraries(wflign
   edlib
@@ -42,7 +40,6 @@ target_link_libraries(wflign
   z)
 
 add_library(libwflign_static STATIC
-  #src/wflign_edlib.cpp
   src/wflign_wfa.cpp
   src/wfa_edit_callback.cpp
   src/rkmh.cpp

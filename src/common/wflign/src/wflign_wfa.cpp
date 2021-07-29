@@ -209,7 +209,7 @@ void wflign_affine_wavefront(
             pattern_length, text_length, &attributes);
 
 
-    // save computed alignments in a pair-indexed patchmap
+    // save computed alignments in a pair-indexed map
     robin_hood::unordered_flat_map<uint64_t, alignment_t *> alignments;
 
     // allocate vectors to store our sketches
