@@ -20,6 +20,28 @@ struct Parameters {
     //bool align_input_paf = false;
 };
 
+int64_t handy_parameter(const std::string& value) {
+    auto is_a_float = [](const std::string s) {
+        return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
+    };
+
+    uint64_t str_len = value.length();
+    uint8_t exp = 0;
+    if (value[str_len-1] == 'k' || value[str_len-1] == 'K') {
+        exp = 3;
+        --str_len;
+    } else if (value[str_len-1] == 'm' || value[str_len-1] == 'M') {
+        exp = 6;
+        --str_len;
+    } else if (value[str_len-1] == 'g' || value[str_len-1] == 'G') {
+        exp = 9;
+        --str_len;
+    }
+
+    const std::string tmp = value.substr(0, str_len);
+    return is_a_float(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
+}
+
 void parse_args(int argc,
                 char** argv,
                 skch::Parameters& map_parameters,
@@ -34,8 +56,8 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping (1k = 1000, 1m = 10^6, 1g = 10^9) [default: 5000]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length_min(parser, "N", "keep mappings with at least this block length (1k = 1000, 1m = 10^6, 1g = 10^9) [default: 3*segment-length]", {'l', "block-length-min"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 5000]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length_min(parser, "N", "keep mappings with at least this block length (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 3*segment-length]", {'l', "block-length-min"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
@@ -62,7 +84,7 @@ void parse_args(int argc,
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                             {'g', "wfa-params"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-    args::ValueFlag<int> wflambda_max_distance_threshold(parser, "N", "maximum distance that a wavefront may be behind the best wavefront [default: 100000]", {'D', "wflambda-diff"});
+    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 100000]", {'D', "wflambda-diff"});
 
     //Unsupported
     //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
@@ -74,8 +96,8 @@ void parse_args(int argc,
     args::ValueFlag<float> wflign_max_mash_dist(parser, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
 
     // patching parameter
-    args::ValueFlag<uint64_t> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
-    args::ValueFlag<uint64_t> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
+    args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 512*segment-length]", {'C', "max-patch-major"});
+    args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 128*segment-length]", {'F', "max-patch-minor"});
     args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
 
     // format parameters
@@ -238,27 +260,8 @@ void parse_args(int argc,
 
     map_parameters.mergeMappings = !args::get(no_merge);
 
-    auto handy_parameter = [](const std::string& value) {
-        auto is_a_float = [](const std::string s) {
-            return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
-        };
-
-        uint64_t str_len = value.length();
-        uint8_t exp = 0;
-        if (value[str_len-1] == 'k') {
-            exp = 3;
-            --str_len;
-        } else if (value[str_len-1] == 'm') {
-            exp = 6;
-            --str_len;
-        }
-
-        const std::string tmp = value.substr(0, str_len);
-        return is_a_float(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
-    };
-
     if (segment_length) {
-        int s = handy_parameter(args::get(segment_length));
+        int64_t s = handy_parameter(args::get(segment_length));
 
         if (s <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length has to be a float value greater than 0." << std::endl;
@@ -276,7 +279,7 @@ void parse_args(int argc,
     }
 
     if (block_length_min) {
-        int l = handy_parameter(args::get(block_length_min));
+        int64_t l = handy_parameter(args::get(block_length_min));
 
         if (l < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
@@ -388,20 +391,41 @@ void parse_args(int argc,
     }
 
     if (wflambda_max_distance_threshold) {
-        align_parameters.wflambda_max_distance_threshold = args::get(wflambda_max_distance_threshold);
+        int wflambda_max_distance_threshold_ = (int)handy_parameter(args::get(wflambda_max_distance_threshold));
+
+        if (wflambda_max_distance_threshold_ <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum distance that a wavefront may be behind the best wavefront has to be a float value greater than 0." << std::endl;
+            exit(1);
+        }
+
+        align_parameters.wflambda_max_distance_threshold = wflambda_max_distance_threshold_;
     } else {
         align_parameters.wflambda_max_distance_threshold = 100000;
     }
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
     if (wflign_max_len_major) {
-        align_parameters.wflign_max_len_major = args::get(wflign_max_len_major);
+        const uint64_t wflign_max_len_major_ = handy_parameter(args::get(wflign_max_len_major));
+
+        if (wflign_max_len_major_ <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the major axis has to be a float value greater than 0." << std::endl;
+            exit(1);
+        }
+
+        align_parameters.wflign_max_len_major = wflign_max_len_major_;
     } else {
         align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
     }
 
     if (wflign_max_len_minor) {
-        align_parameters.wflign_max_len_minor = args::get(wflign_max_len_minor);
+        const uint64_t wflign_max_len_minor_ = handy_parameter(args::get(wflign_max_len_minor));
+
+        if (wflign_max_len_minor_ <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the minor axis has to be a float value greater than 0." << std::endl;
+            exit(1);
+        }
+
+        align_parameters.wflign_max_len_minor = wflign_max_len_minor_;
     } else {
         align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
     }
