@@ -137,9 +137,9 @@ int main(int argc, char** argv) {
             << "\t" << seqName_to_seqCounterAndLen[e.refId].second
             << "\t" << e.rStartPos
             << "\t" << e.rEndPos
-            << "\t" << "0"
+            << "\t" << 0
             << "\t" << std::max(e.rEndPos - e.rStartPos, e.qEndPos - e.qStartPos)
-            << "\t" << "0"
+            << "\t" << 255
             << "\t" << "id:f:" << e.mashmap_identity * 100.0
             << "\n";
         }
