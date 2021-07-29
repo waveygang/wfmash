@@ -225,7 +225,7 @@ namespace align
 
                               if( !mappingRecordLine.empty() ) {
                                   this->parseMashmapRow(mappingRecordLine, currentRecord);
-                              
+
                                   //Check if mapping query id matches current query sequence id
                                   if(currentRecord.qId == qSeqId)
                                   {
@@ -237,7 +237,7 @@ namespace align
                                       while(std::getline(mappingListStream, mappingRecordLine))
                                       {
                                           this->parseMashmapRow(mappingRecordLine, currentRecord);
-                                          
+
                                           if(currentRecord.qId != qSeqId)
                                           {
                                               //Break the inner loop to read query sequence
@@ -252,7 +252,7 @@ namespace align
                                   }
                               }
                           });
-                          
+
                       mappingListStream.close();
 
                   }

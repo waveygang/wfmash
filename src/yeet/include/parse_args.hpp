@@ -329,7 +329,7 @@ void parse_args(int argc,
         align_parameters.wflign_erode_k = 13;
     }
 
-    // Unsupproted
+    // Unsupported
     //if (exact_wflambda) {
     //    // set exact computation of wflambda
     //    align_parameters.wflambda_min_wavefront_length = 0;
@@ -363,7 +363,7 @@ void parse_args(int argc,
                     map_parameters.percentageIdentity,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
-            map_parameters.windowSize = std::min(256, map_parameters.windowSize);
+            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
         }
     }
 
@@ -374,7 +374,12 @@ void parse_args(int argc,
         yeet_parameters.approx_mapping = false;
         if (align_input_paf) {
             yeet_parameters.remapping = true;
+
+            //ToDo sort by query?
+
             align_parameters.mashmapPafFile = args::get(align_input_paf);
+
+
         } else {
             if (tmp_base) {
                 temp_file::set_dir(args::get(tmp_base));
