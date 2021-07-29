@@ -93,8 +93,7 @@ int main(int argc, char** argv) {
             outstrm.close();
         }
      } else {
-        robin_hood::unordered_flat_map< std::string, skch::seqno_t > seqName_to_seqCounter;
-        robin_hood::unordered_flat_map< std::string, uint64_t > seqName_to_seqLen;
+        robin_hood::unordered_flat_map< std::string, std::pair<skch::seqno_t, uint64_t> > seqName_to_seqCounterAndLen;
 
         skch::seqno_t seqCounter = 0;
         for(const auto &fileName : map_parameters.refSequences)
@@ -103,8 +102,7 @@ int main(int argc, char** argv) {
                     fileName,
                     [&](const std::string& seq_name,
                             const std::string& seq) {
-                        seqName_to_seqCounter[seq_name] = seqCounter++;
-                        seqName_to_seqLen[seq_name] = seq.length();
+                        seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
                     });
         }
 
@@ -122,21 +120,21 @@ int main(int argc, char** argv) {
             }
         }
 
-        std::sort(allReadMappings.begin(), allReadMappings.end(), [&seqName_to_seqCounter](const align::MappingBoundaryRow &a, const align::MappingBoundaryRow &b)
+        std::sort(allReadMappings.begin(), allReadMappings.end(), [&seqName_to_seqCounterAndLen](const align::MappingBoundaryRow &a, const align::MappingBoundaryRow &b)
         {
-            return (seqName_to_seqCounter[a.qId] < seqName_to_seqCounter[b.qId]);
+            return (seqName_to_seqCounterAndLen[a.qId].first < seqName_to_seqCounterAndLen[b.qId].first);
         });
 
         std::ofstream outstrm(align_parameters.mashmapPafFile);
         for(auto &e : allReadMappings)
         {
             outstrm << e.qId
-            << "\t" << seqName_to_seqLen[e.qId]
+            << "\t" << seqName_to_seqCounterAndLen[e.qId].second
             << "\t" << e.qStartPos
             << "\t" << e.qEndPos
             << "\t" << (e.strand == skch::strnd::FWD ? "+" : "-")
             << "\t" << e.refId
-            << "\t" << seqName_to_seqLen[e.refId]
+            << "\t" << seqName_to_seqCounterAndLen[e.refId].second
             << "\t" << e.rStartPos
             << "\t" << e.rEndPos
             << "\t" << "0"
