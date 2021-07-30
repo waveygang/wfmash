@@ -313,8 +313,10 @@ void write_merged_alignment(
     const uint16_t &segment_length,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
-    const float &mashmap_estimated_identity, const uint64_t &wflign_max_len_major,
-    const uint64_t &wflign_max_len_minor, const uint16_t &erode_k,
+    const float &mashmap_estimated_identity,
+    const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
+    const uint16_t &erode_k,
+    const int &min_wf_length, const int &max_dist_threshold,
     const bool &with_endline = true);
 
 void write_alignment(std::ostream &out, const alignment_t &aln,
