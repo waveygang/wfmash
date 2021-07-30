@@ -11,6 +11,7 @@
 #include "align/include/align_parameters.hpp"
 
 #include "yeet/include/temp_file.hpp"
+#include "common/utils.hpp"
 
 namespace yeet {
 
@@ -261,7 +262,7 @@ void parse_args(int argc,
     map_parameters.mergeMappings = !args::get(no_merge);
 
     if (segment_length) {
-        int64_t s = handy_parameter(args::get(segment_length));
+        const int64_t s = wfmash::handy_parameter(args::get(segment_length));
 
         if (s <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length has to be a float value greater than 0." << std::endl;
@@ -279,7 +280,7 @@ void parse_args(int argc,
     }
 
     if (block_length_min) {
-        int64_t l = handy_parameter(args::get(block_length_min));
+        const int64_t l = wfmash::handy_parameter(args::get(block_length_min));
 
         if (l < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
@@ -371,7 +372,6 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
-
     if (keep_low_align_pct_identity) {
         align_parameters.min_identity = 0; // now unused
     } else {
@@ -391,7 +391,7 @@ void parse_args(int argc,
     }
 
     if (wflambda_max_distance_threshold) {
-        int wflambda_max_distance_threshold_ = (int)handy_parameter(args::get(wflambda_max_distance_threshold));
+        const int wflambda_max_distance_threshold_ = (int)wfmash::handy_parameter(args::get(wflambda_max_distance_threshold));
 
         if (wflambda_max_distance_threshold_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum distance that a wavefront may be behind the best wavefront has to be a float value greater than 0." << std::endl;
@@ -405,7 +405,7 @@ void parse_args(int argc,
     align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
     if (wflign_max_len_major) {
-        const uint64_t wflign_max_len_major_ = handy_parameter(args::get(wflign_max_len_major));
+        const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
 
         if (wflign_max_len_major_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the major axis has to be a float value greater than 0." << std::endl;
@@ -418,7 +418,7 @@ void parse_args(int argc,
     }
 
     if (wflign_max_len_minor) {
-        const uint64_t wflign_max_len_minor_ = handy_parameter(args::get(wflign_max_len_minor));
+        const uint64_t wflign_max_len_minor_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_minor));
 
         if (wflign_max_len_minor_ <= 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the minor axis has to be a float value greater than 0." << std::endl;
@@ -436,7 +436,7 @@ void parse_args(int argc,
         align_parameters.wflign_erode_k = map_parameters.percentageIdentity >= 0.97 ? 21 : (map_parameters.percentageIdentity >= 0.9 ? 17 : 13);
     }
 
-    // Unsupproted
+    // Unsupported
     //if (exact_wflambda) {
     //    // set exact computation of wflambda
     //    align_parameters.wflambda_min_wavefront_length = 0;
@@ -462,7 +462,7 @@ void parse_args(int argc,
             map_parameters.windowSize = ws;
         } else {
             // If the input window size is 0, compute the best window size using 0 as p-value cutoff
-            const int windowSize = skch::Stat::recommendedWindowSize(
+            const int64_t windowSize = skch::Stat::recommendedWindowSize(
                     ws == 0 ? 0.0 : skch::fixed::pval_cutoff,
                     skch::fixed::confidence_interval,
                     map_parameters.kmerSize,
@@ -470,8 +470,7 @@ void parse_args(int argc,
                     map_parameters.percentageIdentity,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
-
-            map_parameters.windowSize = std::min(256, windowSize);
+            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
         }
     }
 
@@ -480,19 +479,21 @@ void parse_args(int argc,
         yeet_parameters.approx_mapping = true;
     } else {
         yeet_parameters.approx_mapping = false;
+
+        if (tmp_base) {
+            temp_file::set_dir(args::get(tmp_base));
+        } else {
+            char* cwd = get_current_dir_name();
+            temp_file::set_dir(std::string(cwd));
+            free(cwd);
+        }
+
         if (align_input_paf) {
             yeet_parameters.remapping = true;
-            align_parameters.mashmapPafFile = args::get(align_input_paf);
+            map_parameters.outFileName = args::get(align_input_paf);
+            align_parameters.mashmapPafFile = temp_file::create();
         } else {
-            if (tmp_base) {
-                temp_file::set_dir(args::get(tmp_base));
-                map_parameters.outFileName = temp_file::create();
-            } else {
-                char* cwd = get_current_dir_name();
-                temp_file::set_dir(std::string(cwd));
-                free(cwd);
-                map_parameters.outFileName = temp_file::create();
-            }
+            map_parameters.outFileName = temp_file::create();
             align_parameters.mashmapPafFile = map_parameters.outFileName;
         }
         align_parameters.pafOutputFile = "/dev/stdout";

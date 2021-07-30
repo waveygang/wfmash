@@ -32,6 +32,9 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
         target_length, query_length, &attributes);
 }
 
+#define MAX_LEN_FOR_PURE_WFA 10000
+#define MIN_WF_LENGTH 256
+#define MAX_DIST_THRESHOLD 768
 
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
@@ -1674,10 +1677,9 @@ void write_merged_alignment(
                                 do_wfa_patch_alignment(
                                     query, query_pos, query_delta,
                                     target - target_pointer_shift, target_pos,
-                                    target_delta, min_wf_length,
-                                    segment_length,
-                                    max_dist_threshold, wf_aligner,
-                                    affine_penalties, patch_aln);
+                                    target_delta, segment_length,
+                                    MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                                    wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;

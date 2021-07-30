@@ -177,8 +177,8 @@ namespace skch
      * @return                    p-value
      */
     inline double estimate_pvalue (int s, int k, int alphabetSize, 
-        float identity, 
-        int lengthQuery, uint64_t lengthReference, float confidence_interval)
+        float identity,
+        int64_t lengthQuery, uint64_t lengthReference, float confidence_interval)
     {
       //total space size of k-mers
       double kmerSpace = pow(alphabetSize, k);
@@ -224,12 +224,12 @@ namespace skch
      * @param[in] lengthReference   reference length
      * @return                      optimal window size for sketching
      */
-    inline int recommendedWindowSize(double pValue_cutoff, float confidence_interval,
+    inline int64_t recommendedWindowSize(double pValue_cutoff, float confidence_interval,
         int k, int alphabetSize,
         float identity,
-        int segmentLength, uint64_t lengthReference)
+        int64_t segmentLength, uint64_t lengthReference)
     {
-      int lengthQuery = segmentLength;
+        int64_t lengthQuery = segmentLength;
 
       int optimalSketchSize;
       for (optimalSketchSize = 10; optimalSketchSize < lengthQuery; optimalSketchSize += 50) {
@@ -243,10 +243,10 @@ namespace skch
         }
       }
 
-      int w =  (2.0 * lengthQuery)/optimalSketchSize;
+      int64_t w =  (2.0 * lengthQuery)/optimalSketchSize;
 
       // 1 <= w <= lengthQuery
-      return std::min( std::max(w,1), lengthQuery);
+      return std::min(std::max(w,(int64_t)1), lengthQuery);
     }
   }
 }

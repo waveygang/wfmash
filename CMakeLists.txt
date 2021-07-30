@@ -25,15 +25,18 @@ add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/abseil-cpp)
 
 add_executable(wfmash
-  src/yeet/yeet_main.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common/wflign/deps/wflambda -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -ledlib -lwflambda -lwflign
+  src/common/utils.cpp
+  src/yeet/yeet_main.cpp
+) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -ledlib -lwflambda -lwflign
 
 target_include_directories(wfmash PRIVATE
   src
+  src/common
   src/common/wflign/deps
   src/common/wflign/deps/wflambdav2
   src/common/wflign/deps/WFAv2
   #src/common/wflign/abseil-cpp
-  src/common)
+  )
 
 target_link_libraries(wfmash
   gsl
