@@ -32,6 +32,8 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 }
 
 #define MAX_LEN_FOR_PURE_WFA 10000
+#define MIN_WF_LENGTH 256
+#define MAX_DIST_THRESHOLD 512
 
 void wflign_affine_wavefront(
     std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
@@ -77,6 +79,8 @@ void wflign_affine_wavefront(
     if (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(
                 wfa_affine_penalties, target_length, query_length);
+        wfa::wavefront_reduction_set_dynamic(&wf_aligner->reduction,
+                                             MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
 
         auto *aln = new alignment_t();
         wfa::wavefront_aligner_clear__resize(wf_aligner, target_length, query_length);
@@ -987,8 +991,6 @@ void write_merged_alignment(
     // patching parameters
     // we will nibble patching back to this length
     const uint64_t min_wfa_patch_length = 128;
-    const int min_wf_length = 256;
-    const int max_dist_threshold = 512;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1084,9 +1086,8 @@ void write_merged_alignment(
                          &segment_length,
                          &wflign_max_len_major,
                          &wflign_max_len_minor,
-                         &distance_close_big_enough_indels, &min_wf_length,
-                         &max_dist_threshold, &wf_aligner,
-                         &affine_penalties](std::vector<char> &unpatched,
+                         &distance_close_big_enough_indels,
+                         &wf_aligner, &affine_penalties](std::vector<char> &unpatched,
                                             std::vector<char> &patched) {
             auto q = unpatched.begin();
 
@@ -1582,10 +1583,9 @@ void write_merged_alignment(
                                 do_wfa_patch_alignment(
                                     query, query_pos, query_delta,
                                     target - target_pointer_shift, target_pos,
-                                    target_delta, min_wf_length,
-                                    segment_length,
-                                    max_dist_threshold, wf_aligner,
-                                    affine_penalties, patch_aln);
+                                    target_delta, segment_length,
+                                    MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                                    wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;
