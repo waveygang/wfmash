@@ -84,7 +84,7 @@ void wflign_affine_wavefront(
 
         auto *aln = new alignment_t();
         wfa::wavefront_aligner_clear__resize(wf_aligner, target_length, query_length);
-        aln->score = wfa::wavefront_align(wf_aligner, target, target_length, query, target_length);
+        aln->score = wfa::wavefront_align(wf_aligner, target, target_length, query, query_length);
         aln->j = 0;
         aln->i = 0;
         aln->ok = true;
@@ -109,8 +109,13 @@ void wflign_affine_wavefront(
             }
 #endif
 
+        std::cerr << query_name << "\n";
         wflign_edit_cigar_copy(&aln->edit_cigar, &wf_aligner->cigar);
-
+        for(uint64_t i = wf_aligner->cigar.begin_offset; i < wf_aligner->cigar.end_offset; ++i){
+            std::cerr << wf_aligner->cigar.operations[i];
+        }
+        std::cerr << "\n";
+        std::cerr << "\n";
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
                                 segment_length_t, aln.j, aln.i)) {
