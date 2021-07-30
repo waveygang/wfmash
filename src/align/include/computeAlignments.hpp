@@ -106,7 +106,7 @@ namespace align
             currentRecord.refId = tokens[5];
             currentRecord.rStartPos = std::stoi(tokens[7]);
             currentRecord.rEndPos = std::stoi(tokens[8]);
-            currentRecord.mashmap_identity = mm_id;
+            currentRecord.mashmap_estimated_identity = mm_id;
         }
       }
 
