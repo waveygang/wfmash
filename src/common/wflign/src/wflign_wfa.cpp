@@ -1150,7 +1150,7 @@ void write_merged_alignment(
         auto distance_close_big_enough_indels =
             [](const uint32_t indel_len, auto iterator,
                const std::vector<char> &trace) {
-                const uint32_t min_indel_len_to_find = indel_len / 3 + 1;
+                const uint32_t min_indel_len_to_find = indel_len / 3;
                 const uint16_t max_dist_to_look_at =
                     std::min(indel_len * 64, (uint32_t)4096);//std::numeric_limits<uint16_t>::max());
 
@@ -1536,10 +1536,9 @@ void write_merged_alignment(
                             (query_delta < wflign_max_len_minor ||
                              target_delta < wflign_max_len_minor)) {
 
-                        int32_t distance_close_indels =
-                            distance_close_big_enough_indels(
-                                std::max(query_delta, target_delta), q,
-                                unpatched);
+                        int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
+                            distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
+                            -1;
                         // std::cerr << "distance_close_indels " <<
                         // distance_close_indels << std::endl;
                         // Trigger the patching if there is a dropout
