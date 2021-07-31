@@ -97,7 +97,7 @@ The `wfmash` binary will be in `build/bin`. To clean up, just remove the build d
 
 ### Bioconda
 
-`wfmash` recipes for Bioconda are available at https://bioconda.github.io/recipes/wfmash/README.html.
+`wfmash` recipes for Bioconda are available at https://anaconda.org/bioconda/wfmash.
 To install the latest version using `Conda` execute:
 
 ``` bash
