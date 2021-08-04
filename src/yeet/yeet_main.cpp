@@ -42,11 +42,12 @@ int main(int argc, char** argv) {
     yeet::parse_args(argc, argv, map_parameters, align_parameters, yeet_parameters);
 
     //parameters.refSequences.push_back(ref);
-    auto t0 = skch::Time::now();
 
     //skch::parseandSave(argc, argv, cmd, parameters);
     if (!yeet_parameters.remapping) {
         skch::printCmdOptions(map_parameters);
+
+        auto t0 = skch::Time::now();
 
         if (map_parameters.use_spaced_seeds) {
           std::cerr << "[wfmash::map] Generating spaced seeds" << std::endl;
@@ -91,14 +92,63 @@ int main(int argc, char** argv) {
             outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
             outstrm.close();
         }
+     } else {
+        robin_hood::unordered_flat_map< std::string, std::pair<skch::seqno_t, uint64_t> > seqName_to_seqCounterAndLen;
+
+        skch::seqno_t seqCounter = 0;
+        for(const auto &fileName : map_parameters.refSequences)
+        {
+            seqiter::for_each_seq_in_file(
+                    fileName,
+                    [&](const std::string& seq_name,
+                            const std::string& seq) {
+                        seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
+                    });
+        }
+
+        std::ifstream mappingListStream(map_parameters.outFileName);
+        std::string mappingRecordLine;
+        align::MappingBoundaryRow currentRecord;
+        std::vector<align::MappingBoundaryRow> allReadMappings;
+
+        while (!mappingListStream.eof()){
+            std::getline(mappingListStream, mappingRecordLine);
+            if( !mappingRecordLine.empty() ) {
+                parseMashmapRow(mappingRecordLine, currentRecord);
+
+                allReadMappings.push_back(currentRecord);
+            }
+        }
+
+        std::sort(allReadMappings.begin(), allReadMappings.end(), [&seqName_to_seqCounterAndLen](const align::MappingBoundaryRow &a, const align::MappingBoundaryRow &b)
+        {
+            return (seqName_to_seqCounterAndLen[a.qId].first < seqName_to_seqCounterAndLen[b.qId].first);
+        });
+
+        std::ofstream outstrm(align_parameters.mashmapPafFile);
+        for(auto &e : allReadMappings)
+        {
+            outstrm << e.qId
+            << "\t" << seqName_to_seqCounterAndLen[e.qId].second
+            << "\t" << e.qStartPos
+            << "\t" << e.qEndPos
+            << "\t" << (e.strand == skch::strnd::FWD ? "+" : "-")
+            << "\t" << e.refId
+            << "\t" << seqName_to_seqCounterAndLen[e.refId].second
+            << "\t" << e.rStartPos
+            << "\t" << e.rEndPos
+            << "\t" << 0
+            << "\t" << std::max(e.rEndPos - e.rStartPos, e.qEndPos - e.qStartPos)
+            << "\t" << 255
+            << "\t" << "id:f:" << e.mashmap_estimated_identity * 100.0
+            << "\n";
+        }
     }
 
     align::printCmdOptions(align_parameters);
-
-    t0 = skch::Time::now();
-
     align::Aligner alignObj(align_parameters);
 
+    auto t0 = skch::Time::now();
     std::chrono::duration<double> timeRefRead = skch::Time::now() - t0;
     std::cerr << "[wfmash::align] time spent read the reference sequences: " << timeRefRead.count() << " sec" << std::endl;
 
