@@ -122,7 +122,8 @@ void wflign_affine_wavefront(
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
                                                                            query_length,
-                                                                           true);
+                                                                           wfa::compute_alignment,
+                                                                           true, -1);
         wfa::wavefront_reduction_set_adaptive(&wf_aligner->reduction,
                                               min_wf_length,
                                               max_dist_threshold);
@@ -184,6 +185,7 @@ void wflign_affine_wavefront(
                         std::chrono::steady_clock::now() - start_time)
                         .count();
 
+        uint64_t max_wf_memory_used = wfa::wavefront_aligner_get_size(wf_aligner);
         // write a merged alignment
         write_merged_alignment(
                 out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
@@ -191,8 +193,10 @@ void wflign_affine_wavefront(
                 query_offset, query_length, query_is_rev, target, target_name,
                 target_total_length, target_offset, target_length,
                 MAX_LEN_FOR_PURE_WFA, min_identity,
-                elapsed_time_wflambda_ms, num_alignments,
-                num_alignments_performed, mashmap_estimated_identity,
+                elapsed_time_wflambda_ms,
+                num_alignments, num_alignments_performed,
+                max_wf_memory_used,
+                mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor,
                 erode_k,
                 min_wf_length, max_dist_threshold);
@@ -515,14 +519,14 @@ void wflign_affine_wavefront(
                 wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner_cigar->cigar);
             };
 
-        //std::cerr << query_name << " - " << target_name << std::endl;
-        auto are_consecutive_over_the_same_diagonal = [&](const alignment_t &left, const alignment_t &right) {
-            const int v_last = left.i / step_size;
-            const int h_last = left.j / step_size;
-            const int v_curr = right.i / step_size;
-            const int h_curr = right.j / step_size;
-            return (v_last == (v_curr - 1) && h_last == (h_curr - 1));
-        };
+            //std::cerr << query_name << " - " << target_name << std::endl;
+            auto are_consecutive_over_the_same_diagonal = [&](const alignment_t &left, const alignment_t &right) {
+                const int v_last = left.i / step_size;
+                const int h_last = left.j / step_size;
+                const int v_curr = right.i / step_size;
+                const int h_curr = right.j / step_size;
+                return (v_last == (v_curr - 1) && h_last == (h_curr - 1));
+            };
 
             auto x = trace.rbegin();
 
@@ -711,7 +715,8 @@ void wflign_affine_wavefront(
                     query_offset, query_length, query_is_rev, target, target_name,
                     target_total_length, target_offset, target_length,
                     segment_length_to_use, min_identity,
-                    elapsed_time_wflambda_ms, num_alignments, num_alignments_performed,
+                    elapsed_time_wflambda_ms,
+                    num_alignments, num_alignments_performed,
                     max_wf_memory_used,
                     mashmap_estimated_identity,
                     wflign_max_len_major, wflign_max_len_minor,
@@ -1216,8 +1221,8 @@ void write_merged_alignment(
     const bool &query_is_rev, const char *target,
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
-    const uint16_t &segment_length,
-    const float &min_identity, const long &elapsed_time_wflambda_ms,
+    const uint16_t &segment_length, const float &min_identity,
+    const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     uint64_t &max_wf_memory_used,
     const float &mashmap_estimated_identity,
