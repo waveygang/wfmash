@@ -372,7 +372,8 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
-    if (keep_low_align_pct_identity) {
+    if (keep_low_align_pct_identity || align_input_paf) {
+        // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
         align_parameters.min_identity = 0; // now unused
     } else {
         align_parameters.min_identity = map_parameters.percentageIdentity; // in [0,1]
