@@ -186,6 +186,7 @@ void wflign_affine_wavefront(
                         .count();
 
         uint64_t max_wf_memory_used = wfa::wavefront_aligner_get_size(wf_aligner);
+
         // write a merged alignment
         write_merged_alignment(
                 out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
@@ -323,9 +324,6 @@ void wflign_affine_wavefront(
                                                                            segment_length_to_use,
                                                                            wfa::compute_score,
                                                                            false, -1);
-
-        uint64_t num_alignments = 0;
-        uint64_t num_alignments_performed = 0;
 
         int v_max = 0;
         int h_max = 0;
@@ -710,7 +708,7 @@ void wflign_affine_wavefront(
 
                 // write a merged alignment
                 write_merged_alignment(
-                    out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
+                        out, trace, wf_aligner_patching, &wfa_affine_penalties, emit_md_tag,
                     paf_format_else_sam, query, query_name, query_total_length,
                     query_offset, query_length, query_is_rev, target, target_name,
                     target_total_length, target_offset, target_length,
