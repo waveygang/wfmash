@@ -42,7 +42,8 @@ struct Parameters {
     std::vector<std::string> refSequences;        //reference sequence(s)
     std::vector<std::string> querySequences;      //query sequence(s)
     std::string mashmapPafFile;                   //mashmap paf mapping file
-    std::string pafOutputFile;                    //sam output file name
+    std::string pafOutputFile;                    //paf/sam output file name
+    std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
 
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)

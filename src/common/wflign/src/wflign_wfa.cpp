@@ -35,7 +35,9 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 #define MAX_LEN_FOR_PURE_WFA 10000
 
 void wflign_affine_wavefront(
-    std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
+    std::ostream &out,
+    const bool &emit_tsv, std::ostream &out_tsv,
+    const bool &merge_alignments, const bool &emit_md_tag,
     const bool &paf_format_else_sam, const std::string &query_name,
     const char *query, const uint64_t &query_total_length,
     const uint64_t &query_offset, const uint64_t &query_length,
@@ -198,6 +200,17 @@ void wflign_affine_wavefront(
         // Free
         wfa::wavefront_aligner_delete(wf_aligner);
     } else {
+        if (emit_tsv) {
+            out_tsv << "# query_name=" << query_name << std::endl;
+            out_tsv << "# query_start=" << query_offset << std::endl;
+            out_tsv << "# query_end=" << query_offset+query_length << std::endl;
+            out_tsv << "# target_name=" << target_name << std::endl;
+            out_tsv << "# target_start=" << target_offset << std::endl;
+            out_tsv << "# target_end=" << target_offset+target_length << std::endl;
+            out_tsv << "# info: 0) mismatch, mash-distance > threshold; 1) mismatch, WFA-score >= max_score; 2) match, WFA-score < max_score" << std::endl;
+            out_tsv << "v" << "\t" << "h" << "\t" << "info" << std::endl;
+        }
+
         const uint16_t segment_length_to_use =
                 (query_length < segment_length || target_length < segment_length)
                 ? std::min(query_length, target_length)
@@ -350,7 +363,12 @@ void wflign_affine_wavefront(
                             step_size, minhash_kmer_size, wfa_min_wavefront_length,
                             wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
                             wf_aligner, &wfa_affine_penalties, *aln);
-                    //std::cerr << v << "\t" << h << "\t" << "\t" << alignment_performed << std::endl;
+                    if (emit_tsv) {
+                        // 0) Mis-match, alignment skipped
+                        // 1) Mis-match, alignment performed
+                        // 2) Match, alignment performed
+                        out_tsv << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
+                    }
                     ++num_alignments;
                     if (alignment_performed) {
                         ++num_alignments_performed;
@@ -461,160 +479,160 @@ void wflign_affine_wavefront(
         // Trim alignments that overlap in the query
         if (!trace.empty()) {
             //#define VALIDATE_WFA_WFLIGN
-        #ifdef VALIDATE_WFA_WFLIGN
-        if (!trace.front()->validate(query, target)) {
-            std::cerr << "first traceback is wrong" << std::endl;
-            trace.front()->display();
-            assert(false);
-        }
-        #endif
+            #ifdef VALIDATE_WFA_WFLIGN
+            if (!trace.front()->validate(query, target)) {
+                std::cerr << "first traceback is wrong" << std::endl;
+                trace.front()->display();
+                assert(false);
+            }
+            #endif
 
-        if(attributes.low_memory) {
-            std::reverse(trace.begin(), trace.end());
-        }
+            if(attributes.low_memory) {
+                std::reverse(trace.begin(), trace.end());
+            }
 
-        auto x = trace.rbegin();
-        auto end_trace = trace.rend();
+            auto x = trace.rbegin();
+            auto end_trace = trace.rend();
 
-        auto c = x + 1;
-        while (x != end_trace && c != end_trace) {
-            // establish our last and curr alignments to consider when trimming
-            auto &last = **x;
-            auto &curr = **c;
+            auto c = x + 1;
+            while (x != end_trace && c != end_trace) {
+                // establish our last and curr alignments to consider when trimming
+                auto &last = **x;
+                auto &curr = **c;
 
-        #ifdef VALIDATE_WFA_WFLIGN
+            #ifdef VALIDATE_WFA_WFLIGN
+                if (curr.ok && !curr.validate(query, target)) {
+                    std::cerr << "curr traceback is wrong before trimming @ "
+                    << curr.j << " " << curr.i << std::endl;
+                    curr.display();
+                    assert(false);
+                }
+            #endif
+            trace_pos_t last_pos = {last.j, last.i, &last.edit_cigar,
+                                    last.edit_cigar.begin_offset};
+                trace_pos_t curr_pos = {curr.j, curr.i, &curr.edit_cigar,
+                                        curr.edit_cigar.begin_offset};
+
+                // trace the last alignment until we overlap the next
+                // to record our match
+                trace_pos_t match_pos;
+
+                // walk until they are matched at the query position
+                while (!last_pos.at_end() && !curr_pos.at_end()) {
+                    //std::cerr << "last_pos " << last_pos.j << " - " << last_pos.i << " - " << last_pos.offset << " - " << last_pos.curr() << std::endl;
+                    //std::cerr << "curr_pos " << curr_pos.j << " - " << curr_pos.i << " - " << curr_pos.offset << " - " << curr_pos.curr() << std::endl;
+                    if (last_pos.equal(curr_pos)) {
+                        // they equal and we can splice them at the first match
+                        match_pos = last_pos;
+                        break;
+                    }
+                    if (last_pos.j == curr_pos.j) {
+                        last_pos.incr();
+                        curr_pos.incr();
+                    } else if (last_pos.j < curr_pos.j) {
+                        last_pos.incr();
+                    } else {
+                        curr_pos.incr();
+                    }
+                }
+
+                // if we matched, we'll be able to splice the alignments together
+                int trim_last = 0, trim_curr = 0;
+                if (match_pos.assigned()) {
+                    //std::cerr << "match_pos " << match_pos.j << " - " << match_pos.i << " - " << match_pos.offset << " - " << match_pos.curr() << std::endl;
+                    // we'll use our match position to set up the trims
+                    trim_last = (last.j + last.query_length) - match_pos.j;
+                    trim_curr = match_pos.j - curr.j;
+                } else {
+                    // we want to remove any possible overlaps in query or target
+                    // walk back last until we don't overlap in i or j
+                    // recording the distance walked as an additional trim on last
+                    bool flip = false;
+                    while (last_pos.j > curr_pos.j || last_pos.i > curr_pos.i) {
+                        if (flip) {
+                            last_pos.decr();
+                        } else {
+                            curr_pos.incr();
+                        }
+                        flip ^= true;
+                    }
+                    trim_last = (last.j + last.query_length) - last_pos.j + 1;
+                    trim_curr = curr_pos.j - curr.j + 1;
+                    assert(last_pos.j <= curr_pos.j);
+                    assert(last_pos.i <= curr_pos.i);
+                }
+
+                // assign our cigar trim
+                //last.display();
+                if (trim_last > 0) {
+                    //std::cerr << "trim_last " << trim_last << std::endl;
+                    last.trim_back(trim_last);
+                    //last.display();
+            #ifdef VALIDATE_WFA_WFLIGN
+            if (last.ok && !last.validate(query, target)) {
+                std::cerr << "traceback is wrong after last trimming @ "
+                << last.j << " " << last.i << std::endl;
+                last.display();
+                assert(false);
+            }
+            #endif
+                }
+                //curr.display();
+                if (trim_curr > 0) {
+                    //std::cerr << "trim_curr " << trim_curr << std::endl;
+                    curr.trim_front(trim_curr);
+                    //curr.display();
+            #ifdef VALIDATE_WFA_WFLIGN
             if (curr.ok && !curr.validate(query, target)) {
-                std::cerr << "curr traceback is wrong before trimming @ "
+                std::cerr << "traceback is wrong after curr trimming @ "
                 << curr.j << " " << curr.i << std::endl;
                 curr.display();
                 assert(false);
             }
-        #endif
-        trace_pos_t last_pos = {last.j, last.i, &last.edit_cigar,
-                                last.edit_cigar.begin_offset};
-            trace_pos_t curr_pos = {curr.j, curr.i, &curr.edit_cigar,
-                                    curr.edit_cigar.begin_offset};
-
-            // trace the last alignment until we overlap the next
-            // to record our match
-            trace_pos_t match_pos;
-
-            // walk until they are matched at the query position
-            while (!last_pos.at_end() && !curr_pos.at_end()) {
-                //std::cerr << "last_pos " << last_pos.j << " - " << last_pos.i << " - " << last_pos.offset << " - " << last_pos.curr() << std::endl;
-                //std::cerr << "curr_pos " << curr_pos.j << " - " << curr_pos.i << " - " << curr_pos.offset << " - " << curr_pos.curr() << std::endl;
-                if (last_pos.equal(curr_pos)) {
-                    // they equal and we can splice them at the first match
-                    match_pos = last_pos;
-                    break;
+            #endif
                 }
-                if (last_pos.j == curr_pos.j) {
-                    last_pos.incr();
-                    curr_pos.incr();
-                } else if (last_pos.j < curr_pos.j) {
-                    last_pos.incr();
-                } else {
-                    curr_pos.incr();
+                if (curr.ok) {
+                    x = c;
                 }
+                ++c;
+            #ifdef VALIDATE_WFA_WFLIGN
+                auto distance_target = (curr.i - (last.i + last.target_length));
+                auto distance_query = (curr.j - (last.j + last.query_length));
+                if (last.ok && curr.ok &&
+                (distance_query < 0 || distance_target < 0)) {
+                    std::cerr << "distance_target_query " << distance_target << " "
+                    << distance_query << std::endl;
+                    std::cerr << "trimming failure at @ " << last.j << "," << last.i
+                    << " -> " << curr.j << "," << curr.i << std::endl;
+                    last.display();
+                    curr.display();
+                    exit(1);
+                }
+            #endif
             }
 
-            // if we matched, we'll be able to splice the alignments together
-            int trim_last = 0, trim_curr = 0;
-            if (match_pos.assigned()) {
-                //std::cerr << "match_pos " << match_pos.j << " - " << match_pos.i << " - " << match_pos.offset << " - " << match_pos.curr() << std::endl;
-                // we'll use our match position to set up the trims
-                trim_last = (last.j + last.query_length) - match_pos.j;
-                trim_curr = match_pos.j - curr.j;
+            if (merge_alignments) {
+                // write a merged alignment
+                write_merged_alignment(
+                        out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
+                        paf_format_else_sam, query, query_name, query_total_length,
+                        query_offset, query_length, query_is_rev, target, target_name,
+                        target_total_length, target_offset, target_length,
+                        segment_length_to_use, min_identity,
+                        elapsed_time_wflambda_ms, num_alignments,
+                        num_alignments_performed, mashmap_estimated_identity,
+                        wflign_max_len_major, wflign_max_len_minor,
+                        erode_k,
+                        256, 768);
             } else {
-                // we want to remove any possible overlaps in query or target
-                // walk back last until we don't overlap in i or j
-                // recording the distance walked as an additional trim on last
-                bool flip = false;
-                while (last_pos.j > curr_pos.j || last_pos.i > curr_pos.i) {
-                    if (flip) {
-                        last_pos.decr();
-                    } else {
-                        curr_pos.incr();
-                    }
-                    flip ^= true;
+                for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
+                    // std::cerr << "on alignment" << std::endl;
+                    write_alignment(out, **x, query_name, query_total_length,
+                                    query_offset, query_length, query_is_rev,
+                                    target_name, target_total_length, target_offset,
+                                    target_length, min_identity, mashmap_estimated_identity);
                 }
-                trim_last = (last.j + last.query_length) - last_pos.j + 1;
-                trim_curr = curr_pos.j - curr.j + 1;
-                assert(last_pos.j <= curr_pos.j);
-                assert(last_pos.i <= curr_pos.i);
             }
-
-            // assign our cigar trim
-            //last.display();
-            if (trim_last > 0) {
-                //std::cerr << "trim_last " << trim_last << std::endl;
-                last.trim_back(trim_last);
-                //last.display();
-        #ifdef VALIDATE_WFA_WFLIGN
-        if (last.ok && !last.validate(query, target)) {
-            std::cerr << "traceback is wrong after last trimming @ "
-            << last.j << " " << last.i << std::endl;
-            last.display();
-            assert(false);
-        }
-        #endif
-            }
-            //curr.display();
-            if (trim_curr > 0) {
-                //std::cerr << "trim_curr " << trim_curr << std::endl;
-                curr.trim_front(trim_curr);
-                //curr.display();
-        #ifdef VALIDATE_WFA_WFLIGN
-        if (curr.ok && !curr.validate(query, target)) {
-            std::cerr << "traceback is wrong after curr trimming @ "
-            << curr.j << " " << curr.i << std::endl;
-            curr.display();
-            assert(false);
-        }
-        #endif
-            }
-            if (curr.ok) {
-                x = c;
-            }
-            ++c;
-        #ifdef VALIDATE_WFA_WFLIGN
-            auto distance_target = (curr.i - (last.i + last.target_length));
-            auto distance_query = (curr.j - (last.j + last.query_length));
-            if (last.ok && curr.ok &&
-            (distance_query < 0 || distance_target < 0)) {
-                std::cerr << "distance_target_query " << distance_target << " "
-                << distance_query << std::endl;
-                std::cerr << "trimming failure at @ " << last.j << "," << last.i
-                << " -> " << curr.j << "," << curr.i << std::endl;
-                last.display();
-                curr.display();
-                exit(1);
-            }
-        #endif
-        }
-
-        if (merge_alignments) {
-            // write a merged alignment
-            write_merged_alignment(
-                    out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
-                    paf_format_else_sam, query, query_name, query_total_length,
-                    query_offset, query_length, query_is_rev, target, target_name,
-                    target_total_length, target_offset, target_length,
-                    segment_length_to_use, min_identity,
-                    elapsed_time_wflambda_ms, num_alignments,
-                    num_alignments_performed, mashmap_estimated_identity,
-                    wflign_max_len_major, wflign_max_len_minor,
-                    erode_k,
-                    256, 768);
-        } else {
-            for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
-                // std::cerr << "on alignment" << std::endl;
-                write_alignment(out, **x, query_name, query_total_length,
-                                query_offset, query_length, query_is_rev,
-                                target_name, target_total_length, target_offset,
-                                target_length, min_identity, mashmap_estimated_identity);
-            }
-        }
         }
 
         // Free

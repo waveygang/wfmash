@@ -99,7 +99,7 @@ void parse_args(int argc,
     // patching parameter
     args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 512*segment-length]", {'C', "max-patch-major"});
     args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 128*segment-length]", {'F', "max-patch-minor"});
-    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
+    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-match-mismatch"});
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
@@ -107,7 +107,10 @@ void parse_args(int argc,
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
-    args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
+    args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'Z', "keep-temp"});
+
+    // debugging
+    args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
 
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
     //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
@@ -499,6 +502,10 @@ void parse_args(int argc,
         }
         align_parameters.pafOutputFile = "/dev/stdout";
     }
+
+    align_parameters.tsvOutputPrefix = (prefix_wavefront_info_in_tsv && !args::get(prefix_wavefront_info_in_tsv).empty())
+            ? args::get(prefix_wavefront_info_in_tsv)
+            : "";
 
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {

@@ -247,7 +247,9 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
     const bool& low_memory);
 
 void wflign_affine_wavefront(
-    std::ostream &out, const bool &merge_alignments, const bool &emit_md_tag,
+    std::ostream &out,
+    const bool &emit_tsv, std::ostream &out_tsv,
+    const bool &merge_alignments, const bool &emit_md_tag,
     const bool &paf_format_else_sam, const std::string &query_name,
     const char *query, const uint64_t &query_total_length,
     const uint64_t &query_offset, const uint64_t &query_length,
