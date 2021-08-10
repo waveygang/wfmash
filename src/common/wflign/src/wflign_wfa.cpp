@@ -45,7 +45,7 @@ void wflign_affine_wavefront(
     const char *target, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length, const float &min_identity,
-    const int& minhash_kmer_size,
+    const int& _minhash_kmer_size,
     const int &wfa_mismatch_score,
     const int &wfa_gap_opening_score,
     const int &wfa_gap_extension_score,
@@ -66,6 +66,8 @@ void wflign_affine_wavefront(
         return;
     }
 
+    auto minhash_kmer_size = _minhash_kmer_size;
+
     // Set penalties
     wfa::affine_penalties_t wfa_affine_penalties;
     if (wfa_mismatch_score > 0 && wfa_gap_opening_score > 0 && wfa_gap_extension_score > 0){
@@ -75,6 +77,7 @@ void wflign_affine_wavefront(
                 .gap_opening = wfa_gap_opening_score,
                 .gap_extension = wfa_gap_extension_score
         };
+        minhash_kmer_size = 17;
     } else {
         if (mashmap_estimated_identity >= 0.99999) {
             wfa_affine_penalties = {
@@ -83,6 +86,7 @@ void wflign_affine_wavefront(
                     .gap_opening = 25,
                     .gap_extension = 1,
                     };
+            minhash_kmer_size = 17;
         } else if (mashmap_estimated_identity >= 0.97) {
             wfa_affine_penalties = {
                     .match = 0,
@@ -90,13 +94,23 @@ void wflign_affine_wavefront(
                     .gap_opening = 13,
                     .gap_extension = 1,
                     };
+            minhash_kmer_size = 17;
         } else if (mashmap_estimated_identity >= 0.9) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 4,
+                    .gap_opening = 6,
+                    .gap_extension = 1,
+                    };
+            minhash_kmer_size = 15;
+        } else if (mashmap_estimated_identity >= 0.8) {
             wfa_affine_penalties = {
                     .match = 0,
                     .mismatch = 3,
                     .gap_opening = 5,
                     .gap_extension = 1,
                     };
+            minhash_kmer_size = 13;
         } else {
             wfa_affine_penalties = {
                     .match = 0,
@@ -104,6 +118,7 @@ void wflign_affine_wavefront(
                     .gap_opening = 3,
                     .gap_extension = 1,
                     };
+            minhash_kmer_size = 11;
         }
     }
 
@@ -280,8 +295,10 @@ void wflign_affine_wavefront(
                 max_mash_dist_to_evaluate = 0.05;
             } else if (mashmap_estimated_identity >= 0.9) {
                 max_mash_dist_to_evaluate = 0.2;
-            } else {
+            } else if (mashmap_estimated_identity >= 0.8) {
                 max_mash_dist_to_evaluate = 0.3;
+            } else if (mashmap_estimated_identity >= 0.7) {
+                max_mash_dist_to_evaluate = 0.5;
             }
         }
 
@@ -686,6 +703,7 @@ bool do_wfa_segment_alignment(
     } else {
         // if it is, we'll align
 
+        //const int max_score = std::max(segment_length_q, segment_length_t) * 2;
         const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
         // Worst case acceptable as a match: seg_len/4 Is/Ds + seg_len * 3/4 long good enough alignment + seg_len/4 Ds/Is
 //        int segment_length_div_4 = std::max(segment_length_q, segment_length_t) / 4;
