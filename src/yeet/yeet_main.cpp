@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
         robin_hood::unordered_flat_map< std::string, std::pair<skch::seqno_t, uint64_t> > seqName_to_seqCounterAndLen;
 
         skch::seqno_t seqCounter = 0;
-        for(const auto &fileName : map_parameters.refSequences)
+        for(const auto &fileName : map_parameters.querySequences)
         {
             seqiter::for_each_seq_in_file(
                     fileName,
