@@ -98,11 +98,11 @@ void wflign_affine_wavefront(
         } else if (mashmap_estimated_identity >= 0.9) {
             wfa_affine_penalties = {
                     .match = 0,
-                    .mismatch = 4,
-                    .gap_opening = 6,
+                    .mismatch = 7,
+                    .gap_opening = 11,
                     .gap_extension = 1,
                     };
-            minhash_kmer_size = 15;
+            minhash_kmer_size = 16;
         } else if (mashmap_estimated_identity >= 0.8) {
             wfa_affine_penalties = {
                     .match = 0,
@@ -110,15 +110,15 @@ void wflign_affine_wavefront(
                     .gap_opening = 5,
                     .gap_extension = 1,
                     };
-            minhash_kmer_size = 13;
+            minhash_kmer_size = 15;
         } else {
             wfa_affine_penalties = {
                     .match = 0,
                     .mismatch = 2,
-                    .gap_opening = 3,
+                    .gap_opening = 4,
                     .gap_extension = 1,
                     };
-            minhash_kmer_size = 11;
+            minhash_kmer_size = 13;
         }
     }
 
@@ -273,15 +273,22 @@ void wflign_affine_wavefront(
             } else if (mashmap_estimated_identity >= 0.9) {
                 wflambda_affine_penalties = {
                         .match = 0,
-                        .mismatch = 5,
-                        .gap_opening = 9,
+                        .mismatch = 9,
+                        .gap_opening = 14,
+                        .gap_extension = 1,
+                        };
+            } else if (mashmap_estimated_identity >= 0.8) {
+                wflambda_affine_penalties = {
+                        .match = 0,
+                        .mismatch = 7,
+                        .gap_opening = 11,
                         .gap_extension = 1,
                         };
             } else {
                 wflambda_affine_penalties = {
                         .match = 0,
-                        .mismatch = 3,
-                        .gap_opening = 5,
+                        .mismatch = 4,
+                        .gap_opening = 6,
                         .gap_extension = 1,
                         };
             }
@@ -296,9 +303,9 @@ void wflign_affine_wavefront(
             } else if (mashmap_estimated_identity >= 0.9) {
                 max_mash_dist_to_evaluate = 0.2;
             } else if (mashmap_estimated_identity >= 0.8) {
-                max_mash_dist_to_evaluate = 0.3;
+                max_mash_dist_to_evaluate = 0.7;
             } else if (mashmap_estimated_identity >= 0.7) {
-                max_mash_dist_to_evaluate = 0.5;
+                max_mash_dist_to_evaluate = 0.9;
             }
         }
 
