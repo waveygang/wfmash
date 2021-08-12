@@ -661,7 +661,6 @@ void wflign_affine_wavefront(
 
         // Free
         wfa::wavefront_aligner_delete(wf_aligner);
-        wflambda::wavefront_aligner_delete(wflambda_aligner);
     }
 }
 
