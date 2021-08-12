@@ -333,9 +333,8 @@ void wflign_affine_wavefront(
             attributes.reduction.reduction_strategy =
                     wflambda::wavefront_reduction_none; // wavefront_reduction_dynamic
         }
-        attributes.alignment_scope =
-                wflambda::alignment_scope_alignment; // alignment_scope_score
-                attributes.low_memory = true;
+        attributes.alignment_scope = wflambda::alignment_scope_alignment; // alignment_scope_score
+        attributes.low_memory = true;
         wflambda::wavefront_aligner_t *const wflambda_aligner = wflambda::wavefront_aligner_new(
                 pattern_length, text_length, &attributes);
 
@@ -461,6 +460,7 @@ void wflign_affine_wavefront(
                                                   text_length);
         wflambda::wavefront_align(wflambda_aligner, extend_match,
                                   trace_match, pattern_length, text_length);
+        wflambda::wavefront_aligner_delete(wflambda_aligner);
 
         for (const auto &p : alignments) {
             if (p.second != nullptr && !p.second->keep) {
