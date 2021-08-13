@@ -26,31 +26,72 @@
  *
  * PROJECT: Wavefront Alignments Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
- * DESCRIPTION: WaveFront-Alignment module for display and report
  */
+
 
 #pragma once
 
 #include "WFA/utils/commons.h"
-#include "WFA/utils/heatmap.h"
 
 #ifdef WFA_NAMESPACE
 namespace wfa {
 #endif
 
-// Wavefront ahead definition
-typedef struct _wavefront_aligner_t wavefront_aligner_t;
 
-/*
- * Display
- */
-void wavefront_aligner_print(
-    FILE* const stream,
-    wavefront_aligner_t* const wf_aligner,
-    const int score_begin,
-    const int score_end,
-    const int wf_block_num,
-    const int wf_bt_length);
+    /*
+     * Heatmap
+     */
+    typedef enum {
+        heatmap_min,   // Min value stays
+        heatmap_max,   // Max value stays
+        heatmap_value, // Last value set stays
+    } heatmap_type;
+    typedef struct {
+        // Configuration
+        heatmap_type type;
+        // Dimensions
+        int num_rows;
+        int num_columns;
+        // Range
+        int min_v;
+        int max_v;
+        int min_h;
+        int max_h;
+        float binning_factor;
+        // Data
+        int** values;
+    } heatmap_t;
+
+    /*
+     * Setup
+     */
+    heatmap_t* heatmap_new(
+            const heatmap_type type,
+            const int min_v,
+            const int max_v,
+            const int min_h,
+            const int max_h,
+            const int resolution_points);
+    void heatmap_clear(
+            heatmap_t* const heatmap);
+    void heatmap_delete(
+            heatmap_t* const heatmap);
+
+    /*
+     * Accessors
+     */
+    void heatmap_set(
+            heatmap_t* const heatmap,
+            const int v,
+            const int h,
+            const int value);
+
+    /*
+     * Display
+     */
+    void heatmap_print(
+            FILE* const stream,
+            heatmap_t* const heatmap);
 
 #ifdef WFA_NAMESPACE
 }

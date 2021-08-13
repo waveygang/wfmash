@@ -43,59 +43,59 @@ namespace wfa {
 /*
  * Memory Manager for Wavefront
  */
-    typedef struct {
-        // Attributes
-        bool allocate_backtrace;
-        // Wavefront Slabs
-        int max_wavefront_elements;   // Maximum wf-elements allocated (max. wf. size)
-        vector_t* wavefronts;         // All wavefronts (wavefront_t*)
-        vector_t* wavefronts_free;    // Free wavefronts (wavefront_t*)
-        // Stats
-        uint64_t memory_used;         // Memory used (Bytes)
-        // MM
-        mm_allocator_t* mm_allocator; // MM-Allocator
-    } wavefront_slab_t;
+typedef struct {
+  // Attributes
+  bool allocate_backtrace;
+  // Wavefront Slabs
+  int wf_elements_allocated;    // Maximum wf-elements allocated (max. wf. size)
+  vector_t* wavefronts;         // All wavefronts (wavefront_t*)
+  vector_t* wavefronts_free;    // Free wavefronts (wavefront_t*)
+  // Stats
+  uint64_t memory_used;         // Memory used (Bytes)
+  // MM
+  mm_allocator_t* mm_allocator; // MM-Allocator
+} wavefront_slab_t;
 
-    typedef enum {
-        wf_slab_reap_free_unfit = 1, // Reap only the free wavefronts that are unfit
-        wf_slab_reap_all_unfit  = 2, // Reap all unfit wavefronts
-        wf_slab_reap_all        = 3  // Reap all (free memory)
-    } wf_slab_reap_mode_t;
+typedef enum {
+  wf_slab_reap_free_unfit = 1, // Reap only the free wavefronts that are unfit
+  wf_slab_reap_all_unfit  = 2, // Reap all unfit wavefronts
+  wf_slab_reap_all        = 3  // Reap all (free memory)
+} wf_slab_reap_mode_t;
 
 /*
  * Setup
  */
-    wavefront_slab_t* wavefront_slab_new(
-            const int init_max_wavefront_elements,
-            const bool allocate_backtrace,
-            mm_allocator_t* const mm_allocator);
-    void wavefront_slab_reap(
-            wavefront_slab_t* const wavefront_slab,
-            const wf_slab_reap_mode_t reap_mode);
-    void wavefront_slab_resize(
-            wavefront_slab_t* const wavefront_slab,
-            const int max_wavefront_elements);
-    void wavefront_slab_clear(
-            wavefront_slab_t* const wavefront_slab);
-    void wavefront_slab_delete(
-            wavefront_slab_t* const wavefront_slab);
+wavefront_slab_t* wavefront_slab_new(
+    const int wf_elements_allocated,
+    const bool allocate_backtrace,
+    mm_allocator_t* const mm_allocator);
+void wavefront_slab_reap(
+    wavefront_slab_t* const wavefront_slab,
+    const wf_slab_reap_mode_t reap_mode);
+void wavefront_slab_resize(
+    wavefront_slab_t* const wavefront_slab,
+    const int wf_elements_allocated);
+void wavefront_slab_clear(
+    wavefront_slab_t* const wavefront_slab);
+void wavefront_slab_delete(
+    wavefront_slab_t* const wavefront_slab);
 
 /*
  * Allocator
  */
-    wavefront_t* wavefront_slab_allocate(
-            wavefront_slab_t* const wavefront_slab,
-            const int lo,
-            const int hi);
-    void wavefront_slab_free(
-            wavefront_slab_t* const wavefront_slab,
-            wavefront_t* const wavefront);
+wavefront_t* wavefront_slab_allocate(
+    wavefront_slab_t* const wavefront_slab,
+    const int lo,
+    const int hi);
+void wavefront_slab_free(
+    wavefront_slab_t* const wavefront_slab,
+    wavefront_t* const wavefront);
 
 /*
  * Utils
  */
-    uint64_t wavefront_slab_get_size(
-            wavefront_slab_t* const wavefront_slab);
+uint64_t wavefront_slab_get_size(
+    wavefront_slab_t* const wavefront_slab);
 
 #ifdef WFA_NAMESPACE
 }

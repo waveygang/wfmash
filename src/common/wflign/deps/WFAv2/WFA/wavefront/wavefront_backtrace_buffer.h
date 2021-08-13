@@ -42,78 +42,98 @@ namespace wfa {
 #endif
 
 /*
- * Constants
- */
-#define WF_BACKTRACE_PREV_NULL UINT32_MAX
-
-/*
  * Backtrace Block
  */
-    typedef uint32_t block_idx_t;
-    typedef struct {
-        pcigar_t pcigar;
-        block_idx_t prev_idx;
-    } __attribute__((packed)) wf_backtrace_block_t;
+typedef uint32_t block_idx_t; // Up to 2^31-1 (1 bit for marking) references (~16GB of pCIGARs)
+#define WF_BACKTRACE_BLOCK_MAX_IDX   ((1ul<<31)-1)
+#define WF_BACKTRACE_BLOCK_IDX_NULL  UINT32_MAX
+
+typedef struct {
+  pcigar_t pcigar;            // Packed CIGAR
+  block_idx_t prev_idx;       // Index of the previous CIGAR-block
+} __attribute__((packed)) wf_backtrace_block_t;
+
+// Marked blocks
+#define WF_BACKTRACE_BLOCK_MARK_MASK            (1ul<<31)
+#define WF_BACKTRACE_BLOCK_MARK(block_idx)      ((block_idx) | WF_BACKTRACE_BLOCK_MARK_MASK)
+#define WF_BACKTRACE_BLOCK_UNMARK(block_idx)    ((block_idx) & ~(WF_BACKTRACE_BLOCK_MARK_MASK))
+#define WF_BACKTRACE_BLOCK_IS_MARKED(block_idx) (((block_idx) & WF_BACKTRACE_BLOCK_MARK_MASK)!=0)
 
 /*
  * Backtrace Buffer
  */
-    typedef struct {
-        // Current pointer
-        int segment_idx; // Current segment idx
-        int segment_pos; // Current free position within segment
-        // Buffer
-        vector_t* segments;   // Memory segments (wf_backtrace_block_t*)
-        vector_t* palignment; // Temporal buffer to store final alignment (pcigar_t)
-        // MM
-        mm_allocator_t* mm_allocator;
-    } wf_backtrace_buffer_t;
+typedef struct {
+  int segment_idx;      // Current segment idx
+  int segment_pos;      // Current free position within segment
+  // Buffer
+  vector_t* segments;   // Memory segments (wf_backtrace_block_t*)
+  vector_t* palignment; // Temporal buffer to store final alignment (pcigar_t)
+  // MM
+  mm_allocator_t* mm_allocator;
+} wf_backtrace_buffer_t;
 
 /*
  * Setup
  */
-    wf_backtrace_buffer_t* wf_backtrace_buffer_new(mm_allocator_t* const mm_allocator);
-    void wf_backtrace_buffer_clear(
-            wf_backtrace_buffer_t* const bt_buffer);
-    void wf_backtrace_buffer_reap(
-            wf_backtrace_buffer_t* const bt_buffer);
-    void wf_backtrace_buffer_delete(
-            wf_backtrace_buffer_t* const bt_buffer);
+wf_backtrace_buffer_t* wf_backtrace_buffer_new(
+    mm_allocator_t* const mm_allocator);
+void wf_backtrace_buffer_clear(
+    wf_backtrace_buffer_t* const bt_buffer);
+void wf_backtrace_buffer_reap(
+    wf_backtrace_buffer_t* const bt_buffer);
+void wf_backtrace_buffer_delete(
+    wf_backtrace_buffer_t* const bt_buffer);
 
 /*
  * Store blocks
  */
-    void wf_backtrace_buffer_store_block(
-            wf_backtrace_buffer_t* const bt_buffer,
-            pcigar_t* const pcigar,
-            block_idx_t* const prev_idx);
-    void wf_backtrace_buffer_store_starting_block(
-            wf_backtrace_buffer_t* const bt_buffer,
-            const int v,
-            const int h,
-            pcigar_t* const pcigar,
-            block_idx_t* const prev_idx);
+void wf_backtrace_buffer_store_block_bt(
+    wf_backtrace_buffer_t* const bt_buffer,
+    pcigar_t* const pcigar,
+    block_idx_t* const prev_idx);
+void wf_backtrace_buffer_store_block_init(
+    wf_backtrace_buffer_t* const bt_buffer,
+    const int v,
+    const int h,
+    pcigar_t* const pcigar,
+    block_idx_t* const prev_idx);
 
 /*
  * Recover CIGAR
  */
-    void wf_backtrace_buffer_recover_cigar(
-            wf_backtrace_buffer_t* const bt_buffer,
-            const char* const pattern,
-            const int pattern_length,
-            const char* const text,
-            const int text_length,
-            const int alignment_k,
-            const int alignment_offset,
-            const pcigar_t pcigar_last,
-            const block_idx_t prev_idx_last,
-            cigar_t* const cigar);
+void wf_backtrace_buffer_recover_cigar(
+    wf_backtrace_buffer_t* const bt_buffer,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    const int alignment_k,
+    const int alignment_offset,
+    const pcigar_t pcigar_last,
+    const block_idx_t prev_idx_last,
+    cigar_t* const cigar);
+
+/*
+ * Compact
+ */
+void wf_backtrace_buffer_mark_backtrace(
+    wf_backtrace_buffer_t* const bt_buffer,
+    const block_idx_t bt_block_idx);
+block_idx_t wf_backtrace_buffer_translate_idx(
+    wf_backtrace_buffer_t* const bt_buffer,
+    const block_idx_t bt_block_idx);
+void wf_backtrace_buffer_compact_marked(
+    wf_backtrace_buffer_t* const bt_buffer_full,
+    wf_backtrace_buffer_t* const bt_buffer_compacted,
+    const bool verbose);
 
 /*
  * Utils
  */
-    uint64_t wf_backtrace_buffer_get_size(
-            wf_backtrace_buffer_t* const bt_buffer);
+uint64_t wf_backtrace_buffer_get_size_allocated(
+    wf_backtrace_buffer_t* const bt_buffer);
+uint64_t wf_backtrace_buffer_get_size_used(
+    wf_backtrace_buffer_t* const bt_buffer);
 
 #ifdef WFA_NAMESPACE
 }

@@ -10,6 +10,7 @@ namespace wavefront {
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
+    //ToDo: to remove if wavefront_aligner_new will not re-take the seqs' lens in input
     const uint64_t& target_length,
     const uint64_t& query_length,
     const bool& low_memory) {
@@ -28,8 +29,8 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
         wfa::compute_alignment; // alignment_scope_score
     attributes.low_memory = low_memory;
     //wfa::wavefront_aligner_t *const wf_aligner =
-    return wfa::wavefront_aligner_new(
-        target_length, query_length, &attributes);
+    //return wfa::wavefront_aligner_new(target_length, query_length, &attributes);
+    return wfa::wavefront_aligner_new(&attributes);
 }
 
 #define MAX_LEN_FOR_PURE_WFA 10000

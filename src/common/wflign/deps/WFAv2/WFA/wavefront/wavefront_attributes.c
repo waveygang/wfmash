@@ -36,7 +36,6 @@
 namespace wfa {
 #endif
 
-
 /*
  * Default parameters
  */
@@ -50,7 +49,7 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .pattern_end_free = 0,
         .text_begin_free = 0,
         .text_end_free = 0,
-        .max_alignment_score = WF_MAX_SCORE, // Unlimited
+        .max_alignment_score = INT_MAX, // Unlimited
     },
     // Penalties
     .lineal_penalties = {
@@ -83,8 +82,24 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     .low_memory = false,
     // MM
     .mm_allocator = NULL, // Use private MM
-    // Limits
-    .max_memory_used = WF_MAX_MEMORY_DEFAULT // Unlimited
+    // Display
+    .plot_params = {
+        .plot_enabled = false,
+        .resolution_points = 2000,
+        .min_v = -1,
+        .max_v = -1,
+        .min_h = -1,
+        .max_h = -1,
+    },
+    // System
+    .system = {
+        .global_probe_interval = 2000,
+        .bt_compact_probe_interval = 6000,
+        .bt_compact_max_memory = BUFFER_SIZE_256M,
+        .max_memory_used = UINT64_MAX, // Unlimited
+        .max_memory_resident = BUFFER_SIZE_256M,
+        .verbose = false,
+    },
 };
 
 #ifdef WFA_NAMESPACE

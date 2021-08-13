@@ -37,6 +37,7 @@ set(SOURCES
   WFA/utils/commons.c
   WFA/utils/string_padded.c
   WFA/utils/vector.c
+  WFA/utils/heatmap.c
   WFA/wavefront/wavefront.c
   WFA/wavefront/wavefront_align.c
   WFA/wavefront/wavefront_aligner.c
@@ -51,6 +52,7 @@ set(SOURCES
   WFA/wavefront/wavefront_extend.c
   WFA/wavefront/wavefront_pcigar.c
   WFA/wavefront/wavefront_penalties.c
+  WFA/wavefront/wavefront_plot.c
   WFA/wavefront/wavefront_reduction.c
   WFA/wavefront/wavefront_slab.c)
 

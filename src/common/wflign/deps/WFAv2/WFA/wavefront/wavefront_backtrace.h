@@ -40,16 +40,15 @@ namespace wfa {
 /*
  * Backtrace
  */
-    void wavefront_backtrace_affine(
-            wavefront_aligner_t* const wf_aligner,
-            const char* const pattern,
-            const int pattern_length,
-            const char* const text,
-            const int text_length,
-            const int alignment_score,
-            const int alignment_k,
-            const wf_offset_t alignment_offset);
-
+void wavefront_backtrace_affine(
+    wavefront_aligner_t* const wf_aligner,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    const int alignment_score,
+    const int alignment_k,
+    const wf_offset_t alignment_offset);
 
 #ifdef WFA_NAMESPACE
 }
