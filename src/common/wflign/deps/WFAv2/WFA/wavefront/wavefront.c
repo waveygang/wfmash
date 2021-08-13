@@ -96,8 +96,6 @@ namespace wfa {
         wavefront->null = false;
         wavefront->lo = lo;
         wavefront->hi = hi;
-        wavefront->lo_base = lo;
-        wavefront->hi_base = hi;
         wavefront->k_alignment_end = WAVEFRONT_DIAGONAL_NULL;
         // Setup offsets
         wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
@@ -114,8 +112,6 @@ namespace wfa {
         wavefront->null = true;
         wavefront->lo =  1;
         wavefront->hi = -1;
-        wavefront->lo_base = lo; // To keep track of limits
-        wavefront->hi_base = hi; // To keep track of limits
         wavefront->k_alignment_end = WAVEFRONT_DIAGONAL_NULL;
         // Setup offsets
         wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
@@ -141,8 +137,6 @@ namespace wfa {
         wavefront->null = true;
         wavefront->lo =  1;
         wavefront->hi = -1;
-        wavefront->lo_base = lo; // To keep track of limits
-        wavefront->hi_base = hi; // To keep track of limits
         wavefront->k_alignment_end = WAVEFRONT_DIAGONAL_NULL;
         // Setup offsets
         wavefront->offsets = wavefront->offsets_mem - lo; // Center at k=0
