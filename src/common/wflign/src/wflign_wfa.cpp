@@ -133,7 +133,7 @@ void wflign_affine_wavefront(
 
     if (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         const int min_wf_length = 256;
-        const int max_dist_threshold = 3072;
+        const int max_dist_threshold = 4096;
 
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
@@ -648,7 +648,7 @@ void wflign_affine_wavefront(
                         num_alignments_performed, mashmap_estimated_identity,
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
-                        256, 2048);
+                        256, 4096);
             } else {
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                     // std::cerr << "on alignment" << std::endl;
