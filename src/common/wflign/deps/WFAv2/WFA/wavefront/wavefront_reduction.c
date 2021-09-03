@@ -217,7 +217,7 @@ void wavefront_reduce_wavefront_endsfree_text(
   int lo_reduced = wavefront->lo;
   for (k=wavefront->lo;k<top_limit;++k) {
     const int distance = wf_offset_distance_to_pattern(offsets[k],pattern_length,text_length,k);
-    if (distance - min_distance  <= max_distance_threshold) break;
+    if (distance - min_distance <= max_distance_threshold) break;
     ++lo_reduced;
   }
   wavefront->lo = lo_reduced;
@@ -245,10 +245,10 @@ void wavefront_reduce_equate(
 }
 void wavefront_reduce(
     wavefront_aligner_t* const wf_aligner,
-    const int pattern_length,
-    const int text_length,
     const int score) {
   // Parameters
+  const int pattern_length = wf_aligner->pattern_length;
+  const int text_length = wf_aligner->text_length;
   wavefront_components_t* const wf_components = &wf_aligner->wf_components;
   const distance_metric_t distance_metric = wf_aligner->penalties.distance_metric;
   const int min_wavefront_length = wf_aligner->reduction.min_wavefront_length;
@@ -287,8 +287,7 @@ void wavefront_reduce(
     }
   }
   // Check hi/lo range
-  if (mwavefront->lo > mwavefront->hi) {
-    mwavefront->null = true; // FIXME  FIXME  FIXME  FIXME
+  if (mwavefront->lo > mwavefront->hi) { // FIXME: This will never occur, convince yourself
     fprintf(stderr,"[WFA::Reduction] wavefront_reduce_wavefront_end2end::Impossible situation\n"); exit(-1);
   }
   // Plot

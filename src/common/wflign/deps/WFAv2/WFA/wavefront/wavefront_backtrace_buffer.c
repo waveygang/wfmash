@@ -35,6 +35,7 @@
 namespace wfa {
 #endif
 
+
 /*
  * Config
  */
@@ -57,22 +58,23 @@ void wf_backtrace_buffer_segment_add(
 }
 void wf_backtrace_buffer_segment_reserve(
     wf_backtrace_buffer_t* const bt_buffer) {
-  // Check occupancy
-  if (bt_buffer->segment_pos >= BT_BUFFER_SEGMENT_LENGTH) {
-    // Reset position
-    bt_buffer->segment_pos = 0;
-    ++(bt_buffer->segment_idx);
-    // Check segments
-    if (bt_buffer->segment_idx >= vector_get_used(bt_buffer->segments)) {
-      // Check segment position
-      const block_idx_t block_idx = (bt_buffer->segment_idx+1) * BT_BUFFER_SEGMENT_LENGTH;
-      if (block_idx >= WF_BACKTRACE_BLOCK_MAX_IDX) {
-        fprintf(stderr,"[WFA::BacktraceBuffer] Reached maximum addressable index"); exit(-1);
-      }
-      // Add segment
-      wf_backtrace_buffer_segment_add(bt_buffer);
+  // Reset position
+  bt_buffer->segment_pos = 0;
+  ++(bt_buffer->segment_idx);
+  // Check segments
+  if (bt_buffer->segment_idx >= vector_get_used(bt_buffer->segments)) {
+    // Check segment position
+    const block_idx_t block_idx = (bt_buffer->segment_idx+1) * BT_BUFFER_SEGMENT_LENGTH;
+    if (block_idx >= WF_BACKTRACE_BLOCK_MAX_IDX) {
+      fprintf(stderr,"[WFA::BacktraceBuffer] Reached maximum addressable index"); exit(-1);
     }
+    // Add segment
+    wf_backtrace_buffer_segment_add(bt_buffer);
   }
+  // Set pointer to next block free
+  wf_backtrace_block_t** const segments =
+      vector_get_mem(bt_buffer->segments,wf_backtrace_block_t*);
+  bt_buffer->block_next = segments[bt_buffer->segment_idx];
 }
 /*
  * Setup
@@ -89,6 +91,7 @@ wf_backtrace_buffer_t* wf_backtrace_buffer_new(
   bt_buffer->segments = vector_new(10,wf_backtrace_block_t*);
   wf_backtrace_buffer_segment_add(bt_buffer); // Add initial segment
   bt_buffer->palignment = vector_new(100,pcigar_t);
+  bt_buffer->block_next = vector_get_mem(bt_buffer->segments,wf_backtrace_block_t*)[0];
   // Return
   return bt_buffer;
 }
@@ -96,6 +99,7 @@ void wf_backtrace_buffer_clear(
     wf_backtrace_buffer_t* const bt_buffer) {
   bt_buffer->segment_idx = 0;
   bt_buffer->segment_pos = 0;
+  bt_buffer->block_next = vector_get_mem(bt_buffer->segments,wf_backtrace_block_t*)[0];
 }
 void wf_backtrace_buffer_reap(
     wf_backtrace_buffer_t* const bt_buffer) {
@@ -111,6 +115,7 @@ void wf_backtrace_buffer_reap(
   // Clear
   bt_buffer->segment_idx = 0;
   bt_buffer->segment_pos = 0;
+  bt_buffer->block_next = vector_get_mem(bt_buffer->segments,wf_backtrace_block_t*)[0];
 }
 void wf_backtrace_buffer_delete(
     wf_backtrace_buffer_t* const bt_buffer) {
@@ -140,31 +145,60 @@ wf_backtrace_block_t* wf_backtrace_buffer_get_block(
       vector_get_mem(bt_buffer->segments,wf_backtrace_block_t*);
   return &(segments[segment_idx][segment_pos]);
 }
+void wf_backtrace_buffer_add_used(
+    wf_backtrace_buffer_t* const bt_buffer,
+    const int used) {
+  // Next
+  bt_buffer->segment_pos += used;
+  bt_buffer->block_next += used;
+  // Reserve
+  if (bt_buffer->segment_pos >= BT_BUFFER_SEGMENT_LENGTH) {
+    wf_backtrace_buffer_segment_reserve(bt_buffer);
+  }
+}
+block_idx_t wf_backtrace_buffer_get_mem(
+    wf_backtrace_buffer_t* const bt_buffer,
+    wf_backtrace_block_t** const bt_block_mem,
+    int* const bt_blocks_available) {
+  // Parameters
+  const int segment_idx = bt_buffer->segment_idx;
+  const int segment_pos = bt_buffer->segment_pos;
+  // Get total available blocks
+  *bt_block_mem = bt_buffer->block_next;
+  *bt_blocks_available = BT_BUFFER_SEGMENT_LENGTH - bt_buffer->segment_pos;
+  // Return current global position
+  return BT_BUFFER_IDX(segment_idx,segment_pos);
+}
+/*
+ * Store blocks
+ */
 void wf_backtrace_buffer_store_block(
     wf_backtrace_buffer_t* const bt_buffer,
     const pcigar_t pcigar,
     const block_idx_t prev_idx) {
-  // Reserve
-  wf_backtrace_buffer_segment_reserve(bt_buffer);
-  const int segment_idx = bt_buffer->segment_idx;
-  const int segment_pos = bt_buffer->segment_pos;
   // Store BT-block
-  wf_backtrace_block_t** const segments =
-      vector_get_mem(bt_buffer->segments,wf_backtrace_block_t*);
-  segments[segment_idx][segment_pos].pcigar = pcigar;
-  segments[segment_idx][segment_pos].prev_idx = prev_idx;
+  bt_buffer->block_next->pcigar = pcigar;
+  bt_buffer->block_next->prev_idx = prev_idx;
   // Next
+  ++(bt_buffer->block_next);
   ++(bt_buffer->segment_pos);
+  // Reserve
+  if (bt_buffer->segment_pos >= BT_BUFFER_SEGMENT_LENGTH) {
+    wf_backtrace_buffer_segment_reserve(bt_buffer);
+  }
 }
 void wf_backtrace_buffer_store_block_bt(
     wf_backtrace_buffer_t* const bt_buffer,
     pcigar_t* const pcigar,
     block_idx_t* const prev_idx) {
+  // Parameters
+  const int segment_idx = bt_buffer->segment_idx;
+  const int segment_pos = bt_buffer->segment_pos;
   // Store BT-block
   wf_backtrace_buffer_store_block(bt_buffer,*pcigar,*prev_idx);
   // Reset pcigar & set current position
   *pcigar = 0;
-  *prev_idx = BT_BUFFER_IDX(bt_buffer->segment_idx,bt_buffer->segment_pos-1);
+  *prev_idx = BT_BUFFER_IDX(segment_idx,segment_pos);
 }
 void wf_backtrace_buffer_store_block_init(
     wf_backtrace_buffer_t* const bt_buffer,
@@ -172,11 +206,14 @@ void wf_backtrace_buffer_store_block_init(
     const int h,
     pcigar_t* const pcigar,
     block_idx_t* const prev_idx) {
+  // Parameters
+  const int segment_idx = bt_buffer->segment_idx;
+  const int segment_pos = bt_buffer->segment_pos;
   // Store BT-block
   wf_backtrace_buffer_store_block(bt_buffer,BT_BUFFER_PCIGAR_PB(h,v),WF_BACKTRACE_BLOCK_IDX_NULL);
   // Set current position
   *pcigar = 0;
-  *prev_idx = BT_BUFFER_IDX(bt_buffer->segment_idx,bt_buffer->segment_pos-1);
+  *prev_idx = BT_BUFFER_IDX(segment_idx,segment_pos);
 }
 /*
  * Recover CIGAR
@@ -311,8 +348,8 @@ void wf_backtrace_buffer_compact_marked(
     const block_idx_t max_block_idx_compacted =
         BT_BUFFER_IDX(bt_buffer_compacted->segment_idx,bt_buffer_compacted->segment_pos);
     fprintf(stderr,"[WFA::BacktraceBuffer] Compacted from %lu MB to %lu MB (%2.2f%%)\n",
-            CONVERT_B_TO_MB(max_block_idx_full*sizeof(wf_backtrace_block_t)),
-            CONVERT_B_TO_MB(max_block_idx_compacted*sizeof(wf_backtrace_block_t)),
+        CONVERT_B_TO_MB(max_block_idx_full*sizeof(wf_backtrace_block_t)),
+        CONVERT_B_TO_MB(max_block_idx_compacted*sizeof(wf_backtrace_block_t)),
         100.0f*(float)max_block_idx_compacted/(float)max_block_idx_full);
   }
 }
@@ -333,4 +370,3 @@ uint64_t wf_backtrace_buffer_get_size_used(
 #ifdef WFA_NAMESPACE
 }
 #endif
-
