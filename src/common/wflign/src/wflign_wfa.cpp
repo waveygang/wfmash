@@ -834,7 +834,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     aln.ok = status == WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
     if (aln.ok) {
         // correct X/M errors in the cigar
-        hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);
+        //hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);
 
 #ifdef VALIDATE_WFA_WFLIGN
         if (!validate_cigar(wf_aligner->cigar, query, target, query_length,
@@ -875,7 +875,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                       edlib_config);
 }*/
 
-bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
+/*bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
                 const uint64_t &query_aln_len, const uint64_t &target_aln_len,
                 uint64_t j, uint64_t i) {
     const int start_idx = cigar.begin_offset;
@@ -934,7 +934,7 @@ bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
         }
     }
     return ok;
-}
+}*/
 
 bool validate_cigar(const wfa::cigar_t &cigar, const char *query,
                     const char *target, const uint64_t &query_aln_len,
@@ -1427,7 +1427,7 @@ void write_merged_alignment(
                             result.alignmentLength != 0 &&
                             result.editDistance >= 0) {*/
                         if (status == WF_ALIGN_SUCCESSFUL) {
-                            hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(), target_rev.size(), 0, 0);
+                            //hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(), target_rev.size(), 0, 0);
 
 #ifdef VALIDATE_WFA_WFLIGN
                             if (!validate_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
@@ -1994,7 +1994,7 @@ void write_merged_alignment(
                             result.alignmentLength != 0 &&
                             result.editDistance >= 0) {*/
                         if (status == WF_ALIGN_SUCCESSFUL) {
-                            hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta, target_delta_x, 0, 0);
+                            //hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta, target_delta_x, 0, 0);
 
 #ifdef VALIDATE_WFA_WFLIGN
                             if (!validate_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,

@@ -34,9 +34,9 @@ namespace wflign {
 
 namespace wavefront {
 
-bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
+/*bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
                 const uint64_t &query_aln_len, const uint64_t &target_aln_len,
-                uint64_t j, uint64_t i);
+                uint64_t j, uint64_t i);*/
 
 bool validate_cigar(const wfa::cigar_t &cigar, const char *query,
                     const char *target, const uint64_t &query_aln_len,
