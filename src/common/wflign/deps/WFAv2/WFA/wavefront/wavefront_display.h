@@ -31,14 +31,15 @@
 
 #pragma once
 
-/*
- * Includes
- */
-#include "WFA/wavefront/wavefront_aligner.h"
+#include "WFA/utils/commons.h"
+#include "WFA/utils/heatmap.h"
 
 #ifdef WFA_NAMESPACE
 namespace wfa {
 #endif
+
+// Wavefront ahead definition
+typedef struct _wavefront_aligner_t wavefront_aligner_t;
 
 /*
  * Display

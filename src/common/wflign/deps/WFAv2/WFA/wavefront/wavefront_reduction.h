@@ -32,18 +32,33 @@
 #pragma once
 
 #include "WFA/utils/commons.h"
-#include "WFA/wavefront/wavefront_aligner.h"
 
 #ifdef WFA_NAMESPACE
 namespace wfa {
 #endif
+
+// Wavefront ahead definition
+typedef struct _wavefront_aligner_t wavefront_aligner_t;
+
+/*
+ * Wavefront Reduction
+ */
+typedef enum {
+  wavefront_reduction_none,
+  wavefront_reduction_adaptive,
+} wavefront_reduction_type;
+typedef struct {
+  wavefront_reduction_type reduction_strategy; // Reduction strategy
+  int min_wavefront_length;                    // Adaptive: Minimum wavefronts length to reduce
+  int max_distance_threshold;                  // Adaptive: Maximum distance between offsets allowed
+} wavefront_reduction_t;
 
 /*
  * Setup
  */
 void wavefront_reduction_set_none(
     wavefront_reduction_t* const wavefront_reduction);
-void wavefront_reduction_set_dynamic(
+void wavefront_reduction_set_adaptive(
     wavefront_reduction_t* const wavefront_reduction,
     const int min_wavefront_length,
     const int max_distance_threshold);
@@ -53,8 +68,6 @@ void wavefront_reduction_set_dynamic(
  */
 void wavefront_reduce(
     wavefront_aligner_t* const wf_aligner,
-    const int pattern_length,
-    const int text_length,
     const int score);
 
 #ifdef WFA_NAMESPACE

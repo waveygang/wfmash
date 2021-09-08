@@ -43,21 +43,21 @@ void wavefront_reduction_set_none(
     wavefront_reduction_t* const wavefront_reduction) {
   wavefront_reduction->reduction_strategy = wavefront_reduction_none;
 }
-void wavefront_reduction_set_dynamic(
+void wavefront_reduction_set_adaptive(
     wavefront_reduction_t* const wavefront_reduction,
     const int min_wavefront_length,
     const int max_distance_threshold) {
-  wavefront_reduction->reduction_strategy = wavefront_reduction_dynamic;
+  wavefront_reduction->reduction_strategy = wavefront_reduction_adaptive;
   wavefront_reduction->min_wavefront_length = min_wavefront_length;
   wavefront_reduction->max_distance_threshold = max_distance_threshold;
 }
 /*
  * Distances
  */
-int wavefront_distance_to_target_global(
+int wf_offset_distance_to_target_end2end(
+    const wf_offset_t offset,
     const int pattern_length,
     const int text_length,
-    const wf_offset_t offset,
     const int k) {
   const int v = WAVEFRONT_V(k,offset);
   const int h = WAVEFRONT_H(k,offset);
@@ -66,12 +66,170 @@ int wavefront_distance_to_target_global(
   //return left_v + left_h;
   return MAX(left_v,left_h);
 }
-int wavefront_distance_to_target_semiglobal(
+int wf_offset_distance_to_target_endsfree(
+    const wf_offset_t offset,
     const int pattern_length,
     const int text_length,
+    const int k) {
+  const int dist_to_pattern = pattern_length - WAVEFRONT_V(k,offset);
+  const int dist_to_text = text_length - WAVEFRONT_H(k,offset);
+  return MIN(dist_to_pattern,dist_to_text);
+}
+int wf_offset_distance_to_pattern(
     const wf_offset_t offset,
+    const int pattern_length,
+    const int text_length,
     const int k) {
   return pattern_length - WAVEFRONT_V(k,offset);
+}
+int wf_offset_distance_to_text(
+    const wf_offset_t offset,
+    const int pattern_length,
+    const int text_length,
+    const int k) {
+  return text_length - WAVEFRONT_H(k,offset);
+}
+/*
+ * Reduce wavefront end2end
+ */
+void wavefront_reduce_wavefront_end2end(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const wavefront,
+    const int pattern_length,
+    const int text_length,
+    const int max_distance_threshold,
+    const int alignment_k) {
+  // Compute min-distance
+  const wf_offset_t* const offsets = wavefront->offsets;
+  int min_distance = MAX(pattern_length,text_length);
+  int k;
+  for (k=wavefront->lo;k<=wavefront->hi;++k) {
+    const int distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    min_distance = MIN(min_distance,distance);
+  }
+  // Reduce from bottom
+  const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
+  int lo_reduced = wavefront->lo;
+  for (k=wavefront->lo;k<top_limit;++k) {
+    const int distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance  <= max_distance_threshold) break;
+    ++lo_reduced;
+  }
+  wavefront->lo = lo_reduced;
+  // Reduce from top
+  const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
+  int hi_reduced = wavefront->hi;
+  for (k=wavefront->hi;k>botton_limit;--k) {
+    const int distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance <= max_distance_threshold) break;
+    --hi_reduced;
+  }
+  wavefront->hi = hi_reduced;
+}
+/*
+ * Reduce wavefront endsfree
+ */
+void wavefront_reduce_wavefront_endsfree(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const wavefront,
+    const int pattern_length,
+    const int text_length,
+    const int max_distance_threshold,
+    const int alignment_k) {
+  // Compute min-distance
+  const wf_offset_t* const offsets = wavefront->offsets;
+  int min_distance = MAX(pattern_length,text_length);
+  int k;
+  for (k=wavefront->lo;k<=wavefront->hi;++k) {
+    const int distance = wf_offset_distance_to_target_endsfree(offsets[k],pattern_length,text_length,k);
+    min_distance = MIN(min_distance,distance);
+  }
+  // Reduce from bottom
+  const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
+  int lo_reduced = wavefront->lo;
+  for (k=wavefront->lo;k<top_limit;++k) {
+    const int distance = wf_offset_distance_to_target_endsfree(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance  <= max_distance_threshold) break;
+    ++lo_reduced;
+  }
+  wavefront->lo = lo_reduced;
+  // Reduce from top
+  const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
+  int hi_reduced = wavefront->hi;
+  for (k=wavefront->hi;k>botton_limit;--k) {
+    const int distance = wf_offset_distance_to_target_endsfree(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance <= max_distance_threshold) break;
+    --hi_reduced;
+  }
+  wavefront->hi = hi_reduced;
+}
+void wavefront_reduce_wavefront_endsfree_pattern(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const wavefront,
+    const int pattern_length,
+    const int text_length,
+    const int max_distance_threshold,
+    const int alignment_k) {
+  // Compute min-distance
+  const wf_offset_t* const offsets = wavefront->offsets;
+  int min_distance = MAX(pattern_length,text_length);
+  int k;
+  for (k=wavefront->lo;k<=wavefront->hi;++k) {
+    const int distance = wf_offset_distance_to_text(offsets[k],pattern_length,text_length,k);
+    min_distance = MIN(min_distance,distance);
+  }
+  // Reduce from bottom
+  const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
+  int lo_reduced = wavefront->lo;
+  for (k=wavefront->lo;k<top_limit;++k) {
+    const int distance = wf_offset_distance_to_text(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance  <= max_distance_threshold) break;
+    ++lo_reduced;
+  }
+  wavefront->lo = lo_reduced;
+  // Reduce from top
+  const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
+  int hi_reduced = wavefront->hi;
+  for (k=wavefront->hi;k>botton_limit;--k) {
+    const int distance = wf_offset_distance_to_text(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance <= max_distance_threshold) break;
+    --hi_reduced;
+  }
+  wavefront->hi = hi_reduced;
+}
+void wavefront_reduce_wavefront_endsfree_text(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const wavefront,
+    const int pattern_length,
+    const int text_length,
+    const int max_distance_threshold,
+    const int alignment_k) {
+  // Compute min-distance
+  const wf_offset_t* const offsets = wavefront->offsets;
+  int min_distance = MAX(pattern_length,text_length);
+  int k;
+  for (k=wavefront->lo;k<=wavefront->hi;++k) {
+    const int distance = wf_offset_distance_to_pattern(offsets[k],pattern_length,text_length,k);
+    min_distance = MIN(min_distance,distance);
+  }
+  // Reduce from bottom
+  const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
+  int lo_reduced = wavefront->lo;
+  for (k=wavefront->lo;k<top_limit;++k) {
+    const int distance = wf_offset_distance_to_pattern(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance <= max_distance_threshold) break;
+    ++lo_reduced;
+  }
+  wavefront->lo = lo_reduced;
+  // Reduce from top
+  const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
+  int hi_reduced = wavefront->hi;
+  for (k=wavefront->hi;k>botton_limit;--k) {
+    const int distance = wf_offset_distance_to_pattern(offsets[k],pattern_length,text_length,k);
+    if (distance - min_distance <= max_distance_threshold) break;
+    --hi_reduced;
+  }
+  wavefront->hi = hi_reduced;
 }
 /*
  * Reduce wavefront
@@ -85,78 +243,75 @@ void wavefront_reduce_equate(
     if (wavefront_dst->lo > wavefront_dst->hi) wavefront_dst->null = true;
   }
 }
-void wavefront_reduce_mwavefront_global(
-    wavefront_aligner_t* const wf_aligner,
-    wavefront_t* const wavefront,
-    const int pattern_length,
-    const int text_length,
-    const int min_distance,
-    const int max_distance_threshold,
-    const int alignment_k) {
-  // Parameters
-  const wf_offset_t* const offsets = wavefront->offsets;
-  int k;
-  // Reduce from bottom
-  const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
-  int lo_reduced = wavefront->lo;
-  for (k=wavefront->lo;k<top_limit;++k) {
-    const int distance = wavefront_distance_to_target_global(pattern_length,text_length,offsets[k],k);
-    if (distance - min_distance  <= max_distance_threshold) break;
-    ++lo_reduced;
-  }
-  wavefront->lo = lo_reduced;
-  // Reduce from top
-  const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
-  int hi_reduced = wavefront->hi;
-  for (k=wavefront->hi;k>botton_limit;--k) {
-    const int distance = wavefront_distance_to_target_global(pattern_length,text_length,offsets[k],k);
-    if (distance - min_distance <= max_distance_threshold) break;
-    --hi_reduced;
-  }
-  wavefront->hi = hi_reduced;
-  // Check hi/lo range
-  if (wavefront->lo > wavefront->hi) {
-    wavefront->null = true;
-  }
-}
 void wavefront_reduce(
     wavefront_aligner_t* const wf_aligner,
-    const int pattern_length,
-    const int text_length,
     const int score) {
   // Parameters
-  const distance_metric_t distance_metric = wf_aligner->distance_metric;
+  const int pattern_length = wf_aligner->pattern_length;
+  const int text_length = wf_aligner->text_length;
+  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
+  const distance_metric_t distance_metric = wf_aligner->penalties.distance_metric;
   const int min_wavefront_length = wf_aligner->reduction.min_wavefront_length;
   const int max_distance_threshold = wf_aligner->reduction.max_distance_threshold;
   const int alignment_k = WAVEFRONT_DIAGONAL(text_length,pattern_length);
   // Fetch m-wavefront
-  wavefront_t* const mwavefront = wf_aligner->mwavefronts[score];
+  wavefront_t* const mwavefront = wf_components->mwavefronts[score];
   if (mwavefront==NULL) return;
   if ((mwavefront->hi - mwavefront->lo + 1) < min_wavefront_length) return;
-  // Compute min-distance
-  const wf_offset_t* const offsets = mwavefront->offsets;
-  int min_distance = MAX(pattern_length,text_length);
-  int k;
-  for (k=mwavefront->lo;k<=mwavefront->hi;++k) {
-    const int distance = wavefront_distance_to_target_global(
-        pattern_length,text_length,offsets[k],k);
-    min_distance = MIN(min_distance,distance);
-  }
   // Reduce m-wavefront
-  wavefront_reduce_mwavefront_global(
-      wf_aligner,mwavefront,
-      pattern_length,text_length,
-      min_distance,max_distance_threshold,
-      alignment_k);
+  const int lo_base = mwavefront->lo;
+  const int hi_base = mwavefront->hi;
+  if (wf_aligner->alignment_form.span == alignment_end2end) {
+    wavefront_reduce_wavefront_end2end(
+        wf_aligner,mwavefront,
+        pattern_length,text_length,
+        max_distance_threshold,alignment_k);
+  } else {
+    const int pattern_end_free = wf_aligner->alignment_form.pattern_end_free;
+    const int text_end_free = wf_aligner->alignment_form.text_end_free;
+    if (pattern_end_free > 0 && text_end_free > 0) {
+      wavefront_reduce_wavefront_endsfree(
+          wf_aligner,mwavefront,
+          pattern_length,text_length,
+          max_distance_threshold,alignment_k);
+    } else if (pattern_end_free > 0) {
+      wavefront_reduce_wavefront_endsfree_pattern(
+          wf_aligner,mwavefront,
+          pattern_length,text_length,
+          max_distance_threshold,alignment_k);
+    } else if (text_end_free > 0) {
+      wavefront_reduce_wavefront_endsfree_text(
+          wf_aligner,mwavefront,
+          pattern_length,text_length,
+          max_distance_threshold,alignment_k);
+    }
+  }
+  // Check hi/lo range
+  if (mwavefront->lo > mwavefront->hi) { // FIXME: This will never occur, convince yourself
+    fprintf(stderr,"[WFA::Reduction] wavefront_reduce_wavefront_end2end::Impossible situation\n"); exit(-1);
+  }
+  // Plot
+  if (wf_aligner->plot_params.plot_enabled) {
+    wavefront_plot_reduction(wf_aligner,score,
+        lo_base,mwavefront->lo,hi_base,mwavefront->hi);
+  }
+  // DEBUG
+  //  if (wf_aligner->system.verbose) {
+  //    const int wf_length_base = hi_base-lo_base+1;
+  //    const int wf_length_reduced = mwavefront->hi-mwavefront->lo+1;
+  //    fprintf(stderr,"[WFA::Reduction] Reduction from %d to %d offsets (%2.2f%%)\n",
+  //        wf_length_base,wf_length_reduced,100.0f*(float)wf_length_reduced/(float)wf_length_base);
+  //  }
+  // Equate other wavefronts
   if (distance_metric <= gap_lineal) return;
   // Reduce the other wavefronts (same dimensions as M-reduced)
-  wavefront_t* const i1wavefront = wf_aligner->i1wavefronts[score];
-  wavefront_t* const d1wavefront = wf_aligner->d1wavefronts[score];
+  wavefront_t* const i1wavefront = wf_components->i1wavefronts[score];
+  wavefront_t* const d1wavefront = wf_components->d1wavefronts[score];
   wavefront_reduce_equate(i1wavefront,mwavefront);
   wavefront_reduce_equate(d1wavefront,mwavefront);
   if (distance_metric == gap_affine) return;
-  wavefront_t* const i2wavefront = wf_aligner->i2wavefronts[score];
-  wavefront_t* const d2wavefront = wf_aligner->d2wavefronts[score];
+  wavefront_t* const i2wavefront = wf_components->i2wavefronts[score];
+  wavefront_t* const d2wavefront = wf_components->d2wavefronts[score];
   wavefront_reduce_equate(i2wavefront,mwavefront);
   wavefront_reduce_equate(d2wavefront,mwavefront);
 }

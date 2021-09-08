@@ -9,6 +9,7 @@ FOLDER_BUILD=../build
 ###############################################################################
 MODULES=wavefront_align \
         wavefront_aligner \
+        wavefront_attributes \
         wavefront_backtrace_buffer \
         wavefront_backtrace \
         wavefront_components \
@@ -19,6 +20,7 @@ MODULES=wavefront_align \
         wavefront_extend \
         wavefront_pcigar \
         wavefront_penalties \
+        wavefront_plot \
         wavefront_reduction \
         wavefront_slab \
         wavefront

@@ -32,109 +32,103 @@
 #pragma once
 
 #include "WFA/utils/commons.h"
+#include "WFA/utils/heatmap.h"
 #include "WFA/system/profiler_counter.h"
 #include "WFA/system/profiler_timer.h"
 #include "WFA/system/mm_allocator.h"
 #include "WFA/system/mm_stack.h"
 #include "WFA/alignment/cigar.h"
-#include "WFA/gap_affine2p/affine2p_penalties.h"
 #include "WFA/wavefront/wavefront_slab.h"
 #include "WFA/wavefront/wavefront_penalties.h"
+#include "WFA/wavefront/wavefront_attributes.h"
+#include "WFA/wavefront/wavefront_components.h"
 
 #ifdef WFA_NAMESPACE
 namespace wfa {
 #endif
 
 /*
- * Alignment scope
- */
-typedef enum {
-  alignment_scope_score,      // Only distance/score
-  alignment_scope_alignment,  // Full alignment CIGAR
-} alignment_scope_t;
-
-/*
- * Wavefront Reduction
- */
-typedef enum {
-  wavefront_reduction_none,
-  wavefront_reduction_dynamic,
-} wavefront_reduction_type;
-typedef struct {
-  wavefront_reduction_type reduction_strategy;     // Reduction strategy
-  int min_wavefront_length;                        // Dynamic: Minimum wavefronts length to reduce
-  int max_distance_threshold;                      // Dynamic: Maximum distance between offsets allowed
-} wavefront_reduction_t;
-
-/*
- * Wavefront Aligner Attributes
- */
-typedef struct {
-  // Distance model & Penalties
-  distance_metric_t distance_metric;       // Alignment metric/distance used
-  alignment_scope_t alignment_scope;       // Alignment scope (score only or full-CIGAR)
-  lineal_penalties_t lineal_penalties;     // Gap-lineal penalties (placeholder)
-  affine_penalties_t affine_penalties;     // Gap-affine penalties (placeholder)
-  affine2p_penalties_t affine2p_penalties; // Gap-affine-2p penalties (placeholder)
-  // Reduction strategy
-  wavefront_reduction_t reduction;         // Wavefront reduction
-  // Memory model
-  bool low_memory;                         // Use low-memory strategy (modular wavefronts and piggyback)
-  // External MM (instead of allocating one inside)
-  mm_allocator_t* mm_allocator;            // MM-Allocator
-} wavefront_aligner_attr_t;
-
-// Default parameters
-extern wavefront_aligner_attr_t wavefront_aligner_attr_default;
-
-/*
  * Wavefront Aligner
  */
-typedef struct {
-  // Attributes
+typedef struct _wavefront_aligner_t {
+  // Sequences
+  char* pattern;                               // Pattern sequence (padded)
   int pattern_length;                          // Pattern length
+  char* text;                                  // Text sequence (padded)
   int text_length;                             // Text length
-  distance_metric_t distance_metric;           // Alignment metric/distance used
+  // Alignment Attributes
   alignment_scope_t alignment_scope;           // Alignment scope (score only or full-CIGAR)
+  alignment_form_t alignment_form;             // Alignment form (end-to-end/ends-free)
   wavefronts_penalties_t penalties;            // Alignment penalties
   wavefront_reduction_t reduction;             // Reduction parameters
-  bool memory_modular;                         // Memory strategy (modular wavefronts)
-  bool bt_piggyback;                           // Backtrace Piggyback
-  int max_score_scope;                         // Maximum score-difference between dependent wavefronts
   // Wavefront components
-  int num_wavefronts;                          // Total number of allocated wavefronts
-  wavefront_t** mwavefronts;                   // M-wavefronts
-  wavefront_t** i1wavefronts;                  // I1-wavefronts
-  wavefront_t** i2wavefronts;                  // I2-wavefronts
-  wavefront_t** d1wavefronts;                  // D1-wavefronts
-  wavefront_t** d2wavefronts;                  // D2-wavefronts
-  wavefront_t* wavefront_null;                 // Null wavefront (orthogonal reading)
-  wavefront_t* wavefront_victim;               // Dummy wavefront (orthogonal writing)
+  wavefront_components_t wf_components;        // Wavefront components
   // CIGAR
   cigar_t cigar;                               // Alignment CIGAR
-  // Backtrace Buffer
-  wf_backtrace_buffer_t* bt_buffer;            // Backtrace Buffer
   // MM
   bool mm_allocator_own;                       // Ownership of MM-Allocator
   mm_allocator_t* mm_allocator;                // MM-Allocator
   wavefront_slab_t* wavefront_slab;            // MM-Wavefront-Slab (Allocates/Reuses the individual wavefronts)
+  // Display
+  wavefront_plot_params_t plot_params;         // Wavefront plot parameters
+  wavefront_plot_t wf_plot;                    // Wavefront plot
+  // System
+  alignment_system_t system;                   // System related parameters
 } wavefront_aligner_t;
 
 /*
  * Setup
  */
 wavefront_aligner_t* wavefront_aligner_new(
-    const int pattern_length,
-    const int text_length,
     wavefront_aligner_attr_t* attributes);
-void wavefront_aligner_clear(
-    wavefront_aligner_t* const wf_aligner);
-void wavefront_aligner_clear__resize(
+void wavefront_aligner_resize(
     wavefront_aligner_t* const wf_aligner,
     const int pattern_length,
     const int text_length);
+void wavefront_aligner_reap(
+    wavefront_aligner_t* const wf_aligner);
 void wavefront_aligner_delete(
     wavefront_aligner_t* const wf_aligner);
+
+/*
+ * Configuration
+ */
+void wavefront_aligner_set_alignment_end_to_end(
+    wavefront_aligner_t* const wf_aligner);
+void wavefront_aligner_set_alignment_free_ends(
+    wavefront_aligner_t* const wf_aligner,
+    const int pattern_begin_free,
+    const int pattern_end_free,
+    const int text_begin_free,
+    const int text_end_free);
+
+void wavefront_aligner_set_reduction_none(
+    wavefront_aligner_t* const wf_aligner);
+void wavefront_aligner_set_reduction_adaptive(
+    wavefront_aligner_t* const wf_aligner,
+    const int min_wavefront_length,
+    const int max_distance_threshold);
+
+void wavefront_aligner_set_max_alignment_score(
+    wavefront_aligner_t* const wf_aligner,
+    const int max_alignment_score);
+void wavefront_aligner_set_max_memory_used(
+    wavefront_aligner_t* const wf_aligner,
+    const uint64_t max_memory_used);
+
+/*
+ * Utils
+ */
+uint64_t wavefront_aligner_get_size(
+    wavefront_aligner_t* const wf_aligner);
+
+/*
+ * Display
+ */
+void wavefront_aligner_print_status(
+    FILE* const stream,
+    wavefront_aligner_t* const wf_aligner,
+    const int current_score);
 
 #ifdef WFA_NAMESPACE
 }

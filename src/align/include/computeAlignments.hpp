@@ -27,7 +27,7 @@
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
-
+#include "common/utils.hpp"
 #include "common/wflign/src/wflign_wfa.hpp"
 
 namespace align
@@ -57,6 +57,58 @@ namespace align
   typedef atomic_queue::AtomicQueue<seq_record_t*, 2 << 16> seq_atomic_queue_t;
   // results into this, write out
   typedef atomic_queue::AtomicQueue<std::string*, 2 << 16> paf_atomic_queue_t;
+
+  /**
+ * @brief                         parse mashmap row sequence
+ * @param[in]   mappingRecordLine
+ * @param[out]  currentRecord
+ */
+  inline void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord)
+      {
+      std::stringstream ss(mappingRecordLine); // Insert the string into a stream
+        std::string word; // Have a buffer string
+
+        vector<std::string> tokens; // Create vector to hold our words
+
+        while (ss >> word)
+            tokens.push_back(word);
+
+        //We expect and need at least these many values in a mashmap mapping
+        assert(tokens.size() >= 9);
+
+        // Extract the mashmap identity from the string
+        auto split = [](const string& s, const string& delimiter) {
+            size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+            string token;
+            vector<string> res;
+
+            while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+                token = s.substr (pos_start, pos_end - pos_start);
+                pos_start = pos_end + delim_len;
+                res.push_back (token);
+            }
+
+            res.push_back (s.substr (pos_start));
+            return res;
+        };
+
+        char delimiter = ':';
+        std::string delimeter_str(1, delimiter);
+        vector<string> mm_id_vec = split(tokens[12], delimeter_str);
+        double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
+
+        //Save words into currentRecord
+        {
+            currentRecord.qId = tokens[0];
+            currentRecord.qStartPos = std::stoi(tokens[2]);
+            currentRecord.qEndPos = std::stoi(tokens[3]);
+            currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
+            currentRecord.refId = tokens[5];
+            currentRecord.rStartPos = std::stoi(tokens[7]);
+            currentRecord.rEndPos = std::stoi(tokens[8]);
+            currentRecord.mashmap_estimated_identity = mm_id;
+        }
+      }
 
   /**
    * @class     align::Aligner
@@ -146,7 +198,7 @@ namespace align
                       }
 
                       if( !mappingRecordLine.empty() ) {
-                          this->parseMashmapRow(mappingRecordLine, currentRecord);
+                          parseMashmapRow(mappingRecordLine, currentRecord);
 
                           if(currentRecord.qId == qSeqId) {
                               //auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
@@ -155,7 +207,7 @@ namespace align
                               ++total_paf_records;
                               //Check if more mappings have same query sequence id
                               while(std::getline(mappingListStream, mappingRecordLine)) {
-                                  this->parseMashmapRow(mappingRecordLine, currentRecord);
+                                  parseMashmapRow(mappingRecordLine, currentRecord);
                                   if(currentRecord.qId != qSeqId) {
                                       break;
                                   } else {
@@ -172,8 +224,8 @@ namespace align
 
           // input atomic queue
           seq_atomic_queue_t seq_queue;
-          // output atomic queue
-          paf_atomic_queue_t paf_queue;
+          // output atomic queues
+          paf_atomic_queue_t paf_queue, tsv_queue;
           // flag when we're done reading
           std::atomic<bool> reader_done;
           reader_done.store(false);
@@ -224,8 +276,8 @@ namespace align
                               }
 
                               if( !mappingRecordLine.empty() ) {
-                                  this->parseMashmapRow(mappingRecordLine, currentRecord);
-                              
+                                  parseMashmapRow(mappingRecordLine, currentRecord);
+
                                   //Check if mapping query id matches current query sequence id
                                   if(currentRecord.qId == qSeqId)
                                   {
@@ -236,8 +288,8 @@ namespace align
                                       //Check if more mappings have same query sequence id
                                       while(std::getline(mappingListStream, mappingRecordLine))
                                       {
-                                          this->parseMashmapRow(mappingRecordLine, currentRecord);
-                                          
+                                          parseMashmapRow(mappingRecordLine, currentRecord);
+
                                           if(currentRecord.qId != qSeqId)
                                           {
                                               //Break the inner loop to read query sequence
@@ -252,7 +304,7 @@ namespace align
                                   }
                               }
                           });
-                          
+
                       mappingListStream.close();
 
                   }
@@ -288,7 +340,29 @@ namespace align
                   }
               };
 
-          // worker, takes candidate alignments and runs edlib alignment on them
+          uint64_t num_alignments_completed = 0;
+          auto writer_thread_tsv =
+                  [&]() {
+              if (!param.tsvOutputPrefix.empty()) {
+                  while (true) {
+                      std::string* tsv_lines = nullptr;
+                      if (!tsv_queue.try_pop(tsv_lines)
+                      && !still_working(working)) {
+                          break;
+                      } else if (tsv_lines != nullptr) {
+                          std::ofstream ofstream_tsv(param.tsvOutputPrefix + std::to_string(num_alignments_completed++) + ".tsv");
+                          ofstream_tsv << *tsv_lines;
+                          ofstream_tsv.close();
+
+                          delete tsv_lines;
+                      } else {
+                          std::this_thread::sleep_for(100ns);
+                      }
+                  }
+              }
+          };
+
+          // worker, takes candidate alignments and runs wfa alignment on them
           auto worker_thread = 
               [&](uint64_t tid,
                   std::atomic<bool>& is_working) {
@@ -299,18 +373,28 @@ namespace align
                           && reader_done.load()) {
                           break;
                       } else if (rec != nullptr) {
-                          auto* paf_rec
-                              = new std::string(
-                                  doAlignment(rec->currentRecord,
-                                              rec->mappingRecordLine,
-                                              rec->qSequence));
-                          progress.increment(rec->currentRecord.qEndPos
-                                             - rec->currentRecord.qStartPos);
+                          std::stringstream output;
+                          std::stringstream output_tsv;
+                          doAlignment(output, output_tsv,
+                                      rec->currentRecord,
+                                      rec->mappingRecordLine,
+                                      rec->qSequence);
+                          progress.increment(rec->currentRecord.qEndPos - rec->currentRecord.qStartPos);
+
+                          auto* paf_rec = new std::string(output.str());
                           if (!paf_rec->empty()) {
                               paf_queue.push(paf_rec);
                           } else {
                               delete paf_rec;
                           }
+
+                          auto* tsv_rec = new std::string(output_tsv.str());
+                          if (!tsv_rec->empty()) {
+                              tsv_queue.push(tsv_rec);
+                          } else {
+                              delete tsv_rec;
+                          }
+
                           delete rec;
                       } else {
                           std::this_thread::sleep_for(100ns);
@@ -321,8 +405,10 @@ namespace align
 
           // launch reader
           std::thread reader(reader_thread);
-          // launch writer
+          // launch PAF/SAM writer
           std::thread writer(writer_thread);
+          // launch TSV writer
+          std::thread writer_tsv(writer_thread_tsv);
           // launch workers
           std::vector<std::thread> workers; workers.reserve(nthreads);
           for (uint64_t t = 0; t < nthreads; ++t) {
@@ -338,6 +424,7 @@ namespace align
           }
           // and finally the writer
           writer.join();
+          writer_tsv.join();
 
           progress.finish();
           std::cerr << "[wfmash::align::computeAlignments] "
@@ -383,7 +470,7 @@ namespace align
         char delimiter = ':';
         std::string delimeter_str(1, delimiter);
         vector<string> mm_id_vec = split(tokens[12], delimeter_str);
-        double mm_id = std::stod(mm_id_vec.back())/100; // divide by 100 for consistency with block alignment
+        float mm_id = std::stof(mm_id_vec.back())/100; // divide by 100 for consistency with block alignment
 
         //Save words into currentRecord
         {
@@ -394,7 +481,7 @@ namespace align
           currentRecord.refId = tokens[5];
           currentRecord.rStartPos = std::stoi(tokens[7]);
           currentRecord.rEndPos = std::stoi(tokens[8]);
-          currentRecord.mashmap_identity = mm_id;
+          currentRecord.mashmap_estimated_identity = mm_id;
         }
       }
 
@@ -405,9 +492,12 @@ namespace align
        * @param[in]   qSequence           query sequence
        * @param[in]   outstrm             output stream
        */
-      std::string doAlignment(MappingBoundaryRow &currentRecord,
-                              const std::string &mappingRecordLine,
-                              const std::shared_ptr<std::string> &qSequence) {
+      void doAlignment(
+              std::stringstream& output,
+              std::stringstream& output_tsv,
+              MappingBoundaryRow &currentRecord,
+              const std::string &mappingRecordLine,
+              const std::shared_ptr<std::string> &qSequence) {
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
@@ -438,19 +528,14 @@ namespace align
         assert(queryLen <= querySize);
 
         //Compute alignment
-
-        //auto t0 = skch::Time::now();
-
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, WFA execution starting, query region length = " << queryLen
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
-        std::stringstream output;
-        // todo:
-        // - toggle between wflign and regular alignment at some threshold (in wflign?)
         wflign::wavefront::wflign_affine_wavefront(
             output,
+            !param.tsvOutputPrefix.empty(), output_tsv,
             true, // merge alignments
             param.emit_md_tag, !param.sam_format,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
@@ -458,16 +543,22 @@ namespace align
             refId, refRegion, refSize, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
             param.min_identity,
+            17 /*param.kmerSize*/,
+            param.wfa_mismatch_score,
+            param.wfa_gap_opening_score,
+            param.wfa_gap_extension_score,
             param.wflambda_min_wavefront_length,
             param.wflambda_max_distance_threshold,
-            currentRecord.mashmap_identity,
+            currentRecord.mashmap_estimated_identity,
+            param.wflign_mismatch_score,
+            param.wflign_gap_opening_score,
+            param.wflign_gap_extension_score,
+            param.wflign_max_mash_dist,
             param.wflign_max_len_major,
             param.wflign_max_len_minor,
             param.wflign_erode_k);
 
         delete [] queryRegionStrand;
-
-        return output.str();
       }
   };
 }

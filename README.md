@@ -85,18 +85,31 @@ gcc --version
 g++ --version
 ```
 
-Clone the `wfmash` git repository and build with:
+It may be necessary to install several system-level libraries to build `wfmash`. On `Ubuntu 20.04`, these can be 
+installed using apt:
 
 ```
-sudo apt install libjemalloc-dev # ubuntu
-sudo pacman -S jemalloc          # archlinux
+sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev
+```
 
+After installing the required dependencies, clone the `wfmash` git repository and build with:
+
+```
 git clone --recursive https://github.com/ekg/wfmash.git
 cd wfmash
-cmake -H. -Bbuild && cmake --build build -- -j 16
+cmake -H. -Bbuild && cmake --build build -- -j 3
 ```
 
-The `wfmash` binary will be in `build/bin`. To clean up, just remove the build directory.
+The `wfmash` binary will be in `build/bin`.
+
+
+#### Notes on dependencies
+
+On `Arch Linux`, the `jemalloc` dependency can be installed with:
+
+```
+sudo pacman -S jemalloc     # arch linux
+```
 
 ### Bioconda
 

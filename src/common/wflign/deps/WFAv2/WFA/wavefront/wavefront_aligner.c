@@ -29,10 +29,10 @@
  * DESCRIPTION: WaveFront aligner data structure
  */
 
-#include "WFA/gap_affine2p/affine2p_penalties.h"
 #include "WFA/wavefront/wavefront_aligner.h"
 #include "WFA/wavefront/wavefront_reduction.h"
 #include "WFA/wavefront/wavefront_components.h"
+#include "WFA/wavefront/wavefront_plot.h"
 
 #ifdef WFA_NAMESPACE
 namespace wfa {
@@ -41,48 +41,8 @@ namespace wfa {
 /*
  * Configuration
  */
-#define WF_NULL_INIT_LO     (-1024)
-#define WF_NULL_INIT_HI     ( 1024)
-#define WF_NULL_INIT_LENGTH WAVEFRONT_LENGTH(WF_NULL_INIT_LO,WF_NULL_INIT_HI)
-
-/*
- * Default parameters
- */
-wavefront_aligner_attr_t wavefront_aligner_attr_default = {
-    // Distance model & Penalties
-    .distance_metric = gap_affine, // TODO: DU wants lineal
-    .alignment_scope = alignment_scope_alignment, // TODO: I don't know what DU wants, honestly
-    .lineal_penalties = {
-        .match = 0,
-        .mismatch = 4,
-        .insertion = 2,
-        .deletion  = 2,
-    },
-    .affine_penalties = {
-        .match = 0,
-        .mismatch = 4,
-        .gap_opening = 6,
-        .gap_extension = 2, // 1
-    },
-    .affine2p_penalties = {
-        .match = 0,
-        .mismatch = 4,
-        .gap_opening1 = 6,
-        .gap_extension1 = 2,
-        .gap_opening2 = 24,
-        .gap_extension2 = 1, // TODO: Should be 2 (???)
-    },
-    // Reduction
-    .reduction = {
-        .reduction_strategy = wavefront_reduction_none, // TODO: DU wants dynamic
-        .min_wavefront_length = -1, // 10,
-        .max_distance_threshold = -1, // 50,
-    },
-    // Memory model
-    .low_memory = false,  // TODO: DU wants (low_memory if length >= 10000) // FIXME
-    // MM
-    .mm_allocator = NULL, // Use private MM
-};
+#define PATTERN_LENGTH_INIT 1000
+#define TEXT_LENGTH_INIT    1000
 
 /*
  * Penalties
@@ -91,7 +51,9 @@ void wavefront_set_penalties(
     wavefront_aligner_t* const wf_aligner,
     wavefront_aligner_attr_t* const attributes) {
   switch (attributes->distance_metric) {
-    case edit: break;
+    case edit:
+      wavefronts_penalties_set_edit(&wf_aligner->penalties);
+      break;
     case gap_lineal:
       wavefronts_penalties_set_lineal(
           &wf_aligner->penalties,
@@ -113,15 +75,41 @@ void wavefront_set_penalties(
   }
 }
 /*
+ * Reduction
+ */
+void wavefront_set_reduction(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_aligner_attr_t* const attributes) {
+  if (attributes->reduction.reduction_strategy == wavefront_reduction_adaptive) {
+    wavefront_reduction_set_adaptive(
+        &wf_aligner->reduction,
+        attributes->reduction.min_wavefront_length,
+        attributes->reduction.max_distance_threshold);
+  } else { // wavefront_reduction_none
+    wavefront_reduction_set_none(&wf_aligner->reduction);
+  }
+}
+/*
+ * System
+ */
+void wavefront_set_alignment_system(
+    wavefront_aligner_t* const wf_aligner,
+    alignment_system_t* const system) {
+  // Copy all parameters
+  wf_aligner->system = *system;
+  // Reset effective limits
+  wf_aligner->system.bt_compact_max_memory_eff = wf_aligner->system.bt_compact_max_memory;
+}
+/*
  * Setup
  */
 wavefront_aligner_t* wavefront_aligner_new(
-    const int pattern_length,
-    const int text_length,
     wavefront_aligner_attr_t* attributes) {
   // Attributes
+  const int pattern_length = PATTERN_LENGTH_INIT;
+  const int text_length = TEXT_LENGTH_INIT;
   if (attributes == NULL) attributes = &wavefront_aligner_attr_default;
-  const bool score_only = (attributes->alignment_scope == alignment_scope_score);
+  const bool score_only = (attributes->alignment_scope == compute_score);
   const bool memory_modular = attributes->low_memory || score_only;
   const bool bt_piggyback = attributes->low_memory && !score_only;
   // MM
@@ -136,111 +124,184 @@ wavefront_aligner_t* wavefront_aligner_new(
   wf_aligner->mm_allocator = mm_allocator;
   wf_aligner->mm_allocator_own = mm_allocator_own;
   wf_aligner->wavefront_slab = wavefront_slab_new(1000,bt_piggyback,mm_allocator);
-  wf_aligner->bt_buffer = (bt_piggyback) ? wf_backtrace_buffer_new(mm_allocator) : NULL;
   // Configuration
   wf_aligner->pattern_length = pattern_length;
   wf_aligner->text_length = text_length;
-  wf_aligner->distance_metric = attributes->distance_metric;
   wf_aligner->alignment_scope = attributes->alignment_scope;
-  wf_aligner->memory_modular = memory_modular;
-  wf_aligner->bt_piggyback = bt_piggyback;
+  wf_aligner->alignment_form = attributes->alignment_form;
   wavefront_set_penalties(wf_aligner,attributes); // Set penalties
   // Reduction strategy
-  if (attributes->reduction.reduction_strategy == wavefront_reduction_dynamic) {
-    wavefront_reduction_set_dynamic(
-        &wf_aligner->reduction,
-        attributes->reduction.min_wavefront_length,
-        attributes->reduction.max_distance_threshold);
-  } else { // wavefront_reduction_none
-    wavefront_reduction_set_none(&wf_aligner->reduction);
-  }
-  // Allocate victim wavefront
-  wavefront_t* const wavefront_victim = mm_allocator_alloc(mm_allocator,wavefront_t);
-  wavefront_allocate(wavefront_victim,WF_NULL_INIT_LENGTH,bt_piggyback,mm_allocator);
-  wavefront_init_victim(wavefront_victim,WF_NULL_INIT_LO,WF_NULL_INIT_HI);
-  wf_aligner->wavefront_victim = wavefront_victim;
-  // Allocate null wavefront
-  wavefront_t* const wavefront_null = mm_allocator_alloc(mm_allocator,wavefront_t);
-  wavefront_allocate(wavefront_null,WF_NULL_INIT_LENGTH,bt_piggyback,mm_allocator);
-  wavefront_init_null(wavefront_null,WF_NULL_INIT_LO,WF_NULL_INIT_HI);
-  wf_aligner->wavefront_null = wavefront_null;
-  // Allocate wavefronts
-  wavefront_components_dimensions(
-      wf_aligner,attributes->distance_metric,
-      pattern_length,text_length,
-      &wf_aligner->max_score_scope,
-      &wf_aligner->num_wavefronts); // Compute dimensions
-  wavefront_components_allocate(wf_aligner,attributes->distance_metric);
+  wavefront_set_reduction(wf_aligner,attributes);
+  // Wavefront components
+  wavefront_components_allocate(
+      &wf_aligner->wf_components,pattern_length,text_length,
+      &wf_aligner->penalties,memory_modular,bt_piggyback,mm_allocator);
   // CIGAR
   cigar_allocate(&wf_aligner->cigar,2*(pattern_length+text_length),mm_allocator);
+  // Display
+  wf_aligner->plot_params = attributes->plot_params;
+  if (attributes->plot_params.plot_enabled) {
+    wavefront_plot_allocate(&wf_aligner->wf_plot,
+        wf_aligner->penalties.distance_metric,
+        pattern_length,text_length,
+        &wf_aligner->plot_params);
+  }
+  // System
+  wavefront_set_alignment_system(wf_aligner,&attributes->system);
   // Return
   return wf_aligner;
 }
-void wavefront_aligner_clear(
-    wavefront_aligner_t* const wf_aligner) {
-  // Clear wavefront components
-  if (wf_aligner->memory_modular) wavefront_components_clear(wf_aligner,wf_aligner->distance_metric);
-  // Clear CIGAR
-  cigar_clear(&wf_aligner->cigar);
-  // BT-Buffer
-  if (wf_aligner->bt_buffer) wf_backtrace_buffer_clear(wf_aligner->bt_buffer);
-  // Clear Slab
-  wavefront_slab_clear(wf_aligner->wavefront_slab,false);
-}
-void wavefront_aligner_clear__resize(
+void wavefront_aligner_resize(
     wavefront_aligner_t* const wf_aligner,
     const int pattern_length,
     const int text_length) {
-  // Resize wavefront components
-  int num_wavefronts;
-  wavefront_components_dimensions(
-      wf_aligner,wf_aligner->distance_metric,
-      pattern_length,text_length,
-      &wf_aligner->max_score_scope,&num_wavefronts); // Compute dimensions
-  if (num_wavefronts > wf_aligner->num_wavefronts) {
-    wf_aligner->num_wavefronts = num_wavefronts;
-    wavefront_components_free(wf_aligner,wf_aligner->distance_metric);
-    wavefront_components_allocate(wf_aligner,wf_aligner->distance_metric);
-  } else {
-    if (wf_aligner->memory_modular) wavefront_components_clear(wf_aligner,wf_aligner->distance_metric);
-  }
-  // Resize CIGAR
-  if (pattern_length+text_length > wf_aligner->pattern_length+wf_aligner->text_length) {
-    cigar_free(&wf_aligner->cigar); // FIXME
-    cigar_allocate(&wf_aligner->cigar,2*(pattern_length+text_length),wf_aligner->mm_allocator); // FIXME
-  } else {
-    cigar_clear(&wf_aligner->cigar);
-  }
-  // BT-Buffer
-  if (wf_aligner->bt_buffer) wf_backtrace_buffer_clear(wf_aligner->bt_buffer);
-  // Clear Slab
-  wavefront_slab_clear(wf_aligner->wavefront_slab,false);
-  // Resize
+  // Set pattern & text lengths
   wf_aligner->pattern_length = pattern_length;
   wf_aligner->text_length = text_length;
+  // Wavefront components
+  wavefront_components_resize(&wf_aligner->wf_components,
+      pattern_length,text_length,&wf_aligner->penalties);
+  // CIGAR
+  cigar_resize(&wf_aligner->cigar,2*(pattern_length+text_length));
+  // Slab
+  wavefront_slab_clear(wf_aligner->wavefront_slab);
+  // Display
+  if (wf_aligner->plot_params.plot_enabled) {
+    wavefront_plot_free(&wf_aligner->wf_plot);
+    wavefront_plot_allocate(&wf_aligner->wf_plot,
+        wf_aligner->penalties.distance_metric,
+        pattern_length,text_length,
+        &wf_aligner->plot_params);
+  }
+  // System
+  wavefront_set_alignment_system(wf_aligner,&wf_aligner->system);
+}
+//void wavefront_aligner_clear(
+//    wavefront_aligner_t* const wf_aligner) {
+//  // Wavefront components
+//  wavefront_components_clear(&wf_aligner->wf_components);
+//  // CIGAR
+//  cigar_clear(&wf_aligner->cigar);
+//  // Slab
+//  wavefront_slab_clear(wf_aligner->wavefront_slab);
+//}
+void wavefront_aligner_reap(
+    wavefront_aligner_t* const wf_aligner) {
+  // Wavefront components
+  wavefront_components_reap(&wf_aligner->wf_components);
+  // Slab
+  wavefront_slab_reap(wf_aligner->wavefront_slab,wf_slab_reap_all);
 }
 void wavefront_aligner_delete(
     wavefront_aligner_t* const wf_aligner) {
   // Parameters
   mm_allocator_t* const mm_allocator = wf_aligner->mm_allocator;
-  // Null wavefront
-  wavefront_free(wf_aligner->wavefront_null,mm_allocator);
-  mm_allocator_free(mm_allocator,wf_aligner->wavefront_null);
-  // Victim wavefront
-  wavefront_free(wf_aligner->wavefront_victim,mm_allocator);
-  mm_allocator_free(mm_allocator,wf_aligner->wavefront_victim);
   // Wavefront components
-  wavefront_components_free(wf_aligner,wf_aligner->distance_metric);
+  wavefront_components_free(&wf_aligner->wf_components);
   // CIGAR
   cigar_free(&wf_aligner->cigar);
+  // Slab
+  wavefront_slab_delete(wf_aligner->wavefront_slab);
+  // Display
+  if (wf_aligner->plot_params.plot_enabled) wavefront_plot_free(&wf_aligner->wf_plot);
   // MM
-  if (wf_aligner->bt_buffer) wf_backtrace_buffer_delete(wf_aligner->bt_buffer);
-  wavefront_slab_delete(wf_aligner->wavefront_slab); // Slab
   const bool mm_allocator_own = wf_aligner->mm_allocator_own;
   mm_allocator_free(mm_allocator,wf_aligner); // Handler
   if (mm_allocator_own) {
     mm_allocator_delete(mm_allocator);
   }
+}
+/*
+ * Configuration
+ */
+void wavefront_aligner_set_alignment_end_to_end(
+    wavefront_aligner_t* const wf_aligner) {
+  wf_aligner->alignment_form.span = alignment_end2end;
+}
+void wavefront_aligner_set_alignment_free_ends(
+    wavefront_aligner_t* const wf_aligner,
+    const int pattern_begin_free,
+    const int pattern_end_free,
+    const int text_begin_free,
+    const int text_end_free) {
+  wf_aligner->alignment_form.span = alignment_endsfree;
+  wf_aligner->alignment_form.pattern_begin_free = pattern_begin_free;
+  wf_aligner->alignment_form.pattern_end_free = pattern_end_free;
+  wf_aligner->alignment_form.text_begin_free = text_begin_free;
+  wf_aligner->alignment_form.text_end_free = text_end_free;
+}
+void wavefront_aligner_set_reduction_none(
+    wavefront_aligner_t* const wf_aligner) {
+  wavefront_reduction_set_none(&wf_aligner->reduction);
+}
+void wavefront_aligner_set_reduction_adaptive(
+    wavefront_aligner_t* const wf_aligner,
+    const int min_wavefront_length,
+    const int max_distance_threshold) {
+  wavefront_reduction_set_adaptive(&wf_aligner->reduction,
+      min_wavefront_length,max_distance_threshold);
+}
+void wavefront_aligner_set_max_alignment_score(
+    wavefront_aligner_t* const wf_aligner,
+    const int max_alignment_score) {
+  wf_aligner->alignment_form.max_alignment_score = max_alignment_score;
+}
+void wavefront_aligner_set_max_memory_used(
+    wavefront_aligner_t* const wf_aligner,
+    const uint64_t max_memory_used) {
+  wf_aligner->system.max_memory_used = max_memory_used;
+}
+/*
+ * Utils
+ */
+uint64_t wavefront_aligner_get_size(
+    wavefront_aligner_t* const wf_aligner) {
+  // Parameters
+  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
+  // Compute size
+  const uint64_t bt_buffer_size = (wf_components->bt_buffer) ?
+      wf_backtrace_buffer_get_size_allocated(wf_components->bt_buffer) : 0;
+  const uint64_t slab_size = wavefront_slab_get_size(wf_aligner->wavefront_slab);
+  return bt_buffer_size + slab_size;
+}
+/*
+ * Display
+ */
+void wavefront_aligner_print_status(
+    FILE* const stream,
+    wavefront_aligner_t* const wf_aligner,
+    const int score) {
+  // Parameters
+  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
+  // Approximate progress
+  const int dist_total = MAX(wf_aligner->text_length,wf_aligner->pattern_length);
+  int s = (wf_components->memory_modular) ? score%wf_components->max_score_scope : score;
+  wavefront_t* wavefront = wf_components->mwavefronts[s];
+  if (wavefront==NULL && s>0) {
+    s = (wf_components->memory_modular) ? (score-1)%wf_components->max_score_scope : (score-1);
+    wavefront = wf_components->mwavefronts[s];
+  }
+  int dist_max = -1, wf_len = -1, k;
+  if (wavefront!=NULL) {
+    wf_offset_t* const offsets = wavefront->offsets;
+    for (k=wavefront->lo;k<=wavefront->hi;++k) {
+      const int dist = MAX(WAVEFRONT_V(k,offsets[k]),WAVEFRONT_H(k,offsets[k]));
+      dist_max = MAX(dist_max,dist);
+    }
+    wf_len = wavefront->hi-wavefront->lo+1;
+  }
+  // Memory used
+  const uint64_t slab_size = wavefront_slab_get_size(wf_aligner->wavefront_slab);
+  const uint64_t bt_buffer_used = (wf_components->bt_buffer) ?
+      wf_backtrace_buffer_get_size_used(wf_components->bt_buffer) : 0;
+  // Print one-line status
+  fprintf(stream,
+      "[WFA] Score %d (~ %2.3f%% aligned). "
+      "Memory used (WF-Slab,BT-buffer)=(%lu MB,%lu MB). "
+      "Wavefronts ~ %2.3f Moffsets\n",
+      score,(dist_max>=0) ? (100.0f*(float)dist_max/(float)dist_total) : -1.0f,
+      CONVERT_B_TO_MB(slab_size),CONVERT_B_TO_MB(bt_buffer_used),
+      (wf_len>=0) ? (float)wf_len/1000000.0f : -1.0f);
 }
 
 #ifdef WFA_NAMESPACE
