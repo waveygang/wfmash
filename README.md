@@ -103,7 +103,8 @@ cmake -H. -Bbuild && cmake --build build -- -j 3
 If your system has several versions of the gcc/g++ compilers you might tell cmake which one to use with:
 
 ```
-cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10' && cmake --build build -- -j 3
+cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10' 
+cmake --build build -- -j 3
 ```
 
 The `wfmash` binary will be in `build/bin`.
