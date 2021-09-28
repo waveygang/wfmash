@@ -47,6 +47,7 @@ target_link_libraries(wfmash
   edlib
   wflambda
   wfa
+  jemalloc
   z
   #absl::flat_hash_map
 )
