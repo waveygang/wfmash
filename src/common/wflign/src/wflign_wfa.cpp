@@ -99,24 +99,24 @@ void wflign_affine_wavefront(
         } else if (mashmap_estimated_identity >= 0.9) {
             wfa_affine_penalties = {
                     .match = 0,
-                    .mismatch = 7,
-                    .gap_opening = 11,
+                    .mismatch = 8,
+                    .gap_opening = 12,
                     .gap_extension = 1,
                     };
             minhash_kmer_size = 16;
         } else if (mashmap_estimated_identity >= 0.8) {
             wfa_affine_penalties = {
                     .match = 0,
-                    .mismatch = 3,
-                    .gap_opening = 5,
+                    .mismatch = 7,
+                    .gap_opening = 10,
                     .gap_extension = 1,
                     };
             minhash_kmer_size = 15;
         } else {
             wfa_affine_penalties = {
                     .match = 0,
-                    .mismatch = 2,
-                    .gap_opening = 4,
+                    .mismatch = 6,
+                    .gap_opening = 9,
                     .gap_extension = 1,
                     };
             minhash_kmer_size = 13;
