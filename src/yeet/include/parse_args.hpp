@@ -53,7 +53,6 @@ void parse_args(int argc,
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<int> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
-    args::ValueFlag<std::string> target_sequence_file_list(parser, "targets", "alignment target file list", {'L', "target-file-list"});
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
@@ -137,10 +136,6 @@ void parse_args(int argc,
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
         align_parameters.refSequences.push_back(args::get(target_sequence_file));
-    }
-    if (target_sequence_file_list) {
-        skch::parseFileList(args::get(target_sequence_file_list), map_parameters.refSequences);
-        skch::parseFileList(args::get(target_sequence_file_list), align_parameters.refSequences);
     }
     map_parameters.referenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 

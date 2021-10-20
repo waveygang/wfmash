@@ -89,7 +89,7 @@ It may be necessary to install several system-level libraries to build `wfmash`.
 installed using apt:
 
 ```
-sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev
+sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev libhts-dev
 ```
 
 After installing the required dependencies, clone the `wfmash` git repository and build with:

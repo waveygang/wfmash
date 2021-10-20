@@ -146,11 +146,11 @@ int main(int argc, char** argv) {
     }
 
     align::printCmdOptions(align_parameters);
-    align::Aligner alignObj(align_parameters);
 
     auto t0 = skch::Time::now();
+    align::Aligner alignObj(align_parameters);
     std::chrono::duration<double> timeRefRead = skch::Time::now() - t0;
-    std::cerr << "[wfmash::align] time spent read the reference sequences: " << timeRefRead.count() << " sec" << std::endl;
+    std::cerr << "[wfmash::align] time spent loading the reference index: " << timeRefRead.count() << " sec" << std::endl;
 
     //Compute the alignments
     alignObj.compute();

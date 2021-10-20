@@ -45,6 +45,7 @@ target_link_libraries(wfmash
   pthread
   libwflign_static
   edlib
+  hts
   wflambda
   wfa
   jemalloc

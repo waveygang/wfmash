@@ -16,6 +16,7 @@
 #include <cassert>
 #include <thread>
 #include <memory>
+#include <htslib/faidx.h>
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -123,8 +124,17 @@ namespace align
       const align::Parameters &param;
 
       refSequenceMap_t refSequences;
+      faidx_t *faid;
 
     public:
+      /**
+       * @brief                 destructor, cleans up faidx index
+       */
+      ~Aligner(void)
+      {
+          fai_destroy(this->faid);
+          this->faid = nullptr;
+      }
 
       /**
        * @brief                 constructor, also reads reference sequences
@@ -149,28 +159,10 @@ namespace align
       /**
        * @brief                 parse and save all the reference sequences
        */
-      void getRefSequences()
-      {
-        for(const auto &fileName : param.refSequences)
-        {
-
-#ifdef DEBUG
-          std::cerr << "INFO, align::Aligner::getRefSequences, parsing reference sequences in file " << fileName << std::endl;
-#endif
-
-        seqiter::for_each_seq_in_file(
-            fileName,
-            [&](const std::string& seq_name,
-                const std::string& seq) {
-                // todo: offset_t is an 32-bit integer, which could cause problems
-                skch::offset_t len = seq.length();
-                // upper-case our input and make sure it's canonical DNA (for WFA)
-                skch::CommonFunc::makeUpperCaseAndValidDNA((char*)seq.c_str(), len);
-                //seqId shouldn't already exist in our table
-                assert(this->refSequences.count(seq_name) == 0);
-                refSequences.emplace(seq_name, seq);
-            });
-        }
+      void getRefSequences() {
+          assert(param.refSequences.size() == 1);
+          auto& filename = param.refSequences.front();
+          faid = fai_load(filename.c_str());
       }
 
       /**
@@ -503,13 +495,15 @@ namespace align
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
 #endif
 
-        //Define reference substring for this mapping
-        const std::string &refId = currentRecord.refId;
-        const char* refRegion = this->refSequences[refId].c_str();
-        const auto& refSize = this->refSequences[refId].size();
-        refRegion += currentRecord.rStartPos;
+        //Obtain reference substring for this mapping
+        int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
+        std::stringstream ss;
+        // make a samtools faidx-style reference range
+        ss << currentRecord.refId << ":" << currentRecord.rStartPos << "-" << currentRecord.rEndPos;
+        const std::string ref_name = ss.str();
+        int64_t got_seq_len = 0;
+        char *ref_seq = fai_fetch64(faid, ref_name.c_str(), &got_seq_len);
         skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos;
-        assert(refLen <= refSize);
 
         //Define query substring for this mapping
         const char* queryRegion = qSequence->c_str();  //initially point to beginning
@@ -540,7 +534,7 @@ namespace align
             param.emit_md_tag, !param.sam_format,
             currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
-            refId, refRegion, refSize, currentRecord.rStartPos, refLen,
+            currentRecord.refId, ref_seq, ref_size, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
             param.min_identity,
             17 /*param.kmerSize*/,
@@ -559,6 +553,7 @@ namespace align
             param.wflign_erode_k);
 
         delete [] queryRegionStrand;
+        free(ref_seq);
       }
   };
 }
