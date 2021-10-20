@@ -124,7 +124,7 @@ namespace align
       const align::Parameters &param;
 
       refSequenceMap_t refSequences;
-      faidx_t *faid;
+      std::vector<faidx_t*> faidxs;
 
     public:
       /**
@@ -132,8 +132,9 @@ namespace align
        */
       ~Aligner(void)
       {
-          fai_destroy(this->faid);
-          this->faid = nullptr;
+          for (auto& faid : this->faidxs) {
+              fai_destroy(faid);
+          }
       }
 
       /**
@@ -143,7 +144,7 @@ namespace align
       explicit Aligner(const align::Parameters &p) :
         param(p)
       {
-        this->getRefSequences();
+          this->getRefSequences();
       }
 
       /**
@@ -160,9 +161,13 @@ namespace align
        * @brief                 parse and save all the reference sequences
        */
       void getRefSequences() {
+          auto& nthreads = param.threads;
           assert(param.refSequences.size() == 1);
           auto& filename = param.refSequences.front();
-          faid = fai_load(filename.c_str());
+          for (int i = 0; i < nthreads; ++i) {
+              auto faid = fai_load(filename.c_str());
+              faidxs.push_back(faid);
+          }
       }
 
       /**
@@ -223,6 +228,7 @@ namespace align
           reader_done.store(false);
 
           auto& nthreads = param.threads;
+          //for (
 
           // atomics to record if we're working or not
           std::vector<std::atomic<bool>> working(nthreads);
@@ -370,7 +376,7 @@ namespace align
                           doAlignment(output, output_tsv,
                                       rec->currentRecord,
                                       rec->mappingRecordLine,
-                                      rec->qSequence);
+                                      rec->qSequence, tid);
                           progress.increment(rec->currentRecord.qEndPos - rec->currentRecord.qStartPos);
 
                           auto* paf_rec = new std::string(output.str());
@@ -489,20 +495,24 @@ namespace align
               std::stringstream& output_tsv,
               MappingBoundaryRow &currentRecord,
               const std::string &mappingRecordLine,
-              const std::shared_ptr<std::string> &qSequence) {
+              const std::shared_ptr<std::string> &qSequence,
+              int tid) {
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
 #endif
 
         //Obtain reference substring for this mapping
+        // htslib caches are not threadsafe! so we use a thread-specific faidx_t
+        faidx_t* faid = faidxs[tid];
         int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
-        std::stringstream ss;
-        // make a samtools faidx-style reference range
-        ss << currentRecord.refId << ":" << currentRecord.rStartPos << "-" << currentRecord.rEndPos;
-        const std::string ref_name = ss.str();
         int64_t got_seq_len = 0;
-        char *ref_seq = fai_fetch64(faid, ref_name.c_str(), &got_seq_len);
+        char * ref_seq = faidx_fetch_seq64(faid, currentRecord.refId.c_str(),
+                                           currentRecord.rStartPos, currentRecord.rEndPos,
+                                           &got_seq_len);
+        //currentRecord.rStartPos, currentRecord.rEndPos,
+        // hack to make it 0-terminated as expected by WFA
+        ref_seq = (char*)realloc(ref_seq, got_seq_len+1); ref_seq[got_seq_len] = '\0';
         skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos;
 
         //Define query substring for this mapping
