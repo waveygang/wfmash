@@ -1373,7 +1373,7 @@ void write_merged_alignment(
                         target_delta + target_delta_to_shift;
 
                     if (target_delta_x > 0) {
-//                        std::cerr << "B HEAD patching in"
+//                        std::cerr << "B HEAD patching in "
 //                                  << query_name << " "
 //                                  << query_offset << "@ " << query_pos <<
 //                                  " - " << query_delta

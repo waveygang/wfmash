@@ -130,7 +130,7 @@ namespace align
       /**
        * @brief                 destructor, cleans up faidx index
        */
-      ~Aligner(void)
+      ~Aligner()
       {
           for (auto& faid : this->faidxs) {
               fai_destroy(faid);
@@ -496,7 +496,7 @@ namespace align
               MappingBoundaryRow &currentRecord,
               const std::string &mappingRecordLine,
               const std::shared_ptr<std::string> &qSequence,
-              int tid) {
+              uint64_t tid) {
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
@@ -507,12 +507,21 @@ namespace align
         faidx_t* faid = faidxs[tid];
         int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
         int64_t got_seq_len = 0;
-        char * ref_seq = faidx_fetch_seq64(faid, currentRecord.refId.c_str(),
-                                           currentRecord.rStartPos, currentRecord.rEndPos,
-                                           &got_seq_len);
+        const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_major ? param.wflign_max_len_major : currentRecord.rStartPos;
+        char * ref_seq = faidx_fetch_seq64(
+                faid, currentRecord.refId.c_str(),
+                currentRecord.rStartPos - head_padding,
+                currentRecord.rEndPos,
+                &got_seq_len
+                );
         //currentRecord.rStartPos, currentRecord.rEndPos,
         // hack to make it 0-terminated as expected by WFA
-        ref_seq = (char*)realloc(ref_seq, got_seq_len+1); ref_seq[got_seq_len] = '\0';
+        //ref_seq = (char*)realloc(ref_seq, got_seq_len+1);
+        ref_seq[got_seq_len] = '\0';
+
+        // Shift the pointer to the currentRecord.rStartPos position
+        ref_seq = ref_seq + head_padding;
+
         skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos;
 
         //Define query substring for this mapping
@@ -563,6 +572,10 @@ namespace align
             param.wflign_erode_k);
 
         delete [] queryRegionStrand;
+
+        // Re-shift the pointer to the malloc()-ed address
+        ref_seq = ref_seq - head_padding;
+
         free(ref_seq);
       }
   };
