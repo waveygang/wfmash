@@ -96,7 +96,7 @@ namespace align
         char delimiter = ':';
         std::string delimeter_str(1, delimiter);
         vector<string> mm_id_vec = split(tokens[12], delimeter_str);
-        double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
+        const double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
 
         //Save words into currentRecord
         {
@@ -107,7 +107,7 @@ namespace align
             currentRecord.refId = tokens[5];
             currentRecord.rStartPos = std::stoi(tokens[7]);
             currentRecord.rEndPos = std::stoi(tokens[8]);
-            currentRecord.mashmap_estimated_identity = mm_id;
+            currentRecord.mashmap_estimated_identity = (float) mm_id;
         }
       }
 
@@ -507,11 +507,16 @@ namespace align
         faidx_t* faid = faidxs[tid];
         int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
         int64_t got_seq_len = 0;
-        const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_major ? param.wflign_max_len_major : currentRecord.rStartPos;
+
+        // Take flanking sequences to support head/tail patching due to noisy (inaccurate) mapping boundaries
+        const int ref_len = faidx_seq_len(faid, currentRecord.refId.c_str());
+        const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
+        const uint64_t tail_padding = ref_len - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_len - currentRecord.rEndPos;
+
         char * ref_seq = faidx_fetch_seq64(
                 faid, currentRecord.refId.c_str(),
                 currentRecord.rStartPos - head_padding,
-                currentRecord.rEndPos,
+                currentRecord.rEndPos + tail_padding,
                 &got_seq_len
                 );
         //currentRecord.rStartPos, currentRecord.rEndPos,
