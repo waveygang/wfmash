@@ -505,14 +505,13 @@ namespace align
         //Obtain reference substring for this mapping
         // htslib caches are not threadsafe! so we use a thread-specific faidx_t
         faidx_t* faid = faidxs[tid];
-        int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
-        int64_t got_seq_len = 0;
+        const int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
 
         // Take flanking sequences to support head/tail patching due to noisy (inaccurate) mapping boundaries
-        const int ref_len = faidx_seq_len(faid, currentRecord.refId.c_str());
         const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
-        const uint64_t tail_padding = ref_len - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_len - currentRecord.rEndPos;
+        const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
 
+        int64_t got_seq_len = 0;
         char * ref_seq = faidx_fetch_seq64(
                 faid, currentRecord.refId.c_str(),
                 currentRecord.rStartPos - head_padding,
@@ -521,7 +520,6 @@ namespace align
                 );
         //currentRecord.rStartPos, currentRecord.rEndPos,
         // hack to make it 0-terminated as expected by WFA
-        //ref_seq = (char*)realloc(ref_seq, got_seq_len+1);
         ref_seq[got_seq_len] = '\0';
 
         // Shift the pointer to the currentRecord.rStartPos position
