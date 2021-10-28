@@ -176,45 +176,22 @@ namespace align
        */
       void computeAlignments()
       {
-
           uint64_t total_seqs = 0;
+
+          // Count the number of mapped bases to align
           uint64_t total_alignment_length = 0;
-          uint64_t total_paf_records = 0;
-          for(const auto &fileName : param.querySequences) {
+          {
               std::ifstream mappingListStream(param.mashmapPafFile);
               std::string mappingRecordLine;
               MappingBoundaryRow currentRecord;
-              seqiter::for_each_seq_in_file(
-                  fileName,
-                  [&](const std::string& qSeqId,
-                      const std::string& _seq) {
-                      ++total_seqs;
-                      //total_seq_length += seq.size();
-                      while(!mappingListStream.eof() && mappingRecordLine.empty()) {
-                          std::getline(mappingListStream, mappingRecordLine);
-                      }
 
-                      if( !mappingRecordLine.empty() ) {
-                          parseMashmapRow(mappingRecordLine, currentRecord);
-
-                          if(currentRecord.qId == qSeqId) {
-                              //auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
-                              //seq_queue.push(q);
-                              total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                              ++total_paf_records;
-                              //Check if more mappings have same query sequence id
-                              while(std::getline(mappingListStream, mappingRecordLine)) {
-                                  parseMashmapRow(mappingRecordLine, currentRecord);
-                                  if(currentRecord.qId != qSeqId) {
-                                      break;
-                                  } else {
-                                      total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                                      ++total_paf_records;
-                                  }
-                              }
-                          }
-                      }
-                  });
+              while(!mappingListStream.eof()) {
+                  std::getline(mappingListStream, mappingRecordLine);
+                  if (!mappingRecordLine.empty()) {
+                      parseMashmapRow(mappingRecordLine, currentRecord);
+                      total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                  }
+              }
           }
 
           progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
@@ -256,6 +233,8 @@ namespace align
                           fileName,
                           [&](const std::string& qSeqId,
                               const std::string& _seq) {
+                              ++total_seqs;
+
                               // copy our input into a shared ptr
                               std::shared_ptr<std::string> seq(new std::string(_seq));
                               // todo: offset_t is an 32-bit integer, which could cause problems
@@ -428,7 +407,6 @@ namespace align
           std::cerr << "[wfmash::align::computeAlignments] "
                     << "count of mapped reads = " << total_seqs
                     << ", total aligned bp = " << total_alignment_length << std::endl;
-
       }
 
       /**
