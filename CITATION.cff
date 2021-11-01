@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "wfmash: whole-chromosome pairwise alignment using the hierarchical wavefront algorithm"
+version: "0.7.0"
+date-released: "2021-09-09"
+abstract: " wfmash, a new gap-affine pairwise aligner designed to align DNA sequences at a whole-chromosome scale. wfmash applies a hierarchical implementation of the wavefront alignment algorithm to guide the alignment of very long sequences. It scales efficiently to large eukaryotic chromosomes, allowing users to perform pairwise alignment of thousands of large genomes using little time and memory."
+authors:
+  - family-names: "Guarracino"
+    given-names: "Andrea"
+    orcid: "https://orcid.org/0000-0001-9744-131X"
+  - family-names: "Mwaniki"
+    given-names: "Njagi"
+  - family-names: "Marco-Sola"
+    given-names: "Santiago"
+  - family-names: "Garrison"
+    given-names: "Erik"
+license: MIT
+repository-code: "https://github.com/ekg/wfmash"
+keywords:
+  - sequence alignment
+  - pairwise alignment
+  - pangenome
