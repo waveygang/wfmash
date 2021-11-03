@@ -499,6 +499,9 @@ namespace align
         //currentRecord.rStartPos, currentRecord.rEndPos,
         // hack to make it 0-terminated as expected by WFA
         ref_seq[got_seq_len] = '\0';
+        
+        // upper-case our input and make sure it's canonical DNA (for WFA)
+        skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq, got_seq_len);
 
         // Shift the pointer to the currentRecord.rStartPos position
         ref_seq = ref_seq + head_padding;
