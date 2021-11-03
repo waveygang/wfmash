@@ -83,15 +83,6 @@ int main(int argc, char** argv) {
         if (yeet_parameters.approx_mapping) {
             return 0;
         }
-
-        if (align_parameters.sam_format) {
-            std::ofstream outstrm(align_parameters.pafOutputFile);
-            for (auto& x : referSketch.metadata){
-                outstrm << "@SQ\tSN:" << x.name << "\tLN:" << x.len << "\n";
-            }
-            outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
-            outstrm.close();
-        }
      } else {
         robin_hood::unordered_flat_map< std::string, std::pair<skch::seqno_t, uint64_t> > seqName_to_seqCounterAndLen;
 
@@ -143,6 +134,24 @@ int main(int argc, char** argv) {
             << "\t" << "id:f:" << e.mashmap_estimated_identity * 100.0
             << "\n";
         }
+    }
+
+    if (align_parameters.sam_format) {
+        // Prepare SAM header
+        std::ofstream outstrm(align_parameters.pafOutputFile);
+
+        for(const auto &fileName : map_parameters.refSequences)
+        {
+            seqiter::for_each_seq_in_file(
+                    fileName,
+                    [&](const std::string& seq_name,
+                            const std::string& seq) {
+                        outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
+                    });
+        }
+        outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
+
+        outstrm.close();
     }
 
     align::printCmdOptions(align_parameters);
