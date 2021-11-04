@@ -16,6 +16,8 @@ namespace align
   //L1 stage lookup index
   struct MappingBoundaryRow
   {
+    uint16_t rankMapping;             //rank of the mapping for the query qId. It has the same variable type of num_mappings_for_segments (used for the SAM output format)
+
     std::string qId;                    //query sequence(s) 
     std::string refId;                  //reference sequence(s)
     skch::offset_t qStartPos;           //mapping boundary start offset on query

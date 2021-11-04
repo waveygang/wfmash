@@ -251,11 +251,7 @@ void parse_args(int argc,
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     map_parameters.split = !args::get(no_split);
-
-    if (align_parameters.sam_format && map_parameters.split) {
-        std::cerr << "[wfmash] ERROR, skch::parseandSave, Disable splitting of input sequences (with -N) in order to enable the SAM format" << std::endl;
-        exit(1);
-    }
+    align_parameters.split = !args::get(no_split); //ToDo: hacky, to have the information also during the alignment (for SAM format)
 
     map_parameters.mergeMappings = !args::get(no_merge);
 

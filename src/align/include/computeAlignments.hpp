@@ -235,6 +235,8 @@ namespace align
                               const std::string& _seq) {
                               ++total_seqs;
 
+                              uint64_t rank_mapping = 0;
+
                               // copy our input into a shared ptr
                               std::shared_ptr<std::string> seq(new std::string(_seq));
                               // todo: offset_t is an 32-bit integer, which could cause problems
@@ -260,6 +262,7 @@ namespace align
                                   {
                                       //Queue up this query record
                                       auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
+                                      q->currentRecord.rankMapping = rank_mapping++;
                                       seq_queue.push(q);
 
                                       //Check if more mappings have same query sequence id
@@ -275,6 +278,7 @@ namespace align
                                           else
                                           {
                                               auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
+                                              q->currentRecord.rankMapping = rank_mapping++;
                                               seq_queue.push(q);
                                           }
                                       }
@@ -496,10 +500,10 @@ namespace align
                 currentRecord.rEndPos + tail_padding,
                 &got_seq_len
                 );
-        //currentRecord.rStartPos, currentRecord.rEndPos,
+
         // hack to make it 0-terminated as expected by WFA
         ref_seq[got_seq_len] = '\0';
-        
+
         // upper-case our input and make sure it's canonical DNA (for WFA)
         skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq, got_seq_len);
 
@@ -530,12 +534,15 @@ namespace align
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
+        // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix in there is just one alignment for the query)
+        const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
+
         wflign::wavefront::wflign_affine_wavefront(
             output,
             !param.tsvOutputPrefix.empty(), output_tsv,
             true, // merge alignments
             param.emit_md_tag, !param.sam_format,
-            currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
+            currentRecord.qId + query_name_suffix, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
             currentRecord.refId, ref_seq, ref_size, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
