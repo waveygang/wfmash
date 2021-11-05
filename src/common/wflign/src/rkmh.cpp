@@ -10,6 +10,7 @@ inline bool canonical(const char *x, int len) {
     }
     return !trip;
 };
+
 /* Reverse complement the string seq
  * (assumes seq is DNA, and returns non-ACTG letters as-is*/
 
@@ -56,7 +57,7 @@ inline void calc_hashes_(const char *seq, const uint64_t &len,
             hashes[i] = (tmp_fwd < tmp_rev ? tmp_fwd : tmp_rev);
             //std::cerr << "hashes[" << i << "] = " << hashes[i] << std::endl;
         } else {
-            hashes[i] = 0;
+            hashes[i] = std::numeric_limits<hash_t>::max();
         }
     }
 };
@@ -137,7 +138,7 @@ float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta,
         //const double jaccard = double(common) / denom;
         //distance = log(double(common + 1) / (denom + 1)) / log(1. / (denom + 1));
         //distance = -log(2 * jaccard / (1. + jaccard)) / k;
-        distance = -log(2.0 * common / (double(denom) + common)) / k;
+        distance = -log(2.0 * common / (double(denom) + common)) / (double)k;
         if (distance > 1) {
             distance = 1.0;
         }
