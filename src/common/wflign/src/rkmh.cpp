@@ -90,9 +90,9 @@ std::vector<hash_t> hash_sequence(const char* seq,
     std::sort(hashes.begin(), hashes.end());
     // we remove non-canonical hashes
     if (hashes.back() == std::numeric_limits<hash_t>::max()) {
-        auto last = hashes.end(); --last;
-        while (*last == std::numeric_limits<hash_t>::max()) --last;
-        hashes.erase(++last, hashes.end());
+        hashes.erase(std::find(hashes.begin(), hashes.end(),
+                               std::numeric_limits<hash_t>::max()),
+                     hashes.end());
     }
     if (hashes.size() > sketch_size) {
         hashes.erase(hashes.begin()+sketch_size, hashes.end());
