@@ -88,14 +88,14 @@ std::vector<hash_t> hash_sequence(const char* seq,
                                   const uint64_t& sketch_size) {
     std::vector<hash_t> hashes = calc_hashes(seq, len, k);
     std::sort(hashes.begin(), hashes.end());
-    // we remove non-canonical hashes
+    if (hashes.size() > sketch_size) {
+        hashes.erase(hashes.begin()+sketch_size, hashes.end());
+    }
+    // we remove non-canonical hashes which sort last
     if (hashes.back() == std::numeric_limits<hash_t>::max()) {
         hashes.erase(std::find(hashes.begin(), hashes.end(),
                                std::numeric_limits<hash_t>::max()),
                      hashes.end());
-    }
-    if (hashes.size() > sketch_size) {
-        hashes.erase(hashes.begin()+sketch_size, hashes.end());
     }
     return hashes;
 }
