@@ -39,7 +39,8 @@ void wflign_affine_wavefront(
     std::ostream &out,
     const bool &emit_tsv, std::ostream &out_tsv,
     const bool &merge_alignments,
-    const bool &emit_md_tag, const bool &paf_format_else_sam,
+    const bool &emit_md_tag,
+    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
     const std::string &query_name,
     const char *query, const uint64_t &query_total_length,
     const uint64_t &query_offset, const uint64_t &query_length,
@@ -205,7 +206,8 @@ void wflign_affine_wavefront(
         // write a merged alignment
         write_merged_alignment(
                 out, trace, wf_aligner, &wfa_affine_penalties,
-                emit_md_tag, paf_format_else_sam,
+                emit_md_tag,
+                paf_format_else_sam, no_seq_in_sam,
                 query,
                 query_name, query_total_length,
                 query_offset, query_length, query_is_rev,
@@ -645,7 +647,8 @@ void wflign_affine_wavefront(
                 // write a merged alignment
                 write_merged_alignment(
                         out, trace, wf_aligner, &wfa_affine_penalties,
-                        emit_md_tag, paf_format_else_sam,
+                        emit_md_tag,
+                        paf_format_else_sam, no_seq_in_sam,
                         query,
                         query_name,
                         query_total_length,
@@ -1138,7 +1141,8 @@ void write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
     wfa::wavefront_aligner_t *const wf_aligner,
     wfa::affine_penalties_t *const affine_penalties,
-    const bool &emit_md_tag, const bool &paf_format_else_sam,
+    const bool &emit_md_tag,
+    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
     const char *query,
     const std::string &query_name, const uint64_t &query_total_length,
     const uint64_t &query_offset, const uint64_t &query_length,
@@ -2566,8 +2570,12 @@ query_start : query_end)
                 << "\t";
 
             // segment SEQuence
-            for (uint64_t p = query_start; p < query_end; ++p) {
-                out << query[p];
+            if (no_seq_in_sam) {
+                out << "*";
+            } else {
+                for (uint64_t p = query_start; p < query_end; ++p) {
+                    out << query[p];
+                }
             }
 
             out << "\t"

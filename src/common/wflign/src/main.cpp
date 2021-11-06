@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
                                 wflign::wavefront::wflign_affine_wavefront(
                                     std::cout,
                                     merge_alignments,
-                                    false, true,
+                                    false, true, true,
                                     qname, qstrand.c_str(), qstrand.size(), 0, qstrand.size(),
                                     revcomp,
                                     tname, tseq.c_str(), tseq.size(), 0, tseq.size(),

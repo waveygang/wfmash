@@ -48,6 +48,7 @@ struct Parameters {
 
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
+    bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
 };
 
 }

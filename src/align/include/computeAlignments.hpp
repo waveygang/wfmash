@@ -541,7 +541,8 @@ namespace align
             output,
             !param.tsvOutputPrefix.empty(), output_tsv,
             true, // merge alignments
-            param.emit_md_tag, !param.sam_format,
+            param.emit_md_tag,
+            !param.sam_format, param.no_seq_in_sam,
             currentRecord.qId + query_name_suffix, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
             currentRecord.refId, ref_seq, ref_size, currentRecord.rStartPos, refLen,

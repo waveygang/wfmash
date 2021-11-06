@@ -102,7 +102,10 @@ void parse_args(int argc,
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
+
+    // sam format
     args::Flag sam_format(parser, "N", "output in the SAM format (PAF by default)", {'a', "sam-format"});
+    args::Flag no_seq_in_sam(parser, "N", "do not fill the sequence field in the SAM format", {'q', "no-seq-in-sam"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
@@ -250,6 +253,7 @@ void parse_args(int argc,
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
+    align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
     map_parameters.split = !args::get(no_split);
     align_parameters.split = !args::get(no_split); //ToDo: hacky, to have the information also during the alignment (for SAM format)
 
