@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
                 }
             }
         }
-        
+
 
         igzstream mappingListStream(map_parameters.outFileName.c_str());
         std::string mappingRecordLine;
@@ -162,12 +162,35 @@ int main(int argc, char** argv) {
 
         for(const auto &fileName : map_parameters.refSequences)
         {
-            seqiter::for_each_seq_in_file(
-                    fileName,
-                    [&](const std::string& seq_name,
-                            const std::string& seq) {
-                        outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
-                    });
+            // check if there is a .fai
+            std::string fai_name = fileName + ".fai";
+            if (fs::file_exists(fai_name)) {
+                // if so, process the .fai to determine our sequence length
+                std::string line;
+                std::ifstream in(fai_name.c_str());
+                while (std::getline(in, line)) {
+                    auto p1 = line.find('\t');
+                    auto p2 = line.find('\t', p1);
+
+                    const std::string seq_name = line.substr(0, p1);
+                    const uint64_t seq_len = std::stoull(line.substr(p1, p2));
+                    outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
+                }
+            } else {
+                // if not, warn that this is expensive
+                std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
+                seqiter::for_each_seq_in_file(
+                        fileName,
+                        [&](const std::string& seq_name,
+                                const std::string& seq) {
+                            outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
+                        });
+            }
+
+
+
+
+
         }
         outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
 
