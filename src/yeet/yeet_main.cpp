@@ -85,17 +85,37 @@ int main(int argc, char** argv) {
         }
      } else {
         robin_hood::unordered_flat_map< std::string, std::pair<skch::seqno_t, uint64_t> > seqName_to_seqCounterAndLen;
-
         skch::seqno_t seqCounter = 0;
-        for(const auto &fileName : map_parameters.querySequences)
-        {
-            seqiter::for_each_seq_in_file(
-                    fileName,
-                    [&](const std::string& seq_name,
-                            const std::string& seq) {
-                        seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
-                    });
+        for(const auto &fileName : map_parameters.querySequences) {
+            // check if there is a .fai
+            std::string fai_name = fileName + ".fai";
+            if (fs::file_exists(fai_name)) {
+                // if so, process the .fai to determine our sequence length
+                std::string line;
+                std::ifstream in(fai_name.c_str());
+                while (std::getline(in, line)) {
+                    auto p1 = line.find('\t');
+                    auto p2 = line.find('\t', p1);
+
+                    const std::string seq_name = line.substr(0, p1);
+                    const uint64_t seq_len = std::stoull(line.substr(p1, p2));
+                    seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq_len);
+                }
+            } else {
+                // if not, warn that this is expensive
+                std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to sort the mappings (slow)" << std::endl;
+                for(const auto &fileName : map_parameters.querySequences)
+                {
+                    seqiter::for_each_seq_in_file(
+                            fileName,
+                            [&](const std::string& seq_name,
+                                    const std::string& seq) {
+                                seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
+                            });
+                }
+            }
         }
+        
 
         igzstream mappingListStream(map_parameters.outFileName.c_str());
         std::string mappingRecordLine;

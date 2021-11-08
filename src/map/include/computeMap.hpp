@@ -139,7 +139,7 @@ namespace skch
                 }
             } else {
                 // if not, warn that this is expensive
-                std::cerr << "[wfmash::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading file to sum sequence length (slow)" << std::endl;
+                std::cerr << "[wfmash::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to sum sequence length (slow)" << std::endl;
                 seqiter::for_each_seq_in_file(
                     fileName,
                     [&](const std::string& seq_name,
