@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
                     });
         }
 
-        std::ifstream mappingListStream(map_parameters.outFileName);
+        igzstream mappingListStream(map_parameters.outFileName.c_str());
         std::string mappingRecordLine;
         align::MappingBoundaryRow currentRecord;
         std::vector<align::MappingBoundaryRow> allReadMappings;
