@@ -105,15 +105,7 @@ float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta,
     int j = 0;
 
     uint64_t common = 0;
-    uint64_t denom;
-
-    while (i < alpha.size() && alpha[i] == 0) {
-        i++;
-    }
-    while (j < beta.size() && beta[j] == 0) {
-        j++;
-    }
-    denom = i + j;
+    uint64_t denom = 0;
 
     while (i < alpha.size() && j < beta.size()) {
         if (alpha[i] == beta[j]) {
