@@ -138,9 +138,9 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
   {
       bool indexesExist = true;
 
-      if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta")) {
+      if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
           indexesExist &= checkIndexFileExists(fileName, ".fai");
-      }else if (ends_with_string(fileName, ".fa.gz") || ends_with_string(fileName, ".fasta.gz")) {
+      }else if (ends_with_string(fileName, ".fa.gz") || ends_with_string(fileName, ".fasta.gz") || ends_with_string(fileName, ".fna.gz")) {
           indexesExist &= checkIndexFileExists(fileName, ".fai");
           indexesExist &= checkIndexFileExists(fileName, ".gzi");
       } else {
