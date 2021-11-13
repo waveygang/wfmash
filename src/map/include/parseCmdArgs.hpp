@@ -151,7 +151,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       if (!indexesExist)
       {
           std::cerr << "ERROR, skch::validateInputFileIndexes, missing index(es) for the file "<< fileName << std::endl;
-          if (ends_with_string(fileName, ".fa")) {
+          if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
               std::cerr << "\tWe recommend to build the indexes on BGZIP files by executing:" << std::endl;
               std::cerr << "\tbgzip -@ number_of_threads "<< fileName << std::endl;
               std::cerr << "\tsamtools faidx "<< fileName << ".gz" << std::endl;
