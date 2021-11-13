@@ -72,7 +72,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<int> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size applying 0 as p-value cutoff [default: automatically computed applying 1e-120 as p-value cutoff]", {'w', "window-size"});
+    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic)]", {'w', "window-size"});
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
 
@@ -461,19 +461,21 @@ void parse_args(int argc,
 
     //Compute optimal window size
     {
-        const int ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
+        const int64_t ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
         if (ws > 0) {
             map_parameters.windowSize = ws;
         } else {
-            // If the input window size is 0, compute the best window size using 0 as p-value cutoff
+            // If the input window size is <= 0, compute the best window size using `skch::fixed::pval_cutoff` as p-value cutoff
             const int64_t windowSize = skch::Stat::recommendedWindowSize(
-                    ws == 0 ? 0.0 : skch::fixed::pval_cutoff,
+                    skch::fixed::pval_cutoff,
                     skch::fixed::confidence_interval,
                     map_parameters.kmerSize,
                     map_parameters.alphabetSize,
                     map_parameters.percentageIdentity,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
+
+            // Avoid too big values to improve the accuracy
             map_parameters.windowSize = std::min((int64_t)256, windowSize);
         }
     }
