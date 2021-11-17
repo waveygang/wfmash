@@ -201,5 +201,3 @@ For more details about how to handle Guix channels, go to https://git.genenetwor
 - **Chirag Jain, Sergey Koren, Alexander Dilthey, Adam M. Phillippy, and Srinivas Aluru**. ["A Fast Adaptive Algorithm for Computing Whole-Genome Homology Maps"](https://doi.org/10.1093/bioinformatics/bty597). *Bioinformatics (ECCB issue)*, 2018.
 
 - **Chirag Jain, Alexander Dilthey, Sergey Koren, Srinivas Aluru, and Adam M. Phillippy**. ["A fast approximate algorithm for mapping long reads to large reference databases."](https://link.springer.com/chapter/10.1007/978-3-319-56970-3_5) In *International Conference on Research in Computational Molecular Biology*, Springer, Cham, 2017.
-
-- **Martin Šošić and Mile Šikić** ["Edlib: a C/C ++ library for fast, exact sequence alignment using edit distance"](https://doi.org/10.1093/bioinformatics/btw753), *Bioinformatics*, 2017.
