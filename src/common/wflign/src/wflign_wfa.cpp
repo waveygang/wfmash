@@ -38,20 +38,23 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 void wflign_affine_wavefront(
     std::ostream &out,
     const bool &emit_tsv, std::ostream &out_tsv,
-    const bool &merge_alignments, const bool &emit_md_tag,
-    const bool &paf_format_else_sam, const std::string &query_name,
+    const bool &merge_alignments,
+    const bool &emit_md_tag,
+    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
+    const std::string &query_name,
     const char *query, const uint64_t &query_total_length,
     const uint64_t &query_offset, const uint64_t &query_length,
-    const bool &query_is_rev, const std::string &target_name,
+    const bool &query_is_rev,
+    const std::string &target_name,
     const char *target, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
-    const uint16_t &segment_length, const float &min_identity,
-    const int& _minhash_kmer_size,
+    const uint16_t &segment_length,
+    const float &min_identity, const int& _minhash_kmer_size,
     const int &wfa_mismatch_score,
     const int &wfa_gap_opening_score,
     const int &wfa_gap_extension_score,
     const int &wflambda_min_wavefront_length, // with these set at 0 we do exact
-                                              // WFA for wflambda
+    // WFA for wflambda
     const int &wflambda_max_distance_threshold, const float &mashmap_estimated_identity,
     const int &wflign_mismatch_score,
     const int &wflign_gap_opening_score,
@@ -202,10 +205,14 @@ void wflign_affine_wavefront(
 
         // write a merged alignment
         write_merged_alignment(
-                out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
-                paf_format_else_sam, query, query_name, query_total_length,
-                query_offset, query_length, query_is_rev, target, target_name,
-                target_total_length, target_offset, target_length,
+                out, trace, wf_aligner, &wfa_affine_penalties,
+                emit_md_tag,
+                paf_format_else_sam, no_seq_in_sam,
+                query,
+                query_name, query_total_length,
+                query_offset, query_length, query_is_rev,
+                target,
+                target_name, target_total_length, target_offset, target_length,
                 MAX_LEN_FOR_PURE_WFA, min_identity,
                 elapsed_time_wflambda_ms, num_alignments,
                 num_alignments_performed, mashmap_estimated_identity,
@@ -639,8 +646,12 @@ void wflign_affine_wavefront(
             if (merge_alignments) {
                 // write a merged alignment
                 write_merged_alignment(
-                        out, trace, wf_aligner, &wfa_affine_penalties, emit_md_tag,
-                        paf_format_else_sam, query, query_name, query_total_length,
+                        out, trace, wf_aligner, &wfa_affine_penalties,
+                        emit_md_tag,
+                        paf_format_else_sam, no_seq_in_sam,
+                        query,
+                        query_name,
+                        query_total_length,
                         query_offset, query_length, query_is_rev, target, target_name,
                         target_total_length, target_offset, target_length,
                         segment_length_to_use, min_identity,
@@ -1129,11 +1140,14 @@ bool unpack_display_cigar(const wfa::cigar_t &cigar, const char *query,
 void write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
     wfa::wavefront_aligner_t *const wf_aligner,
-    wfa::affine_penalties_t *const affine_penalties, const bool &emit_md_tag,
-    const bool &paf_format_else_sam, const char *query,
+    wfa::affine_penalties_t *const affine_penalties,
+    const bool &emit_md_tag,
+    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
+    const char *query,
     const std::string &query_name, const uint64_t &query_total_length,
     const uint64_t &query_offset, const uint64_t &query_length,
-    const bool &query_is_rev, const char *target,
+    const bool &query_is_rev,
+    const char *target,
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length,
@@ -1373,7 +1387,7 @@ void write_merged_alignment(
                         target_delta + target_delta_to_shift;
 
                     if (target_delta_x > 0) {
-//                        std::cerr << "B HEAD patching in"
+//                        std::cerr << "B HEAD patching in "
 //                                  << query_name << " "
 //                                  << query_offset << "@ " << query_pos <<
 //                                  " - " << query_delta
@@ -2508,13 +2522,6 @@ query_start : query_end)
             out << "\t" << timings_and_num_alignements << "\t"
                 << "cg:Z:" << cigarv << "\n";
         } else {
-            const uint64_t query_start_pos =
-                query_offset +
-                (query_is_rev ? query_length - query_end : query_start);
-            const uint64_t query_end_pos =
-                query_offset +
-                (query_is_rev ? query_length - query_start : query_end);
-
             out << query_name                          // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
                 << "\t" << target_name // Reference sequence NAME
@@ -2527,23 +2534,30 @@ query_start : query_end)
                 << "\t";
 
             // CIGAR
+            const uint64_t query_start_pos =
+                    query_offset +
+                    (query_is_rev ? query_length - query_end : query_start);
+            const uint64_t query_end_pos =
+                    query_offset +
+                    (query_is_rev ? query_length - query_start : query_end);
+
             if (query_is_rev) {
                 if (query_length > query_end_pos) {
-                    out << (query_length - query_end_pos) << "S";
+                    out << (query_length - query_end_pos) << "H";
                 }
             } else {
                 if (query_start_pos > 0) {
-                    out << query_start_pos << "S";
+                    out << query_start_pos << "H";
                 }
             }
             out << cigarv;
             if (query_is_rev) {
                 if (query_start_pos > 0) {
-                    out << query_start_pos << "S";
+                    out << query_start_pos << "H";
                 }
             } else {
                 if (query_length > query_end_pos) {
-                    out << (query_length - query_end_pos) << "S";
+                    out << (query_length - query_end_pos) << "H";
                 }
             }
 
@@ -2556,8 +2570,12 @@ query_start : query_end)
                 << "\t";
 
             // segment SEQuence
-            for (uint64_t p = 0; p < query_length; ++p) {
-                out << query[p];
+            if (no_seq_in_sam) {
+                out << "*";
+            } else {
+                for (uint64_t p = query_start; p < query_end; ++p) {
+                    out << query[p];
+                }
             }
 
             out << "\t"

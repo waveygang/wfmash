@@ -16,6 +16,7 @@
 #include <cassert>
 #include <thread>
 #include <memory>
+#include <htslib/faidx.h>
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -95,7 +96,7 @@ namespace align
         char delimiter = ':';
         std::string delimeter_str(1, delimiter);
         vector<string> mm_id_vec = split(tokens[12], delimeter_str);
-        double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
+        const double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
 
         //Save words into currentRecord
         {
@@ -106,7 +107,7 @@ namespace align
             currentRecord.refId = tokens[5];
             currentRecord.rStartPos = std::stoi(tokens[7]);
             currentRecord.rEndPos = std::stoi(tokens[8]);
-            currentRecord.mashmap_estimated_identity = mm_id;
+            currentRecord.mashmap_estimated_identity = (float) mm_id;
         }
       }
 
@@ -123,8 +124,18 @@ namespace align
       const align::Parameters &param;
 
       refSequenceMap_t refSequences;
+      std::vector<faidx_t*> faidxs;
 
     public:
+      /**
+       * @brief                 destructor, cleans up faidx index
+       */
+      ~Aligner()
+      {
+          for (auto& faid : this->faidxs) {
+              fai_destroy(faid);
+          }
+      }
 
       /**
        * @brief                 constructor, also reads reference sequences
@@ -133,7 +144,7 @@ namespace align
       explicit Aligner(const align::Parameters &p) :
         param(p)
       {
-        this->getRefSequences();
+          this->getRefSequences();
       }
 
       /**
@@ -149,28 +160,14 @@ namespace align
       /**
        * @brief                 parse and save all the reference sequences
        */
-      void getRefSequences()
-      {
-        for(const auto &fileName : param.refSequences)
-        {
-
-#ifdef DEBUG
-          std::cerr << "INFO, align::Aligner::getRefSequences, parsing reference sequences in file " << fileName << std::endl;
-#endif
-
-        seqiter::for_each_seq_in_file(
-            fileName,
-            [&](const std::string& seq_name,
-                const std::string& seq) {
-                // todo: offset_t is an 32-bit integer, which could cause problems
-                skch::offset_t len = seq.length();
-                // upper-case our input and make sure it's canonical DNA (for WFA)
-                skch::CommonFunc::makeUpperCaseAndValidDNA((char*)seq.c_str(), len);
-                //seqId shouldn't already exist in our table
-                assert(this->refSequences.count(seq_name) == 0);
-                refSequences.emplace(seq_name, seq);
-            });
-        }
+      void getRefSequences() {
+          auto& nthreads = param.threads;
+          assert(param.refSequences.size() == 1);
+          auto& filename = param.refSequences.front();
+          for (int i = 0; i < nthreads; ++i) {
+              auto faid = fai_load(filename.c_str());
+              faidxs.push_back(faid);
+          }
       }
 
       /**
@@ -179,45 +176,22 @@ namespace align
        */
       void computeAlignments()
       {
-
           uint64_t total_seqs = 0;
+
+          // Count the number of mapped bases to align
           uint64_t total_alignment_length = 0;
-          uint64_t total_paf_records = 0;
-          for(const auto &fileName : param.querySequences) {
+          {
               std::ifstream mappingListStream(param.mashmapPafFile);
               std::string mappingRecordLine;
               MappingBoundaryRow currentRecord;
-              seqiter::for_each_seq_in_file(
-                  fileName,
-                  [&](const std::string& qSeqId,
-                      const std::string& _seq) {
-                      ++total_seqs;
-                      //total_seq_length += seq.size();
-                      while(!mappingListStream.eof() && mappingRecordLine.empty()) {
-                          std::getline(mappingListStream, mappingRecordLine);
-                      }
 
-                      if( !mappingRecordLine.empty() ) {
-                          parseMashmapRow(mappingRecordLine, currentRecord);
-
-                          if(currentRecord.qId == qSeqId) {
-                              //auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
-                              //seq_queue.push(q);
-                              total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                              ++total_paf_records;
-                              //Check if more mappings have same query sequence id
-                              while(std::getline(mappingListStream, mappingRecordLine)) {
-                                  parseMashmapRow(mappingRecordLine, currentRecord);
-                                  if(currentRecord.qId != qSeqId) {
-                                      break;
-                                  } else {
-                                      total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                                      ++total_paf_records;
-                                  }
-                              }
-                          }
-                      }
-                  });
+              while(!mappingListStream.eof()) {
+                  std::getline(mappingListStream, mappingRecordLine);
+                  if (!mappingRecordLine.empty()) {
+                      parseMashmapRow(mappingRecordLine, currentRecord);
+                      total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                  }
+              }
           }
 
           progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
@@ -231,6 +205,7 @@ namespace align
           reader_done.store(false);
 
           auto& nthreads = param.threads;
+          //for (
 
           // atomics to record if we're working or not
           std::vector<std::atomic<bool>> working(nthreads);
@@ -258,6 +233,10 @@ namespace align
                           fileName,
                           [&](const std::string& qSeqId,
                               const std::string& _seq) {
+                              ++total_seqs;
+
+                              uint64_t rank_mapping = 0;
+
                               // copy our input into a shared ptr
                               std::shared_ptr<std::string> seq(new std::string(_seq));
                               // todo: offset_t is an 32-bit integer, which could cause problems
@@ -283,6 +262,7 @@ namespace align
                                   {
                                       //Queue up this query record
                                       auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
+                                      q->currentRecord.rankMapping = rank_mapping++;
                                       seq_queue.push(q);
 
                                       //Check if more mappings have same query sequence id
@@ -298,6 +278,7 @@ namespace align
                                           else
                                           {
                                               auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
+                                              q->currentRecord.rankMapping = rank_mapping++;
                                               seq_queue.push(q);
                                           }
                                       }
@@ -378,7 +359,7 @@ namespace align
                           doAlignment(output, output_tsv,
                                       rec->currentRecord,
                                       rec->mappingRecordLine,
-                                      rec->qSequence);
+                                      rec->qSequence, tid);
                           progress.increment(rec->currentRecord.qEndPos - rec->currentRecord.qStartPos);
 
                           auto* paf_rec = new std::string(output.str());
@@ -430,7 +411,6 @@ namespace align
           std::cerr << "[wfmash::align::computeAlignments] "
                     << "count of mapped reads = " << total_seqs
                     << ", total aligned bp = " << total_alignment_length << std::endl;
-
       }
 
       /**
@@ -497,19 +477,40 @@ namespace align
               std::stringstream& output_tsv,
               MappingBoundaryRow &currentRecord,
               const std::string &mappingRecordLine,
-              const std::shared_ptr<std::string> &qSequence) {
+              const std::shared_ptr<std::string> &qSequence,
+              uint64_t tid) {
 
 #ifdef DEBUG
         std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
 #endif
 
-        //Define reference substring for this mapping
-        const std::string &refId = currentRecord.refId;
-        const char* refRegion = this->refSequences[refId].c_str();
-        const auto& refSize = this->refSequences[refId].size();
-        refRegion += currentRecord.rStartPos;
+        //Obtain reference substring for this mapping
+        // htslib caches are not threadsafe! so we use a thread-specific faidx_t
+        faidx_t* faid = faidxs[tid];
+        const int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
+
+        // Take flanking sequences to support head/tail patching due to noisy (inaccurate) mapping boundaries
+        const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
+        const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+
+        int64_t got_seq_len = 0;
+        char * ref_seq = faidx_fetch_seq64(
+                faid, currentRecord.refId.c_str(),
+                currentRecord.rStartPos - head_padding,
+                currentRecord.rEndPos + tail_padding,
+                &got_seq_len
+                );
+
+        // hack to make it 0-terminated as expected by WFA
+        ref_seq[got_seq_len] = '\0';
+
+        // upper-case our input and make sure it's canonical DNA (for WFA)
+        skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq, got_seq_len);
+
+        // Shift the pointer to the currentRecord.rStartPos position
+        ref_seq = ref_seq + head_padding;
+
         skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos;
-        assert(refLen <= refSize);
 
         //Define query substring for this mapping
         const char* queryRegion = qSequence->c_str();  //initially point to beginning
@@ -533,14 +534,18 @@ namespace align
           << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
 #endif
 
+        // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix in there is just one alignment for the query)
+        const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
+
         wflign::wavefront::wflign_affine_wavefront(
             output,
             !param.tsvOutputPrefix.empty(), output_tsv,
             true, // merge alignments
-            param.emit_md_tag, !param.sam_format,
-            currentRecord.qId, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
+            param.emit_md_tag,
+            !param.sam_format, param.no_seq_in_sam,
+            currentRecord.qId + query_name_suffix, queryRegionStrand, querySize, currentRecord.qStartPos, queryLen,
             currentRecord.strand != skch::strnd::FWD,
-            refId, refRegion, refSize, currentRecord.rStartPos, refLen,
+            currentRecord.refId, ref_seq, ref_size, currentRecord.rStartPos, refLen,
             param.wflambda_segment_length,
             param.min_identity,
             17 /*param.kmerSize*/,
@@ -559,6 +564,11 @@ namespace align
             param.wflign_erode_k);
 
         delete [] queryRegionStrand;
+
+        // Re-shift the pointer to the malloc()-ed address
+        ref_seq = ref_seq - head_padding;
+
+        free(ref_seq);
       }
   };
 }

@@ -44,6 +44,26 @@ Together, these settings allow us to precisely define an alignment space to cons
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
 
 
+## input indexing
+
+`wfmash` requires a FASTA index (`.fai`) for its reference ("target"), and benefits if both reference and query are indexed.
+We can build these indexes on BGZIP-indexed files, which we recommend due to their significantly smaller size.
+To index your sequences, we suggest something like:
+
+```sh
+bgzip -@ 16 ref.fa
+samtools faidx ref.fa.gz
+```
+
+Here, we apply `bgzip` (from `htslib`) to build a line-indexable gzip file, and then use `samtools` to generate the FASTA index, which is held in 2 files:
+
+```sh
+$ ls -l ref.fa.gz*
+ref.fa.gz
+ref.fa.gz.gzi
+ref.fa.gz.fai
+```
+
 ## examples
 
 Map a set of query sequences against a reference genome:
@@ -89,7 +109,7 @@ It may be necessary to install several system-level libraries to build `wfmash`.
 installed using apt:
 
 ```
-sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev
+sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev libhts-dev
 ```
 
 After installing the required dependencies, clone the `wfmash` git repository and build with:

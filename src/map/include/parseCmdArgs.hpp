@@ -118,6 +118,52 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     }
   }
 
+  bool ends_with_string(std::string const& str, std::string const& what) {
+      return what.size() <= str.size()
+      && str.find(what, str.size() - what.size()) != str.npos;
+  }
+
+  bool checkIndexFileExists(std::string fastaName, const char* suffix){
+      std::string indexFileName(fastaName);
+      indexFileName = indexFileName + suffix;
+      std::ifstream in(indexFileName);
+      return !in.fail();
+  }
+
+  /**
+ * @brief                     check if the indexes for the input file exist (.fai for fasta, .fai + .gzi for bgzipped fasta)
+ * @param[in] fileName        file name
+ */
+  void validateInputFileIndexes(std::string &fileName)
+  {
+      bool indexesExist = true;
+
+      if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
+          indexesExist &= checkIndexFileExists(fileName, ".fai");
+      }else if (ends_with_string(fileName, ".fa.gz") || ends_with_string(fileName, ".fasta.gz") || ends_with_string(fileName, ".fna.gz")) {
+          indexesExist &= checkIndexFileExists(fileName, ".fai");
+          indexesExist &= checkIndexFileExists(fileName, ".gzi");
+      } else {
+          std::cerr << "\tUnknown type for file: "<< fileName << std::endl;
+          exit(1);
+      }
+
+      if (!indexesExist)
+      {
+          std::cerr << "ERROR, skch::validateInputFileIndexes, missing index(es) for the file "<< fileName << std::endl;
+          if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
+              std::cerr << "\tWe recommend to build the indexes on BGZIP files by executing:" << std::endl;
+              std::cerr << "\tbgzip -@ number_of_threads "<< fileName << std::endl;
+              std::cerr << "\tsamtools faidx "<< fileName << ".gz" << std::endl;
+          } else {
+              std::cerr << "\tIf the compressed file is in BGZIP, execute:" << std::endl;
+              std::cerr << "\tsamtools faidx "<< fileName << std::endl;
+          }
+
+          exit(1);
+      }
+  }
+
   /**
    * @brief                     validate the reference and query file(s)
    * @param[in] querySequences  vector containing query file names
@@ -130,8 +176,10 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       for(auto &e : querySequences)
         validateInputFile(e);
 
-      for(auto &e : refSequences)
-        validateInputFile(e);
+      for(auto &e : refSequences) {
+          validateInputFile(e);
+          validateInputFileIndexes(e);
+      }
     }
 
   /**

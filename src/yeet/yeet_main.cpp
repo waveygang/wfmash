@@ -83,30 +83,41 @@ int main(int argc, char** argv) {
         if (yeet_parameters.approx_mapping) {
             return 0;
         }
-
-        if (align_parameters.sam_format) {
-            std::ofstream outstrm(align_parameters.pafOutputFile);
-            for (auto& x : referSketch.metadata){
-                outstrm << "@SQ\tSN:" << x.name << "\tLN:" << x.len << "\n";
-            }
-            outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
-            outstrm.close();
-        }
      } else {
         robin_hood::unordered_flat_map< std::string, std::pair<skch::seqno_t, uint64_t> > seqName_to_seqCounterAndLen;
-
         skch::seqno_t seqCounter = 0;
-        for(const auto &fileName : map_parameters.querySequences)
-        {
-            seqiter::for_each_seq_in_file(
-                    fileName,
-                    [&](const std::string& seq_name,
-                            const std::string& seq) {
-                        seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
-                    });
+        for(const auto &fileName : map_parameters.querySequences) {
+            // check if there is a .fai
+            std::string fai_name = fileName + ".fai";
+            if (fs::file_exists(fai_name)) {
+                // if so, process the .fai to determine our sequence length
+                std::string line;
+                std::ifstream in(fai_name.c_str());
+                while (std::getline(in, line)) {
+                    auto p1 = line.find('\t');
+                    auto p2 = line.find('\t', p1);
+
+                    const std::string seq_name = line.substr(0, p1);
+                    const uint64_t seq_len = std::stoull(line.substr(p1, p2));
+                    seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq_len);
+                }
+            } else {
+                // if not, warn that this is expensive
+                std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to sort the mappings (slow)" << std::endl;
+                for(const auto &fileName : map_parameters.querySequences)
+                {
+                    seqiter::for_each_seq_in_file(
+                            fileName,
+                            [&](const std::string& seq_name,
+                                    const std::string& seq) {
+                                seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
+                            });
+                }
+            }
         }
 
-        std::ifstream mappingListStream(map_parameters.outFileName);
+
+        igzstream mappingListStream(map_parameters.outFileName.c_str());
         std::string mappingRecordLine;
         align::MappingBoundaryRow currentRecord;
         std::vector<align::MappingBoundaryRow> allReadMappings;
@@ -145,12 +156,53 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (align_parameters.sam_format) {
+        // Prepare SAM header
+        std::ofstream outstrm(align_parameters.pafOutputFile);
+
+        for(const auto &fileName : map_parameters.refSequences)
+        {
+            // check if there is a .fai
+            std::string fai_name = fileName + ".fai";
+            if (fs::file_exists(fai_name)) {
+                // if so, process the .fai to determine our sequence length
+                std::string line;
+                std::ifstream in(fai_name.c_str());
+                while (std::getline(in, line)) {
+                    auto p1 = line.find('\t');
+                    auto p2 = line.find('\t', p1);
+
+                    const std::string seq_name = line.substr(0, p1);
+                    const uint64_t seq_len = std::stoull(line.substr(p1, p2));
+                    outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
+                }
+            } else {
+                // if not, warn that this is expensive
+                std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
+                seqiter::for_each_seq_in_file(
+                        fileName,
+                        [&](const std::string& seq_name,
+                                const std::string& seq) {
+                            outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
+                        });
+            }
+
+
+
+
+
+        }
+        outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
+
+        outstrm.close();
+    }
+
     align::printCmdOptions(align_parameters);
-    align::Aligner alignObj(align_parameters);
 
     auto t0 = skch::Time::now();
+    align::Aligner alignObj(align_parameters);
     std::chrono::duration<double> timeRefRead = skch::Time::now() - t0;
-    std::cerr << "[wfmash::align] time spent read the reference sequences: " << timeRefRead.count() << " sec" << std::endl;
+    std::cerr << "[wfmash::align] time spent loading the reference index: " << timeRefRead.count() << " sec" << std::endl;
 
     //Compute the alignments
     alignObj.compute();

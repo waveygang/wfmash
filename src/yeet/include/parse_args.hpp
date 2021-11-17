@@ -53,7 +53,6 @@ void parse_args(int argc,
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<int> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
-    args::ValueFlag<std::string> target_sequence_file_list(parser, "targets", "alignment target file list", {'L', "target-file-list"});
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
@@ -103,7 +102,10 @@ void parse_args(int argc,
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
+
+    // sam format
     args::Flag sam_format(parser, "N", "output in the SAM format (PAF by default)", {'a', "sam-format"});
+    args::Flag no_seq_in_sam(parser, "N", "do not fill the sequence field in the SAM format", {'q', "no-seq-in-sam"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
@@ -137,10 +139,6 @@ void parse_args(int argc,
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
         align_parameters.refSequences.push_back(args::get(target_sequence_file));
-    }
-    if (target_sequence_file_list) {
-        skch::parseFileList(args::get(target_sequence_file_list), map_parameters.refSequences);
-        skch::parseFileList(args::get(target_sequence_file_list), align_parameters.refSequences);
     }
     map_parameters.referenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
@@ -255,12 +253,9 @@ void parse_args(int argc,
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
+    align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
     map_parameters.split = !args::get(no_split);
-
-    if (align_parameters.sam_format && map_parameters.split) {
-        std::cerr << "[wfmash] ERROR, skch::parseandSave, Disable splitting of input sequences (with -N) in order to enable the SAM format" << std::endl;
-        exit(1);
-    }
+    align_parameters.split = !args::get(no_split); //ToDo: hacky, to have the information also during the alignment (for SAM format)
 
     map_parameters.mergeMappings = !args::get(no_merge);
 

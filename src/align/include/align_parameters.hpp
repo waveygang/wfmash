@@ -20,6 +20,7 @@ struct Parameters {
     //int wf_min;                                   // minimum wavefront length to trigger WF_reduce wavefront pruning
     //int wf_diff;                                  // max distance threshold that a wavefront may lag behind the best wavefront and not be removed
     //bool exact_wfa;                               // use exact WFA, avoiding adaptive wavefront reduction
+    bool split;                                       //Split read mapping (done if this is true)
 
     //wflambda
     uint16_t wflambda_segment_length;             //segment length for wflambda
@@ -47,6 +48,7 @@ struct Parameters {
 
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
+    bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
 };
 
 }
