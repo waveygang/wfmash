@@ -44,7 +44,7 @@ target_link_libraries(wfmash
   m
   pthread
   libwflign_static
-  edlib
+  #edlib
   hts
   wflambda
   wfa

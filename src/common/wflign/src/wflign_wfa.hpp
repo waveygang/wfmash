@@ -16,7 +16,6 @@
 #include "WFA/gap_affine/swg.h"
 #include "WFA/wavefront/wavefront_align.h"
 #include "WFA/wavefront/wavefront_reduction.h"
-#include "edlib.h"
 #include "robin-hood-hashing/robin_hood.h"
 
 //#include "wfa_edit_callback.hpp"

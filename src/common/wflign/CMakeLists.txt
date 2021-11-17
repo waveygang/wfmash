@@ -19,7 +19,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_subdirectory(deps/edlib EXCLUDE_FROM_ALL)
+#add_subdirectory(deps/edlib EXCLUDE_FROM_ALL)
 add_subdirectory(deps/wflambdav2 EXCLUDE_FROM_ALL)
 add_subdirectory(deps/WFAv2 EXCLUDE_FROM_ALL)
 
@@ -34,7 +34,7 @@ target_include_directories(wflign PRIVATE
   deps/)
 
 target_link_libraries(wflign
-  edlib
+  #edlib
   wfa
   wflambda
   z)
@@ -49,8 +49,8 @@ target_include_directories(libwflign_static PRIVATE
   deps/
   deps/robin-hood-hashing
   deps/wflambdav2
-  deps/WFAv2
-  deps/edlib/edlib/include)
+  deps/WFAv2)
+  #deps/edlib/edlib/include)
 # not clear if necessary
 #set_target_properties(libodgi_static PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
