@@ -1821,7 +1821,26 @@ void write_merged_alignment(
                                     target_delta, segment_length,
                                     min_wf_length, max_dist_threshold,
                                     wf_aligner, affine_penalties, patch_aln);
-                                if (patch_aln.ok) {
+                                if (!patch_aln.ok) {
+                                    //std::cerr << "trying inversion alignment" << std::endl;
+                                    // try to invert the query
+                                    // if it works we add the alignment for later output
+                                    //reverse_complement
+                                    std::string query_rc(query + query_pos, query_delta);
+                                    reverse_complement_in_place(query_rc);
+                                    alignment_t inv_patch_aln;
+                                    do_wfa_patch_alignment(
+                                        query_rc.c_str(), 0, query_delta,
+                                        target - target_pointer_shift, target_pos,
+                                        target_delta, segment_length,
+                                        min_wf_length, max_dist_threshold,
+                                        wf_aligner, affine_penalties, inv_patch_aln);
+                                    if (inv_patch_aln.ok) {
+                                        //std::cerr << "my inversion patch worked!" << std::endl;
+                                        // we should write these
+                                    }
+                                } else {
+                                    //if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;
                                     got_alignment = true;
