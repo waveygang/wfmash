@@ -204,7 +204,7 @@ void wflign_affine_wavefront(
                         .count();
 
         // write a merged alignment
-        write_merged_alignment(
+        patch_and_write_merged_alignment(
                 out, trace, wf_aligner, &wfa_affine_penalties,
                 emit_md_tag,
                 paf_format_else_sam, no_seq_in_sam,
@@ -645,7 +645,7 @@ void wflign_affine_wavefront(
 
             if (merge_alignments) {
                 // write a merged alignment
-                write_merged_alignment(
+                patch_and_write_merged_alignment(
                         out, trace, wf_aligner, &wfa_affine_penalties,
                         emit_md_tag,
                         paf_format_else_sam, no_seq_in_sam,
@@ -1137,7 +1137,7 @@ bool unpack_display_cigar(const wfa::cigar_t &cigar, const char *query,
     return true;
 }
 
-void write_merged_alignment(
+void patch_and_write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
     wfa::wavefront_aligner_t *const wf_aligner,
     wfa::affine_penalties_t *const affine_penalties,
@@ -2418,6 +2418,98 @@ query_start : query_end)
     const double block_identity =
         (double)matches / (double)(matches + edit_distance);
 
+    if (gap_compressed_identity >= min_identity) {
+
+        const long elapsed_time_patching_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start_time)
+            .count();
+
+        const std::string timings_and_num_alignments =
+            "wt:i:" + std::to_string(elapsed_time_wflambda_ms) +
+            "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
+            "\taa:i:" + std::to_string(num_alignments) +
+            "\tap:i:" + std::to_string(num_alignments_performed);
+
+        actually_write_alignment(
+            out,
+            cigarv,
+            emit_md_tag,
+            paf_format_else_sam, no_seq_in_sam,
+            query,
+            query_name, query_total_length,
+            query_offset, query_length,
+            query_is_rev,
+            target,
+            target_name, target_total_length,
+            target_offset, target_length,
+            elapsed_time_patching_ms,
+            timings_and_num_alignments,
+            mashmap_estimated_identity,
+            matches,
+            mismatches,
+            insertions,
+            inserted_bp,
+            deletions,
+            deleted_bp,
+            query_start,
+            target_start,
+            total_query_aligned_length,
+            total_target_aligned_length,
+            query_end,
+            target_end,
+            total_score,
+            target_pointer_shift,
+            gap_compressed_identity,
+            edit_distance,
+            block_identity,
+            with_endline);
+    }
+
+    // always clean up
+    free(cigarv);
+}
+
+void actually_write_alignment(
+    std::ostream &out,
+    const char* cigarv,
+    const bool &emit_md_tag,
+    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
+    const char *query,
+    const std::string &query_name, const uint64_t &query_total_length,
+    const uint64_t &query_offset, const uint64_t &query_length,
+    const bool &query_is_rev,
+    const char *target,
+    const std::string &target_name, const uint64_t &target_total_length,
+    const uint64_t &target_offset, const uint64_t &target_length,
+    const long &elapsed_time_patching_ms,
+    const std::string& timings_and_num_alignments,
+    const float &mashmap_estimated_identity,
+    const uint64_t& matches,
+    const uint64_t& mismatches,
+    const uint64_t& insertions,
+    const uint64_t& inserted_bp,
+    const uint64_t& deletions,
+    const uint64_t& deleted_bp,
+    const uint64_t& query_start,
+    const uint64_t& target_start,
+    const uint64_t& total_query_aligned_length,
+    const uint64_t& total_target_aligned_length,
+    const uint64_t& query_end,
+    const uint64_t& target_end,
+    const uint64_t& total_score,
+    const int64_t& target_pointer_shift,
+    const double& gap_compressed_identity,
+    const uint64_t& edit_distance,
+    const double& block_identity,
+    /*const float &min_identity, const long &elapsed_time_wflambda_ms,
+    const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
+    const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
+    const uint16_t &erode_k,
+    const int &min_wf_length, const int &max_dist_threshold,
+                                                                 */
+    const bool &with_endline) {
+
     auto write_tag_and_md_string = [&](std::ostream &out, const char *c,
                                        const int target_start) {
         out << "MD:Z:";
@@ -2490,144 +2582,128 @@ query_start : query_end)
         }
     };
 
-    if (gap_compressed_identity >= min_identity) {
-        const long elapsed_time_patching_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time)
-                .count();
+    if (paf_format_else_sam) {
+        out << query_name << "\t" << query_total_length << "\t"
+            << query_offset +
+            (query_is_rev ? query_length - query_end : query_start)
+            << "\t"
+            << query_offset +
+            (query_is_rev ? query_length - query_start : query_end)
+            << "\t" << (query_is_rev ? "-" : "+") << "\t" << target_name
+            << "\t" << target_total_length << "\t"
+            << target_offset - target_pointer_shift + target_start << "\t"
+            << target_offset + target_end << "\t" << matches << "\t"
+            << std::max(total_target_aligned_length,
+                        total_query_aligned_length)
+            << "\t"
+            << std::round(float2phred(1.0 - block_identity))
+            //<< "\t" << "as:i:" << total_score
+            << "\t"
+            << "gi:f:" << gap_compressed_identity << "\t"
+            << "bi:f:"
+            << block_identity
+            //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
+            //<< "\t" << "ma:i:" << matches
+            //<< "\t" << "mm:i:" << mismatches
+            //<< "\t" << "ni:i:" << insertions
+            //<< "\t" << "ii:i:" << inserted_bp
+            //<< "\t" << "nd:i:" << deletions
+            //<< "\t" << "dd:i:" << deleted_bp
+            << "\t"
+            << "md:f:" << mashmap_estimated_identity;
 
-        const std::string timings_and_num_alignements =
-            "wt:i:" + std::to_string(elapsed_time_wflambda_ms) +
-            "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
-            "\taa:i:" + std::to_string(num_alignments) +
-            "\tap:i:" + std::to_string(num_alignments_performed);
+        if (emit_md_tag) {
+            out << "\t";
 
-        if (paf_format_else_sam) {
-            out << query_name << "\t" << query_total_length << "\t"
-                << query_offset +
-                       (query_is_rev ? query_length - query_end : query_start)
-                << "\t"
-                << query_offset +
-                       (query_is_rev ? query_length - query_start : query_end)
-                << "\t" << (query_is_rev ? "-" : "+") << "\t" << target_name
-                << "\t" << target_total_length << "\t"
-                << target_offset - target_pointer_shift + target_start << "\t"
-                << target_offset + target_end << "\t" << matches << "\t"
-                << std::max(total_target_aligned_length,
-                            total_query_aligned_length)
-                << "\t"
-                << std::round(float2phred(1.0 - block_identity))
-                //<< "\t" << "as:i:" << total_score
-                << "\t"
-                << "gi:f:" << gap_compressed_identity << "\t"
-                << "bi:f:"
-                << block_identity
-                //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
-                //<< "\t" << "ma:i:" << matches
-                //<< "\t" << "mm:i:" << mismatches
-                //<< "\t" << "ni:i:" << insertions
-                //<< "\t" << "ii:i:" << inserted_bp
-                //<< "\t" << "nd:i:" << deletions
-                //<< "\t" << "dd:i:" << deleted_bp
-                << "\t"
-                << "md:f:" << mashmap_estimated_identity;
-
-            if (emit_md_tag) {
-                out << "\t";
-
-                write_tag_and_md_string(out, cigarv, target_start);
-            }
-
-            out << "\t" << timings_and_num_alignements << "\t"
-                << "cg:Z:" << cigarv << "\n";
-        } else {
-            out << query_name                          // Query template NAME
-                << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
-                << "\t" << target_name // Reference sequence NAME
-                << "\t"
-                << target_offset - target_pointer_shift + target_start +
-                       1 // 1-based leftmost mapping POSition
-                << "\t"
-                << std::round(
-                       float2phred(1.0 - block_identity)) // MAPping Quality
-                << "\t";
-
-            // CIGAR
-            const uint64_t query_start_pos =
-                    query_offset +
-                    (query_is_rev ? query_length - query_end : query_start);
-            const uint64_t query_end_pos =
-                    query_offset +
-                    (query_is_rev ? query_length - query_start : query_end);
-
-            if (query_is_rev) {
-                if (query_length > query_end_pos) {
-                    out << (query_length - query_end_pos) << "H";
-                }
-            } else {
-                if (query_start_pos > 0) {
-                    out << query_start_pos << "H";
-                }
-            }
-            out << cigarv;
-            if (query_is_rev) {
-                if (query_start_pos > 0) {
-                    out << query_start_pos << "H";
-                }
-            } else {
-                if (query_length > query_end_pos) {
-                    out << (query_length - query_end_pos) << "H";
-                }
-            }
-
-            out << "\t"
-                << "*" // Reference name of the mate/next read
-                << "\t"
-                << "0" // Position of the mate/next read
-                << "\t"
-                << "0" // observed Template LENgth
-                << "\t";
-
-            // segment SEQuence
-            if (no_seq_in_sam) {
-                out << "*";
-            } else {
-                for (uint64_t p = query_start; p < query_end; ++p) {
-                    out << query[p];
-                }
-            }
-
-            out << "\t"
-                << "*" // ASCII of Phred-scaled base QUALity+33
-                << "\t"
-                << "NM:i:"
-                << edit_distance
-                //<< "\t" << "AS:i:" << total_score
-                << "\t"
-                << "gi:f:" << gap_compressed_identity << "\t"
-                << "bi:f:"
-                << block_identity
-                //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
-                //<< "\t" << "ma:i:" << matches
-                //<< "\t" << "mm:i:" << mismatches
-                //<< "\t" << "ni:i:" << insertions
-                //<< "\t" << "ii:i:" << inserted_bp
-                //<< "\t" << "nd:i:" << deletions
-                //<< "\t" << "dd:i:" << deleted_bp
-                << "";
-
-            if (emit_md_tag) {
-                out << "\t";
-
-                write_tag_and_md_string(out, cigarv, target_start);
-            }
-
-            out << "\t" << timings_and_num_alignements << "\n";
+            write_tag_and_md_string(out, cigarv, target_start);
         }
-    }
 
-    // always clean up
-    free(cigarv);
+        out << "\t" << timings_and_num_alignments << "\t"
+            << "cg:Z:" << cigarv << "\n";
+    } else {
+        out << query_name                          // Query template NAME
+            << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
+            << "\t" << target_name // Reference sequence NAME
+            << "\t"
+            << target_offset - target_pointer_shift + target_start +
+            1 // 1-based leftmost mapping POSition
+            << "\t"
+            << std::round(
+                float2phred(1.0 - block_identity)) // MAPping Quality
+            << "\t";
+
+        // CIGAR
+        const uint64_t query_start_pos =
+            query_offset +
+            (query_is_rev ? query_length - query_end : query_start);
+        const uint64_t query_end_pos =
+            query_offset +
+            (query_is_rev ? query_length - query_start : query_end);
+
+        if (query_is_rev) {
+            if (query_length > query_end_pos) {
+                out << (query_length - query_end_pos) << "H";
+            }
+        } else {
+            if (query_start_pos > 0) {
+                out << query_start_pos << "H";
+            }
+        }
+        out << cigarv;
+        if (query_is_rev) {
+            if (query_start_pos > 0) {
+                out << query_start_pos << "H";
+            }
+        } else {
+            if (query_length > query_end_pos) {
+                out << (query_length - query_end_pos) << "H";
+            }
+        }
+
+        out << "\t"
+            << "*" // Reference name of the mate/next read
+            << "\t"
+            << "0" // Position of the mate/next read
+            << "\t"
+            << "0" // observed Template LENgth
+            << "\t";
+
+        // segment SEQuence
+        if (no_seq_in_sam) {
+            out << "*";
+        } else {
+            for (uint64_t p = query_start; p < query_end; ++p) {
+                out << query[p];
+            }
+        }
+
+        out << "\t"
+            << "*" // ASCII of Phred-scaled base QUALity+33
+            << "\t"
+            << "NM:i:"
+            << edit_distance
+            //<< "\t" << "AS:i:" << total_score
+            << "\t"
+            << "gi:f:" << gap_compressed_identity << "\t"
+            << "bi:f:"
+            << block_identity
+            //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
+            //<< "\t" << "ma:i:" << matches
+            //<< "\t" << "mm:i:" << mismatches
+            //<< "\t" << "ni:i:" << insertions
+            //<< "\t" << "ii:i:" << inserted_bp
+            //<< "\t" << "nd:i:" << deletions
+            //<< "\t" << "dd:i:" << deleted_bp
+            << "";
+
+        if (emit_md_tag) {
+            out << "\t";
+
+            write_tag_and_md_string(out, cigarv, target_start);
+        }
+
+        out << "\t" << timings_and_num_alignments << "\n";
+    }
 }
 
 void write_alignment(

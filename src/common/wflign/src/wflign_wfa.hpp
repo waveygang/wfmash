@@ -305,7 +305,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
 //                                          const uint64_t &target_length,
 //                                          const EdlibAlignMode &align_mode);
 
-void write_merged_alignment(
+void patch_and_write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
     wfa::wavefront_aligner_t *const wf_aligner,
     wfa::affine_penalties_t *const affine_penalties,
@@ -325,6 +325,40 @@ void write_merged_alignment(
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const uint16_t &erode_k,
     const int &min_wf_length, const int &max_dist_threshold,
+    const bool &with_endline = true);
+
+void actually_write_alignment(
+    std::ostream &out,
+    const char* cigarv,
+    const bool &emit_md_tag,
+    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
+    const char *query,
+    const std::string &query_name, const uint64_t &query_total_length,
+    const uint64_t &query_offset, const uint64_t &query_length,
+    const bool &query_is_rev,
+    const char *target,
+    const std::string &target_name, const uint64_t &target_total_length,
+    const uint64_t &target_offset, const uint64_t &target_length,
+    const long &elapsed_time_patching_ms,
+    const std::string& timings_and_num_alignments,
+    const float &mashmap_estimated_identity,
+    const uint64_t& matches,
+    const uint64_t& mismatches,
+    const uint64_t& insertions,
+    const uint64_t& inserted_bp,
+    const uint64_t& deletions,
+    const uint64_t& deleted_bp,
+    const uint64_t& query_start,
+    const uint64_t& target_start,
+    const uint64_t& total_query_aligned_length,
+    const uint64_t& total_target_aligned_length,
+    const uint64_t& query_end,
+    const uint64_t& target_end,
+    const uint64_t& total_score,
+    const int64_t& target_pointer_shift,
+    const double& gap_compressed_identity,
+    const uint64_t& edit_distance,
+    const double& block_identity,
     const bool &with_endline = true);
 
 void write_alignment(std::ostream &out, const alignment_t &aln,
