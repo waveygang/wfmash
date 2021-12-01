@@ -97,16 +97,14 @@ The `.fai` indexes are then used to quickly compute the sum of query lengths.
 
 ### building from source
 
-The build is orchestrated with `cmake`. At least GCC version 9.3.0 is required for compilation. You can check your 
-version via:
+The build is orchestrated with `cmake`. At least GCC version 9.3.0 is required for compilation. You can check your version via:
 
 ``` bash
 gcc --version
 g++ --version
 ```
 
-It may be necessary to install several system-level libraries to build `wfmash`. On `Ubuntu 20.04`, these can be 
-installed using apt:
+It may be necessary to install several system-level libraries to build `wfmash`. On `Ubuntu 20.04`, these can be installed using `apt`:
 
 ```
 sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev libhts-dev
@@ -120,7 +118,7 @@ cd wfmash
 cmake -H. -Bbuild && cmake --build build -- -j 3
 ```
 
-If your system has several versions of the gcc/g++ compilers you might tell cmake which one to use with:
+If your system has several versions of the `gcc`/`g++` compilers you might tell `cmake` which one to use with:
 
 ```
 cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10' 
@@ -167,7 +165,7 @@ Now `wfmash` is available as a global binary installation.
 
 #### installing via the guix-genomics channel
 
-Add the following to your ~/.config/guix/channels.scm:
+Add the following to your `~/.config/guix/channels.scm`:
 
 ``` scm
   (cons*
@@ -230,7 +228,7 @@ One example without specifying a workflow manager:
 wfmash -i approximate_mappings.paf.chunk_0.paf reference.fa query.fa > approximate_mappings.paf.chunk_0.paf.aln.paf
 ```
 
-The resulting `.paf` can be directly plugged into e.g. [seqwish](https://github.com/ekg/seqwish).
+The resulting `.paf` can be directly plugged into [seqwish](https://github.com/ekg/seqwish).
 
 ```sh
 # list all base-level alignment PAFs
@@ -242,13 +240,14 @@ seqwish -s reference.fa -p PAFS -k 47 -g seqwish.gfa -B 10000000 -P
 
 ### use [nf-core/pangenome](https://github.com/nf-core/pangenome)
 
-The steps above still require a lot of manual labour. If you have `Nextflow` and `Docker` or `Singularity` available on your cluster, the lines above can become a one-liner:
+If you have `Nextflow` and `Docker` or `Singularity` available on your cluster, the lines above can become a one-liner:
 
 ```sh
 nextflow run nf-core/pangenome -r dev --input references.fa --wfmash_only --wfmash_chunks 5
 ```
 
-This emits a `results/wfmash` folder which stores all the `wfmash` output for your convenience.
+This emits a `results/wfmash` folder which stores all the `wfmash` output.
+
 
 ## <a name=“publications”></a>publications
 
