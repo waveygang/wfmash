@@ -193,6 +193,62 @@ guix environment --ad-hoc wfmash
 
 For more details about how to handle Guix channels, go to https://git.genenetwork.org/guix-bioinformatics/guix-bioinformatics.git.
 
+## running wfmash on a cluster
+
+When aligning a large number of very large sequences, one wants to distribute the calculations across a whole cluster. 
+This can be achieved by dividing the approximate mappings `.paf` into chunks of similar difficult alignment problems using [split_approx_mappings_in_chunks.py](scripts/split_approx_mappings_in_chunks.py).
+
+### example
+
+1. We restrict `wfmash` to its approximate mapping phase.
+
+```sh
+wfmash -m reference.fa query.fa > approximate_mappings.paf
+```
+
+2. We use the Python script to split the approximate mappings into chunks. A good approximation of the number of chunks is the number of nodes on your cluster. In the following, we assume a cluster with 5 nodes.
+
+```python
+python3 split_approx_mappings_in_chunks.py approximate_mappings.paf 5
+```
+This gives us:
+
+```sh
+ls
+approximate_mappings.paf.chunk_0.paf
+approximate_mappings.paf.chunk_1.paf
+approximate_mappings.paf.chunk_2.paf
+approximate_mappings.paf.chunk_3.paf
+approximate_mappings.paf.chunk_4.paf
+```
+
+3. Dependent on your cluster workload manager, create a command line to submit 5 jobs to your cluster. 
+
+One example without specifying a workflow manager:
+
+```sh
+wfmash -i approximate_mappings.paf.chunk_0.paf reference.fa query.fa > approximate_mappings.paf.chunk_0.paf.aln.paf
+```
+
+The resulting `.paf` can be directly plugged into e.g. [seqwish](https://github.com/ekg/seqwish).
+
+```sh
+# list all base-level alignment PAFs
+PAFS=$(ls *.aln.paf | tr '\n' ',')
+# trim of the last ','
+PAFS=${input::-1}
+seqwish -s reference.fa -p PAFS -k 47 -g seqwish.gfa -B 10000000 -P
+```
+
+### use [nf-core/pangenome](https://github.com/nf-core/pangenome)
+
+The steps above still require a lot of manual labour. If you have `Nextflow` and `Docker` or `Singularity` available on your cluster, the lines above can become a one-liner:
+
+```sh
+nextflow run nf-core/pangenome -r dev --input references.fa --wfmash_only --wfmash_chunks 5
+```
+
+This emits a `results/wfmash` folder which stores all the `wfmash` output for your convenience.
 
 ## <a name=“publications”></a>publications
 
