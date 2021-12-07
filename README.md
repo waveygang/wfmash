@@ -235,7 +235,7 @@ The resulting `.paf` can be directly plugged into [seqwish](https://github.com/e
 PAFS=$(ls *.aln.paf | tr '\n' ',')
 # trim of the last ','
 PAFS=${input::-1}
-seqwish -s reference.fa -p PAFS -k 47 -g seqwish.gfa -B 10000000 -P
+seqwish -s reference.fa -p $PAFS -g seqwish.gfa
 ```
 
 ### use [nf-core/pangenome](https://github.com/nf-core/pangenome)
