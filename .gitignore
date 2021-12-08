@@ -23,6 +23,9 @@ wfmash
 src/common/wflign/build
 build
 
+# include directory
+include
+
 #Others
 *.cache
 *~

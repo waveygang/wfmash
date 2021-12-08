@@ -13,6 +13,8 @@
 #include "yeet/include/temp_file.hpp"
 #include "common/utils.hpp"
 
+#include "../../version.hpp"
+
 namespace yeet {
 
 struct Parameters {
@@ -49,7 +51,7 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm");
+    args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm " + wfmash::Version::get_version() + ": " + wfmash::Version::get_codename());
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<int> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
@@ -114,6 +116,9 @@ void parse_args(int argc,
     // debugging
     args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
 
+    // version
+    args::Flag version(parser, "version", "show long version number including github commit", {'v', "version"});
+
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
     //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
 
@@ -135,6 +140,10 @@ void parse_args(int argc,
         //return; // 1;
     }
 
+    if (version) {
+        std::cerr << wfmash::Version::get_version() << std::endl;
+        exit(0);
+    }
 
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
