@@ -234,7 +234,7 @@ The resulting `.paf` can be directly plugged into [seqwish](https://github.com/e
 # list all base-level alignment PAFs
 PAFS=$(ls *.aln.paf | tr '\n' ',')
 # trim of the last ','
-PAFS=${input::-1}
+PAFS=${PAFS::-1}
 seqwish -s reference.fa -p $PAFS -g seqwish.gfa
 ```
 
