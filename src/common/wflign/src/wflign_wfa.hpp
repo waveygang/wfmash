@@ -327,6 +327,34 @@ void patch_and_write_merged_alignment(
     const int &min_wf_length, const int &max_dist_threshold,
     const bool &with_endline = true);
 
+void prepare_cigar_and_eventually_write_alignment(
+        std::ostream &out,
+        const std::vector<char>& tracev,
+        const bool &emit_md_tag,
+        const bool &paf_format_else_sam, const bool &no_seq_in_sam,
+        const char *query,
+        const std::string &query_name, const uint64_t &query_total_length,
+        const uint64_t &query_offset, const uint64_t &query_length,
+        const bool &query_is_rev,
+        const char *target,
+        const std::string &target_name, const uint64_t &target_total_length,
+        const uint64_t &target_offset, const uint64_t &target_length,
+        const long &elapsed_time_patching_ms,
+        const long &elapsed_time_wflambda_ms,
+        const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
+        const float &mashmap_estimated_identity,
+
+        const uint64_t &query_start,
+        const uint64_t &target_start,
+        const uint64_t &query_end,
+        const uint64_t &target_end,
+
+        const int64_t &target_pointer_shift,
+        const bool &with_endline,
+        const uint64_t& trim_del_first,
+        const uint64_t& trim_del_last,
+        const float &min_identity);
+
 void actually_write_alignment(
     std::ostream &out,
     const char* cigarv,
@@ -354,7 +382,6 @@ void actually_write_alignment(
     const uint64_t& total_target_aligned_length,
     const uint64_t& query_end,
     const uint64_t& target_end,
-    const uint64_t& total_score,
     const int64_t& target_pointer_shift,
     const double& gap_compressed_identity,
     const uint64_t& edit_distance,

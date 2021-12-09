@@ -1171,21 +1171,11 @@ void patch_and_write_merged_alignment(
     // then run through the whole alignment building up the cigar
     // finally emitting it
     // our final cigar
-    //
-    // std::string cigarstr;
-    uint64_t matches = 0;
-    uint64_t mismatches = 0;
-    uint64_t insertions = 0;
-    uint64_t inserted_bp = 0;
-    uint64_t deletions = 0;
-    uint64_t deleted_bp = 0;
+
     uint64_t query_start = 0;
     uint64_t target_start = 0;
-    uint64_t total_query_aligned_length = 0;
-    uint64_t total_target_aligned_length = 0;
     uint64_t query_end = 0;
     uint64_t target_end = 0;
-    uint64_t total_score = 0;
 
     // double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
@@ -2275,7 +2265,6 @@ void patch_and_write_merged_alignment(
 #endif
 
             // std::cerr << "FIRST PATCH ROUND
-            // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
             patching(erodev, pre_tracev);
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -2305,12 +2294,10 @@ void patch_and_write_merged_alignment(
         }
 
         // std::cerr << "SECOND PATCH ROUND
-        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
         patching(pre_tracev, tracev);
     }
 
-    // std::cerr << "sorting the indels in tracev" << std::endl;
-    // normalize the indels
+    // normalize: sort so that I<D and otherwise leave it as-is
     sort_indels(tracev);
 
 #ifdef WFLIGN_DEBUG
@@ -2347,6 +2334,11 @@ void patch_and_write_merged_alignment(
         exit(1);
     }
 #endif
+
+    const long elapsed_time_patching_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start_time)
+                    .count();
 
     // trim deletions at start and end of tracev
     uint64_t trim_del_first = 0;
@@ -2402,6 +2394,73 @@ query_start : query_end)
 #endif
     */
 
+    prepare_cigar_and_eventually_write_alignment(
+            out,
+            tracev,
+            emit_md_tag,
+            paf_format_else_sam, no_seq_in_sam,
+            query,
+            query_name, query_total_length,
+            query_offset, query_length,
+            query_is_rev,
+            target,
+            target_name, target_total_length,
+            target_offset, target_length,
+            elapsed_time_patching_ms,
+            elapsed_time_wflambda_ms,
+            num_alignments, num_alignments_performed,
+            mashmap_estimated_identity,
+
+            query_start,
+            target_start,
+            query_end,
+            target_end,
+
+            target_pointer_shift,
+            with_endline,
+            trim_del_first,
+            trim_del_last,
+            min_identity
+            );
+}
+
+void prepare_cigar_and_eventually_write_alignment(
+        std::ostream &out,
+        const std::vector<char>& tracev,
+        const bool &emit_md_tag,
+        const bool &paf_format_else_sam, const bool &no_seq_in_sam,
+        const char *query,
+        const std::string &query_name, const uint64_t &query_total_length,
+        const uint64_t &query_offset, const uint64_t &query_length,
+        const bool &query_is_rev,
+        const char *target,
+        const std::string &target_name, const uint64_t &target_total_length,
+        const uint64_t &target_offset, const uint64_t &target_length,
+        const long &elapsed_time_patching_ms,
+        const long &elapsed_time_wflambda_ms,
+        const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
+        const float &mashmap_estimated_identity,
+
+        const uint64_t &query_start,
+        const uint64_t &target_start,
+        const uint64_t &query_end,
+        const uint64_t &target_end,
+
+        const int64_t &target_pointer_shift,
+        const bool &with_endline,
+        const uint64_t& trim_del_first,
+        const uint64_t& trim_del_last,
+        const float &min_identity
+        ) {
+    uint64_t matches = 0;
+    uint64_t mismatches = 0;
+    uint64_t insertions = 0;
+    uint64_t inserted_bp = 0;
+    uint64_t deletions = 0;
+    uint64_t deleted_bp = 0;
+    uint64_t total_query_aligned_length = 0;
+    uint64_t total_target_aligned_length = 0;
+
     // convert trace to cigar, get correct start and end coordinates
     char *cigarv = alignment_to_cigar(
         tracev, trim_del_first, tracev.size() - trim_del_last,
@@ -2419,12 +2478,6 @@ query_start : query_end)
         (double)matches / (double)(matches + edit_distance);
 
     if (gap_compressed_identity >= min_identity) {
-
-        const long elapsed_time_patching_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time)
-            .count();
-
         const std::string timings_and_num_alignments =
             "wt:i:" + std::to_string(elapsed_time_wflambda_ms) +
             "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
@@ -2458,7 +2511,6 @@ query_start : query_end)
             total_target_aligned_length,
             query_end,
             target_end,
-            total_score,
             target_pointer_shift,
             gap_compressed_identity,
             edit_distance,
@@ -2497,7 +2549,6 @@ void actually_write_alignment(
     const uint64_t& total_target_aligned_length,
     const uint64_t& query_end,
     const uint64_t& target_end,
-    const uint64_t& total_score,
     const int64_t& target_pointer_shift,
     const double& gap_compressed_identity,
     const uint64_t& edit_distance,
@@ -2597,7 +2648,6 @@ void actually_write_alignment(
                         total_query_aligned_length)
             << "\t"
             << std::round(float2phred(1.0 - block_identity))
-            //<< "\t" << "as:i:" << total_score
             << "\t"
             << "gi:f:" << gap_compressed_identity << "\t"
             << "bi:f:"
@@ -2682,7 +2732,6 @@ void actually_write_alignment(
             << "\t"
             << "NM:i:"
             << edit_distance
-            //<< "\t" << "AS:i:" << total_score
             << "\t"
             << "gi:f:" << gap_compressed_identity << "\t"
             << "bi:f:"
