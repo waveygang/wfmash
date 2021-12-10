@@ -1260,8 +1260,8 @@ void patch_and_write_merged_alignment(
                          &wflign_max_len_minor,
                          &distance_close_big_enough_indels, &min_wf_length,
                          &max_dist_threshold, &wf_aligner,
-                         &affine_penalties](std::vector<char> &unpatched,
-                                            std::vector<char> &patched) {
+                         &affine_penalties, &with_endline, &min_identity, &out, &emit_md_tag, &paf_format_else_sam, &no_seq_in_sam, &query_total_length, &query_is_rev, &query_end, &target_length](std::vector<char> &unpatched,
+                                            std::vector<char> &patched, bool enable_inversion_patching) {
             auto q = unpatched.begin();
 
             uint64_t query_pos = query_start;
@@ -1812,22 +1812,68 @@ void patch_and_write_merged_alignment(
                                     min_wf_length, max_dist_threshold,
                                     wf_aligner, affine_penalties, patch_aln);
                                 if (!patch_aln.ok) {
-                                    //std::cerr << "trying inversion alignment" << std::endl;
-                                    // try to invert the query
-                                    // if it works we add the alignment for later output
-                                    //reverse_complement
-                                    std::string query_rc(query + query_pos, query_delta);
-                                    reverse_complement_in_place(query_rc);
-                                    alignment_t inv_patch_aln;
-                                    do_wfa_patch_alignment(
-                                        query_rc.c_str(), 0, query_delta,
-                                        target - target_pointer_shift, target_pos,
-                                        target_delta, segment_length,
-                                        min_wf_length, max_dist_threshold,
-                                        wf_aligner, affine_penalties, inv_patch_aln);
-                                    if (inv_patch_aln.ok) {
-                                        //std::cerr << "my inversion patch worked!" << std::endl;
-                                        // we should write these
+                                    if (enable_inversion_patching) {
+                                        //std::cerr << "trying inversion alignment" << std::endl;
+                                        // try to invert the query
+                                        // if it works we add the alignment for later output
+                                        //reverse_complement
+                                        std::string query_rc(query + query_pos, query_delta);
+                                        reverse_complement_in_place(query_rc);
+                                        alignment_t inv_patch_aln;
+                                        do_wfa_patch_alignment(
+                                                query_rc.c_str(), 0, query_delta,
+                                                target - target_pointer_shift, target_pos,
+                                                target_delta, segment_length,
+                                                min_wf_length, max_dist_threshold,
+                                                wf_aligner, affine_penalties, inv_patch_aln);
+                                        if (inv_patch_aln.ok) {
+                                            //std::cerr << "my inversion patch worked!" << std::endl;
+                                            // we should write these
+
+                                            const int start_idx =
+                                                    inv_patch_aln.edit_cigar.begin_offset;
+                                            const int end_idx =
+                                                    inv_patch_aln.edit_cigar.end_offset;
+                                            std::vector<char> inverted_patched;
+                                            inverted_patched.reserve(end_idx - start_idx + 1);
+                                            for (int i = start_idx; i < end_idx; i++) {
+                                                //std::cerr << inv_patch_aln.edit_cigar.operations[i];
+                                                inverted_patched.push_back(
+                                                        inv_patch_aln.edit_cigar.operations[i]);
+                                            }
+                                            //std::cerr << std::endl;
+
+                                            prepare_cigar_and_eventually_write_alignment(
+                                                    out,
+                                                    inverted_patched,
+                                                    emit_md_tag,
+                                                    paf_format_else_sam, no_seq_in_sam,
+                                                    query,
+                                                    query_name, query_total_length,
+                                                    query_offset, query_length,
+                                                    // We are inverting the query
+                                                    !query_is_rev,
+
+                                                    target,
+                                                    target_name, target_total_length,
+                                                    target_offset, target_length,
+                                                    0,
+                                                    0,
+                                                    0, 0,
+                                                    0,
+
+                                                    query_pos,
+                                                    target_pos,
+                                                    query_pos + query_delta,
+                                                    target_pos + target_delta,
+
+                                                    target_pointer_shift,
+                                                    with_endline,
+                                                    0,
+                                                    0,
+                                                    min_identity
+                                                    );
+                                        }
                                     }
                                 } else {
                                     //if (patch_aln.ok) {
@@ -1879,7 +1925,7 @@ void patch_and_write_merged_alignment(
                                     // structural variants boundaries
                                     //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
                                     //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
-                                    if (size_indel > 7 && size_indel <= 4096 &&
+                                    if (!enable_inversion_patching && size_indel > 7 && size_indel <= 4096 &&
                                         size_region_to_repatch <
                                             (end_idx - start_idx)) {
                                         //std::cerr << "REPATCH " << std::endl;
@@ -2265,7 +2311,7 @@ void patch_and_write_merged_alignment(
 #endif
 
             // std::cerr << "FIRST PATCH ROUND
-            patching(erodev, pre_tracev);
+            patching(erodev, pre_tracev, false);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -2294,7 +2340,7 @@ void patch_and_write_merged_alignment(
         }
 
         // std::cerr << "SECOND PATCH ROUND
-        patching(pre_tracev, tracev);
+        patching(pre_tracev, tracev, true);
     }
 
     // normalize: sort so that I<D and otherwise leave it as-is
