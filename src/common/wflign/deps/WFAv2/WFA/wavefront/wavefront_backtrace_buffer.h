@@ -44,9 +44,9 @@ namespace wfa {
 /*
  * Backtrace Block
  */
-typedef uint32_t block_idx_t; // Up to 2^31-1 (1 bit for marking) references (~16GB of pCIGARs)
-#define WF_BACKTRACE_BLOCK_MAX_IDX   ((1ul<<31)-1)
-#define WF_BACKTRACE_BLOCK_IDX_NULL  UINT32_MAX
+typedef uint64_t block_idx_t; // Up to 2^31-1 (1 bit for marking) references (~16GB of pCIGARs)
+#define WF_BACKTRACE_BLOCK_MAX_IDX   ((1ul<<63)-1)
+#define WF_BACKTRACE_BLOCK_IDX_NULL  UINT64_MAX
 
 typedef struct {
   pcigar_t pcigar;            // Packed CIGAR
@@ -54,7 +54,7 @@ typedef struct {
 } __attribute__((packed)) wf_backtrace_block_t;
 
 // Marked blocks
-#define WF_BACKTRACE_BLOCK_MARK_MASK            (1ul<<31)
+#define WF_BACKTRACE_BLOCK_MARK_MASK            (1ul<<63)
 #define WF_BACKTRACE_BLOCK_MARK(block_idx)      ((block_idx) | WF_BACKTRACE_BLOCK_MARK_MASK)
 #define WF_BACKTRACE_BLOCK_UNMARK(block_idx)    ((block_idx) & ~(WF_BACKTRACE_BLOCK_MARK_MASK))
 #define WF_BACKTRACE_BLOCK_IS_MARKED(block_idx) (((block_idx) & WF_BACKTRACE_BLOCK_MARK_MASK)!=0)
