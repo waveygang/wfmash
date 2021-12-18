@@ -49,12 +49,8 @@ inline void calc_hashes_(const char *seq, const uint64_t &len,
     char fhash[16];
     for (int i = 0; i < numhashes; ++i) {
         if (canonical(seq + i, k)) {
-            reverse_complement(seq + i, reverse, k);
             MurmurHash3_x64_128(seq + i, k, 42, &fhash);
-            MurmurHash3_x64_128(reverse, k, 42, &rhash);
-            hash_t tmp_fwd = *((hash_t*)fhash);
-            hash_t tmp_rev = *((hash_t*)rhash);
-            hashes[i] = (tmp_fwd < tmp_rev ? tmp_fwd : tmp_rev);
+            hashes[i] = *((hash_t*)fhash);
             //std::cerr << "hashes[" << i << "] = " << hashes[i] << std::endl;
         } else {
             hashes[i] = std::numeric_limits<hash_t>::max();
