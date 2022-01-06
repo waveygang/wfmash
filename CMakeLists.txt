@@ -59,5 +59,4 @@ install(TARGETS wfmash DESTINATION bin)
 set(CMAKE_BUILD_TYPE Release)
 
 # version stuff
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/include)
-execute_process(COMMAND bash scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/include)
+execute_process(COMMAND bash scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src)

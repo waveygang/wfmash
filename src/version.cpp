@@ -7,13 +7,13 @@
 #include "version.hpp"
 
 // Get the git version macro from the build system
-#include "../include/wfmash_git_version.hpp"
+#include "wfmash_git_version.hpp"
 
 #include <iostream>
 #include <sstream>
 
-// If the wfmash_GIT_VERSION deosn't exist at all, define a placeholder
-// This lets us be somewhat robust to undeterminable versions
+// If the wfmash_GIT_VERSION doesn't exist at all, define a placeholder
+// This lets us be somewhat robust to indeterminable versions
 #ifndef WFMASH_GIT_VERSION
 #define WFMASH_GIT_VERSION "not-from-git"
 #endif
@@ -40,7 +40,7 @@ namespace wfmash {
             {"v0.4", "wavefront inception: the alignment patching"},
             {"v0.5", "sensitive mapping and stable wfling-ing"},
             {"v0.6", "sparsify and use low-memory WFA"},
-            {"v0.6.1", "wfmash 0.6.1 - Handy"},
+            {"v0.6.1", "Handy"},
             {"v0.7.0", "Educazione"}
             // Add more codenames here
     };
