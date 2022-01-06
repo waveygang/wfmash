@@ -38,6 +38,9 @@ target_include_directories(wfmash PRIVATE
   #src/common/wflign/abseil-cpp
   )
 
+# version stuff
+execute_process(COMMAND bash scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src)
+
 target_link_libraries(wfmash
   gsl
   gslcblas
@@ -58,5 +61,3 @@ install(TARGETS wfmash DESTINATION bin)
 #set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_BUILD_TYPE Release)
 
-# version stuff
-execute_process(COMMAND bash scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src)
