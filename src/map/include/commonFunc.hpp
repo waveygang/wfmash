@@ -20,6 +20,7 @@
 #include "common/prettyprint.hpp"
 
 #include "common/wflign/src/rkmh.hpp"
+#include <common/ntHash/nthash.hpp>
 
 namespace skch {
     /**
@@ -167,10 +168,17 @@ namespace skch {
             makeUpperCaseAndValidDNA(seq, len);
 
             //Compute reverse complement of seq
-            char *seqRev = new char[len];
+//            char *seqRev = new char[len];
 
-            if (alphabetSize == 4) //not protein
-                CommonFunc::reverseComplement(seq, seqRev, len);
+            // IMPORTANT: the rolling hash provided by ntHash library works only for DNA sequences
+            // Not necessary anymore with the ntHash library
+//            if (alphabetSize == 4) //not protein
+//                CommonFunc::reverseComplement(seq, seqRev, len);
+
+            char *kmer = new char[kmerSize+1];
+            strncpy(kmer, seq + 0, kmerSize);
+            uint64_t currentKmer, hashFwd=0, hashBwd=0; // canonical, forward, and reverse-strand hash values
+            currentKmer = NTC64(kmer, kmerSize, hashFwd, hashBwd); // initial hash values
 
             for (offset_t i = 0; i < len - kmerSize + 1; i++) {
                 //The serial number of current sliding window
@@ -178,13 +186,13 @@ namespace skch {
                 offset_t currentWindowId = i - windowSize + 1;
 
                 //Hash kmers
-                hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
-                hash_t hashBwd;
-
-                if (alphabetSize == 4)
-                    hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
-                else  //proteins
-                    hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
+//                hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
+//                hash_t hashBwd;
+//                if (alphabetSize == 4)
+//                    hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
+//                else  //proteins
+//                    hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
+                currentKmer = NTC64(seq[i], seq[i+kmerSize], kmerSize, hashFwd, hashBwd); // consecutive hash values
 
 //#define DEBUG_WINNOWING
 #ifdef DEBUG_WINNOWING
@@ -205,8 +213,8 @@ namespace skch {
                 //Consider non-symmetric kmers only
                 if (hashBwd != hashFwd) {
                     //Take minimum value of kmer and its reverse complement
-                    hash_t currentKmer = std::min(hashFwd, hashBwd);
-
+//                    hash_t currentKmer = std::min(hashFwd, hashBwd);
+                    hash_t currentKmerX = (hash_t)(0x00000000FFFFFFFF & currentKmer);
                     /*double order = (hashFwd < hashBwd) ?
                                    applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
                                    applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);*/
@@ -214,7 +222,7 @@ namespace skch {
                     //Hashes less than equal to currentKmer are not required
                     //Remove them from Q (back)
                     //while (!Q.empty() && Q.back().first.order > order)
-                    while (!Q.empty() && Q.back().first.hash > currentKmer)
+                    while (!Q.empty() && Q.back().first.hash > currentKmerX)
                         Q.pop_back();
 
 #ifdef DEBUG_WINNOWING
@@ -232,7 +240,7 @@ namespace skch {
                     //-1 indicates the dummy window # (will be updated later)
                     Q.push_back(std::make_pair(
                             //MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
-                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
+                            MinimizerInfo{currentKmerX, seqCounter, -1, currentStrand},
                             i));
 
 #ifdef DEBUG_WINNOWING
@@ -307,7 +315,7 @@ namespace skch {
             std::cerr << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";
 #endif
 
-            delete[] seqRev;
+//            delete[] seqRev;
         }
 
         /**
