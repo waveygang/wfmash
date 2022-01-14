@@ -179,6 +179,7 @@ namespace skch {
             strncpy(kmer, seq + 0, kmerSize);
             uint64_t currentKmer, hashFwd=0, hashBwd=0; // canonical, forward, and reverse-strand hash values
             currentKmer = NTC64(kmer, kmerSize, hashFwd, hashBwd); // initial hash values
+            delete[] kmer;
 
             for (offset_t i = 0; i < len - kmerSize + 1; i++) {
                 //The serial number of current sliding window
