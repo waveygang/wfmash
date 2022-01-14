@@ -306,7 +306,7 @@ void parse_args(int argc,
         }
         map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
     } else {
-        map_parameters.percentageIdentity = 0.95;
+        map_parameters.percentageIdentity = skch::fixed::percentage_identity;
     }
 
     if (keep_low_map_pct_identity) {

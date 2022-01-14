@@ -96,7 +96,8 @@ namespace align
         char delimiter = ':';
         std::string delimeter_str(1, delimiter);
         vector<string> mm_id_vec = split(tokens[12], delimeter_str);
-        const double mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stod(mm_id_vec.back())/100.0 : 0.0; // divide by 100 for consistency with block alignment
+        // if the estimated identity is missing, avoid assuming too low values
+        const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? (float) (std::stod(mm_id_vec.back())/100.0) : skch::fixed::percentage_identity; // divide by 100 for consistency with block alignment
 
         //Save words into currentRecord
         {
@@ -107,7 +108,7 @@ namespace align
             currentRecord.refId = tokens[5];
             currentRecord.rStartPos = std::stoi(tokens[7]);
             currentRecord.rEndPos = std::stoi(tokens[8]);
-            currentRecord.mashmap_estimated_identity = (float) mm_id;
+            currentRecord.mashmap_estimated_identity = mm_id;
         }
       }
 

@@ -60,19 +60,20 @@ struct Parameters
 
 
 /**
- * @brief     Internal figures not exposed at the command line interface
+ * @brief     Default values or internal figures not exposed at the command line interface
  */
 namespace fixed
 {
 
-//float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
+//float filter_score_best_range = .99;              // mapping score above a certain fraction of best score is
 //considered good by filtering algorithm
 
-//int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best
+//int max_best_mappings_per_position = 25;          // At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
-double pval_cutoff = 0.0;//1e-120;                  //p-value cutoff for determining window size
-float confidence_interval = 0.95;                   //Confidence interval to relax jaccard cutoff for mapping (0-1)
+double pval_cutoff = 0.0;//1e-120;                  // p-value cutoff for determining window size
+float confidence_interval = 0.95;                   // Confidence interval to relax jaccard cutoff for mapping (0-1)
+float percentage_identity = 0.95;                   // Percent identity in the mapping step
 }
 }
 

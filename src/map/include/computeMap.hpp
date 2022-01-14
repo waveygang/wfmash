@@ -120,8 +120,8 @@ namespace skch
         //Create the thread pool 
         ThreadPool<InputSeqContainer, MapModuleOutput> threadPool( [this](InputSeqContainer* e){return mapModule(e);}, param.threads);
 
-        // kind've expensive, but it can help people know how long we're going to take
-        // enable optionally?
+        // kind've expensive if the fasta index is not available for the query sequences,
+        // but it can help people know how long we're going to take
         uint64_t total_seqs = 0;
         uint64_t total_seq_length = 0;
         for(const auto &fileName : param.querySequences) {
@@ -323,7 +323,6 @@ namespace skch
         else  //Split read mapping
         {
           int noOverlapFragmentCount = input->len / param.segLength;
-          bool mappingReported = false;
 
           //Map individual non-overlapping fragments in the read
           for (int i = 0; i < noOverlapFragmentCount; i++)
