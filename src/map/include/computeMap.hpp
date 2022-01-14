@@ -133,9 +133,8 @@ namespace skch
                 std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
                     ++total_seqs;
-                    auto p1 = line.find('\t');
-                    auto p2 = line.find('\t', p1);
-                    total_seq_length += std::stoi(line.substr(p1, p2));
+                    auto line_split = CommonFunc::split(line, '\t');
+                    total_seq_length += std::stoul(line_split[1]);
                 }
             } else {
                 // if not, warn that this is expensive

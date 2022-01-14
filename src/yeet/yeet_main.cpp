@@ -94,11 +94,9 @@ int main(int argc, char** argv) {
                 std::string line;
                 std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
-                    auto p1 = line.find('\t');
-                    auto p2 = line.find('\t', p1);
-
-                    const std::string seq_name = line.substr(0, p1);
-                    const uint64_t seq_len = std::stoull(line.substr(p1, p2));
+                    auto line_split = skch::CommonFunc::split(line, '\t');
+                    const std::string seq_name = line_split[0];
+                    const uint64_t seq_len = std::stoull(line_split[1]);
                     seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq_len);
                 }
             } else {
@@ -169,11 +167,9 @@ int main(int argc, char** argv) {
                 std::string line;
                 std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
-                    auto p1 = line.find('\t');
-                    auto p2 = line.find('\t', p1);
-
-                    const std::string seq_name = line.substr(0, p1);
-                    const uint64_t seq_len = std::stoull(line.substr(p1, p2));
+                    auto line_split = skch::CommonFunc::split(line, '\t');
+                    const std::string seq_name = line_split[0];
+                    const uint64_t seq_len = std::stoull(line_split[1]);
                     outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
                 }
             } else {
