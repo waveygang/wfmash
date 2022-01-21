@@ -141,6 +141,20 @@ void parse_args(int argc,
         exit(0);
     }
 
+    if (skip_self) {
+        map_parameters.skip_self = true;
+    } else {
+        map_parameters.skip_self = false;
+    }
+
+    if (skip_prefix) {
+        map_parameters.skip_prefix = true;
+        map_parameters.prefix_delim = args::get(skip_prefix);
+    } else {
+        map_parameters.skip_prefix = false;
+        map_parameters.prefix_delim = '\0';
+    }
+
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
         align_parameters.refSequences.push_back(args::get(target_sequence_file));
@@ -158,12 +172,19 @@ void parse_args(int argc,
         skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
 
+    // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
+    if (target_sequence_file && map_parameters.querySequences.empty()) {
+        map_parameters.skip_self = true;
+        map_parameters.querySequences.push_back(map_parameters.refSequences.back());
+        align_parameters.querySequences.push_back(align_parameters.refSequences.back());
+    }
+
     map_parameters.alphabetSize = 4;
 
     if (no_filter) {
         map_parameters.filterMode = skch::filter::NONE;
     } else {
-        if (skip_self || skip_prefix) {
+        if (map_parameters.skip_self || map_parameters.skip_prefix) {
             // before we set skch::filter::ONETOONE here
             // but this does not provide a clear benefit in all-to-all
             // as it sometimes introduces cases of over-filtering
@@ -503,20 +524,6 @@ void parse_args(int argc,
         }
     } else {
         map_parameters.numMappingsForShortSequence = 1;
-    }
-
-    if (skip_self) {
-        map_parameters.skip_self = true;
-    } else {
-        map_parameters.skip_self = false;
-    }
-
-    if (skip_prefix) {
-        map_parameters.skip_prefix = true;
-        map_parameters.prefix_delim = args::get(skip_prefix);
-    } else {
-        map_parameters.skip_prefix = false;
-        map_parameters.prefix_delim = '\0';
     }
 
     //Check if files are valid

@@ -194,19 +194,20 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     std::cerr << "[wfmash::map] Window size = " << parameters.windowSize << std::endl;
     std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
     std::cerr << "[wfmash::map] Block length min = " << parameters.block_length_min << std::endl;
-    std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
+    //std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
     std::cerr << "[wfmash::map] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[wfmash::map] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
     std::cerr << "[wfmash::map] Mapping output file = " << parameters.outFileName << std::endl;
     std::cerr << "[wfmash::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
     std::cerr << "[wfmash::map] Execution threads  = " << parameters.threads << std::endl;
-      if (parameters.use_spaced_seeds) {
-          std::cerr << "[wfmash::map] Spaced seed parameters  = "
-                    << "(weight = " << parameters.spaced_seed_params.weight
-                    << ", count = " << parameters.spaced_seed_params.seed_count
-                    << ", similarity = " << parameters.spaced_seed_params.similarity
-                    << ", region length = " << parameters.spaced_seed_params.region_length
-                    << " )"<< std::endl;
-      }
+    if (parameters.use_spaced_seeds) {
+        std::cerr << "[wfmash::map] Spaced seed parameters  = "
+                  << "(weight = " << parameters.spaced_seed_params.weight
+                  << ", count = " << parameters.spaced_seed_params.seed_count
+                  << ", similarity = " << parameters.spaced_seed_params.similarity
+                  << ", region length = " << parameters.spaced_seed_params.region_length
+                  << " )"<< std::endl;
+    }
   }
 
   /**
