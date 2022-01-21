@@ -197,7 +197,7 @@ void parse_args(int argc,
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params."//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
                       << std::endl;
             exit(1);
         }
@@ -226,7 +226,7 @@ void parse_args(int argc,
     if (!args::get(wflign_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wflign_score_params), ',');
         if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -G/--wflign-params"//either 3 or 5 scoring parameters must be given to -G/--wflign-params
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -G/--wflign-params."//either 3 or 5 scoring parameters must be given to -G/--wflign-params
                       << std::endl;
             exit(1);
         }
@@ -253,8 +253,8 @@ void parse_args(int argc,
     }
 
     if (wflign_max_mash_dist) {
-        if (args::get(wflign_max_mash_dist) <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance has to be greater than 0" << std::endl;
+        if (args::get(wflign_max_mash_dist) <= 0 || args::get(wflign_max_mash_dist) > 1) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance must be greater than 0 and less than or equal to 1." << std::endl;
             exit(1);
         }
         align_parameters.wflign_max_mash_dist = args::get(wflign_max_mash_dist);
@@ -303,7 +303,7 @@ void parse_args(int argc,
 
     if (map_pct_identity) {
         if (args::get(map_pct_identity) < 70) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%." << std::endl;
             exit(1);
         }
         map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
@@ -338,13 +338,13 @@ void parse_args(int argc,
         } else if (foobar.find(':') !=  std::string::npos) {
             delimeter = ':';
         } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params." << std::endl;
             exit(1);
         }
 
         const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
         if (p.size() != 4) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds." << std::endl;
             exit(1);
         }
 
