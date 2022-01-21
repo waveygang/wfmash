@@ -625,7 +625,7 @@ namespace skch
             //Compute mash distance using calculated jaccard
             float mash_dist = Stat::j2md(1.0 * l2.sharedSketchSize/Q.sketchSize, param.kmerSize);
 
-            //Compute lower bound to mash distance within 90% confidence interval
+            //Compute lower bound to mash distance within 95% confidence interval
             float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
 
             float nucIdentity = (1 - mash_dist);

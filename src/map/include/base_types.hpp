@@ -123,7 +123,7 @@ namespace skch
                                                         //--for split read mapping
 
     offset_t splitMappingId;                            // To identify split mappings that are chained
-    int discard;                                        // set to 1 for deletion
+    uint8_t discard;                                    // set to 1 for deletion
     bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
 
     offset_t qlen() {                                   //length of this mapping on query axis 

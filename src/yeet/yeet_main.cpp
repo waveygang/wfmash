@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
         while (!mappingListStream.eof()){
             std::getline(mappingListStream, mappingRecordLine);
             if( !mappingRecordLine.empty() ) {
-                parseMashmapRow(mappingRecordLine, currentRecord);
+                align::Aligner::parseMashmapRow(mappingRecordLine, currentRecord);
 
                 allReadMappings.push_back(currentRecord);
             }

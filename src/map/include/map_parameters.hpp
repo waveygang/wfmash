@@ -37,8 +37,8 @@ struct Parameters
     uint64_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
     int filterMode;                                   //filtering mode in mashmap
-    uint16_t numMappingsForSegment;                   //how many mappings to retain for each segment
-    uint16_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
+    uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment
+    uint32_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
     int threads;                                      //execution thread count
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)

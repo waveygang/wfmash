@@ -66,8 +66,8 @@ void parse_args(int argc,
     args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
     args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
-    args::ValueFlag<uint16_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
-    args::ValueFlag<uint16_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
+    args::ValueFlag<uint32_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
+    args::ValueFlag<uint32_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
@@ -87,9 +87,6 @@ void parse_args(int argc,
                                             {'g', "wfa-params"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
     args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 100000]", {'D', "wflambda-diff"});
-
-    //Unsupported
-    //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
 
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(parser, "mismatch,gap1,ext1",
@@ -120,7 +117,6 @@ void parse_args(int argc,
     args::Flag version(parser, "version", "show long version number including github commit", {'v', "version"});
 
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
-    //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -177,23 +173,8 @@ void parse_args(int argc,
         }
     }
 
-    auto split = [](const string& s, const string& delimiter) {
-      size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-      string token;
-      vector<string> res;
-
-      while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
-          token = s.substr (pos_start, pos_end - pos_start);
-          pos_start = pos_end + delim_len;
-          res.push_back (token);
-      }
-
-      res.push_back (s.substr (pos_start));
-      return res;
-    };
-
     if (!args::get(wfa_score_params).empty()) {
-        const std::vector<std::string> params_str = split(args::get(wfa_score_params), ",");
+        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
             std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
                       << std::endl;
@@ -222,7 +203,7 @@ void parse_args(int argc,
     }
 
     if (!args::get(wflign_score_params).empty()) {
-        const std::vector<std::string> params_str = split(args::get(wflign_score_params), ",");
+        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wflign_score_params), ',');
         if (params_str.size() != 3) {
             std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -G/--wflign-params"//either 3 or 5 scoring parameters must be given to -G/--wflign-params
                       << std::endl;
@@ -264,7 +245,7 @@ void parse_args(int argc,
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
     map_parameters.split = !args::get(no_split);
-    align_parameters.split = !args::get(no_split); //ToDo: hacky, to have the information also during the alignment (for SAM format)
+    align_parameters.split = !args::get(no_split);
 
     map_parameters.mergeMappings = !args::get(no_merge);
 
@@ -340,8 +321,7 @@ void parse_args(int argc,
             exit(1);
         }
 
-        const std::string delimeter_str(1, delimeter);
-        const std::vector<std::string> p = split(foobar, delimeter_str);
+        const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
         if (p.size() != 4) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
             exit(1);
@@ -378,6 +358,7 @@ void parse_args(int argc,
 //        }
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
+
 
     if (keep_low_align_pct_identity || align_input_paf) {
         // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
@@ -444,13 +425,6 @@ void parse_args(int argc,
         align_parameters.wflign_erode_k = map_parameters.percentageIdentity >= 0.97 ? 21 : (map_parameters.percentageIdentity >= 0.9 ? 17 : 13);
     }
 
-    // Unsupported
-    //if (exact_wflambda) {
-    //    // set exact computation of wflambda
-    //    align_parameters.wflambda_min_wavefront_length = 0;
-    //    align_parameters.wflambda_max_distance_threshold = 0;
-    //}
-
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
         align_parameters.threads = args::get(thread_count);
@@ -459,11 +433,7 @@ void parse_args(int argc,
         align_parameters.threads = 1;
     }
 
-    /*
-     * Compute window size for sketching
-     */
-
-    //Compute optimal window size
+    // Compute optimal window size for sketching
     {
         const int64_t ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
         if (ws > 0) {

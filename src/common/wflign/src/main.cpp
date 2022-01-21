@@ -31,13 +31,11 @@ int main(int argc, char** argv) {
     args::ValueFlag<int> wf_diff(parser, "N", "WFlambda_diff: maximum distance in bp that a wavefront may be behind the best wavefront to not be reduced [default: 100000]", {'d', "wf-diff"});
     args::Flag exact_wflign(parser, "N", "compute the exact WFA for wflign, don't use adaptive wavefront reduction", {'e', "exact-wflign"});
     //args::Flag exact_wfa(parser, "N", "compute the exact WFA for base-level WFA, don't use adaptive wavefront reduction", {'E', "exact-wfa"});
-    args::Flag align_edlib(parser, "N", "use edlib for base-level alignment", {'a', "edlib-align"});
     args::Flag revcomp_query(parser, "N", "align the reverse complement of the query", {'r', "revcomp-query"});
     args::Flag no_merge(parser, "N", "don't merge the alignments into a single record (WFA only)", {'M', "no-merge"});
 
     // general parameters
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
-    //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -102,18 +100,6 @@ int main(int argc, char** argv) {
                         target_file,
                         [&](const std::string& tname,
                             const std::string& tseq) {
-                            /*
-                            if (align_edlib) {
-                                wflign::edlib::wflign_affine_wavefront(
-                                    std::cout,
-                                    qname, qstrand.c_str(), qstrand.size(), 0, qstrand.size(),
-                                    revcomp,
-                                    tname, tseq.c_str(), tseq.size(), 0, tseq.size(),
-                                    segment_length,
-                                    min_identity,
-                                    min_wavefront_length,
-                                    max_distance_threshold, 13);
-                                    } */
                             {
                                 wflign::wavefront::wflign_affine_wavefront(
                                     std::cout,

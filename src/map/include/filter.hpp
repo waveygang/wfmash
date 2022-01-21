@@ -223,7 +223,7 @@ namespace skch
       template <typename VecIn>
       void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep)
       {
-          //Apply the main filtering algorithm to ensure best mappings across complete axis
+          //Apply the main filtering algorithm to ensure the best mappings across complete axis
           liFilterAlgorithm(readMappings, secondaryToKeep);
       }
 

@@ -33,10 +33,6 @@ namespace wflign {
 
 namespace wavefront {
 
-/*bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
-                const uint64_t &query_aln_len, const uint64_t &target_aln_len,
-                uint64_t j, uint64_t i);*/
-
 bool validate_cigar(const wfa::cigar_t &cigar, const char *query,
                     const char *target, const uint64_t &query_aln_len,
                     const uint64_t &target_aln_len, uint64_t j, uint64_t i);
@@ -227,14 +223,6 @@ void wflign_edit_cigar_copy(wfa::cigar_t *const edit_cigar_dst,
 void copy_wfa_alignment_into_trace(const wfa::cigar_t *const edit_cigar,
                                    std::vector<char> &trace);
 
-/*
-void edlib_to_wflign_edit_cigar_copy(
-    wfa::cigar_t* const edit_cigar_dst,
-    char* const edlib_cigar_src,
-    const uint64_t& edit_distance,
-    const uint64_t& edlib_cigar_len);
-*/
-
 inline uint64_t encode_pair(int v, int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
@@ -299,12 +287,6 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln);
 
-//EdlibAlignResult do_edlib_patch_alignment(const char *query, const uint64_t &j,
-//                                          const uint64_t &query_length,
-//                                          const char *target, const uint64_t &i,
-//                                          const uint64_t &target_length,
-//                                          const EdlibAlignMode &align_mode);
-
 void write_merged_alignment(
     std::ostream &out, const std::vector<alignment_t *> &trace,
     wfa::wavefront_aligner_t *const wf_aligner,
@@ -352,18 +334,6 @@ char *wfa_alignment_to_cigar(const wfa::cigar_t *const edit_cigar,
                              uint64_t &mismatches, uint64_t &insertions,
                              uint64_t &inserted_bp, uint64_t &deletions,
                              uint64_t &deleted_bp);
-
-/*char* edlib_alignment_to_cigar(
-    const unsigned char* const alignment,
-    const int alignment_length,
-    uint64_t& target_aligned_length,
-    uint64_t& query_aligned_length,
-    uint64_t& matches,
-    uint64_t& mismatches,
-    uint64_t& insertions,
-    uint64_t& inserted_bp,
-    uint64_t& deletions,
-    uint64_t& deleted_bp);*/
 
 double float2phred(const double &prob);
 
