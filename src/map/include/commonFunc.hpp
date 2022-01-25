@@ -311,6 +311,56 @@ namespace skch {
         }
 
         /**
+         * @brief       compute winnowed minimizers from a given sequence and add to the index
+         * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
+         * @param[in]   seq             pointer to input sequence
+         * @param[in]   len             length of input sequence
+         * @param[in]   kmerSize
+         * @param[in]   samplingFactor
+         * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
+         */
+        template<typename T>
+        inline void addWorldMinimizers(std::vector<T> &minimizerIndex,
+                                       char *seq, offset_t len,
+                                       int kmerSize,
+                                       int samplingFactor,
+                                       int alphabetSize,
+                                       seqno_t seqCounter) {
+
+            makeUpperCaseAndValidDNA(seq, len);
+
+            //Compute reverse complement of seq
+            char *seqRev = new char[len];
+
+            if (alphabetSize == 4) //not protein
+                CommonFunc::reverseComplement(seq, seqRev, len);
+
+            for (offset_t i = 0; i < len - kmerSize + 1; i++) {
+                //Hash kmers
+                hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
+                hash_t hashBwd;
+
+                if (alphabetSize == 4)
+                    hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
+                else  //proteins
+                    hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
+
+                //Consider non-symmetric kmers only
+                if (hashBwd != hashFwd) {
+                    //Take minimum value of kmer and its reverse complement
+                    hash_t currentKmer = std::min(hashFwd, hashBwd);
+
+                    if (currentKmer % samplingFactor == 0) {
+
+                        auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
+                        minimizerIndex.push_back(MinimizerInfo{currentKmer, seqCounter, i, currentStrand});
+                    }
+                }
+            }
+            delete[] seqRev;
+        }
+
+        /**
          * @brief       compute winnowed minimizers from a given sequence and add to the index using spaced seeds
          * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
          * @param[in]   seq             pointer to input sequence
