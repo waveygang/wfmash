@@ -54,6 +54,7 @@ struct Parameters
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
+    bool world_minimizers;
 
     //std::unordered_set<std::string> high_freq_kmers;  //
 };

@@ -192,7 +192,11 @@ namespace skch
 
         //Compute minimizers in reference sequence
         if (param.spaced_seeds.empty()) {
-          skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);//, param.high_freq_kmers);
+          if (param.world_minimizers) {
+            skch::CommonFunc::addWorldMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
+          } else {
+            skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
+          }
         } else {
           skch::CommonFunc::addSpacedSeedMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter, param.spaced_seeds);
         }

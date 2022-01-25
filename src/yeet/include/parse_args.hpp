@@ -74,6 +74,7 @@ void parse_args(int argc,
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
     args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic)]", {'w', "window-size"});
+    args::Flag world_minimizers(parser, "", "Use world minimizers (modimizers) rather than window minimizers [default: use window minimizers]", {'U', "world-minimizers"});
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
 
@@ -473,6 +474,12 @@ void parse_args(int argc,
             // Avoid too big values to improve the accuracy
             map_parameters.windowSize = std::min((int64_t)256, windowSize);
         }
+    }
+
+    if (world_minimizers) {
+        map_parameters.world_minimizers = true;
+    } else {
+        map_parameters.world_minimizers = false;
     }
 
     if (approx_mapping) {
