@@ -63,7 +63,8 @@ void wflign_affine_wavefront(
     const int &wflign_gap_extension_score,
     const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k) {
+    const uint16_t &erode_k,
+    const uint64_t &group_mapping, const uint32_t &rank_mapping) {
 
     if (query_offset + query_length > query_total_length ||
         target_offset + target_length > target_total_length) {
@@ -215,7 +216,8 @@ void wflign_affine_wavefront(
                 num_alignments_performed, mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor,
                 erode_k,
-                MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                group_mapping, rank_mapping);
 
         // Free
         wfa::wavefront_aligner_delete(wf_aligner);
@@ -653,7 +655,8 @@ void wflign_affine_wavefront(
                         num_alignments_performed, mashmap_estimated_identity,
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
-                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                        group_mapping, rank_mapping);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -1130,6 +1133,7 @@ void write_merged_alignment(
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const uint16_t &erode_k,
     const int &min_wf_length, const int &max_dist_threshold,
+    const uint64_t &group_mapping, const uint32_t &rank_mapping,
     const bool &with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -2308,7 +2312,7 @@ query_start : query_end)
         (double)matches /
         (double)(matches + mismatches + insertions + deletions);
 
-    if (gap_compressed_identity >= min_identity) {
+    if (false || gap_compressed_identity >= min_identity) {
         const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
 
         // identity over the full block
@@ -2387,6 +2391,8 @@ query_start : query_end)
             }
         };
 
+        const double score = ((double)(query_end - query_start)) * gap_compressed_identity;
+
         const long elapsed_time_patching_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - start_time)
@@ -2435,7 +2441,10 @@ query_start : query_end)
             }
 
             out << "\t" << timings_and_num_alignements << "\t"
-                << "cg:Z:" << cigarv << "\n";
+                << "cg:Z:" << cigarv << "\t"
+                << "gr:i:" << group_mapping << "\t"
+                << "rk:i:" << rank_mapping << "\t"
+                << "sc:i:" << score << "\n";
         } else {
             out << query_name                          // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
@@ -2518,7 +2527,11 @@ query_start : query_end)
                 write_tag_and_md_string(out, cigarv, target_start);
             }
 
-            out << "\t" << timings_and_num_alignements << "\n";
+            out << "\t" << timings_and_num_alignements
+                << "gr:i:" << group_mapping << "\t"
+                << "rk:i:" << rank_mapping << "\t"
+                << "sc:i:" << score
+                << "\n";
         }
     }
 

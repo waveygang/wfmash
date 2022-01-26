@@ -114,12 +114,13 @@ namespace skch
     seqno_t querySeqId;                                 //internal sequence id of the query sequence
     int blockLength;                                    //the block length of the mapping
     float nucIdentity;                                  //calculated identity
-    float nucIdentityUpperBound;                        //upper bound on identity (90% C.I.)
+    float nucIdentityUpperBound;                        //upper bound on identity (95% C.I.)
     int sketchSize;                                     //sketch size
     int conservedSketches;                              //count of conserved sketches
     strand_t strand;                                    //strand
     int approxMatches;                                  //the approximate number of matches in the alignment
-
+    uint64_t group_mapping = 0;
+    uint32_t rank_mapping = 0;
                                                         //--for split read mapping
 
     offset_t splitMappingId;                            // To identify split mappings that are chained

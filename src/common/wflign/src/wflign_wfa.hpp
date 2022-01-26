@@ -259,7 +259,8 @@ void wflign_affine_wavefront(
     const int &wflign_gap_extension_score,
     const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k);
+    const uint16_t &erode_k,
+    const uint64_t &group_mapping, const uint32_t &rank_mapping);
 // const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA
 // for WFA itself const int& wfa_max_distance_threshold);
 
@@ -307,6 +308,7 @@ void write_merged_alignment(
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const uint16_t &erode_k,
     const int &min_wf_length, const int &max_dist_threshold,
+    const uint64_t &group_mapping, const uint32_t &rank_mapping,
     const bool &with_endline = true);
 
 void write_alignment(std::ostream &out, const alignment_t &aln,

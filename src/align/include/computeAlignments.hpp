@@ -23,6 +23,7 @@
 #include "align/include/align_parameters.hpp"
 #include "map/include/base_types.hpp"
 #include "map/include/commonFunc.hpp"
+#include "yeet/include/temp_file.hpp"
 
 //External includes
 #include "common/atomic_queue/atomic_queue.h"
@@ -126,6 +127,12 @@ namespace align
         // if the estimated identity is missing, avoid assuming too low values
         const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back())/(float) 100.0 : skch::fixed::percentage_identity; // divide by 100 for consistency with block alignment
 
+        const vector<string> group_map_vec = skch::CommonFunc::split(tokens[13], ':');
+        const uint64_t group_mapping = wfmash::is_a_number(group_map_vec.back()) ? std::stoull(group_map_vec.back()) : 0;
+
+        const vector<string> rank_map_vec = skch::CommonFunc::split(tokens[14], ':');
+        const uint32_t rank_mapping = wfmash::is_a_number(rank_map_vec.back()) ? std::stoul(rank_map_vec.back()) : 0;
+
         //Save words into currentRecord
         {
             currentRecord.qId = tokens[0];
@@ -136,6 +143,8 @@ namespace align
             currentRecord.rStartPos = std::stoi(tokens[7]);
             currentRecord.rEndPos = std::stoi(tokens[8]);
             currentRecord.mashmap_estimated_identity = mm_id;
+            currentRecord.group_mapping = group_mapping;
+            currentRecord.rank_mapping = rank_mapping;
         }
       }
 
@@ -219,8 +228,6 @@ namespace align
                               const std::string& _seq) {
                               ++total_seqs;
 
-                              uint64_t rank_mapping = 0;
-
                               // copy our input into a shared ptr
                               std::shared_ptr<std::string> seq(new std::string(_seq));
                               // todo: offset_t is an 32-bit integer, which could cause problems
@@ -246,7 +253,6 @@ namespace align
                                   {
                                       //Queue up this query record
                                       auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
-                                      q->currentRecord.rankMapping = rank_mapping++;
                                       seq_queue.push(q);
 
                                       //Check if more mappings have same query sequence id
@@ -262,7 +268,6 @@ namespace align
                                           else
                                           {
                                               auto q = new seq_record_t(currentRecord, mappingRecordLine, seq);
-                                              q->currentRecord.rankMapping = rank_mapping++;
                                               seq_queue.push(q);
                                           }
                                       }
@@ -287,7 +292,11 @@ namespace align
               };
 
           // writer, picks output from queue and writes it to our output stream
-          std::ofstream outstrm(param.pafOutputFile, ios::app);
+          const std::string filename_paf_without_mapq = yeet::temp_file::create();
+          std::ofstream outstrm_nomapq(filename_paf_without_mapq, ios::app);
+
+          const std::string filename_query_group_score_rank = yeet::temp_file::create();
+          std::ofstream outstrm_qgsr(filename_query_group_score_rank, ios::app);
 
           auto writer_thread =
               [&]() {
@@ -297,7 +306,15 @@ namespace align
                           && !still_working(working)) {
                           break;
                       } else if (paf_lines != nullptr) {
-                          outstrm << *paf_lines;
+                          outstrm_nomapq << *paf_lines;
+
+                          const auto paf_line_split = skch::CommonFunc::split(*paf_lines, '\t');
+                          const auto query_name = paf_line_split.front();
+                          const auto group_mapping = std::stoull(skch::CommonFunc::split(paf_line_split[paf_line_split.size() - 3], ':').back());
+                          const auto rank_mapping = std::stoul(skch::CommonFunc::split(paf_line_split[paf_line_split.size() - 2], ':').back());
+                          const auto score = std::stod(skch::CommonFunc::split(paf_line_split.back(), ':').back());
+
+                          outstrm_qgsr << query_name << "\t" << group_mapping << "\t" << score << "\t" << rank_mapping << std::endl;
                           delete paf_lines;
                       } else {
                           std::this_thread::sleep_for(100ns);
@@ -396,6 +413,74 @@ namespace align
           std::cerr << "[wfmash::align::computeAlignments] "
                     << "count of mapped reads = " << total_seqs
                     << ", total aligned bp = " << total_alignment_length << std::endl;
+
+          outstrm_nomapq.close();
+          outstrm_qgsr.close();
+
+          // Compute the mapping quality for each portion of each query
+          robin_hood::unordered_flat_map<std::string, robin_hood::unordered_flat_map<uint64_t, robin_hood::unordered_flat_map<uint64_t, double>>> query_to_group_to_rank_to_mapq;
+          {
+              // Read query, group, score, rank information
+              robin_hood::unordered_flat_map<std::string, robin_hood::unordered_flat_map<uint64_t, std::vector<std::tuple<double, uint32_t>>>> query_to_group_to_score_and_rank;
+              std::string line;
+              std::ifstream in(filename_query_group_score_rank);
+              while (std::getline(in, line)) {
+                  const auto line_split = skch::CommonFunc::split(line, '\t');
+                  const auto query_name = line_split.front();
+                  const auto group_mapping = std::stoull(line_split[1]);
+                  const auto score = std::stod(line_split[2]);
+                  const auto rank_mapping = std::stoul(line_split.back());
+
+                  query_to_group_to_score_and_rank[query_name][group_mapping].emplace_back(score, rank_mapping);
+              }
+
+              // Compute the mapping quality
+              static const double quality_scale_factor = 10.0 / log(10.0);
+              for (const auto& query_and_info: query_to_group_to_score_and_rank) {
+                  for (const auto& group_and_info : query_and_info.second) {
+                      std::vector<std::tuple<double, uint32_t>> logscaledscore_and_rank;
+                      for (const auto& z : group_and_info.second) {
+                          double logscaledscore = log(std::get<0>(z));
+                          logscaledscore_and_rank.emplace_back(logscaledscore, std::get<1>(z));
+                      }
+                      std::sort(logscaledscore_and_rank.begin(), logscaledscore_and_rank.end(), [](const auto &x, const auto &y) {
+                          return (std::get<0>(x) > std::get<0>(y));
+                      });
+
+                      const double second_score = logscaledscore_and_rank.size() == 1 ? 0.0 : std::get<0>(logscaledscore_and_rank[1]);
+                      const double mapq = min(60.0, max(0.0, quality_scale_factor * (std::get<0>(logscaledscore_and_rank[0]) - second_score)));
+
+                      for (int i = 0; i < logscaledscore_and_rank.size(); ++i) {
+                          const uint32_t rank_mapping = std::get<1>(logscaledscore_and_rank[i]);
+
+                          // If there is more than 1 mapping, from the second on they will have mapq equals to 0
+                          query_to_group_to_rank_to_mapq[query_and_info.first][group_and_info.first][rank_mapping] = (i == 0 ? mapq : 0.0);
+                      }
+                  }
+                  //std::cerr << fixed << std::setprecision(2)
+                  //<< query_and_info.first << "\t" << group_and_info.first << "\t" << rank_mapping << "\t" << query_to_group_to_rank_to_mapq[query_and_info.first][group_and_info.first][rank_mapping] << "\n";
+                  //std::cerr << fixed << std::setprecision(2) << std::get<0>(x) << "\t" << std::get<1>(x) << "\t" << std::get<2>(x) << "\t" << std::get<3>(x) << std::endl;
+              }
+          }
+
+          // Fill the MAPQ in the PAF output and write it
+          std::ofstream outstrm(param.pafOutputFile, ios::app);
+          std::string paf_line;
+          std::ifstream in(filename_paf_without_mapq);
+          while (std::getline(in, paf_line)) {
+              auto paf_line_split = skch::CommonFunc::split(paf_line, '\t');
+
+              const auto query_name = paf_line_split.front();
+              const auto group_mapping = std::stoull(skch::CommonFunc::split(paf_line_split[paf_line_split.size() - 3], ':').back());
+              const auto rank_mapping = std::stoul(skch::CommonFunc::split(paf_line_split[paf_line_split.size() - 2], ':').back());
+
+              // Set the MAPQ
+              paf_line_split[11] = std::to_string(query_to_group_to_rank_to_mapq[query_name][group_mapping][rank_mapping]);
+
+              outstrm <<  skch::CommonFunc::join(paf_line_split.begin(), paf_line_split.end(), "\t") << std::endl;
+          }
+
+          outstrm.close();
       }
 
         /**
@@ -468,7 +553,7 @@ namespace align
 #endif
 
         // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix in there is just one alignment for the query)
-        const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
+        const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rank_mapping) : "";
 
         wflign::wavefront::wflign_affine_wavefront(
             output,
@@ -494,7 +579,8 @@ namespace align
             param.wflign_max_mash_dist,
             param.wflign_max_len_major,
             param.wflign_max_len_minor,
-            param.wflign_erode_k);
+            param.wflign_erode_k,
+            currentRecord.group_mapping, currentRecord.rank_mapping);
 
         delete [] queryRegionStrand;
 

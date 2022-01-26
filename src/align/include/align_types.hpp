@@ -16,9 +16,7 @@ namespace align
   //L1 stage lookup index
   struct MappingBoundaryRow
   {
-    uint16_t rankMapping;             //rank of the mapping for the query qId. It has the same variable type of num_mappings_for_segments (used for the SAM output format)
-
-    std::string qId;                    //query sequence(s) 
+    std::string qId;                    //query sequence(s)
     std::string refId;                  //reference sequence(s)
     skch::offset_t qStartPos;           //mapping boundary start offset on query
     skch::offset_t qEndPos;             //mapping boundary end offset on query
@@ -26,6 +24,10 @@ namespace align
     skch::offset_t rEndPos;             //mapping boundary end offset on ref
     skch::strand_t strand;              //mapping strand
     float mashmap_estimated_identity;
+
+    // group_mapping and rank_mapping to identify uniquely each mapping
+    uint64_t group_mapping;             //Group of mappings that refer to the same query portion
+    uint32_t rank_mapping;              //Rank of the mapping in a group. It has the same variable type of num_mappings_for_segments (used for the SAM output format)
   };
 
   typedef std::unordered_map <std::string, std::string> refSequenceMap_t;

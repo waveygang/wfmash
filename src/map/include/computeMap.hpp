@@ -986,7 +986,9 @@ namespace skch
                    << "\t" << e.approxMatches
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
-                   << "\t" << "id:f:" << e.nucIdentity * 100.0;
+                   << "\t" << "id:f:" << e.nucIdentity * 100.0
+                   << "\t" << "gr:i:" << e.group_mapping
+                   << "\t" << "rk:i:" << e.rank_mapping;
               //<< "\t" << "nu:f:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG

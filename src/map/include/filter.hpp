@@ -73,7 +73,7 @@ namespace skch
          * @param[in/out]   L             container with mappings
          */
         template <typename Type>
-        inline void markGood(Type &L, int secondaryToKeep)
+        inline void markGood(Type &L, uint64_t group_mapping, uint32_t &rank_mapping, int secondaryToKeep)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -85,6 +85,12 @@ namespace skch
             {
                 if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
                     break;
+                }
+
+                // Check if this is the first time we encounter such mapping
+                if (vec[*it].discard != 0) {
+                    vec[*it].group_mapping = group_mapping;
+                    vec[*it].rank_mapping = rank_mapping++;
                 }
 
                 vec[*it].discard = 0;
@@ -128,6 +134,8 @@ namespace skch
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
 
+          uint64_t group_mapping = 0;
+          uint32_t rank_mapping = 0;
           //Execute the plane sweep algorithm
           for(auto it = eventSchedule.begin(); it!= eventSchedule.end();)
           {
@@ -147,8 +155,8 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep);
-
+            obj.markGood(bst, group_mapping, rank_mapping, secondaryToKeep);
+            group_mapping++;
             it = it2;
           }
 
