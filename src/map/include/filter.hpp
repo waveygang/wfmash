@@ -52,7 +52,7 @@ namespace skch
           auto x_score = vec[x].qlen() * vec[x].nucIdentity;
           auto y_score = vec[y].qlen() * vec[y].nucIdentity;
 
-          return std::tie(x_score, vec[x].queryStartPos) > std::tie(y_score, vec[y].queryStartPos);
+          return std::tie(x_score, vec[x].queryStartPos) >= std::tie(y_score, vec[y].queryStartPos);
         }
 
         //Greater than comparison by score
@@ -64,7 +64,7 @@ namespace skch
           auto x_score = vec[x].qlen() * vec[x].nucIdentity;
           auto y_score = vec[y].qlen() * vec[y].nucIdentity;
 
-          return x_score > y_score;
+          return x_score >= y_score;
         }
 
         /*
