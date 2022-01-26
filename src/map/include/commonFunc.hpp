@@ -344,16 +344,12 @@ namespace skch {
                     hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
                 else  //proteins
                     hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
-
-                //Consider non-symmetric kmers only
-                if (hashBwd != hashFwd) {
-                    //Take minimum value of kmer and its reverse complement
-                    hash_t currentKmer = std::min(hashFwd, hashBwd);
-
-                    if (currentKmer % samplingFactor == 0) {
-
-                        auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
-                        minimizerIndex.push_back(MinimizerInfo{currentKmer, seqCounter, i, currentStrand});
+                if (hashBwd != hashFwd) { // consider non-symmetric kmers only
+                    if (hashFwd % samplingFactor == 0) {
+                        minimizerIndex.push_back(MinimizerInfo{hashFwd, seqCounter, i, strnd::FWD});
+                    }
+                    if (hashBwd % samplingFactor == 0) {
+                        minimizerIndex.push_back(MinimizerInfo{hashBwd, seqCounter, i, strnd::REV});
                     }
                 }
             }
