@@ -3,6 +3,18 @@
 
 // not doing this results in a linker error
 #include "WFA/wavefront/wavefront_penalties.c" // TODO fixme
+//#include "svg-cpp-plot/svg-cpp-plot.h"
+
+#include "atomic_image.hpp"
+#include "lodepng/lodepng.h"
+
+void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
+    //Encode the image
+    unsigned error = lodepng::encode(filename, image, width, height);
+
+    //if there's an error, display it
+    if (error) std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+}
 
 namespace wflign {
 
@@ -360,6 +372,19 @@ void wflign_affine_wavefront(
                                                                            segment_length_to_use,
                                                                            segment_length_to_use,
                                                                            false);
+
+//        auto mismatch_mash = svg_cpp_plot::rgb(1,0,0);
+//        auto mismatch_wfa = svg_cpp_plot::rgb(0,0,1);
+//        auto match_wfa = svg_cpp_plot::rgb(0,1,0);
+//        svg_cpp_plot::SVGPlot plt;
+//        std::vector<float> x_match_wfa, y_match_wfa;
+//        std::vector<float> x_mismatch_wfa, y_mismatch_wfa;
+//        std::vector<float> x_mismatch_mash, y_mismatch_mash;
+
+        std::vector<std::tuple<int, int, uint8_t>> high_order_dp_matrix;
+
+        bool emit_svg = true;
+
         int v_max = 0;
         int h_max = 0;
 
@@ -394,6 +419,23 @@ void wflign_affine_wavefront(
                         // 2) Match, alignment performed
                         out_tsv << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
                     }
+                    //std::cerr << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
+
+                    if (emit_svg) {
+                        high_order_dp_matrix.emplace_back(v, h, (alignment_performed ? (aln->ok ? 2 : 1) : 0));
+
+//                        plt.scatter({(float)v},{(float)h}).marker("s").c(alignment_performed ? (aln->ok ? match_wfa : mismatch_wfa) : mismatch_mash);
+//                        if (alignment_performed) {
+//                            if (aln->ok) {
+//                                x_match_wfa.push_back((float)v); y_match_wfa.push_back((float)h);
+//                            } else {
+//                                x_mismatch_wfa.push_back((float)v); y_mismatch_wfa.push_back((float)h);
+//                            }
+//                        } else {
+//                            x_mismatch_mash.push_back((float)v); y_mismatch_mash.push_back((float)h);
+//                        }
+                    }
+
                     ++num_alignments;
                     if (alignment_performed) {
                         ++num_alignments_performed;
@@ -470,6 +512,64 @@ void wflign_affine_wavefront(
                 //p.second = nullptr;
             }
         }
+
+        if (emit_svg) {
+            const algorithms::color_t COLOR_RED = { 0xffff0000 };
+            const algorithms::color_t COLOR_GREEN= { 0xff00ff00 };
+            const algorithms::color_t COLOR_BLUE= { 0xff0000ff };
+
+            int width = 10000;
+            int height = 10000;
+            int source_width = 10000;
+            int source_height = 10000;
+            double scale = 1.0;
+            double x_off = 0, y_off = 0;
+            float line_width = 1.0;
+            int source_min_x = 0, source_min_y = 0;
+
+            algorithms::atomic_image_buf_t image(width, height,
+                                     source_width, source_height,
+                                     source_min_x, source_min_y);
+
+            for (auto high_order_DP_cell: high_order_dp_matrix) {
+                algorithms::xy_d_t xy0 = {
+                        (std::get<0>(high_order_DP_cell) * scale) - x_off,
+                        (std::get<1>(high_order_DP_cell) * scale) + y_off
+                };
+                xy0.into(source_min_x, source_min_y,
+                         source_width, source_height,
+                         2, 2,
+                         width-4, height-4);
+                const uint8_t cell_type = std::get<2>(high_order_DP_cell);
+                // 0) Mis-match, alignment skipped
+                // 1) Mis-match, alignment performed
+                // 2) Match, alignment performed
+                wflign::algorithms::wu_calc_wide_line(xy0, xy0, (cell_type == 0 ? COLOR_RED : (cell_type == 1 ? COLOR_BLUE : COLOR_GREEN)), image, line_width);
+            }
+
+            auto bytes = image.to_bytes();
+            const std::string filename = "/home/guarracino/ciao.png";
+            encodeOneStep(filename.c_str(), bytes, width, height);
+        }
+
+//        std::cerr << "CIAO 1\n";
+//        if (emit_svg) {
+//            std::cerr << " x_match_wfa.size(): " << x_match_wfa.size() << std::endl;
+//            if (!x_match_wfa.empty()) {
+//                plt.scatter(x_match_wfa, y_match_wfa).marker("s").c(match_wfa);
+//            }
+//            std::cerr << " x_mismatch_wfa.size(): " << x_mismatch_wfa.size() << std::endl;
+//            if (!x_mismatch_wfa.empty()) {
+//                plt.scatter(x_mismatch_wfa, y_mismatch_wfa).marker("s").c(mismatch_wfa);
+//            }
+//            std::cerr << " x_mismatch_mash.size(): " << x_mismatch_mash.size() << std::endl;
+//            if (!x_mismatch_mash.empty()) {
+//                plt.scatter(x_mismatch_mash, y_mismatch_mash).marker("s").c(mismatch_mash);
+//            }
+//            std::cerr << "CIAO 2\n";
+//            plt.savefig("/home/guarracino/ciao.svg");
+//        }
+//        std::cerr << "CIAO 3\n";
 
         const long elapsed_time_wflambda_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(

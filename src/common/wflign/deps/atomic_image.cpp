@@ -4,9 +4,35 @@
 
 // Xiaolin Wu's Line Algorithm
 
-namespace odgi {
+namespace wflign {
 
 namespace algorithms {
+
+color_t hash_color(const std::string& s) {
+    // use a sha256 to get a few bytes that we'll use for a color
+    picosha2::byte_t hashed[picosha2::k_digest_size];
+    picosha2::hash256(s.begin(), s.end(), hashed, hashed + picosha2::k_digest_size);
+    uint8_t path_r = hashed[24];
+    uint8_t path_g = hashed[8];
+    uint8_t path_b = hashed[16];
+    double path_r_f = (double) path_r / (double) (std::numeric_limits<uint8_t>::max());
+    double path_g_f = (double) path_g / (double) (std::numeric_limits<uint8_t>::max());
+    double path_b_f = (double) path_b / (double) (std::numeric_limits<uint8_t>::max());
+    double sum = path_r_f + path_g_f + path_b_f;
+    path_r_f /= sum;
+    path_g_f /= sum;
+    path_b_f /= sum;
+    double f = std::min(1.5, 1.0 / std::max(std::max(path_r_f, path_g_f), path_b_f));
+    color_t c;
+    c.c.r = (uint8_t) std::round(255 * std::min(path_r_f * f, (double) 1.0));
+    c.c.g = (uint8_t) std::round(255 * std::min(path_g_f * f, (double) 1.0));
+    c.c.b = (uint8_t) std::round(255 * std::min(path_b_f * f, (double) 1.0));
+    //c.c.r = (uint8_t) std::round(255 * std::min(path_r_f, (double) 1.0));
+    //c.c.g = (uint8_t) std::round(255 * std::min(path_g_f, (double) 1.0));
+    //c.c.b = (uint8_t) std::round(255 * std::min(path_b_f, (double) 1.0));
+    c.c.a = 255;
+    return c;
+}
 
 std::ostream& operator<<(std::ostream& out, const color_t& c) {
     out << "(" << (int)c.c.r << "," << (int)c.c.g << "," << (int)c.c.b << "," << (int)c.c.a << ")";
