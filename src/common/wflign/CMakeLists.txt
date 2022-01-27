@@ -23,9 +23,9 @@ add_subdirectory(deps/wflambdav2 EXCLUDE_FROM_ALL)
 add_subdirectory(deps/WFAv2 EXCLUDE_FROM_ALL)
 
 add_executable(wflign
-        deps/atomic_image.cpp
-        deps/lodepng/lodepng.cpp
-        deps/atomic_image.cpp
+  deps/atomic_image.cpp
+  deps/lodepng/lodepng.cpp
+  deps/atomic_image.cpp
   src/wflign_wfa.cpp
   src/wfa_edit_callback.cpp
   src/rkmh.cpp
@@ -35,28 +35,25 @@ target_include_directories(wflign PRIVATE
   deps/)
 
 target_link_libraries(wflign
-        lodepng
-        picosha256
   wfa
   wflambda
   z
-atomic_image
   )
 
 add_library(libwflign_static STATIC
-        deps/atomic_image.cpp
+  deps/atomic_image.cpp
   deps/lodepng/lodepng.cpp
   deps/atomic_image.cpp
-        src/wflign_wfa.cpp
-        src/wfa_edit_callback.cpp
-        src/rkmh.cpp
-        src/murmur3.cpp
+  src/wflign_wfa.cpp
+  src/wfa_edit_callback.cpp
+  src/rkmh.cpp
+  src/murmur3.cpp
   )
 set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
 target_include_directories(libwflign_static PRIVATE
   deps/
   deps/lodepng
-        deps/PicoSHA2
+  deps/PicoSHA2
   deps/robin-hood-hashing
   deps/wflambdav2
   deps/WFAv2

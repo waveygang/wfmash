@@ -236,6 +236,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 void wflign_affine_wavefront(
     std::ostream &out,
     const bool &emit_tsv, std::ostream &out_tsv,
+    const std::string &wfplot_filepath, const uint64_t &wfplot_max_size,
     const bool &merge_alignments,
     const bool &emit_md_tag,
     const bool &paf_format_else_sam, const bool &seq_in_sam,
