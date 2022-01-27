@@ -374,7 +374,7 @@ void wflign_affine_wavefront(
                                                                            false);
 
         bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
-        std::vector<std::tuple<int, int, uint8_t>> high_order_dp_matrix;
+        std::vector<std::tuple<int, int>> high_order_dp_matrix_mismatch;
 
         int v_max = 0;
         int h_max = 0;
@@ -412,10 +412,6 @@ void wflign_affine_wavefront(
                     }
                     //std::cerr << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
 
-                    if (emit_png) {
-                        high_order_dp_matrix.emplace_back(v, h, (alignment_performed ? (aln->ok ? 2 : 1) : 0));
-                    }
-
                     ++num_alignments;
                     if (alignment_performed) {
                         ++num_alignments_performed;
@@ -424,6 +420,12 @@ void wflign_affine_wavefront(
                             alignments[k] = aln;
                         } else {
                             alignments[k] = nullptr;
+                        }
+                    } else {
+                        if (emit_png) {
+                            // Save only the mismatche not cached
+                            //high_order_dp_matrix.emplace_back(v, h, (alignment_performed ? (aln->ok ? 2 : 1) : 0));
+                            high_order_dp_matrix_mismatch.emplace_back(v, h);
                         }
                     }
                     if (!is_a_match) {
@@ -486,15 +488,14 @@ void wflign_affine_wavefront(
                                   trace_match, pattern_length, text_length);
         wflambda::wavefront_aligner_delete(wflambda_aligner);
 
-        for (const auto &p : alignments) {
-            if (p.second != nullptr && !p.second->keep) {
-                delete p.second;
-                //p.second = nullptr;
-            }
-        }
-
         if (emit_png) {
-            const algorithms::color_t COLOR_RED = { 0xff0000ff };
+            const int wfplot_vmin = 0, wfplot_vmax = v_max;
+            const int wfplot_hmin = 0, wfplot_hmax = h_max;
+
+            int v_max = wfplot_vmax - wfplot_vmin;
+            int h_max = wfplot_hmax - wfplot_hmin;
+
+            const algorithms::color_t COLOR_RED = { 0xff0000aa };
             const algorithms::color_t COLOR_GREEN = { 0xff00ff00 };
             const algorithms::color_t COLOR_BLUE = { 0xffff0000 };
 
@@ -513,20 +514,39 @@ void wflign_affine_wavefront(
                                      source_width, source_height,
                                      source_min_x, source_min_y);
 
-            for (auto high_order_DP_cell: high_order_dp_matrix) {
-                algorithms::xy_d_t xy0 = {
-                        (std::get<0>(high_order_DP_cell) * scale) - x_off,
-                        (std::get<1>(high_order_DP_cell) * scale) + y_off
-                };
-                xy0.into(source_min_x, source_min_y,
-                         source_width, source_height,
-                         2, 2,
-                         width-4, height-4);
-                const uint8_t cell_type = std::get<2>(high_order_DP_cell);
-                // 0) Mis-match, alignment skipped
-                // 1) Mis-match, alignment performed
-                // 2) Match, alignment performed
-                wflign::algorithms::wu_calc_wide_line(xy0, xy0, (cell_type == 0 ? COLOR_RED : (cell_type == 1 ? COLOR_BLUE : COLOR_GREEN)), image, line_width);
+            for (const auto &p : alignments) {
+                int v, h;
+                decode_pair(p.first, &v, &h);
+
+                if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                    algorithms::xy_d_t xy0 = {
+                            (v * scale) - x_off,
+                            (h * scale) + y_off
+                    };
+                    xy0.into(source_min_x, source_min_y,
+                             source_width, source_height,
+                             2, 2,
+                             width-4, height-4);
+
+                    wflign::algorithms::wu_calc_wide_line(xy0, xy0, p.second != nullptr ? COLOR_GREEN : COLOR_BLUE, image, line_width);
+                }
+            }
+
+            for (auto high_order_DP_cell: high_order_dp_matrix_mismatch) {
+                const int v = std::get<0>(high_order_DP_cell);
+                const int h = std::get<1>(high_order_DP_cell);
+
+                if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
+                    algorithms::xy_d_t xy0 = {
+                            (v * scale) - x_off,
+                            (h * scale) + y_off
+                    };
+                    xy0.into(source_min_x, source_min_y,
+                             source_width, source_height,
+                             2, 2,
+                             width-4, height-4);
+                    wflign::algorithms::wu_calc_wide_line(xy0, xy0, COLOR_RED, image, line_width);
+                }
             }
 
             auto bytes = image.to_bytes();
@@ -534,6 +554,13 @@ void wflign_affine_wavefront(
                     query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
                     "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length);
             encodeOneStep(filename.c_str(), bytes, width, height);
+        }
+
+        for (const auto &p : alignments) {
+            if (p.second != nullptr && !p.second->keep) {
+                delete p.second;
+                //p.second = nullptr;
+            }
         }
 
         const long elapsed_time_wflambda_ms =

@@ -227,6 +227,11 @@ inline uint64_t encode_pair(int v, int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
 
+inline void decode_pair(uint64_t  pair, int *v, int *h) {
+    *v = pair >> 32;
+    *h = pair & 0x00000000FFFFFFFF;
+}
+
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
     const uint64_t& target_length,
