@@ -471,8 +471,11 @@ void parse_args(int argc,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
 
+            // Avoid tiny windows to improve runtime
+            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize*2, windowSize);
+
             // Avoid too big values to improve the accuracy
-            map_parameters.windowSize = std::min((int64_t)256, windowSize);
+            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
         }
     }
 
