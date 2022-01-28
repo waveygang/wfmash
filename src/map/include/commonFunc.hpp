@@ -11,6 +11,7 @@
 #include <deque>
 #include <cmath>
 #include <fstream>
+#include <limits>
 
 //Own includes
 #include "map/include/map_parameters.hpp"
@@ -332,6 +333,9 @@ namespace skch {
             //Compute reverse complement of seq
             char *seqRev = new char[len];
 
+            // get our sampling fraction
+            hash_t samplingBound = std::numeric_limits<hash_t>::max() / samplingFactor;
+
             if (alphabetSize == 4) //not protein
                 CommonFunc::reverseComplement(seq, seqRev, len);
 
@@ -345,10 +349,10 @@ namespace skch {
                 else  //proteins
                     hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
                 if (hashBwd != hashFwd) { // consider non-symmetric kmers only
-                    if (hashFwd % samplingFactor == 0) {
+                    if (hashFwd < samplingBound) {
                         minimizerIndex.push_back(MinimizerInfo{hashFwd, seqCounter, i, strnd::FWD});
                     }
-                    if (hashBwd % samplingFactor == 0) {
+                    if (hashBwd < samplingBound) {
                         minimizerIndex.push_back(MinimizerInfo{hashBwd, seqCounter, i, strnd::REV});
                     }
                 }
