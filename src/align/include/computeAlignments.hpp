@@ -119,8 +119,8 @@ namespace align
         while (ss >> word)
           tokens.push_back(word);
 
-        //We expect and need at least these many values in a mashmap mapping
-        assert(tokens.size() >= 9);
+        //We expect and need at least these many values in a mashmap mapping/input paf
+        assert(tokens.size() >= 15);
 
         // Extract the mashmap identity from the string
         const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
@@ -186,7 +186,6 @@ namespace align
                   }
               }
           }
-
           progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
 
           // input atomic queue
@@ -418,7 +417,7 @@ namespace align
           outstrm_qgsr.close();
 
           // Compute the mapping quality for each portion of each query
-          robin_hood::unordered_flat_map<std::string, robin_hood::unordered_flat_map<uint64_t, robin_hood::unordered_flat_map<uint64_t, double>>> query_to_group_to_rank_to_mapq;
+          robin_hood::unordered_flat_map<std::string, robin_hood::unordered_flat_map<uint64_t, robin_hood::unordered_flat_map<uint64_t, uint8_t>>> query_to_group_to_rank_to_mapq;
           {
               // Read query, group, score, rank information
               robin_hood::unordered_flat_map<std::string, robin_hood::unordered_flat_map<uint64_t, std::vector<std::tuple<double, uint32_t>>>> query_to_group_to_score_and_rank;
@@ -435,7 +434,7 @@ namespace align
               }
 
               // Compute the mapping quality
-              static const double quality_scale_factor = 10.0 / log(10.0);
+              static const double quality_scale_factor = 10.0 * 13.81 / log(10.0); // In a way that a perfect 200bp-match would have MAPQ = quality_scale_factor * log(200*1) ~ 60
               for (const auto& query_and_info: query_to_group_to_score_and_rank) {
                   for (const auto& group_and_info : query_and_info.second) {
                       std::vector<std::tuple<double, uint32_t>> logscaledscore_and_rank;
@@ -448,13 +447,13 @@ namespace align
                       });
 
                       const double second_score = logscaledscore_and_rank.size() == 1 ? 0.0 : std::get<0>(logscaledscore_and_rank[1]);
-                      const double mapq = min(60.0, max(0.0, quality_scale_factor * (std::get<0>(logscaledscore_and_rank[0]) - second_score)));
+                      const uint8_t mapq = min((uint64_t)60, (uint64_t)max(0.0, quality_scale_factor * (std::get<0>(logscaledscore_and_rank[0]) - second_score)));
 
                       for (int i = 0; i < logscaledscore_and_rank.size(); ++i) {
                           const uint32_t rank_mapping = std::get<1>(logscaledscore_and_rank[i]);
 
                           // If there is more than 1 mapping, from the second on they will have mapq equals to 0
-                          query_to_group_to_rank_to_mapq[query_and_info.first][group_and_info.first][rank_mapping] = (i == 0 ? mapq : 0.0);
+                          query_to_group_to_rank_to_mapq[query_and_info.first][group_and_info.first][rank_mapping] = (i == 0 ? mapq : 0);
                       }
                   }
                   //std::cerr << fixed << std::setprecision(2)

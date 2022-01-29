@@ -2391,7 +2391,9 @@ query_start : query_end)
             }
         };
 
-        const double score = ((double)(query_end - query_start)) * gap_compressed_identity;
+        //const double score = ((double)(query_end - query_start)) * gap_compressed_identity;
+        //const double score = ((double)matches) * gap_compressed_identity;
+        const double score = ((double)matches) * block_identity;
 
         const long elapsed_time_patching_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(

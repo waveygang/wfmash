@@ -129,6 +129,7 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Sort by query id
         std::sort(allReadMappings.begin(), allReadMappings.end(), [&seqName_to_seqCounterAndLen](const align::MappingBoundaryRow &a, const align::MappingBoundaryRow &b)
         {
             return (seqName_to_seqCounterAndLen[a.qId].first < seqName_to_seqCounterAndLen[b.qId].first);
@@ -150,6 +151,8 @@ int main(int argc, char** argv) {
             << "\t" << std::max(e.rEndPos - e.rStartPos, e.qEndPos - e.qStartPos)
             << "\t" << 255
             << "\t" << "id:f:" << e.mashmap_estimated_identity * 100.0
+            << "\t" << "gr:i:" << e.group_mapping
+            << "\t" << "rl:i:" << e.rank_mapping
             << "\n";
         }
     }
