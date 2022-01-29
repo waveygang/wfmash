@@ -289,6 +289,16 @@ void parse_args(int argc,
         map_parameters.segLength = 5000;
     }
 
+    if (map_pct_identity) {
+        if (args::get(map_pct_identity) < 70) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%." << std::endl;
+            exit(1);
+        }
+        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
+    } else {
+        map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+    }
+
     if (block_length_min) {
         const int64_t l = wfmash::handy_parameter(args::get(block_length_min));
 
@@ -299,17 +309,17 @@ void parse_args(int argc,
 
         map_parameters.block_length_min = l;
     } else {
-        map_parameters.block_length_min = 3 * map_parameters.segLength;
-    }
-
-    if (map_pct_identity) {
-        if (args::get(map_pct_identity) < 70) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%." << std::endl;
-            exit(1);
+        // Automatic block length selection based on mapping identity bound.
+        // We scale the block length minimum by the mapping target divergence:
+        //  - at low divergence, we might expect many segment mappings to occur in a row,
+        //  - but at high divergence, this assumption may no longer hold due to SVs.
+        if (map_parameters.percentageIdentity > 0.95) {
+            map_parameters.block_length_min = 3 * map_parameters.segLength;
+        } else if (map_parameters.percentageIdentity > 0.90) {
+            map_parameters.block_length_min = 2 * map_parameters.segLength;
+        } else {
+            map_parameters.block_length_min = 0;
         }
-        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
-    } else {
-        map_parameters.percentageIdentity = skch::fixed::percentage_identity;
     }
 
     if (keep_low_map_pct_identity) {
