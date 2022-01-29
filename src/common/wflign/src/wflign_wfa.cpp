@@ -374,7 +374,7 @@ void wflign_affine_wavefront(
                                                                            false);
 
         bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
-        std::vector<std::tuple<int, int>> high_order_dp_matrix_mismatch;
+        robin_hood::unordered_set<uint64_t> high_order_dp_matrix_mismatch;
 
         int v_max = 0;
         int h_max = 0;
@@ -423,9 +423,8 @@ void wflign_affine_wavefront(
                         }
                     } else {
                         if (emit_png) {
-                            // Save only the mismatche not cached
-                            //high_order_dp_matrix.emplace_back(v, h, (alignment_performed ? (aln->ok ? 2 : 1) : 0));
-                            high_order_dp_matrix_mismatch.emplace_back(v, h);
+                            // Save only the mismatches, as they are not cached
+                            high_order_dp_matrix_mismatch.insert(encode_pair(v, h));
                         }
                     }
                     if (!is_a_match) {
@@ -495,9 +494,9 @@ void wflign_affine_wavefront(
             int v_max = wfplot_vmax - wfplot_vmin;
             int h_max = wfplot_hmax - wfplot_hmin;
 
-            const algorithms::color_t COLOR_RED = { 0xff0000aa };
-            const algorithms::color_t COLOR_GREEN = { 0xff00ff00 };
-            const algorithms::color_t COLOR_BLUE = { 0xffff0000 };
+            const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
+            const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
+            const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
 
             const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
 
@@ -510,53 +509,16 @@ void wflign_affine_wavefront(
             const double line_width = 1.0;
             const double source_min_x = 0, source_min_y = 0;
 
-            // Full plot
-            {
-                algorithms::atomic_image_buf_t image(width, height,
-                                                     source_width, source_height,
-                                                     source_min_x, source_min_y);
-
-                for (const auto &p : alignments) {
-                    int v, h;
-                    decode_pair(p.first, &v, &h);
-
-                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
-                        algorithms::xy_d_t xy0 = {
-                                (v * scale) - x_off,
-                                (h * scale) + y_off
-                        };
-                        xy0.into(source_min_x, source_min_y,
-                                 source_width, source_height,
-                                 2, 2,
-                                 width-4, height-4);
-
-                        wflign::algorithms::wu_calc_wide_line(xy0, xy0, p.second != nullptr ? COLOR_GREEN : COLOR_BLUE, image, line_width);
-                    }
-                }
-
-                for (auto high_order_DP_cell: high_order_dp_matrix_mismatch) {
-                    const int v = std::get<0>(high_order_DP_cell);
-                    const int h = std::get<1>(high_order_DP_cell);
-
-                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
-                        algorithms::xy_d_t xy0 = {
-                                (v * scale) - x_off,
-                                (h * scale) + y_off
-                        };
-                        xy0.into(source_min_x, source_min_y,
-                                 source_width, source_height,
-                                 2, 2,
-                                 width-4, height-4);
-                        wflign::algorithms::wu_calc_wide_line(xy0, xy0, COLOR_RED, image, line_width);
-                    }
-                }
-
-                auto bytes = image.to_bytes();
-                const std::string filename = prefix_wavefront_plot_in_png +
-                        query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";;
-                encodeOneStep(filename.c_str(), bytes, width, height);
-            }
+            auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
+                    ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                                            image.layer_pixel(point.x, point.y, color);
+                                        }
+                    : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                                            wflign::algorithms::wu_calc_wide_line(
+                                                    point, point,
+                                                    color,
+                                                    image);
+                                        };
 
             // Plot with only fragments belonging to the best alignment (that is, only the anchors)
             {
@@ -576,10 +538,10 @@ void wflign_affine_wavefront(
                             };
                             xy0.into(source_min_x, source_min_y,
                                      source_width, source_height,
-                                     2, 2,
-                                     width-4, height-4);
+                                     0, 0,
+                                     width, height);
 
-                            wflign::algorithms::wu_calc_wide_line(xy0, xy0, COLOR_GREEN, image, line_width);
+                            plot_point(xy0, image, COLOR_WFA_MATCH);
                         }
                     }
                 }
@@ -588,6 +550,55 @@ void wflign_affine_wavefront(
                 const std::string filename = prefix_wavefront_plot_in_png +
                         query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
                         "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".anchors.png";
+                encodeOneStep(filename.c_str(), bytes, width, height);
+            }
+
+            // Full plot
+            {
+                algorithms::atomic_image_buf_t image(width, height,
+                                                     source_width, source_height,
+                                                     source_min_x, source_min_y);
+
+                for (const auto &p : alignments) {
+                    int v, h;
+                    decode_pair(p.first, &v, &h);
+
+                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                        algorithms::xy_d_t xy0 = {
+                                (v * scale) - x_off,
+                                (h * scale) + y_off
+                        };
+                        xy0.into(source_min_x, source_min_y,
+                                 source_width, source_height,
+                                 0, 0,
+                                 width, height);
+
+                        plot_point(xy0, image, p.second != nullptr ? COLOR_WFA_MATCH : COLOR_WFA_MISMATCH);
+                    }
+                }
+
+                for (auto high_order_DP_cell: high_order_dp_matrix_mismatch) {
+                    int v, h;
+                    decode_pair(high_order_DP_cell, &v, &h);
+
+                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
+                        algorithms::xy_d_t xy0 = {
+                                (v * scale) - x_off,
+                                (h * scale) + y_off
+                        };
+                        xy0.into(source_min_x, source_min_y,
+                                 source_width, source_height,
+                                 0, 0,
+                                 width, height);
+
+                        plot_point(xy0, image, COLOR_MASH_MISMATCH);
+                    }
+                }
+
+                auto bytes = image.to_bytes();
+                const std::string filename = prefix_wavefront_plot_in_png +
+                        query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";;
                 encodeOneStep(filename.c_str(), bytes, width, height);
             }
         }

@@ -251,7 +251,7 @@ void wu_rekt(xy_d_t xy0, xy_d_t xy1,
         [&](const xy_d_t& p) {
             return l0.lte(p) && l1.lte(p) && l2.gt(p) && l3.gt(p);
         };
-    
+
     xy_d_t l = { u_ipart(min_x), u_ipart(min_y) };
     xy_d_t h = { u_ipart(max_x), u_ipart(max_y) };
     // search the bounding box +/- 1 for pixels inside our bounds
