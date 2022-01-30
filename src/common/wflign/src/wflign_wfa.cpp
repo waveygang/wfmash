@@ -495,7 +495,7 @@ void wflign_affine_wavefront(
             int h_max = wfplot_hmax - wfplot_hmin;
 
             const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
-            const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
+            const algorithms::color_t COLOR_WFA_MISMATCH = { 0xff0000ff };
             const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
 
             const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
