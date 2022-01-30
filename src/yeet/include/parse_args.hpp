@@ -316,9 +316,9 @@ void parse_args(int argc,
         if (map_parameters.percentageIdentity > 0.95) {
             map_parameters.block_length_min = 3 * map_parameters.segLength;
         } else if (map_parameters.percentageIdentity > 0.90) {
-            map_parameters.block_length_min = 2 * map_parameters.segLength;
+            map_parameters.block_length_min = 2.5 * map_parameters.segLength;
         } else {
-            map_parameters.block_length_min = 0;
+            map_parameters.block_length_min = 2 * map_parameters.segLength;
         }
     }
 
