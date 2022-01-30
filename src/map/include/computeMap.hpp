@@ -299,7 +299,7 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
 
-        if(! param.split || input->len < param.segLength || input->len <= param.block_length_min * 2)
+        if(! param.split || input->len < param.segLength || input->len <= param.block_length_min)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
