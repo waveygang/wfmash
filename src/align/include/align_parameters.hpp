@@ -37,7 +37,7 @@ struct Parameters {
     float wflign_max_mash_dist;
     uint64_t wflign_max_len_major;
     uint64_t wflign_max_len_minor;
-    uint16_t wflign_erode_k;
+    int wflign_erode_k;
     int kmerSize;                                 //kmer size for pre-checking before aligning a fragment
 
     std::vector<std::string> refSequences;        //reference sequence(s)

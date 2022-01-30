@@ -63,7 +63,7 @@ void wflign_affine_wavefront(
     const int &wflign_gap_extension_score,
     const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k) {
+    const int& _erode_k) {
 
     if (query_offset + query_length > query_total_length ||
         target_offset + target_length > target_total_length) {
@@ -123,6 +123,25 @@ void wflign_affine_wavefront(
                     .gap_extension = 1,
                     };
             minhash_kmer_size = 13;
+        }
+    }
+
+    int erode_k = 0;
+
+    // Set erosion
+    if (_erode_k >= 0) {
+        erode_k = _erode_k;
+    } else { // scale it automatically
+        if (mashmap_estimated_identity >= 0.99999) {
+            erode_k = 137;
+        } else if (mashmap_estimated_identity >= 0.97) {
+            erode_k = 73;
+        } else if (mashmap_estimated_identity >= 0.9) {
+            erode_k = 29;
+        } else if (mashmap_estimated_identity >= 0.8) {
+            erode_k = 19;
+        } else {
+            erode_k = 13;
         }
     }
 
@@ -299,21 +318,32 @@ void wflign_affine_wavefront(
             }
         }
 
-        float max_mash_dist_to_evaluate;
+        float max_mash_dist_to_evaluate = 1;
+        float mash_sketch_rate = 1;
+        float inception_score_max_ratio = 2;
         if (wflign_max_mash_dist > 0) {
             max_mash_dist_to_evaluate = wflign_max_mash_dist;
+            // TODO set other params here, when the max dist is manually given
         } else {
             // heuristic bound on the max mash dist, adaptive based on estimated
             // identity the goal here is to sparsify the set of alignments in the
             // wflambda layer we then patch up the gaps between them
             if (mashmap_estimated_identity >= 0.97) {
                 max_mash_dist_to_evaluate = 0.05;
+                mash_sketch_rate = 0.125;
+                inception_score_max_ratio = 0.75 + mashmap_estimated_identity;
             } else if (mashmap_estimated_identity >= 0.9) {
-                max_mash_dist_to_evaluate = 0.2;
+                max_mash_dist_to_evaluate = 0.5;
+                mash_sketch_rate = 0.25;
+                inception_score_max_ratio = 1.5 + mashmap_estimated_identity;
             } else if (mashmap_estimated_identity >= 0.8) {
-                max_mash_dist_to_evaluate = 0.7;
-            } else if (mashmap_estimated_identity >= 0.7) {
                 max_mash_dist_to_evaluate = 0.9;
+                mash_sketch_rate = 0.35;
+                inception_score_max_ratio = 2 + mashmap_estimated_identity;
+            } else { //if (mashmap_estimated_identity >= 0.7) {
+                max_mash_dist_to_evaluate = 0.95;
+                mash_sketch_rate = 0.5;
+                inception_score_max_ratio = 3 + mashmap_estimated_identity;
             }
         }
 
@@ -386,7 +416,9 @@ void wflign_affine_wavefront(
                             segment_length_to_use_q,
                             segment_length_to_use_t,
                             step_size, minhash_kmer_size, wfa_min_wavefront_length,
-                            wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
+                            wfa_max_distance_threshold,
+                            max_mash_dist_to_evaluate, mash_sketch_rate,
+                            inception_score_max_ratio,
                             wf_aligner, &wfa_affine_penalties, *aln);
                     if (emit_tsv) {
                         // 0) Mis-match, alignment skipped
@@ -683,22 +715,27 @@ bool do_wfa_segment_alignment(
     const uint64_t &i,
     const uint16_t &segment_length_q,
     const uint16_t &segment_length_t,
-    const uint16_t &step_size, const uint64_t &minhash_kmer_size,
+    const uint16_t &step_size,
+    const uint64_t &minhash_kmer_size,
     const int &min_wavefront_length,
-    const int &max_distance_threshold, const float &max_mash_dist, const float& mashmap_estimated_identity,
+    const int &max_distance_threshold,
+    const float &max_mash_dist,
+    const float &mash_sketch_rate,
+    const float &inception_score_max_ratio,
     wfa::wavefront_aligner_t *const wf_aligner,
-    wfa::affine_penalties_t *const affine_penalties, alignment_t &aln) {
+    wfa::affine_penalties_t *const affine_penalties,
+    alignment_t &aln) {
 
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
         *query_sketch = rkmh::hash_sequence(
-            query + j, segment_length_q, minhash_kmer_size, segment_length_q / 8);
+            query + j, segment_length_q, minhash_kmer_size, segment_length_q * mash_sketch_rate);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
         *target_sketch = rkmh::hash_sequence(
-            target + i, segment_length_t, minhash_kmer_size, segment_length_t / 8);
+            target + i, segment_length_t, minhash_kmer_size, segment_length_t * mash_sketch_rate);
     }
 
     // first check if our mash dist is inbounds
@@ -715,7 +752,7 @@ bool do_wfa_segment_alignment(
     } else {
         // if it is, we'll align
 
-        const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
+        const int max_score = std::max(segment_length_q, segment_length_t) * inception_score_max_ratio;
 
         wfa::wavefront_aligner_resize(wf_aligner, segment_length_t,
                                              segment_length_q);
@@ -882,7 +919,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = 2 * std::max(target_length, query_length);
+    const int max_score = 5 * std::max(target_length, query_length);
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
@@ -1128,7 +1165,7 @@ void write_merged_alignment(
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     const float &mashmap_estimated_identity,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k,
+    const int &erode_k,
     const int &min_wf_length, const int &max_dist_threshold,
     const bool &with_endline) {
 
