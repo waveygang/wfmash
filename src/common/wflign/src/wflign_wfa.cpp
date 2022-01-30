@@ -172,12 +172,18 @@ void wflign_affine_wavefront(
             erode_k = 79;
         } else if (mashmap_estimated_identity >= 0.97) {
             erode_k = 47;
-        } else if (mashmap_estimated_identity >= 0.9) {
+        } else if (mashmap_estimated_identity >= 0.95) {
             erode_k = 29;
-        } else if (mashmap_estimated_identity >= 0.8) {
+        } else if (mashmap_estimated_identity >= 0.9) {
             erode_k = 19;
-        } else {
+        } else if (mashmap_estimated_identity >= 0.85) {
+            erode_k = 15;
+        } else if (mashmap_estimated_identity >= 0.8) {
             erode_k = 13;
+        } else if (mashmap_estimated_identity >= 0.75) {
+            erode_k = 11;
+        } else {
+            erode_k = 9;
         }
     }
 
@@ -339,17 +345,29 @@ void wflign_affine_wavefront(
                 max_mash_dist_to_evaluate = 0.05;
                 mash_sketch_rate = 0.125;
                 inception_score_max_ratio = 2;
-            } else if (mashmap_estimated_identity >= 0.9) {
+            } else if (mashmap_estimated_identity >= 0.95) {
                 max_mash_dist_to_evaluate = 0.1;
                 mash_sketch_rate = 0.25;
-                inception_score_max_ratio = 3;
-            } else if (mashmap_estimated_identity >= 0.8) {
-                max_mash_dist_to_evaluate = 0.3;
-                mash_sketch_rate = 0.30;
-                inception_score_max_ratio = 4;
-            } else { //if (mashmap_estimated_identity >= 0.7) {
-                max_mash_dist_to_evaluate = 0.75;
+                inception_score_max_ratio = 2.25;
+            } else if (mashmap_estimated_identity >= 0.9) {
+                max_mash_dist_to_evaluate = 0.2;
+                mash_sketch_rate = 0.3;
+                inception_score_max_ratio = 2.5;
+            } else if (mashmap_estimated_identity >= 0.85) {
+                max_mash_dist_to_evaluate = 0.5;
                 mash_sketch_rate = 0.35;
+                inception_score_max_ratio = 3;
+            } else if (mashmap_estimated_identity >= 0.80) {
+                max_mash_dist_to_evaluate = 0.75;
+                mash_sketch_rate = 0.5;
+                inception_score_max_ratio = 4;
+            } else if (mashmap_estimated_identity >= 0.75) {
+                max_mash_dist_to_evaluate = 0.85;
+                mash_sketch_rate = 0.6;
+                inception_score_max_ratio = 4.5;
+            } else { //
+                max_mash_dist_to_evaluate = 0.95;
+                mash_sketch_rate = 0.75;
                 inception_score_max_ratio = 5;
             }
         }
