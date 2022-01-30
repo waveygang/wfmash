@@ -20,8 +20,8 @@ namespace wflign {
 namespace wavefront {
 
 #define MAX_LEN_FOR_PURE_WFA    50000
-#define MIN_WF_LENGTH           256
-#define MAX_DIST_THRESHOLD      4096
+#define MIN_WF_LENGTH           512
+#define MAX_DIST_THRESHOLD      8192
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
@@ -97,44 +97,68 @@ void wflign_affine_wavefront(
     } else {
         if (mashmap_estimated_identity >= 0.99999) {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 15,
-                    .gap_opening = 25,
-                    .gap_extension = 1,
-                    };
-            minhash_kmer_size = 17;
+                .match = 0,
+                .mismatch = 15,
+                .gap_opening = 25,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 19;
         } else if (mashmap_estimated_identity >= 0.97) {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 9,
-                    .gap_opening = 13,
-                    .gap_extension = 1,
-                    };
+                .match = 0,
+                .mismatch = 13,
+                .gap_opening = 21,
+                .gap_extension = 1,
+            };
             minhash_kmer_size = 17;
-        } else if (mashmap_estimated_identity >= 0.9) {
+        } else if (mashmap_estimated_identity >= 0.95) {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 7,
-                    .gap_opening = 11,
-                    .gap_extension = 1,
-                    };
-            minhash_kmer_size = 16;
-        } else if (mashmap_estimated_identity >= 0.8) {
-            wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 3,
-                    .gap_opening = 5,
-                    .gap_extension = 1,
-                    };
+                .match = 0,
+                .mismatch = 11,
+                .gap_opening = 17,
+                .gap_extension = 1,
+            };
             minhash_kmer_size = 15;
+        } else if (mashmap_estimated_identity >= 0.90) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 7,
+                .gap_opening = 11,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 13;
+        } else if (mashmap_estimated_identity >= 0.85) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 6,
+                .gap_opening = 9,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 11;
+        } else if (mashmap_estimated_identity >= 0.80) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 5,
+                .gap_opening = 8,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 11;
+        } else if (mashmap_estimated_identity >= 0.75) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 4,
+                .gap_opening = 6,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 11;
         } else {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 2,
-                    .gap_opening = 4,
-                    .gap_extension = 1,
-                    };
-            minhash_kmer_size = 13;
+                .match = 0,
+                .mismatch = 3,
+                .gap_opening = 5,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 9;
         }
     }
 
@@ -145,9 +169,9 @@ void wflign_affine_wavefront(
         erode_k = _erode_k;
     } else { // scale it automatically
         if (mashmap_estimated_identity >= 0.99999) {
-            erode_k = 137;
+            erode_k = 79;
         } else if (mashmap_estimated_identity >= 0.97) {
-            erode_k = 73;
+            erode_k = 47;
         } else if (mashmap_estimated_identity >= 0.9) {
             erode_k = 29;
         } else if (mashmap_estimated_identity >= 0.8) {
@@ -246,7 +270,8 @@ void wflign_affine_wavefront(
                 num_alignments_performed, mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor,
                 erode_k,
-                MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                prefix_wavefront_plot_in_png, wfplot_max_size);
 
         // Free
         wfa::wavefront_aligner_delete(wf_aligner);
@@ -292,42 +317,12 @@ void wflign_affine_wavefront(
                     .gap_extension = wflign_gap_extension_score
             };
         } else {
-            if (mashmap_estimated_identity >= 0.99999) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 17,
-                        .gap_opening = 27,
-                        .gap_extension = 1,
-                        };
-            } else if (mashmap_estimated_identity >= 0.97) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 13,
-                        .gap_opening = 21,
-                        .gap_extension = 1,
-                        };
-            } else if (mashmap_estimated_identity >= 0.9) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 9,
-                        .gap_opening = 14,
-                        .gap_extension = 1,
-                        };
-            } else if (mashmap_estimated_identity >= 0.8) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 7,
-                        .gap_opening = 11,
-                        .gap_extension = 1,
-                        };
-            } else {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 4,
-                        .gap_opening = 6,
-                        .gap_extension = 1,
-                        };
-            }
+            wflambda_affine_penalties = {
+                .match = wfa_affine_penalties.match,
+                .mismatch = wfa_affine_penalties.mismatch,
+                .gap_opening = wfa_affine_penalties.gap_opening,
+                .gap_extension = wfa_affine_penalties.gap_extension
+            };
         }
 
         float max_mash_dist_to_evaluate = 1;
@@ -343,19 +338,19 @@ void wflign_affine_wavefront(
             if (mashmap_estimated_identity >= 0.97) {
                 max_mash_dist_to_evaluate = 0.05;
                 mash_sketch_rate = 0.125;
-                inception_score_max_ratio = 0.75 + mashmap_estimated_identity;
+                inception_score_max_ratio = 2;
             } else if (mashmap_estimated_identity >= 0.9) {
-                max_mash_dist_to_evaluate = 0.5;
+                max_mash_dist_to_evaluate = 0.1;
                 mash_sketch_rate = 0.25;
-                inception_score_max_ratio = 1.5 + mashmap_estimated_identity;
+                inception_score_max_ratio = 3;
             } else if (mashmap_estimated_identity >= 0.8) {
-                max_mash_dist_to_evaluate = 0.9;
-                mash_sketch_rate = 0.35;
-                inception_score_max_ratio = 2 + mashmap_estimated_identity;
+                max_mash_dist_to_evaluate = 0.3;
+                mash_sketch_rate = 0.30;
+                inception_score_max_ratio = 4;
             } else { //if (mashmap_estimated_identity >= 0.7) {
-                max_mash_dist_to_evaluate = 0.95;
-                mash_sketch_rate = 0.5;
-                inception_score_max_ratio = 3 + mashmap_estimated_identity;
+                max_mash_dist_to_evaluate = 0.75;
+                mash_sketch_rate = 0.35;
+                inception_score_max_ratio = 5;
             }
         }
 
@@ -824,7 +819,7 @@ void wflign_affine_wavefront(
                         num_alignments_performed, mashmap_estimated_identity,
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
-                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD, "", 0);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -880,6 +875,7 @@ bool do_wfa_segment_alignment(
     // first check if our mash dist is inbounds
     const float mash_dist =
         rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    //std::cerr << "mash_dist is " << mash_dist << std::endl;
 
     // this threshold is set low enough that we tend to randomly sample wflambda
     // matrix cells for alignment the threshold is adaptive, based on the mash
@@ -1022,7 +1018,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     wfa::wavefront_aligner_t* const wf_aligner
         = big_wave ?
             get_wavefront_aligner(*affine_penalties,
-                                target_length,
+                                  target_length,
                                   query_length,
                                   true)
         : _wf_aligner;
@@ -1058,7 +1054,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = 5 * std::max(target_length, query_length);
+    const int max_score = 2 * std::max(target_length, query_length);
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
@@ -1306,6 +1302,7 @@ void write_merged_alignment(
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const int &erode_k,
     const int &min_wf_length, const int &max_dist_threshold,
+    const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -2344,6 +2341,7 @@ void write_merged_alignment(
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
             patching(erodev, pre_tracev);
+            //pre_tracev = erodev;
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -2374,6 +2372,7 @@ void write_merged_alignment(
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
         patching(pre_tracev, tracev);
+        //tracev = pre_tracev;
     }
 
     // normalize the indels
@@ -2472,6 +2471,96 @@ query_start : query_end)
         exit(1);
     }
 #endif
+    */
+
+    /*
+    bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
+    if (emit_png) {
+
+        const int step_size = (segment_length / 2);
+
+        const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
+        const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
+
+        const int wfplot_vmin = 0, wfplot_vmax = pattern_length;
+        const int wfplot_hmin = 0, wfplot_hmax = text_length;
+
+        int v_max = wfplot_vmax - wfplot_vmin;
+        int h_max = wfplot_hmax - wfplot_hmin;
+
+        const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
+        const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
+        const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
+
+        const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
+
+        const uint64_t width = (int)(scale * (double)v_max);
+        const uint64_t height = (int)(scale * (double)h_max);
+        const double source_width = (double)width;
+        const double source_height = (double)height;
+
+        const double x_off = 0, y_off = 0;
+        const double line_width = 1.0;
+        const double source_min_x = 0, source_min_y = 0;
+
+        auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
+            ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                image.layer_pixel(point.x, point.y, color);
+            }
+            : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                wflign::algorithms::wu_calc_wide_line(
+                    point, point,
+                    color,
+                    image);
+            };
+
+        // Plot the traceback
+        {
+            algorithms::atomic_image_buf_t image(width, height,
+                                                 source_width, source_height,
+                                                 source_min_x, source_min_y);
+
+            
+            uint64_t i = 0; // position in the pattern
+            uint64_t j = 0; // position in the text
+            for (const auto& c : tracev) {
+                switch (c) {
+                case 'M':
+                case 'X':
+                    ++i;
+                    ++j;
+                    break;
+                case 'I':
+                    ++i;
+                    break;
+                case 'D':
+                    ++j;
+                    break;
+                default:
+                    break;
+                }
+                int v = j / step_size;
+                int h = i / step_size;
+                if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                    algorithms::xy_d_t xy0 = {
+                        (v * scale) - x_off,
+                        (h * scale) + y_off
+                    };
+                    xy0.into(source_min_x, source_min_y,
+                             source_width, source_height,
+                             0, 0,
+                             width, height);
+                    plot_point(xy0, image, COLOR_WFA_MATCH);
+                }
+            }
+
+            auto bytes = image.to_bytes();
+            const std::string filename = prefix_wavefront_plot_in_png +
+                query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".final.png";
+            encodeOneStep(filename.c_str(), bytes, width, height);
+        }
+    }
     */
 
     // convert trace to cigar, get correct start and end coordinates

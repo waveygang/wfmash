@@ -317,6 +317,7 @@ void write_merged_alignment(
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const int &erode_k,
     const int &min_wf_length, const int &max_dist_threshold,
+    const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &with_endline = true);
 
 void write_alignment(std::ostream &out, const alignment_t &aln,
