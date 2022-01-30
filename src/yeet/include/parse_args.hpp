@@ -63,8 +63,8 @@ void parse_args(int argc,
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
-    args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
-    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
+    args::Flag drop_low_map_pct_identity(parser, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
+    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=% x 0.75", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
@@ -319,16 +319,16 @@ void parse_args(int argc,
         if (map_parameters.percentageIdentity > 0.95) {
             map_parameters.block_length_min = 3 * map_parameters.segLength;
         } else if (map_parameters.percentageIdentity > 0.90) {
-            map_parameters.block_length_min = 2.5 * map_parameters.segLength;
-        } else {
             map_parameters.block_length_min = 2 * map_parameters.segLength;
+        } else {
+            map_parameters.block_length_min = 1.25 * map_parameters.segLength;
         }
     }
 
-    if (keep_low_map_pct_identity) {
-        map_parameters.keep_low_pct_id = true;
-    } else {
+    if (drop_low_map_pct_identity) {
         map_parameters.keep_low_pct_id = false;
+    } else {
+        map_parameters.keep_low_pct_id = true;
     }
 
     if (kmer_size) {
@@ -399,7 +399,7 @@ void parse_args(int argc,
         // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
         align_parameters.min_identity = 0; // now unused
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity; // in [0,1]
+        align_parameters.min_identity = map_parameters.percentageIdentity * 0.75; // in [0,1]
     }
 
     if (wflambda_segment_length) {
