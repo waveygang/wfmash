@@ -265,7 +265,7 @@ void wflign_affine_wavefront(
         const int wfa_max_distance_threshold = 0; // segment_length_to_use / 8;
 
         wflambda::affine_penalties_t wflambda_affine_penalties;
-        f (wflign_mismatch_score > 0 && wflign_gap_opening_score > 0 && wflign_gap_extension_score > 0){
+        if (wflign_mismatch_score > 0 && wflign_gap_opening_score > 0 && wflign_gap_extension_score > 0){
             wflambda_affine_penalties = {
                     .match = 0,
                     .mismatch = wflign_mismatch_score,
