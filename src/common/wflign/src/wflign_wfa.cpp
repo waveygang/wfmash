@@ -19,9 +19,9 @@ namespace wflign {
 
 namespace wavefront {
 
-#define MAX_LEN_FOR_PURE_WFA    50000
-#define MIN_WF_LENGTH           512
-#define MAX_DIST_THRESHOLD      8192
+#define MAX_LEN_FOR_PURE_WFA    50000 // only for low-divergence, otherwise disabled
+#define MIN_WF_LENGTH           256
+#define MAX_DIST_THRESHOLD      4096
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
@@ -205,7 +205,10 @@ void wflign_affine_wavefront(
     uint64_t num_alignments_performed = 0;
     const auto start_time = std::chrono::steady_clock::now();
 
-    if (false && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
+    // if we expect the alignment to be low divergence, and the mapping is less than 50kb
+    // it's faster to just align directly with WFA
+    if (mashmap_estimated_identity >= 0.95 // about the limit of what our reduction thresholds allow
+        && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
                                                                            query_length,
@@ -2556,7 +2559,7 @@ query_start : query_end)
 
             
             uint64_t v = query_start; // position in the pattern
-            uint64_t h = 0; // target_start; // position in the text
+            uint64_t h = target_start; // position in the text
             int64_t last_v = -1;
             int64_t last_h = -1;
             for (const auto& c : tracev) {
