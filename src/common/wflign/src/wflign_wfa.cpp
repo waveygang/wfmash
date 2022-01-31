@@ -69,7 +69,7 @@ void wflign_affine_wavefront(
     const int &wfa_gap_extension_score,
     const int &wflambda_min_wavefront_length, // with these set at 0 we do exact
     // WFA for wflambda
-    const int &wflambda_max_distance_threshold, const float &mashmap_estimated_identity,
+    const int &_wflambda_max_distance_threshold, const float &mashmap_estimated_identity,
     const int &wflign_mismatch_score,
     const int &wflign_gap_opening_score,
     const int &wflign_gap_extension_score,
@@ -401,6 +401,11 @@ void wflign_affine_wavefront(
         attributes.affine_penalties = wflambda_affine_penalties;
         // attributes.distance_metric = gap_affine2p;
         // attributes.affine2p_penalties = affine2p_penalties;
+
+        uint64_t wflambda_max_distance_threshold =
+            std::min((uint64_t)_wflambda_max_distance_threshold,
+                     std::max((uint64_t)query_length, (uint64_t)target_length)/10) / step_size;
+
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
             attributes.reduction.reduction_strategy =
                     wflambda::wavefront_reduction_dynamic; // wavefront_reduction_dynamic

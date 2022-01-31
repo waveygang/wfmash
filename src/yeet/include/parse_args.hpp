@@ -426,7 +426,6 @@ void parse_args(int argc,
     } else {
         align_parameters.wflambda_max_distance_threshold = 100000;
     }
-    align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
     if (wflign_max_len_major) {
         const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
