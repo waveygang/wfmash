@@ -399,7 +399,7 @@ void parse_args(int argc,
         // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
         align_parameters.min_identity = 0; // now unused
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity * 0.75; // in [0,1]
+        align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
     }
 
     if (wflambda_segment_length) {
