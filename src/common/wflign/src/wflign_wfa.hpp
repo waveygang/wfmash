@@ -311,6 +311,7 @@ void write_merged_alignment(
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length,
+    const uint64_t &max_pure_wfa,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     const float &mashmap_estimated_identity,

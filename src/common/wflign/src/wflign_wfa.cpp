@@ -271,6 +271,7 @@ void wflign_affine_wavefront(
                 query_offset, query_length, query_is_rev,
                 target,
                 target_name, target_total_length, target_offset, target_length,
+                segment_length,
                 MAX_LEN_FOR_PURE_WFA, min_identity,
                 elapsed_time_wflambda_ms, num_alignments,
                 num_alignments_performed, mashmap_estimated_identity,
@@ -533,8 +534,8 @@ void wflign_affine_wavefront(
         wflambda::wavefront_aligner_delete(wflambda_aligner);
 
         if (emit_png) {
-            const int wfplot_vmin = 0, wfplot_vmax = v_max;
-            const int wfplot_hmin = 0, wfplot_hmax = h_max;
+            const int wfplot_vmin = 0, wfplot_vmax = pattern_length; //v_max;
+            const int wfplot_hmin = 0, wfplot_hmax = text_length; //h_max
 
             int v_max = wfplot_vmax - wfplot_vmin;
             int h_max = wfplot_hmax - wfplot_hmin;
@@ -576,7 +577,7 @@ void wflign_affine_wavefront(
                         int v, h;
                         decode_pair(p.first, &v, &h);
 
-                        if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                        if (v >= wfplot_vmin && v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
                             algorithms::xy_d_t xy0 = {
                                     (v * scale) - x_off,
                                     (h * scale) + y_off
@@ -594,7 +595,7 @@ void wflign_affine_wavefront(
                 auto bytes = image.to_bytes();
                 const std::string filename = prefix_wavefront_plot_in_png +
                         query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".anchors.png";
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".1.anchors.png";
                 encodeOneStep(filename.c_str(), bytes, width, height);
             }
 
@@ -608,7 +609,7 @@ void wflign_affine_wavefront(
                     int v, h;
                     decode_pair(p.first, &v, &h);
 
-                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                    if (v >= wfplot_vmin && v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
                         algorithms::xy_d_t xy0 = {
                                 (v * scale) - x_off,
                                 (h * scale) + y_off
@@ -626,7 +627,7 @@ void wflign_affine_wavefront(
                     int v, h;
                     decode_pair(high_order_DP_cell, &v, &h);
 
-                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
+                    if (v >= wfplot_vmin && v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
                         algorithms::xy_d_t xy0 = {
                                 (v * scale) - x_off,
                                 (h * scale) + y_off
@@ -643,7 +644,7 @@ void wflign_affine_wavefront(
                 auto bytes = image.to_bytes();
                 const std::string filename = prefix_wavefront_plot_in_png +
                         query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";;
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".0.full.png";
                 encodeOneStep(filename.c_str(), bytes, width, height);
             }
         }
@@ -832,12 +833,15 @@ void wflign_affine_wavefront(
                         query_total_length,
                         query_offset, query_length, query_is_rev, target, target_name,
                         target_total_length, target_offset, target_length,
-                        segment_length_to_use, min_identity,
+                        segment_length_to_use,
+                        MAX_LEN_FOR_PURE_WFA,
+                        min_identity,
                         elapsed_time_wflambda_ms, num_alignments,
                         num_alignments_performed, mashmap_estimated_identity,
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
-                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD, "", 0);
+                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                        prefix_wavefront_plot_in_png, wfplot_max_size);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -1314,6 +1318,7 @@ void write_merged_alignment(
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length,
+    const uint64_t &max_pure_wfa,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     const float &mashmap_estimated_identity,
@@ -2491,12 +2496,13 @@ query_start : query_end)
 #endif
     */
 
-    /*
     bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
     if (emit_png) {
 
         const int step_size = (segment_length / 2);
 
+        //const int pattern_length = (int)query_length;
+        //const int text_length = (int)target_length;
         const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
         const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
 
@@ -2539,47 +2545,55 @@ query_start : query_end)
                                                  source_min_x, source_min_y);
 
             
-            uint64_t i = 0; // position in the pattern
-            uint64_t j = 0; // position in the text
+            uint64_t v = query_start; // position in the pattern
+            uint64_t h = target_start; // position in the text
+            int64_t last_v = -1;
+            int64_t last_h = -1;
             for (const auto& c : tracev) {
                 switch (c) {
                 case 'M':
                 case 'X':
-                    ++i;
-                    ++j;
+                    ++v;
+                    ++h;
+                    {
+                        uint64_t _v = (v / step_size);
+                        uint64_t _h = (h / step_size);
+                        if ((_v != last_v && _h != last_h)
+                            && _v >= wfplot_vmin && _v <= wfplot_vmax
+                            && _h >= wfplot_hmin && _h <= wfplot_hmax) {
+                            algorithms::xy_d_t xy0 = {
+                                (_v * scale) - x_off,
+                                (_h * scale) + y_off
+                            };
+                            xy0.into(source_min_x, source_min_y,
+                                     source_width, source_height,
+                                     0, 0,
+                                     width, height);
+                            plot_point(xy0, image, COLOR_WFA_MATCH);
+                            last_v = _v;
+                            last_h = _h;
+                        }
+                    }
                     break;
                 case 'I':
-                    ++i;
+                    ++v;
                     break;
                 case 'D':
-                    ++j;
+                    ++h;
                     break;
                 default:
                     break;
                 }
-                int v = j / step_size;
-                int h = i / step_size;
-                if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
-                    algorithms::xy_d_t xy0 = {
-                        (v * scale) - x_off,
-                        (h * scale) + y_off
-                    };
-                    xy0.into(source_min_x, source_min_y,
-                             source_width, source_height,
-                             0, 0,
-                             width, height);
-                    plot_point(xy0, image, COLOR_WFA_MATCH);
-                }
+                //std::cerr << "plot cell " << v << "," << h << std::endl;
             }
 
             auto bytes = image.to_bytes();
             const std::string filename = prefix_wavefront_plot_in_png +
                 query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".final.png";
+                "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".2.trace.png";
             encodeOneStep(filename.c_str(), bytes, width, height);
         }
     }
-    */
 
     // convert trace to cigar, get correct start and end coordinates
     char *cigarv = alignment_to_cigar(
