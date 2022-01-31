@@ -95,14 +95,22 @@ void wflign_affine_wavefront(
         };
         minhash_kmer_size = 17;
     } else {
-        if (mashmap_estimated_identity >= 0.99999) {
+        if (mashmap_estimated_identity >= 0.99) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 19,
+                .gap_opening = 31,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 19;
+        } else if (mashmap_estimated_identity >= 0.98) {
             wfa_affine_penalties = {
                 .match = 0,
                 .mismatch = 15,
                 .gap_opening = 25,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 19;
+            minhash_kmer_size = 17;
         } else if (mashmap_estimated_identity >= 0.97) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -168,7 +176,9 @@ void wflign_affine_wavefront(
     if (_erode_k >= 0) {
         erode_k = _erode_k;
     } else { // scale it automatically
-        if (mashmap_estimated_identity >= 0.99999) {
+        if (mashmap_estimated_identity >= 0.99) {
+            erode_k = 127;
+        } else if (mashmap_estimated_identity >= 0.98) {
             erode_k = 79;
         } else if (mashmap_estimated_identity >= 0.97) {
             erode_k = 47;
@@ -195,7 +205,7 @@ void wflign_affine_wavefront(
     uint64_t num_alignments_performed = 0;
     const auto start_time = std::chrono::steady_clock::now();
 
-    if (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
+    if (false && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
                                                                            query_length,
@@ -343,33 +353,33 @@ void wflign_affine_wavefront(
             // identity the goal here is to sparsify the set of alignments in the
             // wflambda layer we then patch up the gaps between them
             if (mashmap_estimated_identity >= 0.97) {
-                max_mash_dist_to_evaluate = 0.05;
-                mash_sketch_rate = 0.125;
-                inception_score_max_ratio = 2;
-            } else if (mashmap_estimated_identity >= 0.95) {
-                max_mash_dist_to_evaluate = 0.1;
-                mash_sketch_rate = 0.25;
-                inception_score_max_ratio = 2.25;
-            } else if (mashmap_estimated_identity >= 0.9) {
                 max_mash_dist_to_evaluate = 0.2;
+                mash_sketch_rate = 0.125;
+                inception_score_max_ratio = 3;
+            } else if (mashmap_estimated_identity >= 0.95) {
+                max_mash_dist_to_evaluate = 0.25;
+                mash_sketch_rate = 0.25;
+                inception_score_max_ratio = 3;
+            } else if (mashmap_estimated_identity >= 0.9) {
+                max_mash_dist_to_evaluate = 0.3;
                 mash_sketch_rate = 0.3;
-                inception_score_max_ratio = 2.5;
+                inception_score_max_ratio = 3;
             } else if (mashmap_estimated_identity >= 0.85) {
-                max_mash_dist_to_evaluate = 0.5;
+                max_mash_dist_to_evaluate = 0.35;
                 mash_sketch_rate = 0.35;
                 inception_score_max_ratio = 3;
             } else if (mashmap_estimated_identity >= 0.80) {
-                max_mash_dist_to_evaluate = 0.75;
-                mash_sketch_rate = 0.5;
-                inception_score_max_ratio = 4;
+                max_mash_dist_to_evaluate = 0.4;
+                mash_sketch_rate = 0.4;
+                inception_score_max_ratio = 3;
             } else if (mashmap_estimated_identity >= 0.75) {
-                max_mash_dist_to_evaluate = 0.85;
-                mash_sketch_rate = 0.6;
-                inception_score_max_ratio = 4.5;
+                max_mash_dist_to_evaluate = 0.45;
+                mash_sketch_rate = 0.45;
+                inception_score_max_ratio = 3;
             } else { //
-                max_mash_dist_to_evaluate = 0.95;
-                mash_sketch_rate = 0.75;
-                inception_score_max_ratio = 5;
+                max_mash_dist_to_evaluate = 0.5;
+                mash_sketch_rate = 0.5;
+                inception_score_max_ratio = 3;
             }
         }
 
@@ -2546,7 +2556,7 @@ query_start : query_end)
 
             
             uint64_t v = query_start; // position in the pattern
-            uint64_t h = target_start; // position in the text
+            uint64_t h = 0; // target_start; // position in the text
             int64_t last_v = -1;
             int64_t last_h = -1;
             for (const auto& c : tracev) {
