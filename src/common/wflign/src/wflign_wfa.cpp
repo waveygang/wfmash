@@ -244,6 +244,7 @@ void wflign_affine_wavefront(
     uint64_t num_alignments_performed = 0;
     const auto start_time = std::chrono::steady_clock::now();
 
+    /*
     // if we expect the alignment to be low divergence, and the mapping is less than 50kb
     // it's faster to just align directly with WFA
     if (mashmap_estimated_identity >= 0.95 // about the limit of what our reduction thresholds allow
@@ -335,7 +336,101 @@ void wflign_affine_wavefront(
 
         // Free
         wfa::wavefront_aligner_delete(wf_aligner);
-    } else {
+        */
+    /*
+    // if we expect the alignment to be low divergence, and the mapping is less than 50kb
+    // it's faster to just align directly with WFA
+    if (mashmap_estimated_identity >= 0.95 // about the limit of what our reduction thresholds allow
+        && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
+        wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
+                                                                           target_length,
+                                                                           query_length,
+                                                                           true);
+        wfa::wavefront_reduction_set_adaptive(&wf_aligner->reduction,
+                                              MIN_WF_LENGTH,
+                                              MAX_DIST_THRESHOLD);
+
+        auto *aln = new alignment_t();
+        wfa::wavefront_aligner_resize(wf_aligner, target_length, query_length);
+
+        const int status = wfa::wavefront_align(wf_aligner,
+                                                target, target_length,
+                                                query, query_length);
+
+        aln->j = 0;
+        aln->i = 0;
+
+        // aln.mash_dist = mash_dist;
+        aln->ok = status == WF_ALIGN_SUCCESSFUL;
+
+        // fill the alignment info if we aligned
+        if (aln->ok) {
+            aln->query_length = query_length;
+            aln->target_length = target_length;
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!validate_cigar(wf_aligner->cigar, query, target,
+                                segment_length_q, segment_length_t, aln.j, aln.i)) {
+                std::cerr << "cigar failure at alignment " << aln.j << " "
+                << aln.i << std::endl;
+                unpack_display_cigar(wf_aligner->cigar, query,
+                                     target, segment_length_q, segment_length_t,
+                                     aln.j, aln.i);
+                std::cerr << ">query" << std::endl
+                << std::string(query + j, segment_length_q)
+                << std::endl;
+                std::cerr << ">target" << std::endl
+                << std::string(target + i, segment_length_t)
+                << std::endl;
+                assert(false);
+            }
+#endif
+
+            wflign_edit_cigar_copy(&aln->edit_cigar, &wf_aligner->cigar);
+
+#ifdef VALIDATE_WFA_WFLIGN
+            if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
+                                segment_length_t, aln.j, aln.i)) {
+                std::cerr << "cigar failure after cigar copy in alignment "
+                << aln.j << " " << aln.i << std::endl;
+                assert(false);
+            }
+#endif
+        }
+
+        ++num_alignments;
+        ++num_alignments_performed;
+
+        trace.push_back(aln);
+
+        const long elapsed_time_wflambda_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start_time)
+                        .count();
+
+        // write a merged alignment
+        write_merged_alignment(
+                out, trace, wf_aligner, &wfa_affine_penalties,
+                emit_md_tag,
+                paf_format_else_sam, no_seq_in_sam,
+                query,
+                query_name, query_total_length,
+                query_offset, query_length, query_is_rev,
+                target,
+                target_name, target_total_length, target_offset, target_length,
+                segment_length,
+                MAX_LEN_FOR_PURE_WFA, min_identity,
+                elapsed_time_wflambda_ms, num_alignments,
+                num_alignments_performed, mashmap_estimated_identity,
+                wflign_max_len_major, wflign_max_len_minor,
+                erode_k,
+                inception_score_max_ratio,
+                MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                prefix_wavefront_plot_in_png, wfplot_max_size);
+
+        // Free
+        wfa::wavefront_aligner_delete(wf_aligner);
+        */
+    {
         if (emit_tsv) {
             out_tsv << "# query_name=" << query_name << std::endl;
             out_tsv << "# query_start=" << query_offset << std::endl;
