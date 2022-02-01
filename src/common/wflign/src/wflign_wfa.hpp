@@ -293,6 +293,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const int &segment_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
+                            const float& inception_score_max_ratio,
                             wfa::wavefront_aligner_t *const wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln);
@@ -317,6 +318,7 @@ void write_merged_alignment(
     const float &mashmap_estimated_identity,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const int &erode_k,
+    const float &inception_score_max_ratio,
     const int &min_wf_length, const int &max_dist_threshold,
     const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &with_endline = true);

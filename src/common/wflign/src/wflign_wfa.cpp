@@ -170,31 +170,70 @@ void wflign_affine_wavefront(
         }
     }
 
-    int erode_k = 0;
+    // heuristic bound on the max mash dist, adaptive based on estimated
+    // identity the goal here is to sparsify the set of alignments in the
+    // wflambda layer we then patch up the gaps between them
 
-    // Set erosion
+    int erode_k = 0;
+    float inception_score_max_ratio = 2;
+    float max_mash_dist_to_evaluate = 1;
+    float mash_sketch_rate = 1;
+
+    if (mashmap_estimated_identity >= 0.99) {
+        max_mash_dist_to_evaluate = 0.2;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 3;
+        erode_k = 47;
+    } else if (mashmap_estimated_identity >= 0.98) {
+        max_mash_dist_to_evaluate = 0.2;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 3;
+        erode_k = 29;
+    } else if (mashmap_estimated_identity >= 0.97) {
+        max_mash_dist_to_evaluate = 0.2;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 3;
+        erode_k = 19;
+    } else if (mashmap_estimated_identity >= 0.95) {
+        max_mash_dist_to_evaluate = 0.25;
+        mash_sketch_rate = 0.25;
+        inception_score_max_ratio = 3;
+        erode_k = 11;
+    } else if (mashmap_estimated_identity >= 0.9) {
+        max_mash_dist_to_evaluate = 0.3;
+        mash_sketch_rate = 0.3;
+        inception_score_max_ratio = 4;
+        erode_k = 7;
+    } else if (mashmap_estimated_identity >= 0.85) {
+        max_mash_dist_to_evaluate = 0.4;
+        mash_sketch_rate = 0.35;
+        inception_score_max_ratio = 5;
+        erode_k = 0;
+    } else if (mashmap_estimated_identity >= 0.8) {
+        max_mash_dist_to_evaluate = 0.5;
+        mash_sketch_rate = 0.4;
+        inception_score_max_ratio = 6;
+        erode_k = 0;
+    } else if (mashmap_estimated_identity >= 0.75) {
+        max_mash_dist_to_evaluate = 0.6;
+        mash_sketch_rate = 0.45;
+        inception_score_max_ratio = 7;
+        erode_k = 0;
+    } else {
+        max_mash_dist_to_evaluate = 0.7;
+        mash_sketch_rate = 0.5;
+        inception_score_max_ratio = 8;
+        erode_k = 0;
+    }
+
+    // override erosion if given on input
     if (_erode_k >= 0) {
         erode_k = _erode_k;
-    } else { // scale it automatically
-        if (mashmap_estimated_identity >= 0.99) {
-            erode_k = 127;
-        } else if (mashmap_estimated_identity >= 0.98) {
-            erode_k = 79;
-        } else if (mashmap_estimated_identity >= 0.97) {
-            erode_k = 47;
-        } else if (mashmap_estimated_identity >= 0.95) {
-            erode_k = 29;
-        } else if (mashmap_estimated_identity >= 0.9) {
-            erode_k = 19;
-        } else if (mashmap_estimated_identity >= 0.85) {
-            erode_k = 15;
-        } else if (mashmap_estimated_identity >= 0.8) {
-            erode_k = 13;
-        } else if (mashmap_estimated_identity >= 0.75) {
-            erode_k = 11;
-        } else {
-            erode_k = 9;
-        }
+    }
+
+    // override max mash dist if given on input
+    if (wflign_max_mash_dist > 0) {
+        max_mash_dist_to_evaluate = wflign_max_mash_dist;
     }
 
     // accumulate runs of matches in reverse order
@@ -290,6 +329,7 @@ void wflign_affine_wavefront(
                 num_alignments_performed, mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor,
                 erode_k,
+                inception_score_max_ratio,
                 MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
                 prefix_wavefront_plot_in_png, wfplot_max_size);
 
@@ -343,47 +383,6 @@ void wflign_affine_wavefront(
                 .gap_opening = wfa_affine_penalties.gap_opening,
                 .gap_extension = wfa_affine_penalties.gap_extension
             };
-        }
-
-        float max_mash_dist_to_evaluate = 1;
-        float mash_sketch_rate = 1;
-        float inception_score_max_ratio = 2;
-        if (wflign_max_mash_dist > 0) {
-            max_mash_dist_to_evaluate = wflign_max_mash_dist;
-            // TODO set other params here, when the max dist is manually given
-        } else {
-            // heuristic bound on the max mash dist, adaptive based on estimated
-            // identity the goal here is to sparsify the set of alignments in the
-            // wflambda layer we then patch up the gaps between them
-            if (mashmap_estimated_identity >= 0.97) {
-                max_mash_dist_to_evaluate = 0.2;
-                mash_sketch_rate = 0.125;
-                inception_score_max_ratio = 3;
-            } else if (mashmap_estimated_identity >= 0.95) {
-                max_mash_dist_to_evaluate = 0.25;
-                mash_sketch_rate = 0.25;
-                inception_score_max_ratio = 3;
-            } else if (mashmap_estimated_identity >= 0.9) {
-                max_mash_dist_to_evaluate = 0.3;
-                mash_sketch_rate = 0.3;
-                inception_score_max_ratio = 3;
-            } else if (mashmap_estimated_identity >= 0.85) {
-                max_mash_dist_to_evaluate = 0.35;
-                mash_sketch_rate = 0.35;
-                inception_score_max_ratio = 3;
-            } else if (mashmap_estimated_identity >= 0.80) {
-                max_mash_dist_to_evaluate = 0.4;
-                mash_sketch_rate = 0.4;
-                inception_score_max_ratio = 3;
-            } else if (mashmap_estimated_identity >= 0.75) {
-                max_mash_dist_to_evaluate = 0.45;
-                mash_sketch_rate = 0.45;
-                inception_score_max_ratio = 3;
-            } else { //
-                max_mash_dist_to_evaluate = 0.5;
-                mash_sketch_rate = 0.5;
-                inception_score_max_ratio = 3;
-            }
         }
 
         //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
@@ -858,6 +857,7 @@ void wflign_affine_wavefront(
                         num_alignments_performed, mashmap_estimated_identity,
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
+                        inception_score_max_ratio,
                         MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
                         prefix_wavefront_plot_in_png, wfplot_max_size);
             } else {
@@ -1050,6 +1050,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const int &segment_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
+                            const float& inception_score_max_ratio,
                             wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
@@ -1094,7 +1095,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = 2 * std::max(target_length, query_length);
+    const int max_score = std::max(target_length, query_length) * inception_score_max_ratio * 4;
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
@@ -1342,6 +1343,7 @@ void write_merged_alignment(
     const float &mashmap_estimated_identity,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
     const int &erode_k,
+    const float &inception_score_max_ratio,
     const int &min_wf_length, const int &max_dist_threshold,
     const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &with_endline) {
@@ -1352,7 +1354,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 128;
+    const uint64_t min_wfa_patch_length = 0; //128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1456,6 +1458,7 @@ void write_merged_alignment(
                          &wflign_max_len_major,
                          &wflign_max_len_minor,
                          &distance_close_big_enough_indels, &min_wf_length,
+                         &inception_score_max_ratio,
                          &max_dist_threshold, &wf_aligner,
                          &affine_penalties](std::vector<char> &unpatched,
                                             std::vector<char> &patched) {
@@ -1749,6 +1752,8 @@ void write_merged_alignment(
                             (query_delta < wflign_max_len_minor ||
                              target_delta < wflign_max_len_minor)) {
 
+                        if (false) {
+
                         int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
                             distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
                             -1;
@@ -1956,6 +1961,7 @@ void write_merged_alignment(
                                 patched.pop_back();
                             }
 
+                            }
                             /*
                             std::cerr << "E patching in "
                                       << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
@@ -1968,7 +1974,7 @@ void write_merged_alignment(
                             // problem long enough For affine WFA to be correct
                             // (to avoid trace-back errors), it must be at least
                             // 10 nt
-                            if (query_delta >= 10 && target_delta >= 10) {
+                            { //if (query_delta >= 10 && target_delta >= 10) {
                                 alignment_t patch_aln;
                                 // WFA is only global
                                 do_wfa_patch_alignment(
@@ -1976,6 +1982,7 @@ void write_merged_alignment(
                                     target - target_pointer_shift, target_pos,
                                     target_delta, segment_length,
                                     min_wf_length, max_dist_threshold,
+                                    inception_score_max_ratio,
                                     wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
@@ -2224,7 +2231,7 @@ void write_merged_alignment(
 #endif
         };
 
-        std::vector<char> pre_tracev;
+        //std::vector<char> pre_tracev;
         {
             std::vector<char> erodev;
             {
@@ -2381,11 +2388,11 @@ void write_merged_alignment(
 
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev);
+            patching(erodev, tracev);
             //pre_tracev = erodev;
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(pre_tracev, query,
+            if (!validate_trace(tracev, query,
                                 target - target_pointer_shift, query_length,
                                 target_length_mut, query_start, target_start)) {
                 std::cerr << "cigar failure in pre_tracev "
@@ -2407,17 +2414,17 @@ void write_merged_alignment(
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(pre_tracev);
+            sort_indels(tracev);
         }
 
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev);
+        //patching(pre_tracev, tracev);
         //tracev = pre_tracev;
     }
 
     // normalize the indels
-    sort_indels(tracev);
+    //sort_indels(tracev);
 
 #ifdef WFLIGN_DEBUG
     std::cerr
