@@ -180,22 +180,22 @@ void wflign_affine_wavefront(
     float mash_sketch_rate = 1;
 
     if (mashmap_estimated_identity >= 0.99) {
-        max_mash_dist_to_evaluate = 0.2;
+        max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
         erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.98) {
-        max_mash_dist_to_evaluate = 0.2;
+        max_mash_dist_to_evaluate = 0.075;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
         erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.97) {
-        max_mash_dist_to_evaluate = 0.2;
+        max_mash_dist_to_evaluate = 0.1;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
         erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.95) {
-        max_mash_dist_to_evaluate = 0.25;
+        max_mash_dist_to_evaluate = 0.2;
         mash_sketch_rate = 0.25;
         inception_score_max_ratio = 3;
         erode_k = 0;
