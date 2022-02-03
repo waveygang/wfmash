@@ -44,7 +44,7 @@ int main(int argc,char* argv[]) {
   WFAlignerGapAffine aligner(4,6,2);
   // Align
   aligner.alignGlobal(pattern,text);
-  cout << "WFA-Alignemnt returns score " << aligner.getAlignmentScore() << endl;
+  cout << "WFA-Alignment returns score " << aligner.getAlignmentScore() << endl;
 
   // Print CIGAR
   string cigar = aligner.getAlignmentCigar();

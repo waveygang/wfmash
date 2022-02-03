@@ -26,35 +26,43 @@
  *
  * PROJECT: Wavefront Alignments Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
- * DESCRIPTION: WFA Sample-Code
+ * DESCRIPTION: WFA C++ Sample-Code
  */
 
-#include "wavefront/wavefront_align.h"
+#include <iostream>
+#include <string>
+#include "bindings/cpp/WFAligner.hpp"
+
+using namespace std;
+
+// Patter & Text
+int pattern[] = {100, 102, 104, 99, 43,     56, 78, 190, 22};
+int text[]    = {100,      104, 99, 43, 33, 56, 78,  11, 22};
+
+const int patternLength = sizeof(pattern)/sizeof(int);
+const int textLength = sizeof(text)/sizeof(int);
+
+int match_function(
+    int v,
+    int h,
+    void* arguments) {
+  // Check boundaries
+  if (v > patternLength || h > textLength) return false;
+  // Compare arrays
+  return (pattern[v] == text[h]);
+}
 
 int main(int argc,char* argv[]) {
-  // Patter & Text
-  char* pattern = "TCTTTACTCGCGCGTTGGAGAAATACAATAGT";
-  char* text    = "TCTATACTGCGCGTTTGGAGAAATAAAATAGT";
-  // Configure alignment attributes
-  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
-  attributes.distance_metric = gap_affine;
-  attributes.affine_penalties.match = 0;
-  attributes.affine_penalties.mismatch = 4;
-  attributes.affine_penalties.gap_opening = 6;
-  attributes.affine_penalties.gap_extension = 2;
-  // Initialize Wavefront Aligner
-  wavefront_aligner_t* const wf_aligner = wavefront_aligner_new(&attributes);
+  // Create a WFAligner
+  WFAlignerGapAffine aligner(1,0,1);
+  aligner.setMatchFunct(match_function,NULL);
   // Align
-  wavefront_align(wf_aligner,pattern,strlen(pattern),text,strlen(text));
-  fprintf(stderr,"WFA-Alignment returns score %d\n",wf_aligner->cigar.score);
-  // Display alignment
-  fprintf(stderr,"  PATTERN  %s\n",pattern);
-  fprintf(stderr,"  TEXT     %s\n",text);
-  fprintf(stderr,"  SCORE (RE)COMPUTED %d\n",
-      cigar_score_gap_affine(&wf_aligner->cigar,&attributes.affine_penalties));
-  cigar_print_pretty(stderr,
-      pattern,strlen(pattern),text,strlen(text),
-      &wf_aligner->cigar,wf_aligner->mm_allocator);
-  // Free
-  wavefront_aligner_delete(wf_aligner);
+  aligner.alignGlobal(patternLength,textLength);
+  cout << "WFA-Alignment returns score " << aligner.getAlignmentScore() << endl;
+
+  // Print CIGAR
+  string cigar = aligner.getAlignmentCigar();
+  cout << "PATTERN: " << pattern  << endl;
+  cout << "TEXT: " << text  << endl;
+  cout << "CIGAR: " << cigar  << endl;
 }
