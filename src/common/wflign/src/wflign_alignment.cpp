@@ -13,8 +13,8 @@
 void alignment_t::display(void) {
 	std::cerr << j << " " << i << " " << query_length << " "
 			  << target_length << " " << ok << std::endl;
-	for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
-		std::cerr << edit_cigar.operations[x];
+	for (int x = 0; x < edit_cigar.cigar_length; ++x) {
+		std::cerr << edit_cigar.cigar_ops[x];
 	}
 	std::cerr << std::endl;
 }
@@ -102,18 +102,19 @@ void alignment_t::trim_back(int query_trim) {
         --x;
         --target_length;
     }
-    if (x == edit_cigar.begin_offset)
-        ok = false;
+    if (x == edit_cigar.begin_offset) ok = false;
     edit_cigar.end_offset = x;
 }
 alignment_t::~alignment_t() {
-	free(edit_cigar.operations);
+	free(edit_cigar.cigar_ops);
 }
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit
  */
 bool trace_pos_t::incr() {
-    if (offset < edit_cigar->end_offset) {
+	// FIXME ANDREA Shouldn't it be
+	// if (offset < edit_cigar->cigar_length-1)
+    if (offset < edit_cigar->cigar_length) {
         switch (curr()) {
         case 'M':
         case 'X':
@@ -136,7 +137,7 @@ bool trace_pos_t::incr() {
     }
 }
 bool trace_pos_t::decr() {
-    if (offset > edit_cigar->begin_offset) {
+    if (offset > 0) {
         --offset;
         switch (curr()) {
         case 'M':
@@ -159,13 +160,13 @@ bool trace_pos_t::decr() {
     }
 }
 bool trace_pos_t::at_end() {
-	return offset == edit_cigar->end_offset;
+	return offset == edit_cigar->cigar_length;
 }
 char trace_pos_t::curr() {
     assert(!at_end());
-    return edit_cigar->operations[offset];
+    return edit_cigar->cigar_ops[offset];
 }
-bool trace_pos_t::equal(const trace_pos_t &other) {
+bool trace_pos_t::equal(const trace_pos_t& other) {
     return j == other.j &&
     	   i == other.i &&
     	   curr() == 'M' &&
@@ -317,14 +318,14 @@ char* alignment_to_cigar(
 		const std::vector<char> &edit_cigar,
 		const uint64_t &start_idx,
 		const uint64_t &end_idx,
-		uint64_t &target_aligned_length,
-		uint64_t &query_aligned_length,
-		uint64_t &matches,
-		uint64_t &mismatches,
-		uint64_t &insertions,
-		uint64_t &inserted_bp,
-		uint64_t &deletions,
-		uint64_t &deleted_bp) {
+		uint64_t& target_aligned_length,
+		uint64_t& query_aligned_length,
+		uint64_t& matches,
+		uint64_t& mismatches,
+		uint64_t& insertions,
+		uint64_t& inserted_bp,
+		uint64_t& deletions,
+		uint64_t& deleted_bp) {
 
     // the edit cigar contains a character string of ops
     // here we compress them into the standard cigar representation

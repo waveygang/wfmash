@@ -37,13 +37,12 @@ public:
 	wflign_cigar_t edit_cigar;
 	void display(void);
 	bool validate(
-			const char *query,
-			const char *target);
+			const char* query,
+			const char* target);
 	void trim_front(int query_trim);
 	void trim_back(int query_trim);
 	~alignment_t();
 };
-
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit
  */
@@ -53,11 +52,17 @@ public:
     int i = 0;
     wflign_cigar_t* edit_cigar = nullptr;
     int offset = 0;
+    // Setup
+    trace_pos_t(
+    		const int j, ???
+    		const int i, ???
+    		wflign_cigar_t* const edit_cigar);
+    // Accessors
     bool incr();
     bool decr();
     bool at_end();
     char curr();
-    bool equal(const trace_pos_t &other);
+    bool equal(const trace_pos_t& other);
     bool assigned();
 };
 /*
