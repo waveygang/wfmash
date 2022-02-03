@@ -8,7 +8,8 @@
  */
 typedef struct {
 	char* cigar_ops;
-	int cigar_length;
+	int begin_offset;
+	int end_offset;
 } wflign_cigar_t;
 
 /*
@@ -26,22 +27,23 @@ typedef struct {
  */
 class alignment_t {
 public:
-	int j = 0;
-	int i = 0;
-	uint16_t query_length = 0;
-	uint16_t target_length = 0;
+	int j;
+	int i;
+	uint16_t query_length;
+	uint16_t target_length;
 	bool ok = false;
 	bool keep = false;
-	// int score = std::numeric_limits<int>::max();
-	// float mash_dist = 1;
 	wflign_cigar_t edit_cigar;
-	void display(void);
+	// Setup
+	alignment_t();
+	// Utils
 	bool validate(
 			const char* query,
 			const char* target);
 	void trim_front(int query_trim);
 	void trim_back(int query_trim);
-	~alignment_t();
+	// Display
+	void display(void);
 };
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit
@@ -54,9 +56,10 @@ public:
     int offset = 0;
     // Setup
     trace_pos_t(
-    		const int j, ???
-    		const int i, ???
-    		wflign_cigar_t* const edit_cigar);
+    		const int j,
+    		const int i,
+    		wflign_cigar_t* const edit_cigar,
+    		const int offset);
     // Accessors
     bool incr();
     bool decr();

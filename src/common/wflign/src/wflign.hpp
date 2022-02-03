@@ -109,9 +109,6 @@ public:
 		const uint64_t target_total_length,
 		const uint64_t target_offset,
 		const uint64_t target_length);
-private:
-    uint64_t num_alignments;
-    uint64_t num_alignments_performed;
 };
 
 } // namespace wavefront

@@ -10,32 +10,17 @@
 #include <functional>
 #include <fstream>
 
-//#include "WFA/gap_affine/affine_wavefront.hpp"
-//#include "WFA/gap_affine/affine_wavefront_align.h"
-#include "WFA/gap_affine/affine_matrix.h"
-#include "WFA/gap_affine/swg.h"
-#include "WFA/wavefront/wavefront_align.h"
-#include "WFA/wavefront/wavefront_reduction.h"
 #include "robin-hood-hashing/robin_hood.h"
 
 //#include "wfa_edit_callback.hpp"
 #include "dna.hpp"
 #include "rkmh.hpp"
-#include "wflambda/utils/commons.h"
-#include "wflambda/gap_affine/affine_matrix.h"
-#include "wflambda/gap_affine/swg.h"
-#include "wflambda/wavefront/wavefront_align.h"
-#include "wflambda/wavefront/wavefront_reduction.h"
 
 //#define WFLIGN_DEBUG true // for debugging messages
 
 namespace wflign {
 
 namespace wavefront {
-
-inline uint64_t encode_pair(int v, int h) {
-    return ((uint64_t)v << 32) | (uint64_t)h;
-}
 
 bool do_wfa_segment_alignment(
     const std::string &query_name, const char *query,

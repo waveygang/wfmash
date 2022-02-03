@@ -22,17 +22,40 @@ namespace wavefront {
  * DTO ()
  */
 typedef struct {
+	// WFlign
 	WFlign* wflign;
+	// Parameters
+	int pattern_length;
+	int text_length;
+	uint16_t step_size;
+	uint16_t segment_length_to_use;
+	int minhash_kmer_size;
+	int wfa_min_wavefront_length;
+	int wfa_max_distance_threshold;
+	float max_mash_dist_to_evaluate;
+	// Sequences data
     int v_max;
     int h_max;
+    // Alignments and sketches
     robin_hood::unordered_flat_map<uint64_t,alignment_t*>* alignments;
     std::vector<std::vector<rkmh::hash_t>*>* query_sketches;
     std::vector<std::vector<rkmh::hash_t>*>* target_sketches;
+    // Subsidiary WFAligner
+    wfa::WFAlignerGapAffine& wf_aligner;
+    wflign_penalties_t& wfa_affine_penalties;
+    // Stats
+    uint64_t num_alignments;
+    uint64_t num_alignments_performed;
 } wflign_extend_data_t;
 
 /*
  * Utils
  */
+uint64_t encode_pair(
+		int v,
+		int h) {
+    return ((uint64_t)v << 32) | (uint64_t)h;
+}
 void wflign_edit_cigar_copy(
 		wfa::WFAligner& wf_aligner,
 		wflign_cigar_t* const cigar_dst) {
@@ -43,7 +66,8 @@ void wflign_edit_cigar_copy(
 	// Allocate
 	cigar_dst->cigar_ops = (char*)malloc(cigar_length);
 	// Copy
-	cigar_dst->cigar_length = cigar_length;
+	cigar_dst->begin_offset = 0;
+	cigar_dst->end_offset = cigar_length;
 	memcpy(cigar_dst->cigar_ops,cigar_ops,cigar_length);
 }
 /*
@@ -104,9 +128,6 @@ WFlign::WFlign(
 	this->emit_md_tag = false;
 	this->paf_format_else_sam = false;
 	this->no_seq_in_sam = false;
-	// Internals
-    num_alignments = 0;
-    num_alignments_performed = 0;
 }
 /*
  * Output configuration
@@ -135,8 +156,19 @@ int wflambda_extend_match(
 		const int h,
 		void* arguments) {
 	// Extract arguments
-	wflign_extend_data_t* wflign_extend_data = (wflign_extend_data_t)arguments;
-	//
+	wflign_extend_data_t* extend_data = (wflign_extend_data_t)arguments;
+	// Expand arguments
+	const WFlign& wflign = extend_data->wflign;
+	const int query_length = wflign.query_length;
+	const int target_length = wflign.target_length;
+	const int step_size = extend_data->step_size;
+	const int segment_length_to_use = extend_data->segment_length_to_use;
+	const int pattern_length = extend_data->pattern_length;
+	const int text_length = extend_data->text_length;
+    const auto& alignments = extend_data->alignments;
+    const auto& query_sketches = extend_data->query_sketches;
+    const auto& target_sketches = extend_data->target_sketches;
+	// Check match
     bool is_a_match = false;
     if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
         const uint64_t k = encode_pair(v, h);
@@ -148,28 +180,46 @@ int wflambda_extend_match(
             const int target_begin = h * step_size;
 
             // The last fragment can be longer than segment_length_to_use (max 2*segment_length_to_use - 1)
-            const auto segment_length_to_use_q = (uint16_t) (v == pattern_length - 1 ? query_length - query_begin : segment_length_to_use);
-            const auto segment_length_to_use_t = (uint16_t) (h == text_length - 1 ? target_length - target_begin : segment_length_to_use);
+            const uint16_t segment_length_to_use_q =
+            		(v == pattern_length - 1) ? query_length - query_begin : segment_length_to_use;
+            const uint16_t segment_length_to_use_t =
+            		(h == text_length - 1) ? target_length - target_begin : segment_length_to_use;
 
             auto *aln = new alignment_t();
-            const bool alignment_performed = do_wfa_segment_alignment(
-                    query_name, query, query_sketches[v], query_length,
-                    query_begin, target_name, target, target_sketches[h],
-                    target_length, target_begin,
-                    segment_length_to_use_q,
-                    segment_length_to_use_t,
-                    step_size, minhash_kmer_size, wfa_min_wavefront_length,
-                    wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
-                    wf_aligner, &wfa_affine_penalties, *aln);
-            if (emit_tsv) {
+            const bool alignment_performed =
+            		do_wfa_segment_alignment(
+						wflign.query_name,
+						wflign.query,
+						query_sketches[v],
+						wflign.query_length,
+						query_begin,
+						wflign.target_name,
+						wflign.target,
+						target_sketches[h],
+						wflign.target_length,
+						target_begin,
+						segment_length_to_use_q,
+						segment_length_to_use_t,
+						step_size,
+						extend_data->minhash_kmer_size,
+						extend_data->wfa_min_wavefront_length,
+						extend_data->wfa_max_distance_threshold,
+						extend_data->max_mash_dist_to_evaluate,
+						wflign.mashmap_estimated_identity,
+						extend_data->wf_aligner,
+						extend_data->wfa_affine_penalties,
+						*aln);
+            if (wflign.emit_tsv) {
                 // 0) Mis-match, alignment skipped
                 // 1) Mis-match, alignment performed
                 // 2) Match, alignment performed
-                out_tsv << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
+            	wflign.out_tsv << v << "\t" << h << "\t"
+            			       << (alignment_performed ? (aln->ok ? 2 : 1) : 0)
+            			       << std::endl;
             }
-            ++num_alignments;
+            ++(extend_data->num_alignments);
             if (alignment_performed) {
-                ++num_alignments_performed;
+                ++(extend_data->num_alignments_performed);
                 if (aln->ok){
                     is_a_match = true;
                     alignments[k] = aln;
@@ -182,23 +232,20 @@ int wflambda_extend_match(
             }
 
             // cleanup old sketches
-            if (v > v_max) {
-                v_max = v;
-                if (v >= wflambda_max_distance_threshold) {
-                    auto &s =
-                            query_sketches[v - wflambda_max_distance_threshold];
+            if (v > extend_data->v_max) {
+            	extend_data->v_max = v;
+                if (v >= wflign.wflambda_max_distance_threshold) {
+                    auto &s = query_sketches[v - wflign.wflambda_max_distance_threshold];
                     // The C++ language guarantees that delete p will do
                     // nothing if p is equal to NULL
                     delete s;
                     s = nullptr;
                 }
             }
-            if (h > h_max) {
-                h_max = h;
-                if (h >= wflambda_max_distance_threshold) {
-                    auto &s =
-                            target_sketches[h -
-                            wflambda_max_distance_threshold];
+            if (h > extend_data->h_max) {
+            	extend_data->h_max = h;
+                if (h >= wflign.wflambda_max_distance_threshold) {
+                    auto &s = target_sketches[h - wflign.wflambda_max_distance_threshold];
                     // The C++ language guarantees that delete p will do
                     // nothing if p is equal to NULL
                     delete s;
@@ -344,13 +391,11 @@ void WFlign::wflign_affine_wavefront(
     // accumulate runs of matches in reverse order
     // then trim the cigars of successive mappings
     std::vector<alignment_t*> trace;
-
-    uint64_t num_alignments = 0;
-    uint64_t num_alignments_performed = 0;
     const auto start_time = std::chrono::steady_clock::now();
 
     if (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
-
+        uint64_t num_alignments = 0;
+        uint64_t num_alignments_performed = 0;
     	wfa::WFAlignerGapAffine& wf_aligner =
     			new wfa::WFAlignerGapAffine(
     					wfa_affine_penalties.mismatch,
@@ -413,20 +458,35 @@ void WFlign::wflign_affine_wavefront(
 
         // write a merged alignment
         write_merged_alignment(
-                out, trace, wf_aligner, &wfa_affine_penalties,
+                out,
+                trace,
+                wf_aligner,
+                &wfa_affine_penalties,
                 emit_md_tag,
-                paf_format_else_sam, no_seq_in_sam,
+                paf_format_else_sam,
+                no_seq_in_sam,
                 query,
-                query_name, query_total_length,
-                query_offset, query_length, query_is_rev,
+                query_name,
+                query_total_length,
+                query_offset,
+                query_length,
+                query_is_rev,
                 target,
-                target_name, target_total_length, target_offset, target_length,
-                MAX_LEN_FOR_PURE_WFA, min_identity,
-                elapsed_time_wflambda_ms, num_alignments,
-                num_alignments_performed, mashmap_estimated_identity,
-                wflign_max_len_major, wflign_max_len_minor,
+                target_name,
+                target_total_length,
+                target_offset,
+                target_length,
+                MAX_LEN_FOR_PURE_WFA,
+                min_identity,
+                elapsed_time_wflambda_ms,
+                num_alignments,
+                num_alignments_performed,
+                mashmap_estimated_identity,
+                wflign_max_len_major,
+                wflign_max_len_minor,
                 erode_k,
-                MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                MIN_WF_LENGTH,
+                MAX_DIST_THRESHOLD);
 
         // Free
         delete wf_aligner;
@@ -538,21 +598,13 @@ void WFlign::wflign_affine_wavefront(
         	wflambda_aligner.setReductionNone();
         }
 
-        // save computed alignments in a pair-indexed map
+        // Save computed alignments in a pair-indexed map
         robin_hood::unordered_flat_map<uint64_t,alignment_t*> alignments;
-        // allocate vectors to store our sketches
+        // Allocate vectors to store our sketches
         std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length,nullptr);
         std::vector<std::vector<rkmh::hash_t>*> target_sketches(text_length,nullptr);
 
-    	wflign_extend_data_t wflign_extend_data;
-    	wflign_extend_data.v_max = 0;
-    	wflign_extend_data.h_max = 0;
-    	wflign_extend_data.alignments = &alignments;
-    	wflign_extend_data.query_sketches = &query_sketches;
-    	wflign_extend_data.target_sketches = &target_sketches;
-        wflambda_aligner.setMatchFunct(wflambda_extend_match,(void*)&wflign_extend_data);
-
-        // FIXME Move me close to where I'm being used
+        // Allocate subsidiary WFAligner
     	wfa::WFAlignerGapAffine& wf_aligner =
     			new wfa::WFAlignerGapAffine(
     					wfa_affine_penalties.mismatch,
@@ -562,6 +614,27 @@ void WFlign::wflign_affine_wavefront(
     					wfa::WFAligner::WavefrontMemoryFull);
     	wf_aligner.setReductionNone();
 
+    	// Setup WFling extend data
+    	wflign_extend_data_t extend_data;
+    	extend_data.pattern_length = pattern_length;
+    	extend_data.text_length = text_length;
+    	extend_data.step_size = step_size;
+    	extend_data.segment_length_to_use = segment_length_to_use;
+    	extend_data.minhash_kmer_size = minhash_kmer_size;
+    	extend_data.wfa_min_wavefront_length = wfa_min_wavefront_length;
+    	extend_data.wfa_max_distance_threshold = wfa_max_distance_threshold;
+    	extend_data.max_mash_dist_to_evaluate = max_mash_dist_to_evaluate;
+    	extend_data.v_max = 0;
+    	extend_data.h_max = 0;
+    	extend_data.alignments = &alignments;
+    	extend_data.query_sketches = &query_sketches;
+    	extend_data.target_sketches = &target_sketches;
+    	extend_data.wf_aligner = wf_aligner;
+    	extend_data.wfa_affine_penalties = &wfa_affine_penalties;
+    	extend_data.num_alignments = 0;
+    	extend_data.num_alignments_performed = 0;
+        wflambda_aligner.setMatchFunct(wflambda_extend_match,(void*)&extend_data);
+
         // HERE WAS auto extend_match = [&](const int &v, const int &h);
         // HERE WAS auto trace_match = [&](const int &v, const int &h)
 
@@ -569,12 +642,13 @@ void WFlign::wflign_affine_wavefront(
         wflambda_aligner.alignEnd2End(pattern_length,text_length);
 
         // Extract the trace
-        num_alignments += wflambda_trace_match(
+        extend_data.num_alignments += wflambda_trace_match(
         		alignments,wflambda_aligner,trace,pattern_length,text_length);
 
         // Free
         delete wflambda_aligner;
 
+        // FIXME: Can we put this inside wflambda_trace_match?
         for (const auto &p : alignments) {
             if (p.second != nullptr && !p.second->keep) {
                 delete p.second;
@@ -639,10 +713,12 @@ void WFlign::wflign_affine_wavefront(
 						assert(false);
 					}
 				#endif
-				trace_pos_t last_pos = {last.j, last.i, &last.edit_cigar,
-										last.edit_cigar.begin_offset};
-				trace_pos_t curr_pos = {curr.j, curr.i, &curr.edit_cigar,
-										curr.edit_cigar.begin_offset};
+				trace_pos_t last_pos(
+						last.j,last.i,&last.edit_cigar,
+						last.edit_cigar.begin_offset);
+				trace_pos_t curr_pos(
+						curr.j,curr.i,&curr.edit_cigar,
+						curr.edit_cigar.begin_offset);
 
 				// trace the last alignment until we overlap the next
 				// to record our match
@@ -745,27 +821,52 @@ void WFlign::wflign_affine_wavefront(
             if (merge_alignments) {
                 // write a merged alignment
                 write_merged_alignment(
-                        out, trace, wf_aligner, &wfa_affine_penalties,
+                        out,
+                        trace,
+                        wf_aligner,
+                        &wfa_affine_penalties,
                         emit_md_tag,
-                        paf_format_else_sam, no_seq_in_sam,
+                        paf_format_else_sam,
+                        no_seq_in_sam,
                         query,
                         query_name,
                         query_total_length,
-                        query_offset, query_length, query_is_rev, target, target_name,
-                        target_total_length, target_offset, target_length,
-                        segment_length_to_use, min_identity,
-                        elapsed_time_wflambda_ms, num_alignments,
-                        num_alignments_performed, mashmap_estimated_identity,
-                        wflign_max_len_major, wflign_max_len_minor,
+                        query_offset,
+                        query_length,
+                        query_is_rev,
+                        target,
+                        target_name,
+                        target_total_length,
+                        target_offset,
+                        target_length,
+                        segment_length_to_use,
+                        min_identity,
+                        elapsed_time_wflambda_ms,
+                        extend_data.num_alignments,
+                        extend_data.num_alignments_performed,
+                        mashmap_estimated_identity,
+                        wflign_max_len_major,
+                        wflign_max_len_minor,
                         erode_k,
-                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                        MIN_WF_LENGTH,
+                        MAX_DIST_THRESHOLD);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
-                    write_alignment(out, **x, query_name, query_total_length,
-                                    query_offset, query_length, query_is_rev,
-                                    target_name, target_total_length, target_offset,
-                                    target_length, min_identity, mashmap_estimated_identity);
+                    write_alignment(
+                    		out,
+                    		**x,
+                    		query_name,
+                    		query_total_length,
+                    		query_offset,
+                    		query_length,
+                    		query_is_rev,
+                    		target_name,
+                    		target_total_length,
+                    		target_offset,
+                    		target_length,
+                    		min_identity,
+                    		mashmap_estimated_identity);
                 }
             }
         }

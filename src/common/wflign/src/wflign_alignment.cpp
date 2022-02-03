@@ -10,10 +10,19 @@
 /*
  * Wflign Alignment
  */
+alignment_t::alignment_t() {
+	j = 0;
+	i = 0;
+	query_length = 0;
+	target_length = 0;
+	ok = false;
+	keep = false;
+	edit_cigar = {NULL, 0, 0};
+}
 void alignment_t::display(void) {
 	std::cerr << j << " " << i << " " << query_length << " "
 			  << target_length << " " << ok << std::endl;
-	for (int x = 0; x < edit_cigar.cigar_length; ++x) {
+	for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
 		std::cerr << edit_cigar.cigar_ops[x];
 	}
 	std::cerr << std::endl;
@@ -21,8 +30,7 @@ void alignment_t::display(void) {
 bool alignment_t::validate(
 		const char *query,
 		const char *target) {
-    return validate_cigar(edit_cigar, query, target, query_length,
-                          target_length, j, i);
+    return validate_cigar(edit_cigar,query,target,query_length,target_length,j,i);
 }
 void alignment_t::trim_front(int query_trim) {
     // this kills the alignment
@@ -34,7 +42,7 @@ void alignment_t::trim_front(int query_trim) {
     int trim_to_j = j + query_trim;
     int x = edit_cigar.begin_offset;
     while (x < edit_cigar.end_offset && j < trim_to_j) {
-        switch (edit_cigar.operations[x++]) {
+        switch (edit_cigar.cigar_ops[x++]) {
         case 'M':
         case 'X':
             --query_length;
@@ -58,7 +66,7 @@ void alignment_t::trim_front(int query_trim) {
             return;
         }
     }
-    while (x < edit_cigar.end_offset && edit_cigar.operations[x] == 'D') {
+    while (x < edit_cigar.end_offset && edit_cigar.cigar_ops[x] == 'D') {
         ++x;
         --target_length;
         ++i;
@@ -75,7 +83,7 @@ void alignment_t::trim_back(int query_trim) {
     int x = edit_cigar.end_offset;
     int q = 0;
     while (x > edit_cigar.begin_offset && q < query_trim) {
-        switch (edit_cigar.operations[--x]) {
+        switch (edit_cigar.cigar_ops[--x]) {
         case 'M':
         case 'X':
             --query_length;
@@ -98,7 +106,7 @@ void alignment_t::trim_back(int query_trim) {
         }
     }
     while (x >= edit_cigar.begin_offset &&
-           edit_cigar.operations[x - 1] == 'D') {
+           edit_cigar.cigar_ops[x - 1] == 'D') {
         --x;
         --target_length;
     }
@@ -111,10 +119,20 @@ alignment_t::~alignment_t() {
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit
  */
+trace_pos_t::trace_pos_t(
+		const int j,
+		const int i,
+		wflign_cigar_t* const edit_cigar,
+		const int offset) {
+    this->j = 0;
+    this->i = 0;
+    this->edit_cigar = nullptr;
+    this->offset = 0;
+}
 bool trace_pos_t::incr() {
 	// FIXME ANDREA Shouldn't it be
-	// if (offset < edit_cigar->cigar_length-1)
-    if (offset < edit_cigar->cigar_length) {
+	// if (offset < edit_cigar->end_offset-1)
+    if (offset < edit_cigar->end_offset) {
         switch (curr()) {
         case 'M':
         case 'X':
@@ -160,7 +178,7 @@ bool trace_pos_t::decr() {
     }
 }
 bool trace_pos_t::at_end() {
-	return offset == edit_cigar->cigar_length;
+	return offset == edit_cigar->end_offset;
 }
 char trace_pos_t::curr() {
     assert(!at_end());
@@ -187,15 +205,15 @@ bool validate_cigar(
 		uint64_t j,
 		uint64_t i) {
     // check that our cigar matches where it claims it does
-    const int cigar_length = cigar.cigar_length;
-    const char* const cigar_ops = cigar.cigar_ops;
+    const int start_idx = cigar.begin_offset;
+    const int end_idx = cigar.end_offset;
     const uint64_t j_max = j + query_aln_len;
     const uint64_t i_max = i + target_aln_len;
     bool ok = true;
     // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-    for (int c = 0; c < cigar_length; c++) {
+    for (int c = start_idx; c < end_idx; c++) {
         // if new sequence of same moves started
-        switch (cigar_ops[c]) {
+        switch (cigar.cigar_ops[c]) {
         case 'M':
             // check that we match
             if (query[j] != target[i]) {
@@ -272,6 +290,7 @@ bool validate_trace(
                         ok = false;
                     }
                 }
+
                 ++j;
                 ++i;
                 break;
@@ -296,6 +315,7 @@ bool validate_trace(
                         ok = false;
                     }
                 }
+
                 ++j;
                 ++i;
                 break;
@@ -326,7 +346,6 @@ char* alignment_to_cigar(
 		uint64_t& inserted_bp,
 		uint64_t& deletions,
 		uint64_t& deleted_bp) {
-
     // the edit cigar contains a character string of ops
     // here we compress them into the standard cigar representation
 
@@ -403,20 +422,20 @@ char* wfa_alignment_to_cigar(
 		uint64_t &inserted_bp,
 		uint64_t &deletions,
 		uint64_t &deleted_bp) {
-
     // the edit cigar contains a character string of ops
     // here we compress them into the standard cigar representation
 
     auto *cigar = new std::vector<char>();
     char lastMove = 0; // Char of last move. 0 if there was no previous move.
     int numOfSameMoves = 0;
-    const int cigar_length = edit_cigar->cigar_length;
-    const char* const cigar_ops = edit_cigar->cigar_ops;
+    const int start_idx = edit_cigar->begin_offset;
+    const int end_idx = edit_cigar->end_offset;
 
     // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-    for (int i = 0; i < cigar_length; i++) {
+    for (int i = start_idx; i <= end_idx; i++) {
         // if new sequence of same moves started
-        if (i == cigar_length || (cigar_ops[i] != lastMove && lastMove != 0)) {
+        if (i == end_idx ||
+            (edit_cigar->cigar_ops[i] != lastMove && lastMove != 0)) {
             // calculate matches, mismatches, insertions, deletions
             switch (lastMove) {
             case 'M':
@@ -442,6 +461,7 @@ char* wfa_alignment_to_cigar(
             default:
                 break;
             }
+
             // Write number of moves to cigar string.
             int numDigits = 0;
             for (; numOfSameMoves; numOfSameMoves /= 10) {
@@ -454,12 +474,12 @@ char* wfa_alignment_to_cigar(
             lastMove = lastMove == 'M' ? '=' : lastMove;
             cigar->push_back(lastMove);
             // If not at the end, start new sequence of moves.
-            if (i < cigar_length) {
+            if (i < end_idx) {
                 numOfSameMoves = 0;
             }
         }
-        if (i < cigar_length) {
-            lastMove = cigar_ops[i];
+        if (i < end_idx) {
+            lastMove = edit_cigar->cigar_ops[i];
             numOfSameMoves++;
         }
     }
@@ -483,14 +503,14 @@ bool unpack_display_cigar(
 		uint64_t j,
 		uint64_t i) {
     // check that our cigar matches where it claims it does
-    const int cigar_length = cigar.cigar_length;
-    const char* const cigar_ops = cigar.cigar_ops;
+    const int start_idx = cigar.begin_offset;
+    const int end_idx = cigar.end_offset;
     const uint64_t j_max = j + query_aln_len;
     const uint64_t i_max = i + target_aln_len;
     // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-    for (int c = 0; c < cigar_length; c++) {
+    for (int c = start_idx; c < end_idx; c++) {
         // if new sequence of same moves started
-        switch (cigar_ops[c]) {
+        switch (cigar.cigar_ops[c]) {
         case 'M':
             // check that we match
             std::cerr << "M"
