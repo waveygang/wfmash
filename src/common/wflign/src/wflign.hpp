@@ -22,26 +22,16 @@
  * Configuration
  */
 //#define WFLIGN_DEBUG true // for debugging messages
-#define VALIDATE_WFA_WFLIGN
+//#define VALIDATE_WFA_WFLIGN
 
 // Namespaces
 namespace wflign {
 namespace wavefront {
 
-/*
- * Support data-structures
- */
-typedef struct {
-	int match;
-	int mismatch;
-	int gap_opening;
-	int gap_extension;
-} wflign_penalties_t;
-
 class WFlign {
 public:
 	// WFlambda parameters
-	//uint16_t segment_length;
+	uint16_t segment_length;
 	float min_identity;
 	int _minhash_kmer_size;
 	int wfa_mismatch_score;
@@ -81,7 +71,7 @@ public:
 	bool no_seq_in_sam;
 	// Setup
 	WFlign(
-		//const uint16_t segment_length,
+		const uint16_t segment_length,
 		const float min_identity,
 		const int _minhash_kmer_size,
 		const int wfa_mismatch_score,
