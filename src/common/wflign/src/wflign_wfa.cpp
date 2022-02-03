@@ -183,27 +183,27 @@ void wflign_affine_wavefront(
         max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
-        erode_k = 0;
+        erode_k = 47;
     } else if (mashmap_estimated_identity >= 0.98) {
         max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
-        erode_k = 0;
+        erode_k = 29;
     } else if (mashmap_estimated_identity >= 0.97) {
         max_mash_dist_to_evaluate = 0.075;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
-        erode_k = 0;
+        erode_k = 19;
     } else if (mashmap_estimated_identity >= 0.95) {
         max_mash_dist_to_evaluate = 0.15;
         mash_sketch_rate = 0.25;
         inception_score_max_ratio = 3;
-        erode_k = 0;
+        erode_k = 11;
     } else if (mashmap_estimated_identity >= 0.9) {
         max_mash_dist_to_evaluate = 0.3;
         mash_sketch_rate = 0.3;
         inception_score_max_ratio = 4;
-        erode_k = 0;
+        erode_k = 7;
     } else if (mashmap_estimated_identity >= 0.85) {
         max_mash_dist_to_evaluate = 0.4;
         mash_sketch_rate = 0.35;
@@ -2232,98 +2232,165 @@ void write_merged_alignment(
 #endif
         };
 
+        //std::vector<char> pre_tracev;
         {
-            std::vector<char> rawv;
+            std::vector<char> erodev;
+            {
+                std::vector<char> rawv;
+
+                // copy
 #ifdef WFLIGN_DEBUG
-            std::cerr
-                << "[wflign::wflign_affine_wavefront] copying traceback"
-                << std::endl;
+                std::cerr
+                    << "[wflign::wflign_affine_wavefront] copying traceback"
+                    << std::endl;
 #endif
-            for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
-                auto &aln = **x;
-                if (aln.ok) {
-                    if (ok_alns == 0) {
-                        query_start = aln.j;
-                        target_start = aln.i;
-                    }
-                    ++ok_alns;
-                    if (query_end && aln.j > query_end) {
-                        const int len = aln.j - query_end;
-                        for (uint64_t i = 0; i < len; ++i) {
-                            rawv.push_back('I');
+                for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
+                    auto &aln = **x;
+                    if (aln.ok) {
+                        if (ok_alns == 0) {
+                            query_start = aln.j;
+                            target_start = aln.i;
                         }
-                    }
-                    if (target_end && aln.i > target_end) {
-                        const int len = aln.i - target_end;
-                        for (uint64_t i = 0; i < len; ++i) {
-                            rawv.push_back('D');
+                        ++ok_alns;
+                        if (query_end && aln.j > query_end) {
+                            const int len = aln.j - query_end;
+                            for (uint64_t i = 0; i < len; ++i) {
+                                rawv.push_back('I');
+                            }
                         }
-                    }
-                    uint64_t target_aligned_length = 0;
-                    uint64_t query_aligned_length = 0;
-                    const int start_idx = aln.edit_cigar.begin_offset;
-                    const int end_idx = aln.edit_cigar.end_offset;
-                    for (int i = start_idx; i < end_idx; i++) {
-                        const auto &c = aln.edit_cigar.operations[i];
-                        switch (c) {
-                        case 'M':
-                        case 'X':
-                            ++query_aligned_length;
-                            ++target_aligned_length;
-                            break;
-                        case 'I':
-                            ++query_aligned_length;
-                            break;
-                        case 'D':
-                            ++target_aligned_length;
-                            break;
-                        default:
-                            break;
+                        if (target_end && aln.i > target_end) {
+                            const int len = aln.i - target_end;
+                            for (uint64_t i = 0; i < len; ++i) {
+                                rawv.push_back('D');
+                            }
                         }
-                        rawv.push_back(c);
+                        uint64_t target_aligned_length = 0;
+                        uint64_t query_aligned_length = 0;
+                        const int start_idx = aln.edit_cigar.begin_offset;
+                        const int end_idx = aln.edit_cigar.end_offset;
+                        for (int i = start_idx; i < end_idx; i++) {
+                            const auto &c = aln.edit_cigar.operations[i];
+                            switch (c) {
+                            case 'M':
+                            case 'X':
+                                ++query_aligned_length;
+                                ++target_aligned_length;
+                                break;
+                            case 'I':
+                                ++query_aligned_length;
+                                break;
+                            case 'D':
+                                ++target_aligned_length;
+                                break;
+                            default:
+                                break;
+                            }
+                            rawv.push_back(c);
+                        }
+                        query_end = aln.j + query_aligned_length;
+                        target_end = aln.i + target_aligned_length;
                     }
-                    query_end = aln.j + query_aligned_length;
-                    target_end = aln.i + target_aligned_length;
+                    // clean up
+                    delete *x;
                 }
-                // clean up
-                delete *x;
+
+#ifdef VALIDATE_WFA_WFLIGN
+                if (!validate_trace(rawv, query, target - target_pointer_shift,
+                                    query_length, target_length_mut,
+                                    query_start, target_start)) {
+                    std::cerr
+                        << "cigar failure in rawv (at end) "
+                        << "\t" << query_name << "\t" << query_total_length
+                        << "\t"
+                        << query_offset + (query_is_rev
+                                               ? query_length - query_end
+                                               : query_start)
+                        << "\t"
+                        << query_offset + (query_is_rev
+                                               ? query_length - query_start
+                                               : query_end)
+                        << "\t" << (query_is_rev ? "-" : "+") << "\t"
+                        << target_name << "\t" << target_total_length << "\t"
+                        << target_offset - target_pointer_shift + target_start
+                        << "\t" << target_offset + target_end << std::endl;
+                    exit(1);
+                }
+#endif
+
+#ifdef WFLIGN_DEBUG
+                std::cerr << "[wflign::wflign_affine_wavefront] eroding "
+                             "traceback at k="
+                          << erode_k << std::endl;
+#endif
+
+                // erode by removing matches < k
+                for (uint64_t i = 0; i < rawv.size();) {
+                    if (rawv[i] == 'M' || rawv[i] == 'X') {
+                        uint64_t j = i;
+                        while (++j < rawv.size() &&
+                               (rawv[j] == 'M' || rawv[j] == 'X')) {
+                        }
+                        if (j - i < erode_k) {
+                            while (i < j) {
+                                erodev.push_back('D');
+                                erodev.push_back('I');
+                                ++i;
+                            }
+                        } else {
+                            while (i < j) {
+                                erodev.push_back(rawv[i++]);
+                            }
+                        }
+                    } else {
+                        erodev.push_back(rawv[i++]);
+                    }
+                }
             }
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(rawv, query, target - target_pointer_shift,
-                                query_length, target_length_mut,
-                                query_start, target_start)) {
-                std::cerr
-                    << "cigar failure in rawv (at end) "
-                    << "\t" << query_name << "\t" << query_total_length
-                    << "\t"
-                    << query_offset + (query_is_rev
-                                       ? query_length - query_end
-                                       : query_start)
-                    << "\t"
-                    << query_offset + (query_is_rev
-                                       ? query_length - query_start
-                                       : query_end)
-                    << "\t" << (query_is_rev ? "-" : "+") << "\t"
-                    << target_name << "\t" << target_total_length << "\t"
-                    << target_offset - target_pointer_shift + target_start
-                    << "\t" << target_offset + target_end << std::endl;
+            if (!validate_trace(erodev, query, target - target_pointer_shift,
+                                query_length, target_length_mut, query_start,
+                                target_start)) {
+                std::cerr << "cigar failure in erodev "
+                          << "\t" << query_name << "\t" << query_total_length
+                          << "\t"
+                          << query_offset + (query_is_rev
+                                                 ? query_length - query_end
+                                                 : query_start)
+                          << "\t"
+                          << query_offset + (query_is_rev
+                                                 ? query_length - query_start
+                                                 : query_end)
+                          << "\t" << (query_is_rev ? "-" : "+") << "\t"
+                          << target_name << "\t" << target_total_length << "\t"
+                          << target_offset - target_pointer_shift + target_start
+                          << "\t" << target_offset + target_end << std::endl;
                 exit(1);
             }
 #endif
 
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] normalizing eroded "
-                "traceback"
+                         "traceback"
                       << std::endl;
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(rawv);
+            sort_indels(erodev);
+
+#ifdef WFLIGN_DEBUG
+            std::cerr << "[wflign::wflign_affine_wavefront] got normalized "
+                         "eroded traceback: ";
+            for (auto c : erodev) {
+                std::cerr << c;
+            }
+            std::cerr << std::endl;
+#endif
 
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(rawv, tracev);
+            patching(erodev, tracev);
+            //pre_tracev = erodev;
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(tracev, query,
@@ -2333,12 +2400,12 @@ void write_merged_alignment(
                           << "\t" << query_name << "\t" << query_total_length
                           << "\t"
                           << query_offset + (query_is_rev
-                                             ? query_length - query_end
-                                             : query_start)
+                                                 ? query_length - query_end
+                                                 : query_start)
                           << "\t"
                           << query_offset + (query_is_rev
-                                             ? query_length - query_start
-                                             : query_end)
+                                                 ? query_length - query_start
+                                                 : query_end)
                           << "\t" << (query_is_rev ? "-" : "+") << "\t"
                           << target_name << "\t" << target_total_length << "\t"
                           << target_offset - target_pointer_shift + target_start
@@ -2350,6 +2417,11 @@ void write_merged_alignment(
             // normalize: sort so that I<D and otherwise leave it as-is
             sort_indels(tracev);
         }
+
+        // std::cerr << "SECOND PATCH ROUND
+        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+        //patching(pre_tracev, tracev);
+        //tracev = pre_tracev;
     }
 
     // normalize the indels
