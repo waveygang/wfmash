@@ -175,30 +175,30 @@ void wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     int erode_k = 0;
-    float inception_score_max_ratio = 2;
+    float inception_score_max_ratio = 3;
     float max_mash_dist_to_evaluate = 1;
     float mash_sketch_rate = 1;
 
     if (mashmap_estimated_identity >= 0.99) {
         max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
-        inception_score_max_ratio = 3;
-        erode_k = 47;
+        inception_score_max_ratio = 2;
+        erode_k = 13;
     } else if (mashmap_estimated_identity >= 0.98) {
         max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
-        inception_score_max_ratio = 3;
-        erode_k = 29;
+        inception_score_max_ratio = 2;
+        erode_k = 13;
     } else if (mashmap_estimated_identity >= 0.97) {
         max_mash_dist_to_evaluate = 0.075;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
-        erode_k = 19;
+        erode_k = 11;
     } else if (mashmap_estimated_identity >= 0.95) {
         max_mash_dist_to_evaluate = 0.15;
         mash_sketch_rate = 0.25;
         inception_score_max_ratio = 3;
-        erode_k = 11;
+        erode_k = 9;
     } else if (mashmap_estimated_identity >= 0.9) {
         max_mash_dist_to_evaluate = 0.3;
         mash_sketch_rate = 0.3;
@@ -2232,7 +2232,7 @@ void write_merged_alignment(
 #endif
         };
 
-        //std::vector<char> pre_tracev;
+        std::vector<char> pre_tracev;
         {
             std::vector<char> erodev;
             {
@@ -2389,8 +2389,11 @@ void write_merged_alignment(
 
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, tracev);
-            //pre_tracev = erodev;
+            if (erode_k > 0) {
+                patching(erodev, pre_tracev);
+            } else {
+                pre_tracev = erodev;
+            }
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(tracev, query,
@@ -2420,8 +2423,11 @@ void write_merged_alignment(
 
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        //patching(pre_tracev, tracev);
-        //tracev = pre_tracev;
+        if (erode_k > 0) {
+            patching(pre_tracev, tracev);
+        } else {
+            tracev = pre_tracev;
+        }
     }
 
     // normalize the indels
