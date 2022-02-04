@@ -38,7 +38,11 @@ extern "C" {
   #include "../../wavefront/wavefront_aligner.h"
 }
 
+/*
+ * Namespace
+ */
 namespace wfa {
+
 /*
  * General Wavefront Aligner
  */
@@ -145,5 +149,6 @@ public:
       const MemoryModel memoryModel = WFAligner::WavefrontMemoryFull);
 };
 
+} /* namespace wfa */
 
 #endif /* BINDINGS_CPP_WFALIGNER_HPP_ */

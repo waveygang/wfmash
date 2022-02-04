@@ -12,11 +12,11 @@
 #include <functional>
 #include <fstream>
 
+#include "wflign_alignment.hpp"
+
+#include "robin-hood-hashing/robin_hood.h"
 #include "dna.hpp"
 #include "rkmh.hpp"
-#include "wflign_alignment.hpp"
-#include "robin-hood-hashing/robin_hood.h"
-#include "WFA/bindings/cpp/WFAligner.hpp"
 
 /*
  * Configuration
@@ -65,7 +65,7 @@ public:
 	uint64_t target_length;
 	// Output
 	std::ostream* out;
-	const bool emit_tsv;
+	bool emit_tsv;
 	std::ostream* out_tsv;
 	bool merge_alignments;
 	bool emit_md_tag;

@@ -19,6 +19,9 @@ alignment_t::alignment_t() {
 	keep = false;
 	edit_cigar = {NULL, 0, 0};
 }
+alignment_t::~alignment_t() {
+	free(edit_cigar.cigar_ops);
+}
 void alignment_t::display(void) {
 	std::cerr << j << " " << i << " " << query_length << " "
 			  << target_length << " " << ok << std::endl;
@@ -113,9 +116,6 @@ void alignment_t::trim_back(int query_trim) {
     if (x == edit_cigar.begin_offset) ok = false;
     edit_cigar.end_offset = x;
 }
-alignment_t::~alignment_t() {
-	free(edit_cigar.cigar_ops);
-}
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit
  */
@@ -124,6 +124,12 @@ trace_pos_t::trace_pos_t(
 		const int i,
 		wflign_cigar_t* const edit_cigar,
 		const int offset) {
+    this->j = j;
+    this->i = i;
+    this->edit_cigar = edit_cigar;
+    this->offset = offset;
+}
+trace_pos_t::trace_pos_t() {
     this->j = 0;
     this->i = 0;
     this->edit_cigar = nullptr;
@@ -184,7 +190,7 @@ char trace_pos_t::curr() {
     assert(!at_end());
     return edit_cigar->cigar_ops[offset];
 }
-bool trace_pos_t::equal(const trace_pos_t& other) {
+bool trace_pos_t::equal(trace_pos_t& other) {
     return j == other.j &&
     	   i == other.i &&
     	   curr() == 'M' &&
@@ -251,7 +257,7 @@ bool validate_cigar(
     return ok;
 }
 bool validate_trace(
-		const std::vector<char>& tracev,
+		std::vector<char>& tracev,
 		const char* query,
 		const char* target,
 		const uint64_t& query_aln_len,

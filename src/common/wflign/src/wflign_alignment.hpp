@@ -1,6 +1,7 @@
 #ifndef WFLIGN_ALIGNMENT_HPP_
 #define WFLIGN_ALIGNMENT_HPP_
 
+#include <vector>
 #include <cstdint>
 #include "WFA/bindings/cpp/WFAligner.hpp"
 
@@ -37,6 +38,7 @@ public:
 	wflign_cigar_t edit_cigar;
 	// Setup
 	alignment_t();
+	~alignment_t();
 	// Utils
 	bool validate(
 			const char* query,
@@ -61,12 +63,13 @@ public:
     		const int i,
     		wflign_cigar_t* const edit_cigar,
     		const int offset);
+    trace_pos_t();
     // Accessors
     bool incr();
     bool decr();
     bool at_end();
     char curr();
-    bool equal(const trace_pos_t& other);
+    bool equal(trace_pos_t& other);
     bool assigned();
 };
 /*
@@ -81,7 +84,7 @@ bool validate_cigar(
 		uint64_t j,
 		uint64_t i);
 bool validate_trace(
-		const std::vector<char>& tracev,
+		std::vector<char>& tracev,
 		const char* query,
 		const char* target,
 		const uint64_t& query_aln_len,

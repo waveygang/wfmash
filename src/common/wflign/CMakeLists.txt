@@ -31,7 +31,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(ExternalProject)
 ExternalProject_Add(
   project_wfa
-  URL file://${CMAKE_CURRENT_SOURCE_DIR}/deps//WFA
+  URL file://${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps/WFA
   CONFIGURE_COMMAND ""
   BUILD_COMMAND make release
@@ -55,7 +55,11 @@ add_executable(
   src/wflign_alignment.cpp
   src/rkmh.cpp
   src/murmur3.cpp)
-target_include_directories(wflign PRIVATE deps/)
+target_include_directories(
+  wflign PRIVATE deps/
+  deps/ 
+  deps/robin-hood-hashing
+  deps/WFA)
 
 #
 # WFling library

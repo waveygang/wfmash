@@ -1,7 +1,6 @@
 #ifndef WFLIGN_PATCH_HPP_
 #define WFLIGN_PATCH_HPP_
 
-#include "WFA/edit/edit_dp.h"
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -12,8 +11,7 @@
 #include <sstream>
 #include <functional>
 #include <fstream>
-#include "WFA/bindings/cpp/WFAligner.hpp"
-#include "robin-hood-hashing/robin_hood.h"
+
 #include "dna.hpp"
 #include "rkmh.hpp"
 #include "wflign_alignment.hpp"
@@ -48,7 +46,7 @@ bool do_wfa_segment_alignment(
 		const int& max_distance_threshold,
 		const float& max_mash_dist,
 		const float& mashmap_estimated_identity,
-		const wfa::WFAlignerGapAffine& wf_aligner,
+		wfa::WFAlignerGapAffine& wf_aligner,
 		const wflign_penalties_t& affine_penalties,
 		alignment_t& aln);
 void do_wfa_patch_alignment(
@@ -61,13 +59,13 @@ void do_wfa_patch_alignment(
 		const int& segment_length,
 		const int& min_wavefront_length,
 		const int& max_distance_threshold,
-		const wfa::WFAlignerGapAffine& _wf_aligner,
+		wfa::WFAlignerGapAffine& _wf_aligner,
 		const wflign_penalties_t& affine_penalties,
 		alignment_t& aln);
 void write_merged_alignment(
 	    std::ostream &out,
 	    const std::vector<alignment_t *> &trace,
-	    const wfa::WFAlignerGapAffine& wf_aligner,
+	    wfa::WFAlignerGapAffine& wf_aligner,
 	    const wflign_penalties_t& affine_penalties,
 	    const bool& emit_md_tag,
 	    const bool& paf_format_else_sam,

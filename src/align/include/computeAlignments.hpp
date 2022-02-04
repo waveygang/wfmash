@@ -18,7 +18,6 @@
 #include <memory>
 #include <htslib/faidx.h>
 
-#include "../../common/wflign/src/wflign_patch.hpp"
 //Own includes
 #include "align/include/align_types.hpp"
 #include "align/include/align_parameters.hpp"
@@ -26,6 +25,7 @@
 #include "map/include/commonFunc.hpp"
 
 //External includes
+#include "common/wflign/src/wflign.hpp"
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
@@ -470,41 +470,45 @@ namespace align
         // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix in there is just one alignment for the query)
         const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
 
-        wflign::wavefront::wflign_affine_wavefront(
-            output,
-            !param.tsvOutputPrefix.empty(),
-            output_tsv,
-            true, // merge alignments
-            param.emit_md_tag,
-            !param.sam_format, param.no_seq_in_sam,
-            currentRecord.qId + query_name_suffix,
-            queryRegionStrand,
-            querySize,
-            currentRecord.qStartPos,
-            queryLen,
-            currentRecord.strand != skch::strnd::FWD,
-            currentRecord.refId,
-            ref_seq,
-            ref_size,
-            currentRecord.rStartPos,
-            refLen,
-            param.wflambda_segment_length,
-            param.min_identity,
-            17 /*param.kmerSize*/,
-            param.wfa_mismatch_score,
-            param.wfa_gap_opening_score,
-            param.wfa_gap_extension_score,
-            param.wflambda_min_wavefront_length,
-            param.wflambda_max_distance_threshold,
-            currentRecord.mashmap_estimated_identity,
-            param.wflign_mismatch_score,
-            param.wflign_gap_opening_score,
-            param.wflign_gap_extension_score,
-            param.wflign_max_mash_dist,
-            param.wflign_max_len_major,
-            param.wflign_max_len_minor,
-            param.wflign_erode_k);
+        wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
+				param.wflambda_segment_length,
+				param.min_identity,
+				17 /*param.kmerSize*/,
+				param.wfa_mismatch_score,
+				param.wfa_gap_opening_score,
+				param.wfa_gap_extension_score,
+				param.wflambda_min_wavefront_length,
+				param.wflambda_max_distance_threshold,
+				currentRecord.mashmap_estimated_identity,
+				param.wflign_mismatch_score,
+				param.wflign_gap_opening_score,
+				param.wflign_gap_extension_score,
+				param.wflign_max_mash_dist,
+				param.wflign_max_len_major,
+				param.wflign_max_len_minor,
+				param.wflign_erode_k);
+        wflign->set_output(
+                &output,
+                !param.tsvOutputPrefix.empty(),
+                &output_tsv,
+                true, // merge alignments
+                param.emit_md_tag,
+                !param.sam_format,
+                param.no_seq_in_sam);
+        wflign->wflign_affine_wavefront(
+        		currentRecord.qId + query_name_suffix,
+				queryRegionStrand,
+				querySize,
+				currentRecord.qStartPos,
+				queryLen,
+				currentRecord.strand != skch::strnd::FWD,
+				currentRecord.refId,
+				ref_seq,
+				ref_size,
+				currentRecord.rStartPos,
+				refLen);
 
+        delete wflign;
         delete [] queryRegionStrand;
 
         // Re-shift the pointer to the malloc()-ed address

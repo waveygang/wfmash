@@ -33,8 +33,7 @@ target_include_directories(wfmash PRIVATE
   src
   src/common
   src/common/wflign/deps
-  src/common/wflign/deps/wflambdav2
-  src/common/wflign/deps/WFAv2
+  src/common/wflign/deps/WFA
   #src/common/wflign/abseil-cpp
   )
 
