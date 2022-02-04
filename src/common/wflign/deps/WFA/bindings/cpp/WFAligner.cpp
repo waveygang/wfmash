@@ -36,6 +36,11 @@ extern "C" {
 }
 
 /*
+ * Namespace
+ */
+namespace wfa {
+
+/*
  * General Wavefront Aligner
  */
 WFAligner::WFAligner(
@@ -90,10 +95,10 @@ int WFAligner::getAlignmentScore() {
   return wfAligner->cigar.score;
 }
 void WFAligner::getAlignmentCigar(
-    char** const buffer,
-    int* bufferLength) {
- *buffer = wfAligner->cigar.operations + wfAligner->cigar.begin_offset;
- *bufferLength = wfAligner->cigar.end_offset - wfAligner->cigar.begin_offset;
+    char** const cigarOperations,
+    int* cigarLength) {
+ *cigarOperations = wfAligner->cigar.operations + wfAligner->cigar.begin_offset;
+ *cigarLength = wfAligner->cigar.end_offset - wfAligner->cigar.begin_offset;
 }
 std::string WFAligner::getAlignmentCigar() {
   // Fetch CIGAR
@@ -232,5 +237,5 @@ WFAlignerGapAffine2Pieces::WFAlignerGapAffine2Pieces(
   wfAligner = wavefront_aligner_new(&attributes);
 }
 
-
+} /* namespace wfa */
 

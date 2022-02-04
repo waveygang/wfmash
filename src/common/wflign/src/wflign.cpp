@@ -301,26 +301,26 @@ int wflambda_trace_match(
  * WFling align
  */
 void WFlign::wflign_affine_wavefront(
-		std::string* const query_name,
+		const std::string& query_name,
 		char* const query,
 		const uint64_t query_total_length,
 		const uint64_t query_offset,
 		const uint64_t query_length,
 		const bool query_is_rev,
-		std::string* const target_name,
+		const std::string& target_name,
 		char* const target,
 		const uint64_t target_total_length,
 		const uint64_t target_offset,
 		const uint64_t target_length) {
 	// Set query
-	this->query_name = query_name;
+	this->query_name = &query_name;
 	this->query = query;
 	this->query_total_length = query_total_length;
 	this->query_offset = query_offset;
 	this->query_length = query_length;
 	this->query_is_rev = query_is_rev;
 	// Set target
-	this->target_name = target_name;
+	this->target_name = &target_name;
 	this->target = target;
 	this->target_total_length = target_total_length;
 	this->target_offset = target_offset;
@@ -453,13 +453,13 @@ void WFlign::wflign_affine_wavefront(
                 paf_format_else_sam,
                 no_seq_in_sam,
                 query,
-                *query_name,
+                query_name,
                 query_total_length,
                 query_offset,
                 query_length,
                 query_is_rev,
                 target,
-                *target_name,
+                target_name,
                 target_total_length,
                 target_offset,
                 target_length,
@@ -816,13 +816,13 @@ void WFlign::wflign_affine_wavefront(
                         paf_format_else_sam,
                         no_seq_in_sam,
                         query,
-                        *query_name,
+                        query_name,
                         query_total_length,
                         query_offset,
                         query_length,
                         query_is_rev,
                         target,
-                        *target_name,
+                        target_name,
                         target_total_length,
                         target_offset,
                         target_length,
@@ -843,12 +843,12 @@ void WFlign::wflign_affine_wavefront(
                     write_alignment(
                     		*out,
                     		**x,
-                    		*query_name,
+                    		query_name,
                     		query_total_length,
                     		query_offset,
                     		query_length,
                     		query_is_rev,
-                    		*target_name,
+                    		target_name,
                     		target_total_length,
                     		target_offset,
                     		target_length,

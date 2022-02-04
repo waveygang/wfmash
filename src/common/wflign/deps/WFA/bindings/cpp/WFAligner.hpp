@@ -71,8 +71,8 @@ public:
   // Accessors
   int getAlignmentScore();
   void getAlignmentCigar(
-      char** const buffer,  // FIXME
-      int* const bufferLength);
+      char** const cigarOperations,
+      int* cigarLength);
   std::string getAlignmentCigar();
   // Align End-to-end
   int alignEnd2End(

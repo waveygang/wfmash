@@ -51,14 +51,14 @@ public:
 	uint64_t wflign_max_len_minor;
 	uint16_t erode_k;
 	// Query
-	std::string* query_name;
+	const std::string* query_name;
 	char* query;
 	uint64_t query_total_length;
 	uint64_t query_offset;
 	uint64_t query_length;
 	bool query_is_rev;
 	// Target
-	std::string* target_name;
+	const std::string* target_name;
 	char* target;
 	uint64_t target_total_length;
 	uint64_t target_offset;
@@ -100,13 +100,13 @@ public:
 		const bool no_seq_in_sam);
 	// WFling affine
 	void wflign_affine_wavefront(
-		std::string* const query_name,
+		const std::string& query_name,
 		char* const query,
 		const uint64_t query_total_length,
 		const uint64_t query_offset,
 		const uint64_t query_length,
 		const bool query_is_rev,
-		std::string* const target_name,
+		const std::string& target_name,
 		char* const target,
 		const uint64_t target_total_length,
 		const uint64_t target_offset,

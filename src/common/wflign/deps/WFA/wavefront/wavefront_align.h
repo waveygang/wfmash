@@ -35,9 +35,15 @@
 #include "wavefront_aligner.h"
 #include "wavefront_display.h" // For convenience
 
+/*
+ * Error codes & messages
+ */
 #define WF_ALIGN_SUCCESSFUL   0
 #define WF_ALIGN_MAX_SCORE   -1
 #define WF_ALIGN_OOM         -2
+
+extern char* wf_error_msg[3];
+char* wavefront_align_strerror(const int wf_error_code);
 
 /*
  * Wavefront Alignment

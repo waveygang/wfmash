@@ -28,22 +28,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #
 # WFA Build
 # 
-include(ExternalProject)
-ExternalProject_Add(
-  project_wfa
-  URL file://${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA
-  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps/WFA
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND make release
-  INSTALL_COMMAND ""
+add_custom_target(
+   wfa_lib
+   COMMAND make
+   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA
 )
-# SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA
-# BUILD_IN_SOURCE 1
-
-ExternalProject_Get_Property(project_wfa install_dir)
-add_library(wfa STATIC IMPORTED)
-set_property(TARGET wfa PROPERTY IMPORTED_LOCATION ${install_dir}/build/libwfa.a)
-add_dependencies(wfa project_wfa)
 
 #
 # WFling
@@ -53,6 +42,7 @@ add_executable(
   src/main.cpp
   src/wflign.cpp
   src/wflign_alignment.cpp
+  src/wflign_patch.cpp
   src/rkmh.cpp
   src/murmur3.cpp)
 target_include_directories(
@@ -64,11 +54,12 @@ target_include_directories(
 #
 # WFling library
 # 
-target_link_libraries(wflign wfa z)
+target_link_libraries(wflign z)
 add_library(
   libwflign_static STATIC
   src/wflign.cpp
   src/wflign_alignment.cpp
+  src/wflign_patch.cpp
   src/rkmh.cpp
   src/murmur3.cpp)
 set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
@@ -77,4 +68,5 @@ target_include_directories(
   deps/
   deps/robin-hood-hashing
   deps/WFA)
+add_dependencies(libwflign_static wfa_lib)
 

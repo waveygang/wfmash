@@ -34,6 +34,7 @@
 #include "bindings/cpp/WFAligner.hpp"
 
 using namespace std;
+using namespace wfa;
 
 // Patter & Text
 int pattern[] = {100, 102, 104, 99, 43,     56, 78, 190, 22};
@@ -57,7 +58,7 @@ int main(int argc,char* argv[]) {
   WFAlignerGapAffine aligner(1,0,1);
   aligner.setMatchFunct(match_function,NULL);
   // Align
-  aligner.alignGlobal(patternLength,textLength);
+  aligner.alignEnd2End(patternLength,textLength);
   cout << "WFA-Alignment returns score " << aligner.getAlignmentScore() << endl;
 
   // Print CIGAR
