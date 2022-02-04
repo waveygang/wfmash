@@ -30,7 +30,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # 
 add_custom_target(
    wfa_lib
-   COMMAND make
+   COMMAND make clean all
    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA
 )
 
