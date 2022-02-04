@@ -276,7 +276,7 @@ int wflambda_trace_match(
 	int v = pattern_length-1;
 	int h = text_length-1;
 	int i, num_alignments = 0;
-	for (i=cigar_length-1;i>=0;) {
+	for (i=cigar_length-1;i>=0;--i) {
 		switch (cigar_ops[i]) {
 			case 'I':      --h; break;
 			case 'D': --v;      break;
@@ -578,7 +578,7 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.gap_opening,
     					wfa_affine_penalties.gap_extension,
     					false,
-    					wfa::WFAligner::WavefrontMemoryHigh);
+    					wfa::WFAligner::WavefrontMemoryFull);
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
         	wflambda_aligner->setReductionAdaptive(wflambda_min_wavefront_length,wflambda_max_distance_threshold);
         } else {
