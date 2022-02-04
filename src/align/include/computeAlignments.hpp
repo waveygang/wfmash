@@ -18,6 +18,7 @@
 #include <memory>
 #include <htslib/faidx.h>
 
+#include "../../common/wflign/src/wflign_patch.hpp"
 //Own includes
 #include "align/include/align_types.hpp"
 #include "align/include/align_parameters.hpp"
@@ -29,7 +30,6 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 #include "common/utils.hpp"
-#include "common/wflign/src/wflign_wfa.hpp"
 
 namespace align
 {

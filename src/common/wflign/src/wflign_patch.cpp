@@ -1,38 +1,34 @@
-#include "wflign_wfa.hpp"
 #include <chrono>
+#include "wflign_patch.hpp"
 
 namespace wflign {
 
 namespace wavefront {
 
-//#define MAX_LEN_FOR_PURE_WFA    50000
-//#define MIN_WF_LENGTH           256
-//#define MAX_DIST_THRESHOLD      4096
-
-wfa::wavefront_aligner_t* get_wavefront_aligner(
-    const wfa::affine_penalties_t& wfa_affine_penalties,
-    //ToDo: to remove if wavefront_aligner_new will not re-take the seqs' lens in input
-    const uint64_t& target_length,
-    const uint64_t& query_length,
-    const bool& low_memory) {
-    // Configure the attributes of the wf-aligner
-    wfa::wavefront_aligner_attr_t attributes =
-        wfa::wavefront_aligner_attr_default;
-    attributes.distance_metric = wfa::gap_affine;
-    attributes.affine_penalties = wfa_affine_penalties;
-    // attributes.distance_metric = gap_affine2p;
-    // attributes.affine2p_penalties = affine2p_penalties;
-    attributes.reduction.reduction_strategy =
-        wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
-    // attributes.reduction.min_wavefront_length = 10;
-    // attributes.reduction.max_distance_threshold = 50;
-    attributes.alignment_scope =
-        wfa::compute_alignment; // alignment_scope_score
-    attributes.low_memory = low_memory;
-    //wfa::wavefront_aligner_t *const wf_aligner =
-    //return wfa::wavefront_aligner_new(target_length, query_length, &attributes);
-    return wfa::wavefront_aligner_new(&attributes);
-}
+//wfa::wavefront_aligner_t* get_wavefront_aligner(
+//    const wfa::affine_penalties_t& wfa_affine_penalties,
+//    //ToDo: to remove if wavefront_aligner_new will not re-take the seqs' lens in input
+//    const uint64_t& target_length,
+//    const uint64_t& query_length,
+//    const bool& low_memory) {
+//    // Configure the attributes of the wf-aligner
+//    wfa::wavefront_aligner_attr_t attributes =
+//        wfa::wavefront_aligner_attr_default;
+//    attributes.distance_metric = wfa::gap_affine;
+//    attributes.affine_penalties = wfa_affine_penalties;
+//    // attributes.distance_metric = gap_affine2p;
+//    // attributes.affine2p_penalties = affine2p_penalties;
+//    attributes.reduction.reduction_strategy =
+//        wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
+//    // attributes.reduction.min_wavefront_length = 10;
+//    // attributes.reduction.max_distance_threshold = 50;
+//    attributes.alignment_scope =
+//        wfa::compute_alignment; // alignment_scope_score
+//    attributes.low_memory = low_memory;
+//    //wfa::wavefront_aligner_t *const wf_aligner =
+//    //return wfa::wavefront_aligner_new(target_length, query_length, &attributes);
+//    return wfa::wavefront_aligner_new(&attributes);
+//}
 
 // accumulate alignment objects
 // run the traceback determine which are part of the main chain
@@ -40,18 +36,27 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 // needed--- 0-cost deduplication of alignment regions (how????)
 //     --- trim the alignment back to the first 1/2 of the query
 bool do_wfa_segment_alignment(
-    const std::string &query_name, const char *query,
-    std::vector<rkmh::hash_t> *&query_sketch, const uint64_t &query_length,
-    const uint64_t &j, const std::string &target_name, const char *target,
-    std::vector<rkmh::hash_t> *&target_sketch, const uint64_t &target_length,
-    const uint64_t &i,
-    const uint16_t &segment_length_q,
-    const uint16_t &segment_length_t,
-    const uint16_t &step_size, const uint64_t &minhash_kmer_size,
-    const int &min_wavefront_length,
-    const int &max_distance_threshold, const float &max_mash_dist, const float& mashmap_estimated_identity,
-    wfa::wavefront_aligner_t *const wf_aligner,
-    wfa::affine_penalties_t *const affine_penalties, alignment_t &aln) {
+		const std::string& query_name,
+		const char* query,
+		std::vector<rkmh::hash_t>*& query_sketch,
+		const uint64_t& query_length,
+		const uint64_t& j,
+		const std::string& target_name,
+		const char* target,
+		std::vector<rkmh::hash_t>*& target_sketch,
+		const uint64_t& target_length,
+		const uint64_t& i,
+		const uint16_t& segment_length_q,
+		const uint16_t& segment_length_t,
+		const uint16_t& step_size,
+		const uint64_t& minhash_kmer_size,
+		const int& min_wavefront_length,
+		const int& max_distance_threshold,
+		const float& max_mash_dist,
+		const float& mashmap_estimated_identity,
+		const wfa::WFAlignerGapAffine& wf_aligner,
+		const wflign_penalties_t& affine_penalties,
+		alignment_t& aln) {
 
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
@@ -80,20 +85,16 @@ bool do_wfa_segment_alignment(
         // if it is, we'll align
 
         const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
-
-        wfa::wavefront_aligner_resize(wf_aligner, segment_length_t,
-                                             segment_length_q);
-
-        wfa::wavefront_aligner_set_max_alignment_score(wf_aligner, max_score);
-        const int status =
-            wfa::wavefront_align(wf_aligner, target + i, segment_length_t,
-                                         query + j, segment_length_q);
+        wf_aligner.setMaxAlignmentScore(max_score);
+        const int status = wf_aligner.alignEnd2End(
+        		target + i,segment_length_t,
+                query + j,segment_length_q);
 
         aln.j = j;
         aln.i = i;
 
         // aln.mash_dist = mash_dist;
-        aln.ok = status == WF_ALIGN_SUCCESSFUL && wf_aligner->cigar.score < max_score;
+        aln.ok = (status == 0);
 
         // fill the alignment info if we aligned
         if (aln.ok) {
@@ -117,7 +118,7 @@ bool do_wfa_segment_alignment(
             }
 #endif
 
-            wflign_edit_cigar_copy(&aln.edit_cigar, &wf_aligner->cigar);
+            wflign_edit_cigar_copy(wf_aligner,&aln.edit_cigar);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
@@ -196,15 +197,19 @@ bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
     return ok;
 }*/
 
-void do_wfa_patch_alignment(const char *query, const uint64_t &j,
-                            const uint64_t &query_length, const char *target,
-                            const uint64_t &i, const uint64_t &target_length,
-                            const int &segment_length,
-                            const int &min_wavefront_length,
-                            const int &max_distance_threshold,
-                            wfa::wavefront_aligner_t *const _wf_aligner,
-                            wfa::affine_penalties_t *const affine_penalties,
-                            alignment_t &aln) {
+void do_wfa_patch_alignment(
+		const char* query,
+		const uint64_t& j,
+		const uint64_t& query_length,
+		const char* target,
+		const uint64_t& i,
+		const uint64_t& target_length,
+		const int& segment_length,
+		const int& min_wavefront_length,
+		const int& max_distance_threshold,
+		const wfa::WFAlignerGapAffine& _wf_aligner,
+		const wflign_penalties_t& affine_penalties,
+		alignment_t& aln) {
     const long max_seg_len = 3 * segment_length;
     const bool big_wave = (query_length > max_seg_len || target_length > max_seg_len);
     wfa::wavefront_aligner_t* const wf_aligner
@@ -285,26 +290,36 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
 }
 
 void write_merged_alignment(
-    std::ostream &out, const std::vector<alignment_t *> &trace,
-    wfa::wavefront_aligner_t *const wf_aligner,
-    wfa::affine_penalties_t *const affine_penalties,
-    const bool &emit_md_tag,
-    const bool &paf_format_else_sam, const bool &no_seq_in_sam,
-    const char *query,
-    const std::string &query_name, const uint64_t &query_total_length,
-    const uint64_t &query_offset, const uint64_t &query_length,
-    const bool &query_is_rev,
-    const char *target,
-    const std::string &target_name, const uint64_t &target_total_length,
-    const uint64_t &target_offset, const uint64_t &target_length,
-    const uint16_t &segment_length,
-    const float &min_identity, const long &elapsed_time_wflambda_ms,
-    const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
-    const float &mashmap_estimated_identity,
-    const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k,
-    const int &min_wf_length, const int &max_dist_threshold,
-    const bool &with_endline) {
+    std::ostream &out,
+    const std::vector<alignment_t *> &trace,
+    const wfa::WFAlignerGapAffine& wf_aligner,
+    const wflign_penalties_t& affine_penalties,
+    const bool& emit_md_tag,
+    const bool& paf_format_else_sam,
+    const bool& no_seq_in_sam,
+    const char* query,
+    const std::string& query_name,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const uint64_t& query_length,
+    const bool& query_is_rev,
+    const char* target,
+    const std::string& target_name,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length,
+    const uint16_t& segment_length,
+    const float& min_identity,
+    const long& elapsed_time_wflambda_ms,
+    const uint64_t& num_alignments,
+    const uint64_t& num_alignments_performed,
+    const float& mashmap_estimated_identity,
+    const uint64_t& wflign_max_len_major,
+    const uint64_t& wflign_max_len_minor,
+    const uint16_t& erode_k,
+    const int& min_wf_length,
+    const int& max_dist_threshold,
+    const bool& with_endline) {
 
     int64_t target_pointer_shift = 0;
 
@@ -1701,16 +1716,20 @@ query_start : query_end)
 }
 
 void write_alignment(
-    std::ostream &out, const alignment_t &aln, const std::string &query_name,
-    const uint64_t &query_total_length,
-    const uint64_t &query_offset, // query offset on the forward strand
-    const uint64_t &
-        query_length, // used to compute the coordinates for reversed alignments
-    const bool &query_is_rev, const std::string &target_name,
-    const uint64_t &target_total_length, const uint64_t &target_offset,
-    const uint64_t &target_length, // unused
-    const float &min_identity, const float &mashmap_estimated_identity,
-    const bool &with_endline) {
+    std::ostream& out,
+    const alignment_t& aln,
+    const std::string& query_name,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset, // query offset on the forward strand
+    const uint64_t& query_length, // used to compute the coordinates for reversed alignments
+    const bool& query_is_rev,
+    const std::string& target_name,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length, // unused
+    const float& min_identity,
+    const float& mashmap_estimated_identity,
+    const bool& with_endline) {
 
     if (aln.ok) {
         uint64_t matches = 0;
@@ -1774,82 +1793,7 @@ void write_alignment(
     }
 }
 
-char *alignment_to_cigar(const std::vector<char> &edit_cigar,
-                         const uint64_t &start_idx, const uint64_t &end_idx,
-                         uint64_t &target_aligned_length,
-                         uint64_t &query_aligned_length, uint64_t &matches,
-                         uint64_t &mismatches, uint64_t &insertions,
-                         uint64_t &inserted_bp, uint64_t &deletions,
-                         uint64_t &deleted_bp) {
-
-    // the edit cigar contains a character string of ops
-    // here we compress them into the standard cigar representation
-
-    auto *cigar = new std::vector<char>();
-    char lastMove = 0; // Char of last move. 0 if there was no previous move.
-    int numOfSameMoves = 0;
-
-    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-    for (int i = start_idx; i <= end_idx; i++) {
-        // if new sequence of same moves started
-        if (i == end_idx || (edit_cigar[i] != lastMove && lastMove != 0)) {
-            // calculate matches, mismatches, insertions, deletions
-            switch (lastMove) {
-            case 'M':
-                matches += numOfSameMoves;
-                query_aligned_length += numOfSameMoves;
-                target_aligned_length += numOfSameMoves;
-                break;
-            case 'X':
-                mismatches += numOfSameMoves;
-                query_aligned_length += numOfSameMoves;
-                target_aligned_length += numOfSameMoves;
-                break;
-            case 'I':
-                ++insertions;
-                inserted_bp += numOfSameMoves;
-                query_aligned_length += numOfSameMoves;
-                break;
-            case 'D':
-                ++deletions;
-                deleted_bp += numOfSameMoves;
-                target_aligned_length += numOfSameMoves;
-                break;
-            default:
-                break;
-            }
-
-            // Write number of moves to cigar string.
-            int numDigits = 0;
-            for (; numOfSameMoves; numOfSameMoves /= 10) {
-                cigar->push_back('0' + numOfSameMoves % 10);
-                numDigits++;
-            }
-            std::reverse(cigar->end() - numDigits, cigar->end());
-            // Write code of move to cigar string.
-            // reassign 'M' to '=' for convenience
-            lastMove = lastMove == 'M' ? '=' : lastMove;
-            cigar->push_back(lastMove);
-            // If not at the end, start new sequence of moves.
-            if (i < end_idx) {
-                numOfSameMoves = 0;
-            }
-        }
-        if (i < end_idx) {
-            lastMove = edit_cigar[i];
-            numOfSameMoves++;
-        }
-    }
-    cigar->push_back(0); // Null character termination.
-
-    char *cigar_ = (char *)malloc(cigar->size() * sizeof(char));
-    std::memcpy(cigar_, &(*cigar)[0], cigar->size() * sizeof(char));
-    delete cigar;
-
-    return cigar_;
-}
-
-double float2phred(const double &prob) {
+double float2phred(const double& prob) {
     if (prob == 1)
         return 255; // guards against "-0"
     double p = -10 * (double)log10(prob);
@@ -1859,8 +1803,7 @@ double float2phred(const double &prob) {
         return p;
 }
 
-
-void sort_indels(std::vector<char> &v) {
+void sort_indels(std::vector<char>& v) {
     auto f = v.begin();
     while (f != v.end()) {
         auto j = f;
@@ -1876,6 +1819,5 @@ void sort_indels(std::vector<char> &v) {
     }
 }
 
-} // namespace wavefront
-
-} // namespace wflign
+} /* namespace wavefront */
+} /* namespace wflign */

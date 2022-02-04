@@ -24,7 +24,9 @@
 //#define WFLIGN_DEBUG true // for debugging messages
 //#define VALIDATE_WFA_WFLIGN
 
-// Namespaces
+/*
+ * Namespaces
+ */
 namespace wflign {
 namespace wavefront {
 
@@ -111,7 +113,7 @@ public:
 		const uint64_t target_length);
 };
 
-} // namespace wavefront
-} // namespace wflign
+} /* namespace wavefront */
+} /* namespace wflign */
 
 #endif /* WFLIGN_HPP_ */

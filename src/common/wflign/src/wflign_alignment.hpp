@@ -2,6 +2,7 @@
 #define WFLIGN_ALIGNMENT_HPP_
 
 #include <cstdint>
+#include "WFA/bindings/cpp/WFAligner.hpp"
 
 /*
  * Cigar
@@ -91,27 +92,27 @@ bool validate_trace(
  * Alignment-CIGAR Adaptors
  */
 char* alignment_to_cigar(
-		const std::vector<char> &edit_cigar,
-		const uint64_t &start_idx,
-		const uint64_t &end_idx,
-		uint64_t &target_aligned_length,
-		uint64_t &query_aligned_length,
-		uint64_t &matches,
-		uint64_t &mismatches,
-		uint64_t &insertions,
-		uint64_t &inserted_bp,
-		uint64_t &deletions,
-		uint64_t &deleted_bp);
+		const std::vector<char>& edit_cigar,
+		const uint64_t& start_idx,
+		const uint64_t& end_idx,
+		uint64_t& target_aligned_length,
+		uint64_t& query_aligned_length,
+		uint64_t& matches,
+		uint64_t& mismatches,
+		uint64_t& insertions,
+		uint64_t& inserted_bp,
+		uint64_t& deletions,
+		uint64_t& deleted_bp);
 char* wfa_alignment_to_cigar(
 		const wflign_cigar_t* const edit_cigar,
-		uint64_t &target_aligned_length,
-		uint64_t &query_aligned_length,
-		uint64_t &matches,
-		uint64_t &mismatches,
-		uint64_t &insertions,
-		uint64_t &inserted_bp,
-		uint64_t &deletions,
-		uint64_t &deleted_bp);
+		uint64_t& target_aligned_length,
+		uint64_t& query_aligned_length,
+		uint64_t& matches,
+		uint64_t& mismatches,
+		uint64_t& insertions,
+		uint64_t& inserted_bp,
+		uint64_t& deletions,
+		uint64_t& deleted_bp);
 /*
  * Utils
  */
@@ -123,5 +124,8 @@ bool unpack_display_cigar(
 		const uint64_t target_aln_len,
 		uint64_t j,
 		uint64_t i);
+void wflign_edit_cigar_copy(
+		wfa::WFAligner& wf_aligner,
+		wflign_cigar_t* const cigar_dst);
 
 #endif /* WFLIGN_ALIGNMENT_HPP_ */

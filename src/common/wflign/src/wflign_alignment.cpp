@@ -335,9 +335,9 @@ bool validate_trace(
  * Alignment-CIGAR Adaptors
  */
 char* alignment_to_cigar(
-		const std::vector<char> &edit_cigar,
-		const uint64_t &start_idx,
-		const uint64_t &end_idx,
+		const std::vector<char>& edit_cigar,
+		const uint64_t& start_idx,
+		const uint64_t& end_idx,
 		uint64_t& target_aligned_length,
 		uint64_t& query_aligned_length,
 		uint64_t& matches,
@@ -414,14 +414,14 @@ char* alignment_to_cigar(
 }
 char* wfa_alignment_to_cigar(
 		const wflign_cigar_t* const edit_cigar,
-		uint64_t &target_aligned_length,
-		uint64_t &query_aligned_length,
-		uint64_t &matches,
-		uint64_t &mismatches,
-		uint64_t &insertions,
-		uint64_t &inserted_bp,
-		uint64_t &deletions,
-		uint64_t &deleted_bp) {
+		uint64_t& target_aligned_length,
+		uint64_t& query_aligned_length,
+		uint64_t& matches,
+		uint64_t& mismatches,
+		uint64_t& insertions,
+		uint64_t& inserted_bp,
+		uint64_t& deletions,
+		uint64_t& deleted_bp) {
     // the edit cigar contains a character string of ops
     // here we compress them into the standard cigar representation
 
@@ -559,6 +559,20 @@ bool unpack_display_cigar(
         }
     }
     return true;
+}
+void wflign_edit_cigar_copy(
+		wfa::WFAligner& wf_aligner,
+		wflign_cigar_t* const cigar_dst) {
+	// Retrieve CIGAR
+	char* cigar_ops;
+	int cigar_length;
+	wf_aligner.getAlignmentCigar(&cigar_ops,&cigar_length);
+	// Allocate
+	cigar_dst->cigar_ops = (char*)malloc(cigar_length);
+	// Copy
+	cigar_dst->begin_offset = 0;
+	cigar_dst->end_offset = cigar_length;
+	memcpy(cigar_dst->cigar_ops,cigar_ops,cigar_length);
 }
 /*
 // No more necessary

@@ -1,7 +1,7 @@
 #include <iostream>
 #include "args.hxx"
 #include "seqiter.hpp"
-#include "wflign_wfa.hpp"
+#include "wflign_patch.hpp"
 
 void parse_file_list(const std::string& file,
                      std::vector<std::string>& files) {

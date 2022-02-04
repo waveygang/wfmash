@@ -5,7 +5,7 @@
 #include <iterator>
 #include <string>
 
-#include "src/wflign.hpp"
+#include "wflign.hpp"
 
 // Namespaces
 namespace wflign {
@@ -55,20 +55,6 @@ uint64_t encode_pair(
 		int v,
 		int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
-}
-void wflign_edit_cigar_copy(
-		wfa::WFAligner& wf_aligner,
-		wflign_cigar_t* const cigar_dst) {
-	// Retrieve CIGAR
-	char* cigar_ops;
-	int cigar_length;
-	wf_aligner.getAlignmentCigar(&cigar_ops,&cigar_length);
-	// Allocate
-	cigar_dst->cigar_ops = (char*)malloc(cigar_length);
-	// Copy
-	cigar_dst->begin_offset = 0;
-	cigar_dst->end_offset = cigar_length;
-	memcpy(cigar_dst->cigar_ops,cigar_ops,cigar_length);
 }
 /*
  * Setup
