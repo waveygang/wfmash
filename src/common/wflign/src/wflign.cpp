@@ -603,6 +603,7 @@ void WFlign::wflign_affine_wavefront(
 
     	// Setup WFling extend data
     	wflign_extend_data_t extend_data;
+    	extend_data.wflign = this;
     	extend_data.pattern_length = pattern_length;
     	extend_data.text_length = text_length;
     	extend_data.step_size = step_size;
