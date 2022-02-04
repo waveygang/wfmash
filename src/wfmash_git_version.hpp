@@ -1,1 +1,0 @@
-#define WFMASH_GIT_VERSION "v0.7.0-83-g1e4e08b"
