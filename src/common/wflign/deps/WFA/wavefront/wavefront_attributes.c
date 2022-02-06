@@ -77,7 +77,7 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .max_distance_threshold = 50,
     },
     // Memory model
-    .memory_mode = wavefront_memory_full,
+    .memory_mode = wavefront_memory_high,
     // MM
     .mm_allocator = NULL, // Use private MM
     // Display
@@ -96,6 +96,6 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .max_memory_compact = -1,  // Automatically set based on memory-mode
         .max_memory_resident = -1, // Automatically set based on memory-mode
         .max_memory_abort = UINT64_MAX, // Unlimited
-        .verbose = false,
+        .verbose = 0, // Quiet
     },
 };

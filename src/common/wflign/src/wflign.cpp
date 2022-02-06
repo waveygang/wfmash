@@ -388,8 +388,8 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.mismatch,
     					wfa_affine_penalties.gap_opening,
     					wfa_affine_penalties.gap_extension,
-    					false,
-    					wfa::WFAligner::WavefrontMemoryHigh);
+    					wfa::WFAligner::Alignment,
+    					wfa::WFAligner::MemoryMed);
     	wf_aligner->setReductionAdaptive(MIN_WF_LENGTH,MAX_DIST_THRESHOLD);
     	const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
 
@@ -577,8 +577,8 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.mismatch,
     					wfa_affine_penalties.gap_opening,
     					wfa_affine_penalties.gap_extension,
-    					false,
-    					wfa::WFAligner::WavefrontMemoryFull);
+    					wfa::WFAligner::Alignment,
+						wfa::WFAligner::MemoryHigh);
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
         	wflambda_aligner->setReductionAdaptive(wflambda_min_wavefront_length,wflambda_max_distance_threshold);
         } else {
@@ -597,8 +597,8 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.mismatch,
     					wfa_affine_penalties.gap_opening,
     					wfa_affine_penalties.gap_extension,
-    					false,
-    					wfa::WFAligner::WavefrontMemoryFull);
+    					wfa::WFAligner::Alignment,
+						wfa::WFAligner::MemoryHigh);
     	wf_aligner->setReductionNone();
 
     	// Setup WFling extend data
@@ -627,7 +627,7 @@ void WFlign::wflign_affine_wavefront(
         // HERE WAS auto trace_match = [&](const int &v, const int &h)
 
         // Align
-        wflambda_aligner->alignEnd2End(pattern_length,text_length);
+        wflambda_aligner->alignEnd2EndLambda(pattern_length,text_length);
 
         // Extract the trace
         extend_data.num_alignments += wflambda_trace_match(

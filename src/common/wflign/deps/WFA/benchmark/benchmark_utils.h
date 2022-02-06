@@ -60,10 +60,17 @@ typedef struct {
   int pattern_length;
   char* text;
   int text_length;
+  // Alignment form
+  bool ends_free;
+  int pattern_begin_free;
+  int text_begin_free;
+  int pattern_end_free;
+  int text_end_free;
   // Output
   FILE* output_file;
+  bool output_full;
   // MM
-  wavefront_aligner_t* wf_aligner; // WF-Aligner (Pre-allocated)
+  wavefront_aligner_t* wf_aligner;
   mm_allocator_t* mm_allocator;
   // PROFILE/STATS
   profiler_timer_t timer;
@@ -102,7 +109,12 @@ void benchmark_print_alignment(
     cigar_t* const cigar_computed,
     const int score_correct,
     cigar_t* const cigar_correct);
-void benchmark_print_alignment_output(
+void benchmark_print_output_lite(
+    FILE* const stream,
+    align_input_t* const align_input,
+    const int score,
+    cigar_t* const cigar);
+void benchmark_print_output_full(
     FILE* const stream,
     align_input_t* const align_input,
     const int score,

@@ -66,6 +66,25 @@ typedef struct {
   // Limits
   int max_alignment_score; // Maximum score allowed before quit
 } alignment_form_t;
+
+/*
+ * Custom extend-match function, e.g.:
+ *
+ *   typedef struct {
+ *     char* pattern;
+ *     int pattern_length;
+ *     char* text;
+ *     int text_length;
+ *   } match_function_params_t;
+ *
+ *   int match_function(int v,int h,void* arguments) {
+ *     // Extract parameters
+ *     match_function_params_t* match_arguments = (match_function_params_t*)arguments;
+ *     // Check match
+ *     if (v > match_arguments->pattern_length || h > match_arguments->text_length) return 0;
+ *     return (match_arguments->pattern[v] == match_arguments->text[h]);
+ *   }
+ */
 typedef int (*alignment_match_funct_t)(int,int,void*);
 
 /*
@@ -79,18 +98,22 @@ typedef struct {
   uint64_t max_memory_compact;   // Maximum BT-buffer memory allowed before trying compacting
   uint64_t max_memory_resident;  // Maximum memory allowed to be buffered before reap
   uint64_t max_memory_abort;     // Maximum memory allowed to be used before aborting alignment
-  // Misc
-  bool verbose;                  // Verbose (regulates messages during alignment)
+  // Verbose
+  //  0 - Quiet
+  //  1 - Report WFA progress and heavy tasks
+  //  2 - Report each sequence aligned (brief)
+  //  3 - Report each sequence aligned (very verbose)
+  int verbose;                   // Verbose (regulates messages during alignment)
 } alignment_system_t;
 
 /*
  * Low-memory modes
  */
 typedef enum {
-  wavefront_memory_full = 0, // High-memore mode (fastest, stores all WFs explicitly)
-  wavefront_memory_high = 1, // Succing-memory mode (fast, offloads multiple BT-blocks -- even empty)
-  wavefront_memory_med  = 2, // Succing-memory mode (medium, offloads half-full BT-blocks)
-  wavefront_memory_low  = 3, // Succing-memory mode (slow, offloads only full BT-blocks)
+  wavefront_memory_high = 0,     // High-memore mode (fastest, stores all WFs explicitly)
+  wavefront_memory_med = 1,      // Succing-memory mode (fast, offloads multiple BT-blocks)
+  wavefront_memory_low = 2,      // Succing-memory mode (medium, offloads half-full BT-blocks)
+  wavefront_memory_ultralow = 3, // Succing-memory mode (slow, offloads only full BT-blocks)
 } wavefront_memory_t;
 
 /*

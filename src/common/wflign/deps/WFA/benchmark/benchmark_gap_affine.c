@@ -60,10 +60,15 @@ void benchmark_gap_affine_swg(
   if (align_input->debug_flags) {
     benchmark_check_alignment(align_input,&cigar);
   }
+  // Output
   if (align_input->output_file) {
     const int score = cigar_score_gap_affine(&cigar,penalties);
-    benchmark_print_alignment_output(
-        align_input->output_file,align_input,score,&cigar);
+    FILE* const output_file = align_input->output_file;
+    if (align_input->output_full) {
+      benchmark_print_output_full(output_file,align_input,score,&cigar);
+    } else {
+      benchmark_print_output_lite(output_file,align_input,score,&cigar);
+    }
   }
   // Free
   affine_matrix_free(&affine_matrix,align_input->mm_allocator);
@@ -71,11 +76,7 @@ void benchmark_gap_affine_swg(
 }
 void benchmark_gap_affine_swg_endsfree(
     align_input_t* const align_input,
-    affine_penalties_t* const penalties,
-    const int pattern_begin_free,
-    const int pattern_end_free,
-    const int text_begin_free,
-    const int text_end_free) {
+    affine_penalties_t* const penalties) {
   // Allocate
   affine_matrix_t affine_matrix;
   affine_matrix_allocate(
@@ -90,17 +91,22 @@ void benchmark_gap_affine_swg_endsfree(
   swg_compute_endsfree(&affine_matrix,penalties,
       align_input->pattern,align_input->pattern_length,
       align_input->text,align_input->text_length,
-      pattern_begin_free,pattern_begin_free,
-      text_begin_free,text_end_free,&cigar);
+      align_input->pattern_begin_free,align_input->pattern_begin_free,
+      align_input->text_begin_free,align_input->text_end_free,&cigar);
   timer_stop(&align_input->timer);
   // DEBUG
   if (align_input->debug_flags) {
     benchmark_check_alignment(align_input,&cigar);
   }
+  // Output
   if (align_input->output_file) {
     const int score = cigar_score_gap_affine(&cigar,penalties);
-    benchmark_print_alignment_output(
-        align_input->output_file,align_input,score,&cigar);
+    FILE* const output_file = align_input->output_file;
+    if (align_input->output_full) {
+      benchmark_print_output_full(output_file,align_input,score,&cigar);
+    } else {
+      benchmark_print_output_lite(output_file,align_input,score,&cigar);
+    }
   }
   // Free
   affine_matrix_free(&affine_matrix,align_input->mm_allocator);
@@ -129,10 +135,15 @@ void benchmark_gap_affine_swg_banded(
   if (align_input->debug_flags) {
     benchmark_check_alignment(align_input,&cigar);
   }
+  // Output
   if (align_input->output_file) {
     const int score = cigar_score_gap_affine(&cigar,penalties);
-    benchmark_print_alignment_output(
-        align_input->output_file,align_input,score,&cigar);
+    FILE* const output_file = align_input->output_file;
+    if (align_input->output_full) {
+      benchmark_print_output_full(output_file,align_input,score,&cigar);
+    } else {
+      benchmark_print_output_lite(output_file,align_input,score,&cigar);
+    }
   }
   // Free
   affine_matrix_free(&affine_matrix,align_input->mm_allocator);
@@ -153,11 +164,16 @@ void benchmark_gap_affine_wavefront(
   if (align_input->debug_flags) {
     benchmark_check_alignment(align_input,&wf_aligner->cigar);
   }
+  // Output
   if (align_input->output_file) {
     const int score_only = (wf_aligner->alignment_scope == compute_score);
-    const int score = (score_only) ?
-        wf_aligner->cigar.score : cigar_score_gap_affine(&wf_aligner->cigar,penalties);
-    benchmark_print_alignment_output(
-        align_input->output_file,align_input,score,&wf_aligner->cigar);
+    const int score = (score_only) ? wf_aligner->cigar.score :
+        cigar_score_gap_affine(&wf_aligner->cigar,penalties);
+    FILE* const output_file = align_input->output_file;
+    if (align_input->output_full) {
+      benchmark_print_output_full(output_file,align_input,score,&wf_aligner->cigar);
+    } else {
+      benchmark_print_output_lite(output_file,align_input,score,&wf_aligner->cigar);
+    }
   }
 }

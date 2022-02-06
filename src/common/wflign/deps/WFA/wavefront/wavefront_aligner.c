@@ -96,15 +96,15 @@ void wavefront_set_alignment_system(
   // Reset effective limits
   if (system->max_memory_compact == -1 || system->max_memory_resident == -1) {
     switch (wf_aligner->memory_mode) {
-      case wavefront_memory_high:
+      case wavefront_memory_med:
         wf_aligner->system.max_memory_compact = BUFFER_SIZE_2G;
         wf_aligner->system.max_memory_resident = BUFFER_SIZE_2G + BUFFER_SIZE_256M;
         break;
-      case wavefront_memory_med:
+      case wavefront_memory_low:
         wf_aligner->system.max_memory_compact = BUFFER_SIZE_1G;
         wf_aligner->system.max_memory_resident = BUFFER_SIZE_1G + BUFFER_SIZE_256M;
         break;
-      case wavefront_memory_low:
+      case wavefront_memory_ultralow:
         wf_aligner->system.max_memory_compact = BUFFER_SIZE_256M;
         wf_aligner->system.max_memory_resident = 2*BUFFER_SIZE_256M;
         break;
@@ -148,7 +148,7 @@ wavefront_aligner_t* wavefront_aligner_new(
   // Reduction strategy
   wavefront_set_reduction(wf_aligner,attributes);
   // Custom matching functions
-  if (wf_aligner->match_funct != NULL) {
+  if (attributes->match_funct != NULL) {
     wf_aligner->match_funct = attributes->match_funct;
     wf_aligner->match_funct_arguments = attributes->match_funct_arguments;
   }

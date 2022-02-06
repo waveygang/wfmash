@@ -223,8 +223,8 @@ void do_wfa_patch_alignment(
     			affine_penalties.mismatch,
     			affine_penalties.gap_opening,
     			affine_penalties.gap_extension,
-    			false,
-    			wfa::WFAligner::WavefrontMemoryHigh);
+    			wfa::WFAligner::Alignment,
+				wfa::WFAligner::MemoryMed);
     }
 
     /*
@@ -579,8 +579,8 @@ void write_merged_alignment(
                     					affine_penalties.mismatch,
                     					affine_penalties.gap_opening,
                     					affine_penalties.gap_extension,
-                    					false,
-                    					wfa::WFAligner::WavefrontMemoryHigh);
+                    					wfa::WFAligner::Alignment,
+										wfa::WFAligner::MemoryMed);
                     	wf_aligner_heads->setReductionAdaptive(min_wf_length,max_dist_threshold);
                     	const int status = wf_aligner_heads->alignEndsFree(
                     			target_rev.c_str(),target_rev.size(),0,0,
@@ -1105,8 +1105,8 @@ void write_merged_alignment(
                     					affine_penalties.mismatch,
                     					affine_penalties.gap_opening,
                     					affine_penalties.gap_extension,
-                    					false,
-                    					wfa::WFAligner::WavefrontMemoryHigh);
+                    					wfa::WFAligner::Alignment,
+										wfa::WFAligner::MemoryMed);
                     	wf_aligner_tails->setReductionAdaptive(min_wf_length,max_dist_threshold);
                     	const int status = wf_aligner_tails->alignEndsFree(
                     			target - target_pointer_shift + target_pos, target_delta_x,0,0,

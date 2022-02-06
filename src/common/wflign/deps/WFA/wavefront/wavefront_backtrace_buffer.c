@@ -231,6 +231,8 @@ void wf_backtrace_buffer_recover_cigar(
     const int pattern_length,
     const char* const text,
     const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
     const int alignment_k,
     const int alignment_offset,
     const pcigar_t pcigar_last,
@@ -271,11 +273,9 @@ void wf_backtrace_buffer_recover_cigar(
     int cigar_block_length = 0;
     pcigar_recover(
         palignment_blocks[i],
-        pattern,pattern_length,
-        text,text_length,
-        &v,&h,
-        cigar_buffer,&cigar_block_length,
-        &current_matrix_type);
+        pattern,pattern_length,text,text_length,
+        match_funct,match_funct_arguments,&v,&h,
+        cigar_buffer,&cigar_block_length,&current_matrix_type);
     // Update CIGAR
     cigar_buffer += cigar_block_length;
   }
@@ -434,7 +434,7 @@ void wf_backtrace_buffer_compact_marked(
   bt_buffer->block_next = write_block;
   // DEBUG
   if (verbose) {
-    fprintf(stderr,"[WFA::BacktraceBuffer] Compacted from %lu MB to %lu MB (%2.2f%%)\n",
+    fprintf(stderr,"[WFA::BacktraceBuffer] Compacted from %lu MB to %lu MB (%2.2f%%)",
         CONVERT_B_TO_MB(read_global_pos*sizeof(bt_block_t)),
         CONVERT_B_TO_MB(write_global_pos*sizeof(bt_block_t)),
         100.0f*(float)write_global_pos/(float)read_global_pos);
