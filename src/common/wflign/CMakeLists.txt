@@ -1,6 +1,6 @@
 #
 # CMAKE
-# 
+#
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 project(wflign VERSION 0.0.1)
 
@@ -9,7 +9,7 @@ include(CheckCXXCompilerFlag)
 
 #
 # Config
-# 
+#
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard it not allowed.
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
@@ -27,7 +27,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 #
 # WFA Build
-# 
+#
 add_custom_target(
    wfa_lib
    COMMAND make clean all
@@ -36,9 +36,12 @@ add_custom_target(
 
 #
 # WFling
-# 
+#
 add_executable(
   wflign
+  deps/atomic_image.cpp
+  deps/lodepng/lodepng.cpp
+  deps/atomic_image.cpp
   src/main.cpp
   src/wflign.cpp
   src/wflign_alignment.cpp
@@ -47,16 +50,19 @@ add_executable(
   src/murmur3.cpp)
 target_include_directories(
   wflign PRIVATE deps/
-  deps/ 
+  deps/
   deps/robin-hood-hashing
   deps/WFA)
 
 #
 # WFling library
-# 
+#
 target_link_libraries(wflign z)
 add_library(
   libwflign_static STATIC
+  deps/atomic_image.cpp
+  deps/lodepng/lodepng.cpp
+  deps/atomic_image.cpp
   src/wflign.cpp
   src/wflign_alignment.cpp
   src/wflign_patch.cpp
@@ -66,6 +72,8 @@ set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
 target_include_directories(
   libwflign_static PRIVATE
   deps/
+  deps/lodepng
+  deps/PicoSHA2
   deps/robin-hood-hashing
   deps/WFA)
 add_dependencies(libwflign_static wfa_lib)

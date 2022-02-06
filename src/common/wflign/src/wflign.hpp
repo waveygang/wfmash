@@ -24,6 +24,11 @@
 //#define WFLIGN_DEBUG true // for debugging messages
 //#define VALIDATE_WFA_WFLIGN
 
+#include "atomic_image.hpp"
+#include "lodepng/lodepng.h"
+
+
+
 /*
  * Namespaces
  */
@@ -67,6 +72,8 @@ public:
 	std::ostream* out;
 	bool emit_tsv;
 	std::ostream* out_tsv;
+	const std::string* prefix_wavefront_plot_in_png;
+	uint64_t wfplot_max_size;
 	bool merge_alignments;
 	bool emit_md_tag;
 	bool paf_format_else_sam;
@@ -94,6 +101,8 @@ public:
 		std::ostream* const out,
 		const bool emit_tsv,
 		std::ostream* const out_tsv,
+		const std::string &wfplot_filepath,
+        const uint64_t wfplot_max_size,
 		const bool merge_alignments,
 		const bool emit_md_tag,
 		const bool paf_format_else_sam,
@@ -111,6 +120,13 @@ public:
 		const uint64_t target_total_length,
 		const uint64_t target_offset,
 		const uint64_t target_length);
+	void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
+	    //Encode the image
+	    unsigned error = lodepng::encode(filename, image, width, height);
+
+	    //if there's an error, display it
+	    if (error) std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+	}
 };
 
 } /* namespace wavefront */

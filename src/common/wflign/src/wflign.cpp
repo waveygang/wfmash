@@ -47,16 +47,25 @@ typedef struct {
     // Stats
     uint64_t num_alignments;
     uint64_t num_alignments_performed;
+    // wfplot
+    bool emit_png;
+    robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;
 } wflign_extend_data_t;
 
 /*
  * Utils
  */
-uint64_t encode_pair(
+inline uint64_t encode_pair(
 		int v,
 		int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
+
+inline void decode_pair(uint64_t  pair, int *v, int *h) {
+    *v = pair >> 32;
+    *h = pair & 0x00000000FFFFFFFF;
+}
+
 /*
  * Setup
  */
@@ -111,6 +120,8 @@ WFlign::WFlign(
 	this->out = NULL;
 	this->emit_tsv = false;
 	this->out_tsv = NULL;
+    this->prefix_wavefront_plot_in_png = NULL;
+    this->wfplot_max_size = 0;
 	this->merge_alignments = false;
 	this->emit_md_tag = false;
 	this->paf_format_else_sam = false;
@@ -123,6 +134,8 @@ void WFlign::set_output(
 	std::ostream* const out,
 	const bool emit_tsv,
 	std::ostream* const out_tsv,
+    const std::string &wfplot_filepath,
+	const uint64_t wfplot_max_size,
 	const bool merge_alignments,
 	const bool emit_md_tag,
 	const bool paf_format_else_sam,
@@ -130,6 +143,8 @@ void WFlign::set_output(
 	this->out = out;
 	this->emit_tsv = emit_tsv;
 	this->out_tsv = out_tsv;
+	this->prefix_wavefront_plot_in_png = &wfplot_filepath;
+	this->wfplot_max_size = wfplot_max_size;
 	this->merge_alignments = merge_alignments;
 	this->emit_md_tag = emit_md_tag;
 	this->paf_format_else_sam = paf_format_else_sam;
@@ -155,6 +170,9 @@ int wflambda_extend_match(
 	robin_hood::unordered_flat_map<uint64_t,alignment_t*>& alignments = *(extend_data->alignments);
 	std::vector<std::vector<rkmh::hash_t>*>& query_sketches = *(extend_data->query_sketches);
 	std::vector<std::vector<rkmh::hash_t>*>& target_sketches = *(extend_data->target_sketches);
+    // wfplots
+    const bool emit_png = extend_data->emit_png;
+	robin_hood::unordered_set<uint64_t>& high_order_dp_matrix_mismatch = *(extend_data->high_order_dp_matrix_mismatch);
 	// Check match
     bool is_a_match = false;
     if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
@@ -212,6 +230,11 @@ int wflambda_extend_match(
                     alignments[k] = aln;
                 } else {
                     alignments[k] = nullptr;
+                }
+            } else {
+                if (emit_png) {
+                    // Save only the mismatches, as they are not cached
+                    high_order_dp_matrix_mismatch.insert(encode_pair(v, h));
                 }
             }
             if (!is_a_match) {
@@ -601,6 +624,9 @@ void WFlign::wflign_affine_wavefront(
 						wfa::WFAligner::MemoryHigh);
     	wf_aligner->setReductionNone();
 
+    	// Save mismatches if wfplots are requsted
+        robin_hood::unordered_set<uint64_t> high_order_dp_matrix_mismatch;
+
     	// Setup WFling extend data
     	wflign_extend_data_t extend_data;
     	extend_data.wflign = this;
@@ -621,6 +647,8 @@ void WFlign::wflign_affine_wavefront(
     	extend_data.wfa_affine_penalties = &wfa_affine_penalties;
     	extend_data.num_alignments = 0;
     	extend_data.num_alignments_performed = 0;
+    	extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
+    	extend_data.high_order_dp_matrix_mismatch = &high_order_dp_matrix_mismatch;
         wflambda_aligner->setMatchFunct(wflambda_extend_match,(void*)&extend_data);
 
         // HERE WAS auto extend_match = [&](const int &v, const int &h);
@@ -635,6 +663,120 @@ void WFlign::wflign_affine_wavefront(
 
         // Free
         delete wflambda_aligner;
+
+        if (extend_data.emit_png) {
+            const int wfplot_vmin = 0, wfplot_vmax = pattern_length; //v_max;
+            const int wfplot_hmin = 0, wfplot_hmax = text_length; //h_max
+
+            int v_max = wfplot_vmax - wfplot_vmin;
+            int h_max = wfplot_hmax - wfplot_hmin;
+            const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
+            const algorithms::color_t COLOR_WFA_MISMATCH = { 0xff0000ff };
+            const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
+
+            const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
+            const uint64_t width = (uint64_t)(scale * (double)v_max);
+            const uint64_t height = (uint64_t)(scale * (double)h_max);
+            const double source_width = (double)width;
+            const double source_height = (double)height;
+
+            const double x_off = 0, y_off = 0;
+            const double line_width = 1.0;
+            const double source_min_x = 0, source_min_y = 0;
+
+            auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
+                    ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                image.layer_pixel(point.x, point.y, color);
+            }
+            : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                wflign::algorithms::wu_calc_wide_line(
+                        point, point,
+                        color,
+                        image);
+            };
+
+            // Plot with only fragments belonging to the best alignment (that is, only the anchors)
+            {
+                algorithms::atomic_image_buf_t image(width, height,
+                                                     source_width, source_height,
+                                                     source_min_x, source_min_y);
+
+                for (const auto &p : alignments) {
+                    if (p.second != nullptr && p.second->keep) {
+                        int v, h;
+                        decode_pair(p.first, &v, &h);
+
+                        if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                            algorithms::xy_d_t xy0 = {
+                                    (v * scale) - x_off,
+                                    (h * scale) + y_off
+                            };
+                            xy0.into(source_min_x, source_min_y,
+                                     source_width, source_height,
+                                     0, 0,
+                                     width, height);
+
+                            plot_point(xy0, image, COLOR_WFA_MATCH);
+                        }
+                    }
+                }
+
+                auto bytes = image.to_bytes();
+                const std::string filename = *prefix_wavefront_plot_in_png +
+                        query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".anchors.png";
+                encodeOneStep(filename.c_str(), bytes, width, height);
+            }
+
+            // Full plot
+            {
+                algorithms::atomic_image_buf_t image(width, height,
+                                                     source_width, source_height,
+                                                     source_min_x, source_min_y);
+
+                for (const auto &p : alignments) {
+                    int v, h;
+                    decode_pair(p.first, &v, &h);
+
+                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                        algorithms::xy_d_t xy0 = {
+                                (v * scale) - x_off,
+                                (h * scale) + y_off
+                        };
+                        xy0.into(source_min_x, source_min_y,
+                                 source_width, source_height,
+                                 0, 0,
+                                 width, height);
+
+                        plot_point(xy0, image, p.second != nullptr ? COLOR_WFA_MATCH : COLOR_WFA_MISMATCH);
+                    }
+                }
+
+                for (auto high_order_DP_cell: high_order_dp_matrix_mismatch) {
+                    int v, h;
+                    decode_pair(high_order_DP_cell, &v, &h);
+
+                    if (v >= wfplot_vmin & v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
+                        algorithms::xy_d_t xy0 = {
+                                (v * scale) - x_off,
+                                (h * scale) + y_off
+                        };
+                        xy0.into(source_min_x, source_min_y,
+                                 source_width, source_height,
+                                 0, 0,
+                                 width, height);
+
+                        plot_point(xy0, image, COLOR_MASH_MISMATCH);
+                    }
+                }
+
+                auto bytes = image.to_bytes();
+                const std::string filename = *prefix_wavefront_plot_in_png +
+                        query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";;
+                        encodeOneStep(filename.c_str(), bytes, width, height);
+            }
+        }
 
         // FIXME: Can we put this inside wflambda_trace_match?
         for (const auto &p : alignments) {

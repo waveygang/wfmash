@@ -49,6 +49,10 @@ struct Parameters {
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
     bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
+
+    // plotting
+    std::string prefix_wavefront_plot_in_png;     // Prefix of PNG files with wavefront plot for each alignment
+    uint64_t wfplot_max_size;                     // Max size (width/height) of the wfplot
 };
 
 }
