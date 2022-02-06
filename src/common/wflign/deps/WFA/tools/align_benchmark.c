@@ -178,8 +178,11 @@ void align_pairwise_test() {
   // Patters & Texts
 //  char * pattern = "GATTACA";
 //  char * text = "GATCACTA";
-  char* pattern = "AAGGGTAATCTAAGTGTCTGGTCCTTTGTCATTCTGACTTTCTTCATAATGTGATCTCCTCACCTCCAGATTTCCCTTCTGCTCAATAGAACTAGGAGGAAGGAGAGGGAGCTTAACATTTCCCTTCTCTCAGACCCTTAGCTCCAA";
-  char* text = "CAAGGGTAATCTAAGTGTT";
+//  char* pattern = "AAGGGTAATCTAAGTGTCTGGTCCTTTGTCATTCTGACTTTCTTCATAATGTGATCTCCTCACCTCCAGATTTCCCTTCTGCTCAATAGAACTAGGAGGAAGGAGAGGGAGCTTAACATTTCCCTTCTCTCAGACCCTTAGCTCCAA";
+//  char* text = "CAAGGGTAATCTAAGTGTT";
+
+  char* pattern =  "AAGGGTAATCTAAGTGTCTGGTCCTTTGTCATTCTGACTTTCTTCATAATGTGATCTCCTCACCTCCAGATTTCCCTTCTGCTCAATAGAACTAGGAGGAAGGAGAGGGAGCTTAACATTTCCCTTCTCTCAGACCCTTAGCTCCAA";
+  char* text =    "CAAGGGTAATCTAAGTGTT";
 
   // MMAllocator
   mm_allocator_t* const mm_allocator = mm_allocator_new(BUFFER_SIZE_8M);
@@ -212,7 +215,7 @@ void align_pairwise_test() {
   attributes.reduction.min_wavefront_length = 256;
   attributes.reduction.max_distance_threshold = 4096;
   attributes.alignment_scope = compute_alignment; // compute_score
-  attributes.memory_mode = wavefront_memory_high;
+  attributes.memory_mode = wavefront_memory_med;
   attributes.alignment_form.span = (endsfree) ? alignment_endsfree : alignment_end2end;
   attributes.alignment_form.pattern_begin_free = pattern_begin_free;
   attributes.alignment_form.pattern_end_free = pattern_end_free;

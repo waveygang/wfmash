@@ -54,6 +54,8 @@ WFAligner::WFAligner(
     case MemoryUltralow: this->attributes.memory_mode = wavefront_memory_ultralow; break;
     default: this->attributes.memory_mode = wavefront_memory_high; break;
   }
+  //this->attributes.system.verbose = 3;
+  //this->attributes.system.check_alignment_correct = true;
   this->attributes.alignment_scope = (alignmentScope==Score) ? compute_score : compute_alignment;
   this->wfAligner = nullptr;
 }

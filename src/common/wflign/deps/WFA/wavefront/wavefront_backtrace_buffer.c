@@ -280,7 +280,9 @@ void wf_backtrace_buffer_recover_cigar(
     cigar_buffer += cigar_block_length;
   }
   // Account for last stroke of matches
-  const int num_matches = MIN(pattern_length-v,text_length-h);
+  const int alignment_v = WAVEFRONT_V(alignment_k,alignment_offset);
+  const int alignment_h = WAVEFRONT_H(alignment_k,alignment_offset);
+  const int num_matches = MIN(alignment_v-v,alignment_h-h);
   for (i=0;i<num_matches;++i) {*cigar_buffer = 'M'; ++cigar_buffer;};
   v += num_matches;
   h += num_matches;

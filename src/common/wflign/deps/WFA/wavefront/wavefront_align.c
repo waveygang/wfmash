@@ -341,7 +341,7 @@ bool wavefront_align_endsfree_terminate(
   // Check end reached
   if (mwavefront->k_alignment_end==WAVEFRONT_DIAGONAL_NULL) return false;
   // DEBUG
-  //wavefront_aligner_print(stderr,wf_aligner,0,score_final,6,0);
+  //wavefront_aligner_print(stderr,wf_aligner,score_final-5,score_final,6,16);
   // Retrieve alignment
   if (wf_aligner->alignment_scope == compute_score) {
     cigar_clear(&wf_aligner->cigar);
@@ -405,7 +405,7 @@ int wavefront_align_sequences(
     // PROFILE
     if (plot) wavefront_plot(wf_aligner,pattern,text,score);
     // DEBUG
-    //wavefront_aligner_print(stderr,wf_aligner,0,score,6,0);
+    //wavefront_aligner_print(stderr,wf_aligner,score,score,6,16);
   }
   // Return OK
   return WF_ALIGN_SUCCESSFUL;
@@ -431,11 +431,9 @@ int wavefront_align(
   // Resize wavefront aligner
   wavefront_aligner_resize(wf_aligner,pattern_length,text_length);
   // Init padded strings
-  strings_padded_t* const sequences = NULL;
+  strings_padded_t* sequences = NULL;
   if (wf_aligner->match_funct == NULL) {
-    // Set sequences
-    strings_padded_t* const sequences =
-        strings_padded_new_rhomb(
+    sequences = strings_padded_new_rhomb(
             pattern,pattern_length,text,text_length,
             WAVEFRONT_PADDING,wf_aligner->mm_allocator);
     wf_aligner->pattern = sequences->pattern_padded;
