@@ -584,7 +584,7 @@ void write_merged_alignment(
                     	wf_aligner_heads->setReductionAdaptive(min_wf_length,max_dist_threshold);
                     	const int status = wf_aligner_heads->alignEndsFree(
                     			target_rev.c_str(),target_rev.size(),0,0,
-                    			query_rev.c_str(), query_rev.size(),0,query_rev.size());
+                    			query_rev.c_str(),query_rev.size(),0,query_rev.size());
                         if (status == 0) { // WF_ALIGN_SUCCESSFUL
                             //hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(), target_rev.size(), 0, 0);
 

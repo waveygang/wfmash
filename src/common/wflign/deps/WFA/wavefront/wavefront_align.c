@@ -54,7 +54,7 @@ char* wavefront_align_strerror(
 /*
  * Checks
  */
-void wavefront_form_endsfree_check(
+void wavefront_check_endsfree_form(
     wavefront_aligner_t* const wf_aligner,
     const int pattern_length,
     const int text_length) {
@@ -70,6 +70,85 @@ void wavefront_form_endsfree_check(
         pattern_length,text_length);
     exit(1);
   }
+}
+bool wavefront_check_alignment(
+    FILE* const stream,
+    wavefront_aligner_t* const wf_aligner) {
+  // Parameters
+  const char* const pattern = wf_aligner->pattern;
+  const int pattern_length = wf_aligner->pattern_length;
+  const char* const text = wf_aligner->text;
+  const int text_length = wf_aligner->text_length;
+  // Custom function to compare sequences
+  alignment_match_funct_t match_funct = wf_aligner->match_funct;
+  void* match_funct_arguments = wf_aligner->match_funct_arguments;
+  // CIGAR
+  cigar_t* const cigar = &wf_aligner->cigar;
+  char* const operations = cigar->operations;
+  const int begin_offset = cigar->begin_offset;
+  const int end_offset = cigar->end_offset;
+  // Traverse CIGAR
+  bool alignment_correct = true;
+  int pattern_pos=0, text_pos=0, i;
+  for (i=begin_offset;i<end_offset;++i) {
+    switch (operations[i]) {
+      case 'M': {
+        // Check match
+        const bool is_match = (match_funct!=NULL) ?
+            match_funct(pattern_pos,text_pos,match_funct_arguments) :
+            pattern[pattern_pos] == text[text_pos];
+        if (!is_match) {
+          fprintf(stream,"[WFA::Check] Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
+              pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
+          alignment_correct = false;
+          break;
+        }
+        ++pattern_pos;
+        ++text_pos;
+        break;
+      }
+      case 'X': {
+        // Check mismatch
+        const bool is_match = (match_funct!=NULL) ?
+            match_funct(pattern_pos,text_pos,match_funct_arguments) :
+            pattern[pattern_pos] == text[text_pos];
+        if (is_match) {
+          fprintf(stream,"[WFA::Check] Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
+              pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
+          alignment_correct = false;
+          break;
+        }
+        ++pattern_pos;
+        ++text_pos;
+        break;
+      }
+      case 'I':
+        ++text_pos;
+        break;
+      case 'D':
+        ++pattern_pos;
+        break;
+      default:
+        fprintf(stderr,"[WFA::Check] Unknown edit operation '%c'\n",operations[i]);
+        exit(1);
+        break;
+    }
+  }
+  // Check alignment length
+  if (pattern_pos != pattern_length) {
+    fprintf(stream,
+        "[WFA::Check] Alignment incorrect length (pattern-aligned=%d,pattern-length=%d)\n",
+        pattern_pos,pattern_length);
+    alignment_correct = false;
+  }
+  if (text_pos != text_length) {
+    fprintf(stream,
+        "[WFA::Check] Alignment incorrect length (text-aligned=%d,text-length=%d)\n",
+        text_pos,text_length);
+    alignment_correct = false;
+  }
+  // Return
+  return alignment_correct;
 }
 /*
  * Limits
@@ -384,7 +463,7 @@ int wavefront_align(
     wavefront_align_terminate = &wavefront_align_end2end_terminate;
     wavefront_align_extend = &wavefront_extend_end2end;
   } else {
-    wavefront_form_endsfree_check(wf_aligner,pattern_length,text_length);
+    wavefront_check_endsfree_form(wf_aligner,pattern_length,text_length);
     wavefront_align_initialize = &wavefront_align_endsfree_initialize;
     wavefront_align_terminate = &wavefront_align_endsfree_terminate;
     wavefront_align_extend = &wavefront_extend_endsfree;
@@ -414,6 +493,14 @@ int wavefront_align(
           wf_status,wf_memory_used,&timer);
     } else {
       wavefront_report_verbose_end(stderr,wf_aligner,wf_status,wf_memory_used,&timer);
+    }
+  }
+  if (wf_aligner->system.check_alignment_correct && wf_status==WF_ALIGN_SUCCESSFUL) {
+    if (!wavefront_check_alignment(stderr,wf_aligner)) {
+	  fprintf(stderr,"[WFA::Check] Alignment incorrect\n");
+      wavefront_report_verbose_begin(stderr,wf_aligner,pattern,pattern_length,text,text_length);
+      wavefront_report_verbose_end(stderr,wf_aligner,wf_status,wf_memory_used,&timer);
+      exit(1);
     }
   }
   // Return
