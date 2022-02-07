@@ -601,7 +601,7 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.gap_opening,
     					wfa_affine_penalties.gap_extension,
     					wfa::WFAligner::Alignment,
-						wfa::WFAligner::MemoryHigh);
+    					wfa::WFAligner::MemoryMed);
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
         	wflambda_aligner->setReductionAdaptive(wflambda_min_wavefront_length,wflambda_max_distance_threshold);
         } else {
