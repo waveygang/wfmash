@@ -61,7 +61,7 @@ inline uint64_t encode_pair(
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
 
-inline void decode_pair(uint64_t  pair, int *v, int *h) {
+inline void decode_pair(uint64_t pair, int *v, int *h) {
     *v = pair >> 32;
     *h = pair & 0x00000000FFFFFFFF;
 }
@@ -568,7 +568,7 @@ void WFlign::wflign_affine_wavefront(
             }
         }
 
-        float max_mash_dist_to_evaluate;
+        float max_mash_dist_to_evaluate = 1.0;
         if (wflign_max_mash_dist > 0) {
             max_mash_dist_to_evaluate = wflign_max_mash_dist;
         } else {
@@ -681,7 +681,7 @@ void WFlign::wflign_affine_wavefront(
             const double source_height = (double)height;
 
             const double x_off = 0, y_off = 0;
-            const double line_width = 1.0;
+            //const double line_width = 1.0;
             const double source_min_x = 0, source_min_y = 0;
 
             auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
@@ -773,7 +773,7 @@ void WFlign::wflign_affine_wavefront(
                 auto bytes = image.to_bytes();
                 const std::string filename = *prefix_wavefront_plot_in_png +
                         query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";;
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";
                         encodeOneStep(filename.c_str(), bytes, width, height);
             }
         }

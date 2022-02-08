@@ -343,7 +343,7 @@ void write_merged_alignment(
     uint64_t total_target_aligned_length = 0;
     uint64_t query_end = 0;
     uint64_t target_end = 0;
-    uint64_t total_score = 0;
+    //uint64_t total_score = 0;
 
     // double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
