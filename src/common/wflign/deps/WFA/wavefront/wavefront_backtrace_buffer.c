@@ -381,7 +381,8 @@ void wf_backtrace_buffer_mark_backtrace_batch(
         // Take the last in the batch
         --active_blocks;
         pf_block_idx[i] = pf_block_idx[active_blocks];
-        // No need to go next in batch (i)
+        // Next in batch
+        if (active_blocks) i = (i+1) % active_blocks;
         break;
       }
     }

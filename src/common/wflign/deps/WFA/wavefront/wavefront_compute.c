@@ -422,7 +422,7 @@ void wavefront_compute_offload_backtrace_blocks_selective(
   // Check PCIGAR buffers full and off-load if needed
   int k;
   for (k=lo;k<=hi;++k) {
-    if (PCIGAR_IS_UTILISED(out_bt_pcigar[k],occupation_mask) && out_offsets[k]>=0) {
+    if (out_offsets[k]>=0 && PCIGAR_IS_UTILISED(out_bt_pcigar[k],occupation_mask)) {
       // Store
       bt_block_mem->pcigar = out_bt_pcigar[k];
       bt_block_mem->prev_idx = out_bt_prev[k];
