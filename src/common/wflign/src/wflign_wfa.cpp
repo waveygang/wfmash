@@ -299,7 +299,7 @@ void wflign_affine_wavefront(
             }
         }
 
-        float max_mash_dist_to_evaluate;
+        float max_mash_dist_to_evaluate = 1.0;
         if (wflign_max_mash_dist > 0) {
             max_mash_dist_to_evaluate = wflign_max_mash_dist;
         } else {
