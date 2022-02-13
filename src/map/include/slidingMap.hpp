@@ -13,6 +13,7 @@
 
 //Own includes
 #include "map/include/base_types.hpp"
+#include "common/art_map/map.h"
 
 //External includes
 
@@ -50,7 +51,7 @@ namespace skch
 
         //Ordered map to save unique sketch elements, and associated value as 
         //a pair of its occurrence in the query and the reference
-        typedef std::map< hash_t, slidingMapContainerValueType > MapType;
+        typedef art::map< hash_t, slidingMapContainerValueType > MapType;
         MapType slidingWindowMinhashes;
 
         //Iterator pointing to the smallest 's'th element in the map
