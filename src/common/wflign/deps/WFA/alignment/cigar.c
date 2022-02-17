@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Edit cigar data-structure (match/mismatch/insertion/deletion)
  */
@@ -136,16 +136,16 @@ int cigar_score_edit(
   }
   return score;
 }
-int cigar_score_gap_lineal(
+int cigar_score_gap_linear(
     cigar_t* const cigar,
-    lineal_penalties_t* const penalties) {
+    linear_penalties_t* const penalties) {
   int score = 0, i;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
     switch (cigar->operations[i]) {
       case 'M': score -= penalties->match; break;
       case 'X': score -= penalties->mismatch; break;
-      case 'I': score -= penalties->insertion; break;
-      case 'D': score -= penalties->deletion; break;
+      case 'I': score -= penalties->indel; break;
+      case 'D': score -= penalties->indel; break;
       default: return INT_MIN;
     }
   }

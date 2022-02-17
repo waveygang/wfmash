@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Support functions for wavefront reduction strategies
  */
@@ -305,7 +305,7 @@ void wavefront_reduce(
   //        wf_length_base,wf_length_reduced,100.0f*(float)wf_length_reduced/(float)wf_length_base);
   //  }
   // Equate other wavefronts
-  if (distance_metric <= gap_lineal) return;
+  if (distance_metric <= gap_linear) return;
   // Reduce the other wavefronts (same dimensions as M-reduced)
   wavefront_t* const i1wavefront = wf_components->i1wavefronts[score];
   wavefront_t* const d1wavefront = wf_components->d1wavefronts[score];

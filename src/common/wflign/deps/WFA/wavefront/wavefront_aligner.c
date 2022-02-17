@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront aligner data structure
  */
@@ -47,13 +47,16 @@ void wavefront_set_penalties(
     wavefront_aligner_t* const wf_aligner,
     wavefront_aligner_attr_t* const attributes) {
   switch (attributes->distance_metric) {
+    case indel:
+      wavefronts_penalties_set_indel(&wf_aligner->penalties);
+      break;
     case edit:
       wavefronts_penalties_set_edit(&wf_aligner->penalties);
       break;
-    case gap_lineal:
-      wavefronts_penalties_set_lineal(
+    case gap_linear:
+      wavefronts_penalties_set_linear(
           &wf_aligner->penalties,
-          &attributes->lineal_penalties,
+          &attributes->linear_penalties,
           wavefronts_penalties_shifted_penalties);
       break;
     case gap_affine:
@@ -192,6 +195,7 @@ void wavefront_aligner_resize(
         &wf_aligner->plot_params);
   }
   // System
+  timer_reset(&wf_aligner->timer);
   wavefront_set_alignment_system(wf_aligner,&wf_aligner->system);
 }
 void wavefront_aligner_reap(

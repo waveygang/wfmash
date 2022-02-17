@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront backtrace buffer to store bactrace-blocks
  */
@@ -111,9 +111,12 @@ bt_block_idx_t wf_backtrace_buffer_init_block(
     const int h);
 
 /*
- * Recover CIGAR
+ * Unpack CIGAR
  */
-void wf_backtrace_buffer_recover_cigar(
+bt_block_t* wf_backtrace_buffer_traceback_pcigar(
+    wf_backtrace_buffer_t* const bt_buffer,
+    bt_block_t* bt_block);
+void wf_backtrace_buffer_unpack_cigar_linear(
     wf_backtrace_buffer_t* const bt_buffer,
     const char* const pattern,
     const int pattern_length,
@@ -121,10 +124,23 @@ void wf_backtrace_buffer_recover_cigar(
     const int text_length,
     alignment_match_funct_t const match_funct,
     void* const match_funct_arguments,
-    const int alignment_k,
-    const int alignment_offset,
-    const pcigar_t pcigar_last,
-    const bt_block_idx_t prev_idx_last,
+    const int begin_v,
+    const int begin_h,
+    const int end_v,
+    const int end_h,
+    cigar_t* const cigar);
+void wf_backtrace_buffer_unpack_cigar_affine(
+    wf_backtrace_buffer_t* const bt_buffer,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
+    const int begin_v,
+    const int begin_h,
+    const int end_v,
+    const int end_h,
     cigar_t* const cigar);
 
 /*

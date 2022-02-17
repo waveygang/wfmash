@@ -11,50 +11,42 @@ UNAME=$(shell uname)
 CC=gcc
 CPP=g++
 
-LD_FLAGS=-lm
 CC_FLAGS=-Wall -g
-ifeq ($(UNAME), Linux)
-  LD_FLAGS+=-lrt 
-endif
 
 AR=ar
 AR_FLAGS=-rsc
 
 ###############################################################################
-# Compile rules
+# Configuration rules
 ###############################################################################
 LIB_WFA=$(FOLDER_LIB)/libwfa.a
 LIB_WFA_CPP=$(FOLDER_LIB)/libwfacpp.a
 SUBDIRS=alignment \
-        benchmark \
         bindings/cpp \
-        edit \
-        gap_affine \
-        gap_affine2p \
-        gap_lineal \
         system \
         utils \
         wavefront
+TOOLS=tools/align_benchmark \
+      tools/generate_dataset         
 
 release: CC_FLAGS+=-O3 -march=native -flto
-release: MODE=all
-release: setup
-release: $(SUBDIRS) lib_wfa tools
+release: build
 
 all: CC_FLAGS+=-O3 -march=native
-all: MODE=all
-all: setup
-all: $(SUBDIRS) lib_wfa tools
+all: build
 
-debug: setup
-debug: MODE=all
-debug: $(SUBDIRS) lib_wfa tools
+debug: build
 
 # ASAN: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=2:log_threads=1
 asan: CC_FLAGS+=-fsanitize=address -fno-omit-frame-pointer -fno-common
-asan: MODE=all
-asan: setup
-asan: $(SUBDIRS) lib_wfa tools
+asan: build
+
+###############################################################################
+# Build rules
+###############################################################################
+build: setup
+build: $(SUBDIRS) 
+build: lib_wfa 
 
 setup:
 	@mkdir -p $(FOLDER_BIN) $(FOLDER_BUILD) $(FOLDER_BUILD_CPP) $(FOLDER_LIB)
@@ -65,6 +57,7 @@ lib_wfa: $(SUBDIRS)
 
 clean:
 	rm -rf $(FOLDER_BIN) $(FOLDER_BUILD) $(FOLDER_LIB)
+	$(MAKE) --directory=tools/align_benchmark clean
 	
 ###############################################################################
 # Subdir rule
@@ -73,8 +66,8 @@ export
 $(SUBDIRS):
 	$(MAKE) --directory=$@ all
 	
-tools: $(SUBDIRS)
-	$(MAKE) --directory=$@ $(MODE)
+$(TOOLS):
+	$(MAKE) --directory=$@ all
 
-.PHONY: $(SUBDIRS) tools
+.PHONY: $(SUBDIRS) $(TOOLS)
 

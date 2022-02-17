@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront aligner data structure attributes
  */
@@ -36,8 +36,8 @@
  */
 wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     // Distance model & Penalties
-    .distance_metric = gap_affine, // TODO: DU wants lineal
-    .alignment_scope = compute_alignment, // TODO: I don't know what DU wants, honestly
+    .distance_metric = gap_affine,
+    .alignment_scope = compute_alignment,
     .alignment_form = {
         .span = alignment_end2end,
         .pattern_begin_free = 0,
@@ -50,17 +50,16 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     .match_funct = NULL,           // Use default match-compare function
     .match_funct_arguments = NULL, // No arguments
     // Penalties
-    .lineal_penalties = {
+    .linear_penalties = {
         .match = 0,
         .mismatch = 4,
-        .insertion = 2,
-        .deletion  = 2,
+        .indel = 2,
     },
     .affine_penalties = {
         .match = 0,
         .mismatch = 4,
         .gap_opening = 6,
-        .gap_extension = 2, // 1
+        .gap_extension = 2,
     },
     .affine2p_penalties = {
         .match = 0,

@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront alignment module for computing wavefronts (gap-affine-2p)
  */
@@ -32,6 +32,7 @@
 #include "utils/string_padded.h"
 #include "wavefront_compute.h"
 #include "wavefront_compute_affine.h"
+#include "wavefront_backtrace_offload.h"
 
 /*
  * Compute Kernels
@@ -272,7 +273,7 @@ void wavefront_compute_affine2p_idm_piggyback(
     out_m[k] = max;
   }
   // Offload backtrace
-  wavefront_compute_offload_backtrace(wf_aligner,wavefront_set,lo,hi);
+  wavefront_backtrace_offload_affine(wf_aligner,wavefront_set,lo,hi);
 }
 /*
  * Compute next wavefront
@@ -320,7 +321,7 @@ void wavefront_compute_affine2p(
     }
   }
   // Trim wavefront ends
-  wavefront_compute_trim_ends(wf_aligner,&wavefront_set);
+  wavefront_compute_trim_ends_set(wf_aligner,&wavefront_set);
 }
 
 

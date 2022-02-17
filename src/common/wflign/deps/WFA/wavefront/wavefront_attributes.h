@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront aligner data structure attributes
  */
@@ -34,9 +34,9 @@
 
 #include "utils/commons.h"
 #include "alignment/cigar.h"
-#include "gap_affine/affine_penalties.h"
-#include "gap_affine2p/affine2p_penalties.h"
-#include "gap_lineal/lineal_penalties.h"
+#include "alignment/affine_penalties.h"
+#include "alignment/affine2p_penalties.h"
+#include "alignment/linear_penalties.h"
 #include "system/mm_allocator.h"
 
 #include "wavefront_penalties.h"
@@ -127,7 +127,7 @@ typedef struct {
   alignment_scope_t alignment_scope;       // Alignment scope (score only or full-CIGAR)
   alignment_form_t alignment_form;         // Alignment mode (end-to-end/ends-free)
   // Penalties
-  lineal_penalties_t lineal_penalties;     // Gap-lineal penalties (placeholder)
+  linear_penalties_t linear_penalties;     // Gap-linear penalties (placeholder)
   affine_penalties_t affine_penalties;     // Gap-affine penalties (placeholder)
   affine2p_penalties_t affine2p_penalties; // Gap-affine-2p penalties (placeholder)
   // Reduction strategy

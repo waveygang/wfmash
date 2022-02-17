@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: C++ bindings for the WaveFront Alignment modules
  */
@@ -54,8 +54,6 @@ WFAligner::WFAligner(
     case MemoryUltralow: this->attributes.memory_mode = wavefront_memory_ultralow; break;
     default: this->attributes.memory_mode = wavefront_memory_high; break;
   }
-  //this->attributes.system.verbose = 3;
-  //this->attributes.system.check_alignment_correct = true;
   this->attributes.alignment_scope = (alignmentScope==Score) ? compute_score : compute_alignment;
   this->wfAligner = nullptr;
 }
@@ -212,7 +210,42 @@ void WFAligner::setVerbose(
   wfAligner->system.verbose = verbose;
 }
 /*
- * Gap-Affine Aligner
+ * Indel Aligner (a.k.a Longest Common Subsequence - LCS)
+ */
+WFAlignerIndel::WFAlignerIndel(
+    const AlignmentScope alignmentScope,
+    const MemoryModel memoryModel) :
+        WFAligner(alignmentScope,memoryModel) {
+  attributes.distance_metric = indel;
+  wfAligner = wavefront_aligner_new(&attributes);
+}
+/*
+ * Edit Aligner (a.k.a Levenshtein)
+ */
+WFAlignerEdit::WFAlignerEdit(
+    const AlignmentScope alignmentScope,
+    const MemoryModel memoryModel) :
+        WFAligner(alignmentScope,memoryModel) {
+  attributes.distance_metric = edit;
+  wfAligner = wavefront_aligner_new(&attributes);
+}
+/*
+ * Gap-Linear Aligner (a.k.a Needleman-Wunsch)
+ */
+WFAlignerGapLinear::WFAlignerGapLinear(
+    const int mismatch,
+    const int indel,
+    const AlignmentScope alignmentScope,
+    const MemoryModel memoryModel) :
+        WFAligner(alignmentScope,memoryModel) {
+  attributes.distance_metric = gap_linear;
+  attributes.linear_penalties.match = 0;
+  attributes.linear_penalties.mismatch = mismatch;
+  attributes.linear_penalties.indel = indel;
+  wfAligner = wavefront_aligner_new(&attributes);
+}
+/*
+ * Gap-Affine Aligner (a.k.a Smith-Waterman-Gotoh)
  */
 WFAlignerGapAffine::WFAlignerGapAffine(
     const int mismatch,
@@ -229,7 +262,7 @@ WFAlignerGapAffine::WFAlignerGapAffine(
   wfAligner = wavefront_aligner_new(&attributes);
 }
 /*
- * Gap-Affine Dual-Cost (2 pieces) Aligner
+ * Gap-Affine Dual-Cost Aligner (a.k.a. concave 2-pieces)
  */
 WFAlignerGapAffine2Pieces::WFAlignerGapAffine2Pieces(
     const int mismatch,

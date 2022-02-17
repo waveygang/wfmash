@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * VERSION: v20.08.25
  * DESCRIPTION: Simple time profiler
@@ -89,10 +89,10 @@ void timer_print(
     const profiler_timer_t* const timer,
     const profiler_timer_t* const ref_timer);
 
-#define TIMER_GET_TOTAL_US(timer) TIMER_CONVERT_NS_TO_US(TIMER_GET_TOTAL_NS(timer))
-#define TIMER_GET_TOTAL_MS(timer) TIMER_CONVERT_NS_TO_MS(TIMER_GET_TOTAL_NS(timer))
-#define TIMER_GET_TOTAL_S(timer)  TIMER_CONVERT_NS_TO_S(TIMER_GET_TOTAL_NS(timer))
-#define TIMER_GET_TOTAL_M(timer)  TIMER_CONVERT_NS_TO_M(TIMER_GET_TOTAL_NS(timer))
-#define TIMER_GET_TOTAL_H(timer)  TIMER_CONVERT_NS_TO_H(TIMER_GET_TOTAL_NS(timer))
+#define TIMER_GET_TOTAL_US(timer) TIMER_CONVERT_NS_TO_US(timer_get_total_ns(timer))
+#define TIMER_GET_TOTAL_MS(timer) TIMER_CONVERT_NS_TO_MS(timer_get_total_ns(timer))
+#define TIMER_GET_TOTAL_S(timer)  TIMER_CONVERT_NS_TO_S(timer_get_total_ns(timer))
+#define TIMER_GET_TOTAL_M(timer)  TIMER_CONVERT_NS_TO_M(timer_get_total_ns(timer))
+#define TIMER_GET_TOTAL_H(timer)  TIMER_CONVERT_NS_TO_H(timer_get_total_ns(timer))
 
 #endif /* PROFILER_TIMER_H */

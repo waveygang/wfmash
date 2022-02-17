@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Packed CIGAR (Alignment operations in 2-bits)
  */
@@ -33,7 +33,6 @@
 #define WAVEFRONT_PACKED_CIGAR_H_
 
 #include "utils/commons.h"
-#include "gap_affine/affine_matrix.h"
 #include "wavefront_attributes.h"
 
 /*
@@ -88,9 +87,21 @@ int pcigar_unpack(
     char* cigar_buffer);
 
 /*
- * PCIGAR recover
+ * PCIGAR unpack
  */
-void pcigar_recover(
+void pcigar_unpack_linear(
+    pcigar_t pcigar,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
+    int* const v_pos,
+    int* const h_pos,
+    char* cigar_buffer,
+    int* const cigar_length);
+void pcigar_unpack_affine(
     pcigar_t pcigar,
     const char* const pattern,
     const int pattern_length,

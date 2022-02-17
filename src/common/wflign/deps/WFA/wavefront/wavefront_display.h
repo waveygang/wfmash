@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront-Alignment module for display and report
  */
@@ -33,8 +33,6 @@
 #define WAVEFRONT_DISPLAY_H_
 
 #include "utils/commons.h"
-#include "utils/heatmap.h"
-#include "system/profiler_timer.h"
 
 // Wavefront ahead definition
 typedef struct _wavefront_aligner_t wavefront_aligner_t;
@@ -49,32 +47,5 @@ void wavefront_aligner_print(
     const int score_end,
     const int num_wfs_per_row,
     const int backtrace_length);
-
-/*
- * Debug
- */
-void wavefront_report_lite(
-    FILE* const stream,
-    wavefront_aligner_t* const wf_aligner,
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    const int wf_status,
-    const uint64_t wf_memory_used,
-    profiler_timer_t* const timer);
-void wavefront_report_verbose_begin(
-    FILE* const stream,
-    wavefront_aligner_t* const wf_aligner,
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length);
-void wavefront_report_verbose_end(
-    FILE* const stream,
-    wavefront_aligner_t* const wf_aligner,
-    const int wf_status,
-    const uint64_t wf_memory_used,
-    profiler_timer_t* const timer);
 
 #endif /* WAVEFRONT_DISPLAY_H_ */

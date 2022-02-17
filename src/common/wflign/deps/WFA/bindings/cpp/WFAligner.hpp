@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: C++ bindings for the WaveFront Alignment modules
  */
@@ -134,7 +134,36 @@ private:
   WFAligner(const WFAligner&);
 };
 /*
- * Gap-Affine Aligner
+ * Indel Aligner (a.k.a Longest Common Subsequence - LCS)
+ */
+class WFAlignerIndel : public WFAligner {
+public:
+  WFAlignerIndel(
+      const AlignmentScope alignmentScope,
+      const MemoryModel memoryModel = MemoryHigh);
+};
+/*
+ * Edit Aligner (a.k.a Levenshtein)
+ */
+class WFAlignerEdit : public WFAligner {
+public:
+  WFAlignerEdit(
+      const AlignmentScope alignmentScope,
+      const MemoryModel memoryModel = MemoryHigh);
+};
+/*
+ * Gap-Linear Aligner (a.k.a Needleman-Wunsch)
+ */
+class WFAlignerGapLinear : public WFAligner {
+public:
+  WFAlignerGapLinear(
+      const int mismatch,
+      const int indel,
+      const AlignmentScope alignmentScope,
+      const MemoryModel memoryModel = MemoryHigh);
+};
+/*
+ * Gap-Affine Aligner (a.k.a Smith-Waterman-Gotoh)
  */
 class WFAlignerGapAffine : public WFAligner {
 public:
@@ -146,7 +175,7 @@ public:
       const MemoryModel memoryModel = MemoryHigh);
 };
 /*
- * Gap-Affine Dual-Cost (2 pieces) Aligner
+ * Gap-Affine Dual-Cost Aligner (a.k.a. concave 2-pieces)
  */
 class WFAlignerGapAffine2Pieces : public WFAligner {
 public:

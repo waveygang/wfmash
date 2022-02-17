@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront penalties handling module
  */
@@ -32,18 +32,19 @@
 #ifndef WAVEFRONT_WAVEFRONT_PENALTIES_H_
 #define WAVEFRONT_WAVEFRONT_PENALTIES_H_
 
-#include "gap_lineal/lineal_penalties.h"
-#include "gap_affine/affine_penalties.h"
-#include "gap_affine2p/affine2p_penalties.h"
+#include "alignment/linear_penalties.h"
+#include "alignment/affine_penalties.h"
+#include "alignment/affine2p_penalties.h"
 
 /*
  * Distance metrics
  */
 typedef enum {
-  edit          = 0,
-  gap_lineal    = 1,
-  gap_affine    = 2,
-  gap_affine_2p = 3
+  indel         = 0, // Longest Common Subsequence - LCS
+  edit          = 1, // Levenshtein
+  gap_linear    = 2, // Needleman-Wunsch
+  gap_affine    = 3, // Smith-Waterman-Gotoh
+  gap_affine_2p = 4  // Concave 2-pieces
 } distance_metric_t;
 
 /*
@@ -70,11 +71,13 @@ typedef struct {
 /*
  * Penalties adjustment
  */
+void wavefronts_penalties_set_indel(
+    wavefronts_penalties_t* const wavefronts_penalties);
 void wavefronts_penalties_set_edit(
     wavefronts_penalties_t* const wavefronts_penalties);
-void wavefronts_penalties_set_lineal(
+void wavefronts_penalties_set_linear(
     wavefronts_penalties_t* const wavefronts_penalties,
-    lineal_penalties_t* const lineal_penalties,
+    linear_penalties_t* const linear_penalties,
     const wf_penalties_strategy_type penalties_strategy);
 void wavefronts_penalties_set_affine(
     wavefronts_penalties_t* const wavefronts_penalties,

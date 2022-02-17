@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront-Alignment module for backtracing alignments
  */
@@ -37,10 +37,25 @@
 /*
  * Backtrace
  */
+void wavefront_backtrace_linear(
+    wavefront_aligner_t* const wf_aligner,
+    const int alignment_score,
+    const int alignment_k,
+    const wf_offset_t alignment_offset);
 void wavefront_backtrace_affine(
     wavefront_aligner_t* const wf_aligner,
     const int alignment_score,
     const int alignment_k,
     const wf_offset_t alignment_offset);
+
+/*
+ * Backtrace from BT-Buffer (pcigar)
+ */
+void wavefront_backtrace_pcigar(
+    wavefront_aligner_t* const wf_aligner,
+    const int alignment_k,
+    const int alignment_offset,
+    const pcigar_t pcigar_last,
+    const bt_block_idx_t prev_idx_last);
 
 #endif /* WAVEFRONT_BACKTRACE_H_ */
