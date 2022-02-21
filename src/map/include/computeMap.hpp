@@ -416,10 +416,8 @@ namespace skch
 
         // remove short merged mappings when we are merging
         if (split_mapping) {
+            // filter mappings that didn't reach the min block length through merging
             filterShortMappings(output->readMappings, param.block_length_min);
-            // expansion could help deal with boundary effects from mash mapping
-            // but it probably will make alignment much harder
-            //expandMappings(output->readMappings, param.block_length_min);
             // merge mappings in range and get a copy of the unmerged, annotated with segment id
             auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap);
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
