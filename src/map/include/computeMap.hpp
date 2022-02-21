@@ -32,7 +32,8 @@
 #include "common/progress.hpp"
 #include "common/filesystem.hpp"
 //#include "common/union_find.hpp"
-#include "common/dset64-gccAtomic.hpp"
+//#include "common/dset64-gccAtomic.hpp"
+#include "common/dset64.hpp"
 
 namespace skch
 {

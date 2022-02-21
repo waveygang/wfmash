@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <stdexcept>
 
 /**
@@ -29,32 +28,8 @@
  * \author Wenzel Jakob
  *
  *
- * IMPORTANT COMPILATION AND PORTABILITY INFORMATION
- *
- * 128-bit integers and 128-bit atomic primitives
- * are not available on all platforms.
- * This code uses __uint128_t as the 128 integer type,
- * and synchronization primitives available in C++11
- * via std::atomic<uint128_t>
- *
- * Both __uint128_t and std::atomic<__uint128_t>
- * are available with g++ on 64-bit x86 Linux,
- * and std::atomic<uint128_t>::is_lock_free returns true,
- * if the following compilation option is used to enable the
- * 16-byte (128 bit) compare-and-swap instruction, CMPXCHG16B:
- * -mcx16
- * This instruction is available on most modern 64-bit x86 processors.
- * Some older processors that don't implement this instruction
- * will crash with an "Illegal instruction" error
- * upon attempting to run this code.
- *
- * Unfortunately, however, beginning with gcc 7, a bug was introduced
- * that causes std::atomic<uint128_t>::is_lock_free to return false,
- * even when compile option -mcx16 is used (gcc bug 80878):
- * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80878
- * When using a version of gcc with the bug, this
- * code will run at reduced performance.
- *
+ * This is a non-atomic version of the dset64 code, designed for single
+ * threaded use and portability.
  */
 
 // Sanity check that we are compiling on x86_64.
@@ -82,14 +57,7 @@ public:
 
     // For memory allocation flexibility, the memory is allocated
     // and owned by the caller.
-    DisjointSets(std::atomic<Aint>* mData, uint64_t size) : mData(mData), n(size) {
-        if(!mData->is_lock_free()) {
-            // If this happens with g++ on 64-bit x86 Linux, use
-            // compile option -mcx16.
-            // This throw is commented out to permit running on Ubuntu 18.04
-            // (see comments above), but at a performance penalty.
-            // throw std::runtime_error("DisjointSets::Aint is not lock-free.");
-        }
+    DisjointSets(Aint* mData, uint64_t size) : mData(mData), n(size) {
         for (uint64_t i=0; i<size; ++i)
             mData[i] = Aint(i);
     }
@@ -101,8 +69,10 @@ public:
             Aint new_value =
                 (value & rankMask) | new_parent;
             /* Try to update parent (may fail, that's ok) */
-            if (value != new_value)
-                mData[id].compare_exchange_weak(value, new_value);
+            if (value != new_value
+                && mData[id] == value) {
+                mData[id] = new_value;
+            }
             id = new_parent;
         }
         return id;
@@ -137,14 +107,16 @@ public:
             Aint oldEntry = ((Aint) r1 << 64) | id1;
             Aint newEntry = ((Aint) r1 << 64) | id2;
 
-            if (!mData[id1].compare_exchange_strong(oldEntry, newEntry))
+            if (mData[id1] == oldEntry) {
+                mData[id1] = newEntry;
+            } else {
                 continue;
+            }
 
             if (r1 == r2) {
                 oldEntry = ((Aint) r2 << 64) | id2;
                 newEntry = ((Aint) (r2+1) << 64) | id2;
-                /* Try to update the rank (may fail, that's ok) */
-                mData[id2].compare_exchange_weak(oldEntry, newEntry);
+                mData[id2] = newEntry;
             }
 
             break;
@@ -164,7 +136,7 @@ public:
 
     // Use memory supplied by the caller, rather than an owned vector.
     // This provides more flexibility in allocating the memory.
-    std::atomic<Aint>* mData;
+    Aint* mData;
     uint64_t n;
 };
 
