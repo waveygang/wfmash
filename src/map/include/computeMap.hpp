@@ -399,7 +399,7 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
-              mergeMappingsInRange(output->readMappings, param.block_length_min / 2);
+              mergeMappingsInRange(output->readMappings, param.block_length_min);
           }
         }
 
@@ -1004,6 +1004,7 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
+              std::vector<std::pair<uint64_t, uint64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is too far from current mapping being evaluated, stop finding a merge
                   if (it2->refSeqId != it->refSeqId || it2->refStartPos > it->refEndPos + max_dist) {
@@ -1011,21 +1012,26 @@ namespace skch
                   }
 
                   //If the next mapping is within range, check if it's in range and 
-                  if (it2->strand == it->strand
-                      && it2->refStartPos <= it->refEndPos + max_dist
-                      && ((it->strand == strnd::FWD
-                           && it->queryStartPos < it2->queryStartPos
-                           && it2->queryStartPos <= it->queryEndPos + max_dist)
-                          ||
-                          (it->strand != strnd::FWD
-                           && it->queryEndPos > it2->queryEndPos
-                           && it2->queryEndPos >= it->queryStartPos - max_dist))) {
-                      
-                      //std::cerr << "unifying " << it2->queryStartPos << " vs " << it->queryEndPos + max_dist << std::endl;
-                      //std::cerr << it->splitMappingId << ", " << it2->splitMappingId << std::endl;
-                      disjoint_sets.unite(it->splitMappingId, it2->splitMappingId);
-                      //continue;
+                  if (it2->strand == it->strand) {
+                      auto ref_dist = it2->refStartPos - it->refEndPos;
+                      auto score = std::numeric_limits<uint64_t>::max();
+                      bool ok = false;
+                      if (it->strand == strnd::FWD && it->queryStartPos < it2->queryStartPos) {
+                          auto query_dist = it2->queryStartPos - it->queryEndPos;
+                          ok = query_dist + ref_dist < max_dist;
+                          score = ref_dist + query_dist;
+                      } else if (it->strand != strnd::FWD && it->queryEndPos > it2->queryEndPos) {
+                          auto query_dist = it->queryStartPos - it2->queryEndPos;
+                          ok = query_dist + ref_dist < max_dist;
+                          score = ref_dist + query_dist;
+                      }
+                      if (ok) distances.push_back(std::make_pair(score, it2->splitMappingId));
+                      //if (ok) disjoint_sets.unite(it->splitMappingId, it2->splitMappingId);
                   }
+              }
+              if (distances.size()) {
+                  std::sort(distances.begin(), distances.end());
+                  disjoint_sets.unite(it->splitMappingId, distances.front().second);
               }
           }
 
