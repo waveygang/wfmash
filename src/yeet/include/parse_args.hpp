@@ -337,7 +337,7 @@ void parse_args(int argc,
         }
         map_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 50 * map_parameters.segLength;
+        map_parameters.chain_gap = 50 * map_parameters.block_length_min;
     }
 
     if (drop_low_map_pct_identity) {
