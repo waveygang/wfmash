@@ -8,6 +8,7 @@
 #define SKETCH_MAP_HPP
 
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 #include <unordered_map>
 #include <fstream>
@@ -285,6 +286,25 @@ namespace skch
               readMappings.end());
       }
 
+      /**
+       * @brief               helper to main mapping function
+       * @details             filters mappings whose split ids aren't to be kept
+       * @param[in]   input   mappings
+       * @param[in]   input   
+       * @return              void
+       */
+      void filterFailedSubMappings(MappingResultsVector_t &readMappings,
+                                   const std::unordered_set<offset_t>& kept_chains)
+      {
+          readMappings.erase(
+              std::remove_if(readMappings.begin(),
+                             readMappings.end(),
+                             [&](MappingResult &e){
+                                 return kept_chains.count(e.splitMappingId) == 0;
+                             }),
+              readMappings.end());
+      }
+
 
       /**
        * @brief               main mapping function given an input read
@@ -379,7 +399,8 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
-              mergeMappings(output->readMappings);
+              //mergeMappings(output->readMappings);
+              mergeMappingsInRange(output->readMappings, param.block_length_min);
           }
         }
 
@@ -397,13 +418,24 @@ namespace skch
         // remove short merged mappings when we are merging
         if (split_mapping) {
             this->filterShortMappings(output->readMappings);
-            mergeMappingsInRange(output->readMappings, param.segLength * 10);
+            //expandMappings(output->readMappings, param.block_length_min);
+            // merge mappings in range and get a copy of the unmerged, annotated with segment id
+            auto unmerged = mergeMappingsInRange(output->readMappings, param.block_length_min * 50);
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                 skch::Filter::query::filterMappings(output->readMappings,
                                                     (input->len < param.segLength ?
                                                      param.numMappingsForShortSequence
                                                      : param.numMappingsForSegment) - 1);
             }
+            // trivial: make a set of the kept segment ids
+            // use this to filter the unmerged
+            std::unordered_set<offset_t> x;
+            // do this w/o the hash table
+            for (auto& m : output->readMappings) {
+                x.insert(m.splitMappingId);
+            }
+            filterFailedSubMappings(unmerged, x);
+            output->readMappings = unmerged;
         }
 
         // remove alignments where the ratio between query and target length is < our identity threshold
@@ -831,6 +863,21 @@ namespace skch
         }
 
       /**
+       * @brief                       Merge the consecutive fragment mappings reported in each query
+       * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
+       */
+      template <typename VecIn>
+        void expandMappings(VecIn &readMappings, int expansion)
+        {
+            for (auto& m : readMappings) {
+                m.refStartPos -= expansion;
+                m.refEndPos += expansion;
+                m.queryStartPos -= expansion;
+                m.queryEndPos += expansion;
+            }
+        }
+      
+      /**
        * @brief                       Merge the consecutive fragment mappings reported in each query 
        * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
        */
@@ -931,11 +978,11 @@ namespace skch
        * @param[in]     max_dist      Distance to look in target and query
        */
       template <typename VecIn>
-      void mergeMappingsInRange(VecIn &readMappings, int max_dist) {
+      VecIn mergeMappingsInRange(VecIn &readMappings, int max_dist) {
           assert(param.split == true);
 
           if(readMappings.size() < 2)
-              return;
+              return readMappings;
 
           //Sort the mappings by reference (then query) position
           std::sort(
@@ -996,6 +1043,9 @@ namespace skch
                   return a.splitMappingId < b.splitMappingId;
               });
 
+          // copy for independent return of merged and unmerged
+          auto unmergedReadMappings = readMappings;
+
           for(auto it = readMappings.begin(); it != readMappings.end();) {
 
               //Bucket by each chain
@@ -1034,6 +1084,8 @@ namespace skch
           readMappings.erase( 
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
               readMappings.end());
+
+          return unmergedReadMappings;
       }
 
      /**
