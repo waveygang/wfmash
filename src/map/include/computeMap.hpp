@@ -237,13 +237,13 @@ namespace skch
        * @param[in]   input   mappings
        * @return              void
        */
-      void filterShortMappings(MappingResultsVector_t &readMappings)
+      void filterShortMappings(MappingResultsVector_t &readMappings, int64_t length)
       {
           readMappings.erase(
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 return e.blockLength < param.block_length_min;
+                                 return e.blockLength < length;
                              }),
               readMappings.end());
       }
@@ -399,8 +399,7 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
-              //mergeMappings(output->readMappings);
-              mergeMappingsInRange(output->readMappings, param.block_length_min);
+              mergeMappingsInRange(output->readMappings, param.block_length_min / 2);
           }
         }
 
@@ -417,10 +416,12 @@ namespace skch
 
         // remove short merged mappings when we are merging
         if (split_mapping) {
-            this->filterShortMappings(output->readMappings);
+            filterShortMappings(output->readMappings, param.block_length_min);
+            // expansion could help deal with boundary effects from mash mapping
+            // but it probably will make alignment much harder
             //expandMappings(output->readMappings, param.block_length_min);
             // merge mappings in range and get a copy of the unmerged, annotated with segment id
-            auto unmerged = mergeMappingsInRange(output->readMappings, param.block_length_min * 50);
+            auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap);
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                 skch::Filter::query::filterMappings(output->readMappings,
                                                     (input->len < param.segLength ?
