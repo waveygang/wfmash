@@ -8,7 +8,6 @@
 #define SKETCH_MAP_HPP
 
 #include <vector>
-#include <unordered_set>
 #include <algorithm>
 #include <unordered_map>
 #include <fstream>
@@ -31,8 +30,10 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 #include "common/filesystem.hpp"
-//#include "common/union_find.hpp"
+#include "robin-hood-hashing/robin_hood.h"
+// if we ever want to do the union-find chaining in parallel
 //#include "common/dset64-gccAtomic.hpp"
+// this is for single-threaded use, but is more portable
 #include "common/dset64.hpp"
 
 namespace skch
@@ -295,7 +296,7 @@ namespace skch
        * @return              void
        */
       void filterFailedSubMappings(MappingResultsVector_t &readMappings,
-                                   const std::unordered_set<offset_t>& kept_chains)
+                                   const robin_hood::unordered_set<offset_t>& kept_chains)
       {
           readMappings.erase(
               std::remove_if(readMappings.begin(),
@@ -429,7 +430,7 @@ namespace skch
             }
             // trivial: make a set of the kept segment ids
             // use this to filter the unmerged
-            std::unordered_set<offset_t> x;
+            robin_hood::unordered_set<offset_t> x;
             // do this w/o the hash table
             for (auto& m : output->readMappings) {
                 x.insert(m.splitMappingId);
