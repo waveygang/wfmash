@@ -405,9 +405,6 @@ namespace skch
           }
         }
 
-        // remove self-mode don't-maps
-        this->filterSelfingLongToShorts(output->readMappings);
-
         //filter mappings best over query sequence axis
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
             skch::Filter::query::filterMappings(output->readMappings,
@@ -438,6 +435,9 @@ namespace skch
             filterFailedSubMappings(unmerged, x);
             output->readMappings = unmerged;
         }
+
+        // remove self-mode don't-maps
+        this->filterSelfingLongToShorts(output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
         this->filterFalseHighIdentity(output->readMappings);
