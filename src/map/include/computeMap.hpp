@@ -284,7 +284,8 @@ namespace skch
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
-                                 return len_id_bound < param.percentageIdentity;
+                                 // don't trust the mapping if the id bound is < 50%
+                                 return len_id_bound < 0.5;
                              }),
               readMappings.end());
       }
