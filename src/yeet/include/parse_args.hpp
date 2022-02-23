@@ -313,7 +313,7 @@ void parse_args(int argc,
 
         map_parameters.block_length_min = l;
     } else {
-        map_parameters.block_length_min = 5 * map_parameters.segLength;
+        map_parameters.block_length_min = 3 * map_parameters.segLength;
         // Automatic block length selection based on mapping identity bound.
         // We scale the block length minimum by the mapping target divergence:
         //  - at low divergence, we might expect many segment mappings to occur in a row,

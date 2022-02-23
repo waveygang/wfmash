@@ -285,7 +285,7 @@ namespace skch
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
                                  // don't trust the mapping if the id bound is < 50%
-                                 return len_id_bound < 0.5;
+                                 return len_id_bound < 0.7;
                              }),
               readMappings.end());
       }
@@ -406,7 +406,7 @@ namespace skch
               // query head-to-tail merge
               mergeMappings(output->readMappings);
               // find the best mapping in the query/target 2D of length 0.75 * block length
-              mergeMappingsInRange(output->readMappings, param.block_length_min * 0.75);
+              mergeMappingsInRange(output->readMappings, param.block_length_min / 2);
           }
         }
 
