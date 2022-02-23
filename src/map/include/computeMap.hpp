@@ -403,6 +403,7 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
+              mergeMappings(output->readMappings);
               mergeMappingsInRange(output->readMappings, param.block_length_min);
           }
         }
