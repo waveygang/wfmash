@@ -245,7 +245,8 @@ namespace skch
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 return e.blockLength < length;
+                                 return e.queryLen > e.blockLength
+                                     && e.blockLength < length;
                              }),
               readMappings.end());
       }
