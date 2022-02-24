@@ -29,6 +29,7 @@ struct ales_params {
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
+    float kmer_pct_threshold;                         //use only kmers not in the top kmer_pct_threshold %-ile
     int64_t windowSize;                               //window size used for sketching
     int64_t segLength;                                //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap

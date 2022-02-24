@@ -60,8 +60,9 @@ void parse_args(int argc,
     // mashmap arguments
     args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 5k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length"});
-    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, then filter and retain primary mappings [default: 50*segment-length]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 50*segment-length]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
+    args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
     args::Flag drop_low_map_pct_identity(parser, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
@@ -357,6 +358,12 @@ void parse_args(int argc,
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
         */
         map_parameters.kmerSize = 19;
+    }
+
+    if (kmer_pct_threshold) {
+        map_parameters.kmer_pct_threshold = args::get(kmer_pct_threshold);
+    } else {
+        map_parameters.kmer_pct_threshold = 0.5; // in percent! so we keep 99.5%
     }
 
     if (spaced_seed_params) {

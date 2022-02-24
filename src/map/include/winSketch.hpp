@@ -53,9 +53,6 @@ namespace skch
       //algorithm parameters
       const skch::Parameters &param;
 
-      //Ignore top % most frequent minimizers while lookups
-      float percentageThreshold = 0.5; // we keep 99.5% of kmers
-
       //Minimizers that occur this or more times will be ignored (computed based on percentageThreshold)
       int freqThreshold = std::numeric_limits<int>::max();
 
@@ -253,7 +250,7 @@ namespace skch
               //2. Compute frequency threshold to ignore most frequent minimizers
 
               int64_t totalUniqueMinimizers = this->minimizerPosLookupIndex.size();
-              int64_t minimizerToIgnore = totalUniqueMinimizers * percentageThreshold / 100;
+              int64_t minimizerToIgnore = totalUniqueMinimizers * param.kmer_pct_threshold / 100;
 
               int64_t sum = 0;
 
@@ -272,11 +269,11 @@ namespace skch
               }
 
               if (this->freqThreshold != std::numeric_limits<int>::max())
-                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold
+                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
                             << "\%, ignore minimizers occurring >= " << this->freqThreshold << " times during lookup."
                             << std::endl;
               else
-                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->percentageThreshold
+                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
                             << "\%, consider all minimizers during lookup." << std::endl;
           } else {
               std::cerr << "[wfmash::skch::Sketch::computeFreqHist] No minimizers." << std::endl;
