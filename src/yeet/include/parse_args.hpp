@@ -59,7 +59,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
     args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 5k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length_min(parser, "N", "keep mappings with at least this block length [default: 5*segment-length]", {'l', "block-length-min"});
+    args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, then filter and retain primary mappings [default: 50*segment-length]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
@@ -303,28 +303,28 @@ void parse_args(int argc,
         map_parameters.percentageIdentity = skch::fixed::percentage_identity;
     }
 
-    if (block_length_min) {
-        const int64_t l = wfmash::handy_parameter(args::get(block_length_min));
+    if (block_length) {
+        const int64_t l = wfmash::handy_parameter(args::get(block_length));
 
         if (l < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
             exit(1);
         }
 
-        map_parameters.block_length_min = l;
+        map_parameters.block_length = l;
     } else {
-        map_parameters.block_length_min = 3 * map_parameters.segLength;
+        map_parameters.block_length = 3 * map_parameters.segLength;
         // Automatic block length selection based on mapping identity bound.
         // We scale the block length minimum by the mapping target divergence:
         //  - at low divergence, we might expect many segment mappings to occur in a row,
         //  - but at high divergence, this assumption may no longer hold due to SVs.
         /*
         if (map_parameters.percentageIdentity > 0.95) {
-            map_parameters.block_length_min = 3 * map_parameters.segLength;
+            map_parameters.block_length = 3 * map_parameters.segLength;
         } else if (map_parameters.percentageIdentity > 0.90) {
-            map_parameters.block_length_min = 2 * map_parameters.segLength;
+            map_parameters.block_length = 2 * map_parameters.segLength;
         } else {
-            map_parameters.block_length_min = 1.25 * map_parameters.segLength;
+            map_parameters.block_length = 1.25 * map_parameters.segLength;
         }
         */
     }

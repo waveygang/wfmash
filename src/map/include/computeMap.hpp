@@ -325,7 +325,7 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
 
-        if(! param.split || input->len < param.segLength || input->len <= param.block_length_min)
+        if(! param.split || input->len < param.segLength || input->len <= param.block_length)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -406,7 +406,7 @@ namespace skch
               // query head-to-tail merge
               mergeMappings(output->readMappings);
               // find the best mapping in the query/target 2D of length 0.75 * block length
-              mergeMappingsInRange(output->readMappings, param.block_length_min / 2);
+              mergeMappingsInRange(output->readMappings, param.block_length / 2);
           }
         }
 
@@ -421,7 +421,7 @@ namespace skch
         // remove short merged mappings when we are merging
         if (split_mapping) {
             // filter mappings that didn't reach the min block length through merging
-            filterShortMappings(output->readMappings, param.block_length_min);
+            filterShortMappings(output->readMappings, param.block_length);
             // merge mappings in range and get a copy of the unmerged, annotated with segment id
             auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap);
             // filter the merged mappings using plane sweep
@@ -432,7 +432,7 @@ namespace skch
                                                      : param.numMappingsForSegment) - 1);
             }
             // remove short chains
-            filterShortMappings(output->readMappings, param.block_length_min * 2);
+            filterShortMappings(output->readMappings, param.block_length * 2);
             // use this to filter the unmerged mappings by merged mapping
             robin_hood::unordered_set<offset_t> x;
             // do this w/o the hash table

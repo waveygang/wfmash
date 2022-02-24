@@ -193,7 +193,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     std::cerr << "[wfmash::map] Kmer size = " << parameters.kmerSize << std::endl;
     std::cerr << "[wfmash::map] Window size = " << parameters.windowSize << std::endl;
     std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cerr << "[wfmash::map] Block length min = " << parameters.block_length_min << std::endl;
+    std::cerr << "[wfmash::map] Block length min = " << parameters.block_length << std::endl;
     std::cerr << "[wfmash::map] Chaining gap max = " << parameters.chain_gap << std::endl;
     //std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
     std::cerr << "[wfmash::map] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;

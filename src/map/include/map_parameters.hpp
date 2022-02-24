@@ -32,7 +32,7 @@ struct Parameters
     int64_t windowSize;                               //window size used for sketching
     int64_t segLength;                                //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
-    int64_t block_length_min;                         // minimum (potentially merged) block to keep if we aren't split
+    int64_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
     int64_t chain_gap;                                // max distance for 2d range union-find mapping chaining
     int alphabetSize;                                 //alphabet size
     uint64_t referenceSize;                           //Approximate reference size
