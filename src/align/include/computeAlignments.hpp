@@ -473,6 +473,7 @@ namespace align
         wflign::wavefront::wflign_affine_wavefront(
             output,
             !param.tsvOutputPrefix.empty(), output_tsv,
+            param.prefix_wavefront_plot_in_png, param.wfplot_max_size,
             true, // merge alignments
             param.emit_md_tag,
             !param.sam_format, param.no_seq_in_sam,

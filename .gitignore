@@ -32,5 +32,6 @@ include
 \#*
 .\#*
 src/common/WFA/bin/
+src/wfmash_git_version.hpp
 
 test/

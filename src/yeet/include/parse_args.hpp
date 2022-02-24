@@ -58,13 +58,15 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 5000]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length_min(parser, "N", "keep mappings with at least this block length (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 3*segment-length]", {'l', "block-length-min"});
-    args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 5k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length"});
+    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 50*segment-length]", {'c', "chain-gap"});
+    args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
+    args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
     args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
-    args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
-    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
+    args::Flag drop_low_map_pct_identity(parser, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
+    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=% x 0.75", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
@@ -73,7 +75,8 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic)]", {'w', "window-size"});
+    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic), minimum 5*-k]", {'w', "window-size"});
+    args::Flag window_minimizers(parser, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
 
@@ -86,7 +89,7 @@ void parse_args(int argc,
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                             {'g', "wfa-params"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 100000]", {'D', "wflambda-diff"});
+    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront [default: 100k]", {'D', "wflambda-diff"});
 
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(parser, "mismatch,gap1,ext1",
@@ -95,8 +98,8 @@ void parse_args(int argc,
     args::ValueFlag<float> wflign_max_mash_dist(parser, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
 
     // patching parameter
-    args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 512*segment-length]", {'C', "max-patch-major"});
-    args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 128*segment-length]", {'F', "max-patch-minor"});
+    args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
+    args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
     args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-match-mismatch"});
 
     // format parameters
@@ -112,6 +115,9 @@ void parse_args(int argc,
 
     // debugging
     args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
+
+    args::ValueFlag<std::string> prefix_wavefront_plot_in_png(parser, "PREFIX", " write wavefronts' plot for each alignment in PNG format files with this PREFIX", {'u', "prefix-png"});
+    args::ValueFlag<uint64_t> wfplot_max_size(parser, "N", "max size of the wfplot [default: 1500]", {'z', "wfplot-max-size"});
 
     // version
     args::Flag version(parser, "version", "show long version number including github commit", {'v', "version"});
@@ -288,19 +294,6 @@ void parse_args(int argc,
         map_parameters.segLength = 5000;
     }
 
-    if (block_length_min) {
-        const int64_t l = wfmash::handy_parameter(args::get(block_length_min));
-
-        if (l < 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
-            exit(1);
-        }
-
-        map_parameters.block_length_min = l;
-    } else {
-        map_parameters.block_length_min = 3 * map_parameters.segLength;
-    }
-
     if (map_pct_identity) {
         if (args::get(map_pct_identity) < 70) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%." << std::endl;
@@ -311,10 +304,47 @@ void parse_args(int argc,
         map_parameters.percentageIdentity = skch::fixed::percentage_identity;
     }
 
-    if (keep_low_map_pct_identity) {
-        map_parameters.keep_low_pct_id = true;
+    if (block_length) {
+        const int64_t l = wfmash::handy_parameter(args::get(block_length));
+
+        if (l < 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
+            exit(1);
+        }
+
+        map_parameters.block_length = l;
     } else {
+        map_parameters.block_length = 3 * map_parameters.segLength;
+        // Automatic block length selection based on mapping identity bound.
+        // We scale the block length minimum by the mapping target divergence:
+        //  - at low divergence, we might expect many segment mappings to occur in a row,
+        //  - but at high divergence, this assumption may no longer hold due to SVs.
+        /*
+        if (map_parameters.percentageIdentity > 0.95) {
+            map_parameters.block_length = 3 * map_parameters.segLength;
+        } else if (map_parameters.percentageIdentity > 0.90) {
+            map_parameters.block_length = 2 * map_parameters.segLength;
+        } else {
+            map_parameters.block_length = 1.25 * map_parameters.segLength;
+        }
+        */
+    }
+
+    if (chain_gap) {
+        const int64_t l = wfmash::handy_parameter(args::get(chain_gap));
+        if (l < 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
+            exit(1);
+        }
+        map_parameters.chain_gap = l;
+    } else {
+        map_parameters.chain_gap = 50 * map_parameters.segLength;
+    }
+
+    if (drop_low_map_pct_identity) {
         map_parameters.keep_low_pct_id = false;
+    } else {
+        map_parameters.keep_low_pct_id = true;
     }
 
     if (kmer_size) {
@@ -323,9 +353,17 @@ void parse_args(int argc,
         // Smaller values of k are more sensitive for divergent genomes, but lose specificity for large
         // genomes due to chance k-mer collisions. However, too large of a k-mer will reduce sensitivity
         // and so choosing the smallest k that avoids chance collisions is recommended.
-
+        /*
         map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
+        */
+        map_parameters.kmerSize = 19;
+    }
+
+    if (kmer_pct_threshold) {
+        map_parameters.kmer_pct_threshold = args::get(kmer_pct_threshold);
+    } else {
+        map_parameters.kmer_pct_threshold = 0.5; // in percent! so we keep 99.5%
     }
 
     if (spaced_seed_params) {
@@ -385,7 +423,7 @@ void parse_args(int argc,
         // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
         align_parameters.min_identity = 0; // now unused
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity; // in [0,1]
+        align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
     }
 
     if (wflambda_segment_length) {
@@ -412,7 +450,6 @@ void parse_args(int argc,
     } else {
         align_parameters.wflambda_max_distance_threshold = 100000;
     }
-    align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
     if (wflign_max_len_major) {
         const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
@@ -443,7 +480,7 @@ void parse_args(int argc,
     if (wflign_erode_k) {
         align_parameters.wflign_erode_k = args::get(wflign_erode_k);
     } else {
-        align_parameters.wflign_erode_k = map_parameters.percentageIdentity >= 0.97 ? 21 : (map_parameters.percentageIdentity >= 0.9 ? 17 : 13);
+        align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
     }
 
     if (thread_count) {
@@ -470,9 +507,18 @@ void parse_args(int argc,
                     map_parameters.segLength,
                     map_parameters.referenceSize);
 
+            // Avoid tiny windows to improve runtime
+            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize*5, windowSize);
+
             // Avoid too big values to improve the accuracy
-            map_parameters.windowSize = std::min((int64_t)256, windowSize);
+            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
         }
+    }
+
+    if (window_minimizers) {
+        map_parameters.world_minimizers = false;
+    } else {
+        map_parameters.world_minimizers = true;
     }
 
     if (approx_mapping) {
@@ -503,6 +549,16 @@ void parse_args(int argc,
     align_parameters.tsvOutputPrefix = (prefix_wavefront_info_in_tsv && !args::get(prefix_wavefront_info_in_tsv).empty())
             ? args::get(prefix_wavefront_info_in_tsv)
             : "";
+
+    // wfplotting
+    if (prefix_wavefront_plot_in_png) {
+        align_parameters.prefix_wavefront_plot_in_png = args::get(prefix_wavefront_plot_in_png);
+    }
+    if (wfplot_max_size) {
+        align_parameters.wfplot_max_size = args::get(wfplot_max_size);
+    } else {
+        align_parameters.wfplot_max_size = 1500;
+    }
 
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {

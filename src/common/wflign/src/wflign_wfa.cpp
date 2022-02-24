@@ -4,11 +4,22 @@
 // not doing this results in a linker error
 #include "WFA/wavefront/wavefront_penalties.c" // TODO fixme
 
+#include "atomic_image.hpp"
+#include "lodepng/lodepng.h"
+
+void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
+    //Encode the image
+    unsigned error = lodepng::encode(filename, image, width, height);
+
+    //if there's an error, display it
+    if (error) std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+}
+
 namespace wflign {
 
 namespace wavefront {
 
-#define MAX_LEN_FOR_PURE_WFA    50000
+#define MAX_LEN_FOR_PURE_WFA    50000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
 #define MAX_DIST_THRESHOLD      4096
 
@@ -40,6 +51,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 void wflign_affine_wavefront(
     std::ostream &out,
     const bool &emit_tsv, std::ostream &out_tsv,
+    const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &merge_alignments,
     const bool &emit_md_tag,
     const bool &paf_format_else_sam, const bool &no_seq_in_sam,
@@ -57,13 +69,13 @@ void wflign_affine_wavefront(
     const int &wfa_gap_extension_score,
     const int &wflambda_min_wavefront_length, // with these set at 0 we do exact
     // WFA for wflambda
-    const int &wflambda_max_distance_threshold, const float &mashmap_estimated_identity,
+    const int &_wflambda_max_distance_threshold, const float &mashmap_estimated_identity,
     const int &wflign_mismatch_score,
     const int &wflign_gap_opening_score,
     const int &wflign_gap_extension_score,
     const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k) {
+    const int& _erode_k) {
 
     if (query_offset + query_length > query_total_length ||
         target_offset + target_length > target_total_length) {
@@ -83,47 +95,145 @@ void wflign_affine_wavefront(
         };
         minhash_kmer_size = 17;
     } else {
-        if (mashmap_estimated_identity >= 0.99999) {
+        if (mashmap_estimated_identity >= 0.99) {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 15,
-                    .gap_opening = 25,
-                    .gap_extension = 1,
-                    };
+                .match = 0,
+                .mismatch = 19,
+                .gap_opening = 31,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 19;
+        } else if (mashmap_estimated_identity >= 0.98) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 15,
+                .gap_opening = 25,
+                .gap_extension = 1,
+            };
             minhash_kmer_size = 17;
         } else if (mashmap_estimated_identity >= 0.97) {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 9,
-                    .gap_opening = 13,
-                    .gap_extension = 1,
-                    };
+                .match = 0,
+                .mismatch = 13,
+                .gap_opening = 21,
+                .gap_extension = 1,
+            };
             minhash_kmer_size = 17;
-        } else if (mashmap_estimated_identity >= 0.9) {
+        } else if (mashmap_estimated_identity >= 0.95) {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 7,
-                    .gap_opening = 11,
-                    .gap_extension = 1,
-                    };
-            minhash_kmer_size = 16;
-        } else if (mashmap_estimated_identity >= 0.8) {
-            wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 3,
-                    .gap_opening = 5,
-                    .gap_extension = 1,
-                    };
+                .match = 0,
+                .mismatch = 11,
+                .gap_opening = 17,
+                .gap_extension = 1,
+            };
             minhash_kmer_size = 15;
+        } else if (mashmap_estimated_identity >= 0.90) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 7,
+                .gap_opening = 11,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 13;
+        } else if (mashmap_estimated_identity >= 0.85) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 6,
+                .gap_opening = 9,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 11;
+        } else if (mashmap_estimated_identity >= 0.80) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 5,
+                .gap_opening = 8,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 11;
+        } else if (mashmap_estimated_identity >= 0.75) {
+            wfa_affine_penalties = {
+                .match = 0,
+                .mismatch = 4,
+                .gap_opening = 6,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 11;
         } else {
             wfa_affine_penalties = {
-                    .match = 0,
-                    .mismatch = 2,
-                    .gap_opening = 4,
-                    .gap_extension = 1,
-                    };
-            minhash_kmer_size = 13;
+                .match = 0,
+                .mismatch = 3,
+                .gap_opening = 5,
+                .gap_extension = 1,
+            };
+            minhash_kmer_size = 9;
         }
+    }
+
+    // heuristic bound on the max mash dist, adaptive based on estimated
+    // identity the goal here is to sparsify the set of alignments in the
+    // wflambda layer we then patch up the gaps between them
+
+    int erode_k = 0;
+    float inception_score_max_ratio = 3;
+    float max_mash_dist_to_evaluate = 1;
+    float mash_sketch_rate = 1;
+
+    if (mashmap_estimated_identity >= 0.99) {
+        max_mash_dist_to_evaluate = 0.05;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 2;
+        erode_k = 13;
+    } else if (mashmap_estimated_identity >= 0.98) {
+        max_mash_dist_to_evaluate = 0.05;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 2;
+        erode_k = 13;
+    } else if (mashmap_estimated_identity >= 0.97) {
+        max_mash_dist_to_evaluate = 0.075;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 3;
+        erode_k = 11;
+    } else if (mashmap_estimated_identity >= 0.95) {
+        max_mash_dist_to_evaluate = 0.15;
+        mash_sketch_rate = 0.25;
+        inception_score_max_ratio = 3;
+        erode_k = 9;
+    } else if (mashmap_estimated_identity >= 0.9) {
+        max_mash_dist_to_evaluate = 0.3;
+        mash_sketch_rate = 0.3;
+        inception_score_max_ratio = 4;
+        erode_k = 7;
+    } else if (mashmap_estimated_identity >= 0.85) {
+        max_mash_dist_to_evaluate = 0.4;
+        mash_sketch_rate = 0.35;
+        inception_score_max_ratio = 5;
+        erode_k = 0;
+    } else if (mashmap_estimated_identity >= 0.8) {
+        max_mash_dist_to_evaluate = 0.5;
+        mash_sketch_rate = 0.4;
+        inception_score_max_ratio = 6;
+        erode_k = 0;
+    } else if (mashmap_estimated_identity >= 0.75) {
+        max_mash_dist_to_evaluate = 0.6;
+        mash_sketch_rate = 0.45;
+        inception_score_max_ratio = 7;
+        erode_k = 0;
+    } else {
+        max_mash_dist_to_evaluate = 0.7;
+        mash_sketch_rate = 0.5;
+        inception_score_max_ratio = 8;
+        erode_k = 0;
+    }
+
+    // override erosion if given on input
+    if (_erode_k >= 0) {
+        erode_k = _erode_k;
+    }
+
+    // override max mash dist if given on input
+    if (wflign_max_mash_dist > 0) {
+        max_mash_dist_to_evaluate = wflign_max_mash_dist;
     }
 
     // accumulate runs of matches in reverse order
@@ -134,7 +244,10 @@ void wflign_affine_wavefront(
     uint64_t num_alignments_performed = 0;
     const auto start_time = std::chrono::steady_clock::now();
 
-    if (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
+    // if we expect the alignment to be low divergence, and the mapping is less than 50kb
+    // it's faster to just align directly with WFA
+    if (mashmap_estimated_identity >= 0.95 // about the limit of what our reduction thresholds allow
+        && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
                                                                            query_length,
@@ -210,16 +323,20 @@ void wflign_affine_wavefront(
                 query_offset, query_length, query_is_rev,
                 target,
                 target_name, target_total_length, target_offset, target_length,
+                segment_length,
                 MAX_LEN_FOR_PURE_WFA, min_identity,
                 elapsed_time_wflambda_ms, num_alignments,
                 num_alignments_performed, mashmap_estimated_identity,
                 wflign_max_len_major, wflign_max_len_minor,
                 erode_k,
-                MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                inception_score_max_ratio,
+                MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                prefix_wavefront_plot_in_png, wfplot_max_size);
 
         // Free
         wfa::wavefront_aligner_delete(wf_aligner);
-    } else {
+
+    } else { // regular wflign
         if (emit_tsv) {
             out_tsv << "# query_name=" << query_name << std::endl;
             out_tsv << "# query_start=" << query_offset << std::endl;
@@ -261,60 +378,12 @@ void wflign_affine_wavefront(
                     .gap_extension = wflign_gap_extension_score
             };
         } else {
-            if (mashmap_estimated_identity >= 0.99999) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 17,
-                        .gap_opening = 27,
-                        .gap_extension = 1,
-                        };
-            } else if (mashmap_estimated_identity >= 0.97) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 13,
-                        .gap_opening = 21,
-                        .gap_extension = 1,
-                        };
-            } else if (mashmap_estimated_identity >= 0.9) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 9,
-                        .gap_opening = 14,
-                        .gap_extension = 1,
-                        };
-            } else if (mashmap_estimated_identity >= 0.8) {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 7,
-                        .gap_opening = 11,
-                        .gap_extension = 1,
-                        };
-            } else {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 4,
-                        .gap_opening = 6,
-                        .gap_extension = 1,
-                        };
-            }
-        }
-
-        float max_mash_dist_to_evaluate = 1.0;
-        if (wflign_max_mash_dist > 0) {
-            max_mash_dist_to_evaluate = wflign_max_mash_dist;
-        } else {
-            // heuristic bound on the max mash dist, adaptive based on estimated
-            // identity the goal here is to sparsify the set of alignments in the
-            // wflambda layer we then patch up the gaps between them
-            if (mashmap_estimated_identity >= 0.97) {
-                max_mash_dist_to_evaluate = 0.05;
-            } else if (mashmap_estimated_identity >= 0.9) {
-                max_mash_dist_to_evaluate = 0.2;
-            } else if (mashmap_estimated_identity >= 0.8) {
-                max_mash_dist_to_evaluate = 0.7;
-            } else if (mashmap_estimated_identity >= 0.7) {
-                max_mash_dist_to_evaluate = 0.9;
-            }
+            wflambda_affine_penalties = {
+                .match = wfa_affine_penalties.match,
+                .mismatch = wfa_affine_penalties.mismatch,
+                .gap_opening = wfa_affine_penalties.gap_opening,
+                .gap_extension = wfa_affine_penalties.gap_extension
+            };
         }
 
         //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
@@ -332,6 +401,11 @@ void wflign_affine_wavefront(
         attributes.affine_penalties = wflambda_affine_penalties;
         // attributes.distance_metric = gap_affine2p;
         // attributes.affine2p_penalties = affine2p_penalties;
+
+        uint64_t wflambda_max_distance_threshold =
+            std::min((uint64_t)_wflambda_max_distance_threshold,
+                     std::max((uint64_t)query_length, (uint64_t)target_length)/10) / step_size;
+
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
             attributes.reduction.reduction_strategy =
                     wflambda::wavefront_reduction_dynamic; // wavefront_reduction_dynamic
@@ -360,6 +434,10 @@ void wflign_affine_wavefront(
                                                                            segment_length_to_use,
                                                                            segment_length_to_use,
                                                                            false);
+
+        bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
+        robin_hood::unordered_set<uint64_t> high_order_dp_matrix_mismatch;
+
         int v_max = 0;
         int h_max = 0;
 
@@ -386,7 +464,9 @@ void wflign_affine_wavefront(
                             segment_length_to_use_q,
                             segment_length_to_use_t,
                             step_size, minhash_kmer_size, wfa_min_wavefront_length,
-                            wfa_max_distance_threshold, max_mash_dist_to_evaluate, mashmap_estimated_identity,
+                            wfa_max_distance_threshold,
+                            max_mash_dist_to_evaluate, mash_sketch_rate,
+                            inception_score_max_ratio,
                             wf_aligner, &wfa_affine_penalties, *aln);
                     if (emit_tsv) {
                         // 0) Mis-match, alignment skipped
@@ -394,6 +474,8 @@ void wflign_affine_wavefront(
                         // 2) Match, alignment performed
                         out_tsv << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
                     }
+                    //std::cerr << v << "\t" << h << "\t" << (alignment_performed ? (aln->ok ? 2 : 1) : 0) << std::endl;
+
                     ++num_alignments;
                     if (alignment_performed) {
                         ++num_alignments_performed;
@@ -402,6 +484,11 @@ void wflign_affine_wavefront(
                             alignments[k] = aln;
                         } else {
                             alignments[k] = nullptr;
+                        }
+                    } else {
+                        if (emit_png) {
+                            // Save only the mismatches, as they are not cached
+                            high_order_dp_matrix_mismatch.insert(encode_pair(v, h));
                         }
                     }
                     if (!is_a_match) {
@@ -463,6 +550,122 @@ void wflign_affine_wavefront(
         wflambda::wavefront_align(wflambda_aligner, extend_match,
                                   trace_match, pattern_length, text_length);
         wflambda::wavefront_aligner_delete(wflambda_aligner);
+
+        if (emit_png) {
+            const int wfplot_vmin = 0, wfplot_vmax = pattern_length; //v_max;
+            const int wfplot_hmin = 0, wfplot_hmax = text_length; //h_max
+
+            int v_max = wfplot_vmax - wfplot_vmin;
+            int h_max = wfplot_hmax - wfplot_hmin;
+
+            const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
+            const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
+            const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
+
+            const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
+
+            const uint64_t width = (int)(scale * (double)v_max);
+            const uint64_t height = (int)(scale * (double)h_max);
+            const double source_width = (double)width;
+            const double source_height = (double)height;
+
+            const double x_off = 0, y_off = 0;
+            const double line_width = 1.0;
+            const double source_min_x = 0, source_min_y = 0;
+
+            auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
+                    ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                                            image.layer_pixel(point.x, point.y, color);
+                                        }
+                    : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                                            wflign::algorithms::wu_calc_wide_line(
+                                                    point, point,
+                                                    color,
+                                                    image);
+                                        };
+
+            // Plot with only fragments belonging to the best alignment (that is, only the anchors)
+            {
+                algorithms::atomic_image_buf_t image(width, height,
+                                                     source_width, source_height,
+                                                     source_min_x, source_min_y);
+
+                for (const auto &p : alignments) {
+                    if (p.second != nullptr && p.second->keep) {
+                        int v, h;
+                        decode_pair(p.first, &v, &h);
+
+                        if (v >= wfplot_vmin && v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                            algorithms::xy_d_t xy0 = {
+                                    (v * scale) - x_off,
+                                    (h * scale) + y_off
+                            };
+                            xy0.into(source_min_x, source_min_y,
+                                     source_width, source_height,
+                                     0, 0,
+                                     width, height);
+
+                            plot_point(xy0, image, COLOR_WFA_MATCH);
+                        }
+                    }
+                }
+
+                auto bytes = image.to_bytes();
+                const std::string filename = prefix_wavefront_plot_in_png +
+                        query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".1.anchors.png";
+                encodeOneStep(filename.c_str(), bytes, width, height);
+            }
+
+            // Full plot
+            {
+                algorithms::atomic_image_buf_t image(width, height,
+                                                     source_width, source_height,
+                                                     source_min_x, source_min_y);
+
+                for (const auto &p : alignments) {
+                    int v, h;
+                    decode_pair(p.first, &v, &h);
+
+                    if (v >= wfplot_vmin && v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax) {
+                        algorithms::xy_d_t xy0 = {
+                                (v * scale) - x_off,
+                                (h * scale) + y_off
+                        };
+                        xy0.into(source_min_x, source_min_y,
+                                 source_width, source_height,
+                                 0, 0,
+                                 width, height);
+
+                        plot_point(xy0, image, p.second != nullptr ? COLOR_WFA_MATCH : COLOR_WFA_MISMATCH);
+                    }
+                }
+
+                for (auto high_order_DP_cell: high_order_dp_matrix_mismatch) {
+                    int v, h;
+                    decode_pair(high_order_DP_cell, &v, &h);
+
+                    if (v >= wfplot_vmin && v <= wfplot_vmax && h >= wfplot_hmin && h <= wfplot_hmax){
+                        algorithms::xy_d_t xy0 = {
+                                (v * scale) - x_off,
+                                (h * scale) + y_off
+                        };
+                        xy0.into(source_min_x, source_min_y,
+                                 source_width, source_height,
+                                 0, 0,
+                                 width, height);
+
+                        plot_point(xy0, image, COLOR_MASH_MISMATCH);
+                    }
+                }
+
+                auto bytes = image.to_bytes();
+                const std::string filename = prefix_wavefront_plot_in_png +
+                        query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                        "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".0.full.png";
+                encodeOneStep(filename.c_str(), bytes, width, height);
+            }
+        }
 
         for (const auto &p : alignments) {
             if (p.second != nullptr && !p.second->keep) {
@@ -648,12 +851,16 @@ void wflign_affine_wavefront(
                         query_total_length,
                         query_offset, query_length, query_is_rev, target, target_name,
                         target_total_length, target_offset, target_length,
-                        segment_length_to_use, min_identity,
+                        segment_length_to_use,
+                        MAX_LEN_FOR_PURE_WFA,
+                        min_identity,
                         elapsed_time_wflambda_ms, num_alignments,
                         num_alignments_performed, mashmap_estimated_identity,
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
-                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD);
+                        inception_score_max_ratio,
+                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                        prefix_wavefront_plot_in_png, wfplot_max_size);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -683,27 +890,33 @@ bool do_wfa_segment_alignment(
     const uint64_t &i,
     const uint16_t &segment_length_q,
     const uint16_t &segment_length_t,
-    const uint16_t &step_size, const uint64_t &minhash_kmer_size,
+    const uint16_t &step_size,
+    const uint64_t &minhash_kmer_size,
     const int &min_wavefront_length,
-    const int &max_distance_threshold, const float &max_mash_dist, const float& mashmap_estimated_identity,
+    const int &max_distance_threshold,
+    const float &max_mash_dist,
+    const float &mash_sketch_rate,
+    const float &inception_score_max_ratio,
     wfa::wavefront_aligner_t *const wf_aligner,
-    wfa::affine_penalties_t *const affine_penalties, alignment_t &aln) {
+    wfa::affine_penalties_t *const affine_penalties,
+    alignment_t &aln) {
 
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
         *query_sketch = rkmh::hash_sequence(
-            query + j, segment_length_q, minhash_kmer_size, segment_length_q / 8);
+            query + j, segment_length_q, minhash_kmer_size, segment_length_q * mash_sketch_rate);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
         *target_sketch = rkmh::hash_sequence(
-            target + i, segment_length_t, minhash_kmer_size, segment_length_t / 8);
+            target + i, segment_length_t, minhash_kmer_size, segment_length_t * mash_sketch_rate);
     }
 
     // first check if our mash dist is inbounds
     const float mash_dist =
         rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    //std::cerr << "mash_dist is " << mash_dist << std::endl;
 
     // this threshold is set low enough that we tend to randomly sample wflambda
     // matrix cells for alignment the threshold is adaptive, based on the mash
@@ -715,7 +928,7 @@ bool do_wfa_segment_alignment(
     } else {
         // if it is, we'll align
 
-        const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
+        const int max_score = std::max(segment_length_q, segment_length_t) * inception_score_max_ratio;
 
         wfa::wavefront_aligner_resize(wf_aligner, segment_length_t,
                                              segment_length_q);
@@ -838,6 +1051,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const int &segment_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
+                            const float& inception_score_max_ratio,
                             wfa::wavefront_aligner_t *const _wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln) {
@@ -846,7 +1060,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     wfa::wavefront_aligner_t* const wf_aligner
         = big_wave ?
             get_wavefront_aligner(*affine_penalties,
-                                target_length,
+                                  target_length,
                                   query_length,
                                   true)
         : _wf_aligner;
@@ -882,7 +1096,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = 2 * std::max(target_length, query_length);
+    const int max_score = std::max(target_length, query_length) * inception_score_max_ratio * 4;
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
@@ -1124,12 +1338,15 @@ void write_merged_alignment(
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length,
+    const uint64_t &max_pure_wfa,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     const float &mashmap_estimated_identity,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k,
+    const int &erode_k,
+    const float &inception_score_max_ratio,
     const int &min_wf_length, const int &max_dist_threshold,
+    const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -1138,7 +1355,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 128;
+    const uint64_t min_wfa_patch_length = 0; //128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1242,6 +1459,7 @@ void write_merged_alignment(
                          &wflign_max_len_major,
                          &wflign_max_len_minor,
                          &distance_close_big_enough_indels, &min_wf_length,
+                         &inception_score_max_ratio,
                          &max_dist_threshold, &wf_aligner,
                          &affine_penalties](std::vector<char> &unpatched,
                                             std::vector<char> &patched) {
@@ -1535,6 +1753,8 @@ void write_merged_alignment(
                             (query_delta < wflign_max_len_minor ||
                              target_delta < wflign_max_len_minor)) {
 
+                        if (false) {
+
                         int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
                             distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
                             -1;
@@ -1742,6 +1962,7 @@ void write_merged_alignment(
                                 patched.pop_back();
                             }
 
+                            }
                             /*
                             std::cerr << "E patching in "
                                       << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
@@ -1754,7 +1975,7 @@ void write_merged_alignment(
                             // problem long enough For affine WFA to be correct
                             // (to avoid trace-back errors), it must be at least
                             // 10 nt
-                            if (query_delta >= 10 && target_delta >= 10) {
+                            { //if (query_delta >= 10 && target_delta >= 10) {
                                 alignment_t patch_aln;
                                 // WFA is only global
                                 do_wfa_patch_alignment(
@@ -1762,6 +1983,7 @@ void write_merged_alignment(
                                     target - target_pointer_shift, target_pos,
                                     target_delta, segment_length,
                                     min_wf_length, max_dist_threshold,
+                                    inception_score_max_ratio,
                                     wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
@@ -2167,10 +2389,14 @@ void write_merged_alignment(
 
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev);
+            if (erode_k > 0) {
+                patching(erodev, pre_tracev);
+            } else {
+                pre_tracev = erodev;
+            }
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(pre_tracev, query,
+            if (!validate_trace(tracev, query,
                                 target - target_pointer_shift, query_length,
                                 target_length_mut, query_start, target_start)) {
                 std::cerr << "cigar failure in pre_tracev "
@@ -2192,16 +2418,20 @@ void write_merged_alignment(
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(pre_tracev);
+            sort_indels(tracev);
         }
 
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev);
+        if (erode_k > 0) {
+            patching(pre_tracev, tracev);
+        } else {
+            tracev = pre_tracev;
+        }
     }
 
     // normalize the indels
-    sort_indels(tracev);
+    //sort_indels(tracev);
 
 #ifdef WFLIGN_DEBUG
     std::cerr
@@ -2297,6 +2527,105 @@ query_start : query_end)
     }
 #endif
     */
+
+    bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
+    if (emit_png) {
+
+        const int step_size = (segment_length / 2);
+
+        //const int pattern_length = (int)query_length;
+        //const int text_length = (int)target_length;
+        const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
+        const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
+
+        const int wfplot_vmin = 0, wfplot_vmax = pattern_length;
+        const int wfplot_hmin = 0, wfplot_hmax = text_length;
+
+        int v_max = wfplot_vmax - wfplot_vmin;
+        int h_max = wfplot_hmax - wfplot_hmin;
+
+        const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
+        const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
+        const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
+
+        const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
+
+        const uint64_t width = (int)(scale * (double)v_max);
+        const uint64_t height = (int)(scale * (double)h_max);
+        const double source_width = (double)width;
+        const double source_height = (double)height;
+
+        const double x_off = 0, y_off = 0;
+        const double line_width = 1.0;
+        const double source_min_x = 0, source_min_y = 0;
+
+        auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
+            ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                image.layer_pixel(point.x, point.y, color);
+            }
+            : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                wflign::algorithms::wu_calc_wide_line(
+                    point, point,
+                    color,
+                    image);
+            };
+
+        // Plot the traceback
+        {
+            algorithms::atomic_image_buf_t image(width, height,
+                                                 source_width, source_height,
+                                                 source_min_x, source_min_y);
+
+            
+            uint64_t v = query_start; // position in the pattern
+            uint64_t h = target_start; // position in the text
+            int64_t last_v = -1;
+            int64_t last_h = -1;
+            for (const auto& c : tracev) {
+                switch (c) {
+                case 'M':
+                case 'X':
+                    ++v;
+                    ++h;
+                    {
+                        uint64_t _v = (v / step_size);
+                        uint64_t _h = (h / step_size);
+                        if ((_v != last_v && _h != last_h)
+                            && _v >= wfplot_vmin && _v <= wfplot_vmax
+                            && _h >= wfplot_hmin && _h <= wfplot_hmax) {
+                            algorithms::xy_d_t xy0 = {
+                                (_v * scale) - x_off,
+                                (_h * scale) + y_off
+                            };
+                            xy0.into(source_min_x, source_min_y,
+                                     source_width, source_height,
+                                     0, 0,
+                                     width, height);
+                            plot_point(xy0, image, COLOR_WFA_MATCH);
+                            last_v = _v;
+                            last_h = _h;
+                        }
+                    }
+                    break;
+                case 'I':
+                    ++v;
+                    break;
+                case 'D':
+                    ++h;
+                    break;
+                default:
+                    break;
+                }
+                //std::cerr << "plot cell " << v << "," << h << std::endl;
+            }
+
+            auto bytes = image.to_bytes();
+            const std::string filename = prefix_wavefront_plot_in_png +
+                query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".2.trace.png";
+            encodeOneStep(filename.c_str(), bytes, width, height);
+        }
+    }
 
     // convert trace to cigar, get correct start and end coordinates
     char *cigarv = alignment_to_cigar(
@@ -2415,9 +2744,9 @@ query_start : query_end)
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
                 << "\t"
-                << "gi:f:" << gap_compressed_identity << "\t"
+                << "gi:f:" << gap_compressed_identity * 100 << "\t"
                 << "bi:f:"
-                << block_identity
+                << block_identity * 100
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
@@ -2426,7 +2755,7 @@ query_start : query_end)
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
                 << "\t"
-                << "md:f:" << mashmap_estimated_identity;
+                << "md:f:" << mashmap_estimated_identity * 100;
 
             if (emit_md_tag) {
                 out << "\t";

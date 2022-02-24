@@ -227,6 +227,11 @@ inline uint64_t encode_pair(int v, int h) {
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
 
+inline void decode_pair(uint64_t  pair, int *v, int *h) {
+    *v = pair >> 32;
+    *h = pair & 0x00000000FFFFFFFF;
+}
+
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
     const uint64_t& target_length,
@@ -236,6 +241,7 @@ wfa::wavefront_aligner_t* get_wavefront_aligner(
 void wflign_affine_wavefront(
     std::ostream &out,
     const bool &emit_tsv, std::ostream &out_tsv,
+    const std::string &wfplot_filepath, const uint64_t &wfplot_max_size,
     const bool &merge_alignments,
     const bool &emit_md_tag,
     const bool &paf_format_else_sam, const bool &seq_in_sam,
@@ -259,7 +265,7 @@ void wflign_affine_wavefront(
     const int &wflign_gap_extension_score,
     const float &wflign_max_mash_dist,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k);
+    const int &erode_k);
 // const int& wfa_min_wavefront_length, // with these set at 0 we do exact WFA
 // for WFA itself const int& wfa_max_distance_threshold);
 
@@ -271,9 +277,13 @@ bool do_wfa_segment_alignment(
     const uint64_t &i,
     const uint16_t &segment_length_q,
     const uint16_t &segment_length_t,
-    const uint16_t &step_size, const uint64_t &minhash_kmer_size,
+    const uint16_t &step_size,
+    const uint64_t &minhash_kmer_size,
     const int &min_wavefront_length,
-    const int &max_distance_threshold, const float &max_mash_dist, const float& mashmap_estimated_identity,
+    const int &max_distance_threshold,
+    const float &max_mash_dist,
+    const float &mash_sketch_rate,
+    const float &inception_score_max_ratio,
     wfa::wavefront_aligner_t *const wf_aligner,
     wfa::affine_penalties_t *const affine_penalties, alignment_t &aln);
 
@@ -283,6 +293,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                             const int &segment_length,
                             const int &min_wavefront_length,
                             const int &max_distance_threshold,
+                            const float& inception_score_max_ratio,
                             wfa::wavefront_aligner_t *const wf_aligner,
                             wfa::affine_penalties_t *const affine_penalties,
                             alignment_t &aln);
@@ -301,12 +312,15 @@ void write_merged_alignment(
     const std::string &target_name, const uint64_t &target_total_length,
     const uint64_t &target_offset, const uint64_t &target_length,
     const uint16_t &segment_length,
+    const uint64_t &max_pure_wfa,
     const float &min_identity, const long &elapsed_time_wflambda_ms,
     const uint64_t &num_alignments, const uint64_t &num_alignments_performed,
     const float &mashmap_estimated_identity,
     const uint64_t &wflign_max_len_major, const uint64_t &wflign_max_len_minor,
-    const uint16_t &erode_k,
+    const int &erode_k,
+    const float &inception_score_max_ratio,
     const int &min_wf_length, const int &max_dist_threshold,
+    const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool &with_endline = true);
 
 void write_alignment(std::ostream &out, const alignment_t &aln,

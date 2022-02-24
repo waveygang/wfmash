@@ -29,10 +29,12 @@ struct ales_params {
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
+    float kmer_pct_threshold;                         //use only kmers not in the top kmer_pct_threshold %-ile
     int64_t windowSize;                               //window size used for sketching
     int64_t segLength;                                //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
-    int64_t block_length_min;                         // minimum (potentially merged) block to keep if we aren't split
+    int64_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
+    int64_t chain_gap;                                // max distance for 2d range union-find mapping chaining
     int alphabetSize;                                 //alphabet size
     uint64_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
@@ -54,6 +56,7 @@ struct Parameters
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
+    bool world_minimizers;
 
     //std::unordered_set<std::string> high_freq_kmers;  //
 };
