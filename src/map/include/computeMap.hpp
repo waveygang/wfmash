@@ -405,8 +405,8 @@ namespace skch
           if (param.mergeMappings) {
               // query head-to-tail merge
               mergeMappings(output->readMappings);
-              // find the best mapping in the query/target 2D of length 0.75 * block length
-              mergeMappingsInRange(output->readMappings, param.block_length / 2);
+              // find the best mapping in the query/target 2D of 2x segment length
+              mergeMappingsInRange(output->readMappings, param.segLength * 2);
           }
         }
 
