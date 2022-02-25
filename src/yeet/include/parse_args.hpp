@@ -75,7 +75,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic), minimum 5*-k]", {'w', "window-size"});
+    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic), minimum -k]", {'w', "window-size"});
     args::Flag window_minimizers(parser, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
@@ -508,7 +508,7 @@ void parse_args(int argc,
                     map_parameters.referenceSize);
 
             // Avoid tiny windows to improve runtime
-            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize*5, windowSize);
+            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
 
             // Avoid too big values to improve the accuracy
             map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
