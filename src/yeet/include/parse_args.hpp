@@ -498,7 +498,8 @@ void parse_args(int argc,
             map_parameters.windowSize = ws;
         } else {
             // Compute the window size with a heuristic function
-            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 7);
+            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 7)
+                * map_parameters.segLength / 5000;
 
             // Avoid tiny windows to improve runtime
             map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
