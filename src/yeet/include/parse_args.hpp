@@ -497,15 +497,8 @@ void parse_args(int argc,
         if (ws > 0) {
             map_parameters.windowSize = ws;
         } else {
-            // If the input window size is <= 0, compute the best window size using `skch::fixed::pval_cutoff` as p-value cutoff
-            const int64_t windowSize = skch::Stat::recommendedWindowSize(
-                    skch::fixed::pval_cutoff,
-                    skch::fixed::confidence_interval,
-                    map_parameters.kmerSize,
-                    map_parameters.alphabetSize,
-                    map_parameters.percentageIdentity,
-                    map_parameters.segLength,
-                    map_parameters.referenceSize);
+            // Compute the window size with a heuristic function
+            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 7);
 
             // Avoid tiny windows to improve runtime
             map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
