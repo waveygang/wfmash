@@ -1027,11 +1027,11 @@ namespace skch
                       bool ok = false;
                       if (it->strand == strnd::FWD && it->queryStartPos < it2->queryStartPos) {
                           auto query_dist = it2->queryStartPos - it->queryEndPos;
-                          ok = query_dist + ref_dist < max_dist;
+                          ok = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2)) < max_dist;
                           score = ref_dist + query_dist;
                       } else if (it->strand != strnd::FWD && it->queryEndPos > it2->queryEndPos) {
                           auto query_dist = it->queryStartPos - it2->queryEndPos;
-                          ok = query_dist + ref_dist < max_dist;
+                          ok = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2)) < max_dist;
                           score = ref_dist + query_dist;
                       }
                       if (ok) distances.push_back(std::make_pair(score, it2->splitMappingId));
