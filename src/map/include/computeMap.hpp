@@ -405,8 +405,8 @@ namespace skch
           if (param.mergeMappings) {
               // query head-to-tail merge
               mergeMappings(output->readMappings);
-              // find the best mapping in the query/target 2D of 2x segment length
-              mergeMappingsInRange(output->readMappings, param.segLength * 2);
+              // find the best mapping in the query/target 2D of 3x segment length
+              mergeMappingsInRange(output->readMappings, param.segLength * 3);
           }
         }
 
@@ -431,8 +431,8 @@ namespace skch
                                                      param.numMappingsForShortSequence
                                                      : param.numMappingsForSegment) - 1);
             }
-            // remove short chains
-            filterShortMappings(output->readMappings, param.block_length * 2);
+            // remove short chains that didn't exceed 1 block length + 1 segment length
+            filterShortMappings(output->readMappings, param.block_length + param.segLength);
             // use this to filter the unmerged mappings by merged mapping
             robin_hood::unordered_set<offset_t> x;
             // do this w/o the hash table

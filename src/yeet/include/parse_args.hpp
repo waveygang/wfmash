@@ -314,20 +314,9 @@ void parse_args(int argc,
 
         map_parameters.block_length = l;
     } else {
-        map_parameters.block_length = 3 * map_parameters.segLength;
-        // Automatic block length selection based on mapping identity bound.
-        // We scale the block length minimum by the mapping target divergence:
-        //  - at low divergence, we might expect many segment mappings to occur in a row,
-        //  - but at high divergence, this assumption may no longer hold due to SVs.
-        /*
-        if (map_parameters.percentageIdentity > 0.95) {
-            map_parameters.block_length = 3 * map_parameters.segLength;
-        } else if (map_parameters.percentageIdentity > 0.90) {
-            map_parameters.block_length = 2 * map_parameters.segLength;
-        } else {
-            map_parameters.block_length = 1.25 * map_parameters.segLength;
-        }
-        */
+        // n.b. we map-merge across gaps up to 3x segment length
+        // and then filter for things that are at least block_length long
+        map_parameters.block_length = 5 * map_parameters.segLength;
     }
 
     if (chain_gap) {
