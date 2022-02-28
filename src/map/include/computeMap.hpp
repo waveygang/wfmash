@@ -431,8 +431,8 @@ namespace skch
                                                      param.numMappingsForShortSequence
                                                      : param.numMappingsForSegment) - 1);
             }
-            // remove short chains that didn't exceed 1 block length + 1 segment length
-            filterShortMappings(output->readMappings, param.block_length + param.segLength);
+            // remove short chains that didn't exceed 2x block length
+            filterShortMappings(output->readMappings, param.block_length * 2);
             // use this to filter the unmerged mappings by merged mapping
             robin_hood::unordered_set<offset_t> x;
             // do this w/o the hash table
