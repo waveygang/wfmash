@@ -1013,7 +1013,7 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::pair<uint64_t, uint64_t>> distances;
+              std::vector<std::pair<double, uint64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is too far from current mapping being evaluated, stop finding a merge
                   if (it2->refSeqId != it->refSeqId || it2->refStartPos > it->refEndPos + max_dist) {
@@ -1023,19 +1023,17 @@ namespace skch
                   //If the next mapping is within range, check if it's in range and 
                   if (it2->strand == it->strand) {
                       auto ref_dist = it2->refStartPos - it->refEndPos;
-                      auto score = std::numeric_limits<uint64_t>::max();
-                      bool ok = false;
-                      if (it->strand == strnd::FWD && it->queryStartPos < it2->queryStartPos) {
+                      auto dist = std::numeric_limits<double>::max();
+                      if (it->strand == strnd::FWD && it->queryEndPos <= it2->queryStartPos) {
                           auto query_dist = it2->queryStartPos - it->queryEndPos;
-                          ok = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2)) < max_dist;
-                          score = ref_dist + query_dist;
-                      } else if (it->strand != strnd::FWD && it->queryEndPos > it2->queryEndPos) {
+                          dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
+                      } else if (it->strand != strnd::FWD && it->queryStartPos >= it2->queryEndPos) {
                           auto query_dist = it->queryStartPos - it2->queryEndPos;
-                          ok = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2)) < max_dist;
-                          score = ref_dist + query_dist;
+                          dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                       }
-                      if (ok) distances.push_back(std::make_pair(score, it2->splitMappingId));
-                      //if (ok) disjoint_sets.unite(it->splitMappingId, it2->splitMappingId);
+                      if (dist < max_dist) {
+                          distances.push_back(std::make_pair(dist, it2->splitMappingId));
+                      }
                   }
               }
               if (distances.size()) {
