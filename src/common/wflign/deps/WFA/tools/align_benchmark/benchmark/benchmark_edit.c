@@ -31,12 +31,42 @@
 
 #include "benchmark/benchmark_utils.h"
 #include "benchmark/benchmark_check.h"
-#include "wavefront/wavefront_align.h"
 #include "edit/edit_dp.h"
+#include "edit/edit_bpm.h"
+#include "wavefront/wavefront_align.h"
 
 /*
  * Benchmark Edit
  */
+void benchmark_edit_bpm(
+    align_input_t* const align_input) {
+  // Allocate
+  bpm_pattern_t bpm_pattern;
+  edit_bpm_pattern_compile(
+      &bpm_pattern,align_input->pattern,
+      align_input->pattern_length,align_input->mm_allocator);
+  bpm_matrix_t bpm_matrix;
+  edit_bpm_matrix_allocate(
+      &bpm_matrix,align_input->pattern_length,
+      align_input->text_length,align_input->mm_allocator);
+  // Align
+  timer_start(&align_input->timer);
+  edit_bpm_compute(
+      &bpm_matrix,&bpm_pattern,align_input->text,
+      align_input->text_length,align_input->pattern_length);
+  timer_stop(&align_input->timer);
+  // DEBUG
+  if (align_input->debug_flags) {
+    benchmark_check_alignment(align_input,&bpm_matrix.cigar);
+  }
+  // Output
+  if (align_input->output_file) {
+    benchmark_print_output(align_input,edit,false,&bpm_matrix.cigar);
+  }
+  // Free
+  edit_bpm_pattern_free(&bpm_pattern,align_input->mm_allocator);
+  edit_bpm_matrix_free(&bpm_matrix,align_input->mm_allocator);
+}
 void benchmark_edit_dp(
     align_input_t* const align_input) {
   // Parameters
@@ -63,13 +93,7 @@ void benchmark_edit_dp(
   }
   // Output
   if (align_input->output_file) {
-    const int score = cigar_score_edit(&cigar);
-    FILE* const output_file = align_input->output_file;
-    if (align_input->output_full) {
-      benchmark_print_output_full(output_file,align_input,score,&cigar);
-    } else {
-      benchmark_print_output_lite(output_file,align_input,score,&cigar);
-    }
+    benchmark_print_output(align_input,edit,false,&cigar);
   }
   // Free
   score_matrix_free(&score_matrix);
@@ -103,13 +127,7 @@ void benchmark_edit_dp_banded(
   }
   // Output
   if (align_input->output_file) {
-    const int score = cigar_score_edit(&cigar);
-    FILE* const output_file = align_input->output_file;
-    if (align_input->output_full) {
-      benchmark_print_output_full(output_file,align_input,score,&cigar);
-    } else {
-      benchmark_print_output_lite(output_file,align_input,score,&cigar);
-    }
+    benchmark_print_output(align_input,edit,false,&cigar);
   }
   // Free
   score_matrix_free(&score_matrix);
@@ -132,12 +150,6 @@ void benchmark_edit_wavefront(
   // Output
   if (align_input->output_file) {
     const int score_only = (wf_aligner->alignment_scope == compute_score);
-    const int score = (score_only) ? wf_aligner->cigar.score : cigar_score_edit(&wf_aligner->cigar);
-    FILE* const output_file = align_input->output_file;
-    if (align_input->output_full) {
-      benchmark_print_output_full(output_file,align_input,score,&wf_aligner->cigar);
-    } else {
-      benchmark_print_output_lite(output_file,align_input,score,&wf_aligner->cigar);
-    }
+    benchmark_print_output(align_input,edit,score_only,&wf_aligner->cigar);
   }
 }

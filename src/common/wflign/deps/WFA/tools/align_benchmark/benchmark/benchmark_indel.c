@@ -53,12 +53,6 @@ void benchmark_indel_wavefront(
   // Output
   if (align_input->output_file) {
     const int score_only = (wf_aligner->alignment_scope == compute_score);
-    const int score = (score_only) ? wf_aligner->cigar.score : cigar_score_edit(&wf_aligner->cigar);
-    FILE* const output_file = align_input->output_file;
-    if (align_input->output_full) {
-      benchmark_print_output_full(output_file,align_input,score,&wf_aligner->cigar);
-    } else {
-      benchmark_print_output_lite(output_file,align_input,score,&wf_aligner->cigar);
-    }
+    benchmark_print_output(align_input,indel,score_only,&wf_aligner->cigar);
   }
 }
