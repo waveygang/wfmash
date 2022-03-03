@@ -1748,14 +1748,16 @@ void write_merged_alignment(
                     if (size_region_to_repatch > 0 ||
                         (query_delta > 0 && target_delta > 0) ||
                         (query_delta > 2 || target_delta > 2) &&
-                        (query_delta < wflign_max_len_major &&
-                         target_delta < wflign_max_len_major) &&
-                        (query_delta < wflign_max_len_minor ||
-                         target_delta < wflign_max_len_minor)) {
+                            (query_delta < wflign_max_len_major &&
+                             target_delta < wflign_max_len_major) &&
+                            (query_delta < wflign_max_len_minor ||
+                             target_delta < wflign_max_len_minor)) {
+
+                        if (false) {
 
                         int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
-                            distance_close_big_enough_indels(std::max(query_delta, target_delta),
-                                                             q, unpatched) : -1;
+                            distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
+                            -1;
                         // std::cerr << "distance_close_indels " <<
                         // distance_close_indels << std::endl;
                         // Trigger the patching if there is a dropout
@@ -1771,7 +1773,7 @@ void write_merged_alignment(
                             // distance_close_indel << "\n";
 
                             std::cerr << "[wflign::wflign_affine_wavefront] "
-                                "patching in "
+                                         "patching in "
                                       << query_name << " " << query_offset
                                       << " @ " << query_pos << " - "
                                       << query_delta << " " << target_name
@@ -1825,7 +1827,7 @@ void write_merged_alignment(
                                     !patched.empty() &&
                                     (query_delta < (min_wfa_patch_length / 2) ||
                                      target_delta <
-                                     (min_wfa_patch_length / 2))) {
+                                         (min_wfa_patch_length / 2))) {
                                     const auto &c = patched.back();
                                     switch (c) {
                                     case 'M':
@@ -1875,11 +1877,11 @@ void write_merged_alignment(
                             }
 
                             /*
-                              std::cerr
-                              << "B patching in "
-                              << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
-                              << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
-                              << std::endl;
+                            std::cerr
+                                << "B patching in "
+                                << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+                                << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+                                << std::endl;
                             */
 
                             // Nibble until the close, big enough indel is
@@ -1907,137 +1909,138 @@ void write_merged_alignment(
 
                                 --distance_close_indels;
                             }
-                        }
 
 
-                        /*
-                          std::cerr << "C patching in "
-                          << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
-                          << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
-                          << std::endl;
-                        */
+                            /*
+                            std::cerr << "C patching in "
+                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+                                      << std::endl;
+                            */
 
-                        // check forward if there are other Is/Ds to merge
-                        // in the current patch
-                        while (q != unpatched.end() &&
-                               (*q == 'I' || *q == 'D') &&
-                               ((query_delta < wflign_max_len_major &&
-                                 target_delta < wflign_max_len_major) &&
-                                (query_delta < wflign_max_len_minor ||
-                                 target_delta < wflign_max_len_minor))) {
-                            const auto &c = *q++;
-                            if (c == 'I') {
-                                ++query_delta;
-                            } else {
-                                ++target_delta;
-                            }
-                        }
-
-                        /*
-                          std::cerr << "D patching in "
-                          << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
-                          << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
-                          << std::endl;
-                        */
-
-                        // check backward if there are other Is/Ds to merge
-                        // in the current patch it will eventually nibble
-                        // the Is/Ds left from the last patch
-                        while (!patched.empty() &&
-                               (patched.back() == 'I' ||
-                                patched.back() == 'D') &&
-                               ((query_delta < wflign_max_len_major &&
-                                 target_delta < wflign_max_len_major) &&
-                                (query_delta < wflign_max_len_minor ||
-                                 target_delta < wflign_max_len_minor))) {
-                            const auto &c = patched.back();
-                            if (c == 'I') {
-                                ++query_delta;
-                                --query_pos;
-                            } else {
-                                ++target_delta;
-                                --target_pos;
-                            }
-                            patched.pop_back();
-                        }
-
-                        /*
-                          std::cerr << "E patching in "
-                          << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
-                          << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
-                          << std::endl;
-                        */
-
-                        size_region_to_repatch = 0;
-                        // we need to be sure that our nibble made the
-                        // problem long enough For affine WFA to be correct
-                        // (to avoid trace-back errors), it must be at least
-                        // 10 nt
-                        { //if (query_delta >= 10 && target_delta >= 10) {
-                            alignment_t patch_aln;
-                            // WFA is only global
-                            do_wfa_patch_alignment(
-                                query, query_pos, query_delta,
-                                target - target_pointer_shift, target_pos,
-                                target_delta, segment_length,
-                                min_wf_length, max_dist_threshold,
-                                inception_score_max_ratio,
-                                wf_aligner, affine_penalties, patch_aln);
-                            if (patch_aln.ok) {
-                                // std::cerr << "got an ok patch aln" <<
-                                // std::endl;
-                                got_alignment = true;
-                                const int start_idx =
-                                    patch_aln.edit_cigar.begin_offset;
-                                const int end_idx =
-                                    patch_aln.edit_cigar.end_offset;
-                                for (int i = start_idx; i < end_idx; i++) {
-                                    // std::cerr <<
-                                    // patch_aln.edit_cigar.operations[i];
-                                    patched.push_back(
-                                        patch_aln.edit_cigar.operations[i]);
-                                }
-                                // std::cerr << "\n";
-
-                                // Check if there are too many indels in the
-                                // patch
-                                uint32_t size_indel = 0;
-                                for (int i = end_idx - 1; i >= start_idx;
-                                     --i) {
-                                    // std::cerr <<
-                                    // patch_aln.edit_cigar.operations[i];
-                                    if (patch_aln.edit_cigar
-                                        .operations[i] == 'I' ||
-                                        patch_aln.edit_cigar
-                                        .operations[i] == 'D') {
-                                        ++size_indel;
-                                        ++size_region_to_repatch;
-                                    } else {
-                                        // Not too big, to avoid repatching
-                                        // structural variants boundaries
-                                        if (size_indel > 7 &&
-                                            size_indel <= 4096 &&
-                                            size_indel <
-                                            (end_idx - start_idx)) {
-                                            break;
-                                        }
-
-                                        ++size_region_to_repatch;
-                                        size_indel = 0;
-                                    }
-                                }
-                                // std::cerr << std::endl;
-
-                                // Not too big, to avoid repatching
-                                // structural variants boundaries
-                                //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
-                                //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
-                                if (size_indel > 7 && size_indel <= 4096 &&
-                                    size_region_to_repatch <
-                                    (end_idx - start_idx)) {
-                                    //std::cerr << "REPATCH " << std::endl;
+                            // check forward if there are other Is/Ds to merge
+                            // in the current patch
+                            while (q != unpatched.end() &&
+                                   (*q == 'I' || *q == 'D') &&
+                                   ((query_delta < wflign_max_len_major &&
+                                     target_delta < wflign_max_len_major) &&
+                                    (query_delta < wflign_max_len_minor ||
+                                     target_delta < wflign_max_len_minor))) {
+                                const auto &c = *q++;
+                                if (c == 'I') {
+                                    ++query_delta;
                                 } else {
-                                    size_region_to_repatch = 0;
+                                    ++target_delta;
+                                }
+                            }
+
+                            /*
+                            std::cerr << "D patching in "
+                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+                                      << std::endl;
+                            */
+
+                            // check backward if there are other Is/Ds to merge
+                            // in the current patch it will eventually nibble
+                            // the Is/Ds left from the last patch
+                            while (!patched.empty() &&
+                                   (patched.back() == 'I' ||
+                                    patched.back() == 'D') &&
+                                   ((query_delta < wflign_max_len_major &&
+                                     target_delta < wflign_max_len_major) &&
+                                    (query_delta < wflign_max_len_minor ||
+                                     target_delta < wflign_max_len_minor))) {
+                                const auto &c = patched.back();
+                                if (c == 'I') {
+                                    ++query_delta;
+                                    --query_pos;
+                                } else {
+                                    ++target_delta;
+                                    --target_pos;
+                                }
+                                patched.pop_back();
+                            }
+
+                            }
+                            /*
+                            std::cerr << "E patching in "
+                                      << query_name << " " << query_offset << " @ " << query_pos << " - " << query_delta << " "
+                                      << target_name << " " << target_offset << " @ " << target_pos << " - " << target_delta
+                                      << std::endl;
+                            */
+
+                            size_region_to_repatch = 0;
+                            // we need to be sure that our nibble made the
+                            // problem long enough For affine WFA to be correct
+                            // (to avoid trace-back errors), it must be at least
+                            // 10 nt
+                            { //if (query_delta >= 10 && target_delta >= 10) {
+                                alignment_t patch_aln;
+                                // WFA is only global
+                                do_wfa_patch_alignment(
+                                    query, query_pos, query_delta,
+                                    target - target_pointer_shift, target_pos,
+                                    target_delta, segment_length,
+                                    min_wf_length, max_dist_threshold,
+                                    inception_score_max_ratio,
+                                    wf_aligner, affine_penalties, patch_aln);
+                                if (patch_aln.ok) {
+                                    // std::cerr << "got an ok patch aln" <<
+                                    // std::endl;
+                                    got_alignment = true;
+                                    const int start_idx =
+                                        patch_aln.edit_cigar.begin_offset;
+                                    const int end_idx =
+                                        patch_aln.edit_cigar.end_offset;
+                                    for (int i = start_idx; i < end_idx; i++) {
+                                        // std::cerr <<
+                                        // patch_aln.edit_cigar.operations[i];
+                                        patched.push_back(
+                                            patch_aln.edit_cigar.operations[i]);
+                                    }
+                                    // std::cerr << "\n";
+
+                                    // Check if there are too many indels in the
+                                    // patch
+                                    uint32_t size_indel = 0;
+                                    for (int i = end_idx - 1; i >= start_idx;
+                                         --i) {
+                                        // std::cerr <<
+                                        // patch_aln.edit_cigar.operations[i];
+                                        if (patch_aln.edit_cigar
+                                                    .operations[i] == 'I' ||
+                                            patch_aln.edit_cigar
+                                                    .operations[i] == 'D') {
+                                            ++size_indel;
+                                            ++size_region_to_repatch;
+                                        } else {
+                                            // Not too big, to avoid repatching
+                                            // structural variants boundaries
+                                            if (size_indel > 7 &&
+                                                size_indel <= 4096 &&
+                                                size_indel <
+                                                    (end_idx - start_idx)) {
+                                                break;
+                                            }
+
+                                            ++size_region_to_repatch;
+                                            size_indel = 0;
+                                        }
+                                    }
+                                    // std::cerr << std::endl;
+
+                                    // Not too big, to avoid repatching
+                                    // structural variants boundaries
+                                    //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
+                                    //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
+                                    if (size_indel > 7 && size_indel <= 4096 &&
+                                        size_region_to_repatch <
+                                            (end_idx - start_idx)) {
+                                        //std::cerr << "REPATCH " << std::endl;
+                                    } else {
+                                        size_region_to_repatch = 0;
+                                    }
                                 }
                             }
                         }
