@@ -21,7 +21,7 @@ namespace wavefront {
 
 #define MAX_LEN_FOR_PURE_WFA    50000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
-#define MAX_DIST_THRESHOLD      4096
+#define MAX_DIST_THRESHOLD      128
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
@@ -1096,7 +1096,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = std::max(target_length, query_length) * inception_score_max_ratio * 4;
+    const int max_score = std::min(target_length, query_length) * inception_score_max_ratio * 4;
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
@@ -1753,11 +1753,11 @@ void write_merged_alignment(
                         (query_delta < wflign_max_len_minor ||
                          target_delta < wflign_max_len_minor)) {
 
-                        if (false) {
+                        { //if (false) {
 
-                            int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
+                            int32_t distance_close_indels = -1; /* (query_delta > 3 || target_delta > 3) ?
                                 distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
-                                -1;
+                                -1;*/
                             // std::cerr << "distance_close_indels " <<
                             // distance_close_indels << std::endl;
                             // Trigger the patching if there is a dropout
@@ -2043,7 +2043,7 @@ void write_merged_alignment(
                                     }
                                 }
                             }
-                        } // if false
+                        } // if false --- to disable patching
                     }
 
                     // add in stuff if we didn't align
