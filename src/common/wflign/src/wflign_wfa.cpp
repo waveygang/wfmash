@@ -2060,13 +2060,15 @@ void write_merged_alignment(
                                 // structural variants boundaries
                                 //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
                                 //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
+                                /*
                                 if (size_indel > 7 && size_indel <= 4096 &&
                                     size_region_to_repatch <
                                         (end_idx - start_idx)) {
                                     //std::cerr << "REPATCH " << std::endl;
                                 } else {
-                                    size_region_to_repatch = 0;
-                                }
+                                */
+                                size_region_to_repatch = 0;
+                                //}
                             }
                         } // if false --- to disable patching
                     }
