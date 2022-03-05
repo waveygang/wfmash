@@ -21,7 +21,7 @@ namespace wavefront {
 
 #define MAX_LEN_FOR_PURE_WFA    50000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
-#define MAX_DIST_THRESHOLD      128
+#define MAX_DIST_THRESHOLD      256
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
