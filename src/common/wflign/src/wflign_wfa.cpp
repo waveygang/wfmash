@@ -1096,7 +1096,9 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = std::min(target_length, query_length) * inception_score_max_ratio * 4;
+    const int max_score = affine_penalties->gap_opening +
+        (std::min(target_length, query_length)
+         * affine_penalties->gap_extension * inception_score_max_ratio * 4);
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
