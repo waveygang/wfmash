@@ -19,7 +19,7 @@ namespace wflign {
 
 namespace wavefront {
 
-#define MAX_LEN_FOR_PURE_WFA    50000 // only for low-divergence, otherwise disabled
+#define MAX_LEN_FOR_PURE_WFA    20000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
 #define MAX_DIST_THRESHOLD      256
 
@@ -246,7 +246,7 @@ void wflign_affine_wavefront(
 
     // if we expect the alignment to be low divergence, and the mapping is less than 50kb
     // it's faster to just align directly with WFA
-    if (mashmap_estimated_identity >= 0.95 // about the limit of what our reduction thresholds allow
+    if (mashmap_estimated_identity >= 0.99 // about the limit of what our reduction thresholds allow
         && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
