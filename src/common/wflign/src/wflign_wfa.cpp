@@ -246,8 +246,11 @@ void wflign_affine_wavefront(
 
     // if we expect the alignment to be low divergence, and the mapping is less than 50kb
     // it's faster to just align directly with WFA
-    if (mashmap_estimated_identity >= 0.99 // about the limit of what our reduction thresholds allow
-        && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
+    if (
+            (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
+            (mashmap_estimated_identity >= 0.99 // about the limit of what our reduction thresholds allow
+            && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA)
+    ) {
         wfa::wavefront_aligner_t* const wf_aligner = get_wavefront_aligner(wfa_affine_penalties,
                                                                            target_length,
                                                                            query_length,
