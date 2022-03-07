@@ -1100,7 +1100,7 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
     }
 
     const int max_score = affine_penalties->gap_opening +
-        (std::min(target_length, query_length)
+        (std::max(4 * (uint64_t)segment_length, std::min(target_length, query_length))
          * affine_penalties->gap_extension * inception_score_max_ratio * 4);
 
     wfa::wavefront_aligner_resize(wf_aligner, target_length,
@@ -2008,6 +2008,7 @@ void write_merged_alignment(
 
                                     // Check if there are too many indels in the
                                     // patch
+                                    /*
                                     uint32_t size_indel = 0;
                                     for (int i = end_idx - 1; i >= start_idx;
                                          --i) {
@@ -2046,6 +2047,7 @@ void write_merged_alignment(
                                     } else {
                                         size_region_to_repatch = 0;
                                     }
+                                    */
                                 }
                             }
                         } // if false --- to disable patching
