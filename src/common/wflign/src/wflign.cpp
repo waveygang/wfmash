@@ -413,7 +413,7 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.gap_extension,
     					wfa::WFAligner::Alignment,
     					wfa::WFAligner::MemoryMed);
-    	wf_aligner->setReductionAdaptive(MIN_WF_LENGTH,MAX_DIST_THRESHOLD);
+    	wf_aligner->setHeuristicWFadaptive(MIN_WF_LENGTH,MAX_DIST_THRESHOLD);
     	const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
 
         auto *aln = new alignment_t();
@@ -603,9 +603,9 @@ void WFlign::wflign_affine_wavefront(
     					wfa::WFAligner::Alignment,
     					wfa::WFAligner::MemoryMed);
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
-        	wflambda_aligner->setReductionAdaptive(wflambda_min_wavefront_length,wflambda_max_distance_threshold);
+            wflambda_aligner->setHeuristicWFadaptive(wflambda_min_wavefront_length,wflambda_max_distance_threshold);
         } else {
-        	wflambda_aligner->setReductionNone();
+            wflambda_aligner->setHeuristicNone();
         }
 
         // Save computed alignments in a pair-indexed map
@@ -622,7 +622,7 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.gap_extension,
     					wfa::WFAligner::Alignment,
 						wfa::WFAligner::MemoryHigh);
-    	wf_aligner->setReductionNone();
+    	wf_aligner->setHeuristicNone();
 
     	// Save mismatches if wfplots are requsted
         robin_hood::unordered_set<uint64_t> high_order_dp_matrix_mismatch;

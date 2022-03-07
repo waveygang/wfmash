@@ -250,9 +250,9 @@ void do_wfa_patch_alignment(
     // Reduction strategy
     if (query_length < max_distance_threshold &&
         target_length < max_distance_threshold) {
-    	wf_aligner->setReductionNone();
+        wf_aligner->setHeuristicNone();
     } else {
-    	wf_aligner->setReductionAdaptive(min_wavefront_length,max_distance_threshold);
+        wf_aligner->setHeuristicWFadaptive(min_wavefront_length,max_distance_threshold);
     }
     const int max_score = 2 * std::max(target_length, query_length);
     wf_aligner->setMaxAlignmentScore(max_score);
@@ -581,7 +581,7 @@ void write_merged_alignment(
                     					affine_penalties.gap_extension,
                     					wfa::WFAligner::Alignment,
 										wfa::WFAligner::MemoryMed);
-                    	wf_aligner_heads->setReductionAdaptive(min_wf_length,max_dist_threshold);
+                    	wf_aligner_heads->setHeuristicWFadaptive(min_wf_length,max_dist_threshold);
                     	const int status = wf_aligner_heads->alignEndsFree(
                     			target_rev.c_str(),target_rev.size(),0,0,
                     			query_rev.c_str(),query_rev.size(),0,query_rev.size());
@@ -1107,7 +1107,7 @@ void write_merged_alignment(
                     					affine_penalties.gap_extension,
                     					wfa::WFAligner::Alignment,
 										wfa::WFAligner::MemoryMed);
-                    	wf_aligner_tails->setReductionAdaptive(min_wf_length,max_dist_threshold);
+                    	wf_aligner_tails->setHeuristicWFadaptive(min_wf_length,max_dist_threshold);
                     	const int status = wf_aligner_tails->alignEndsFree(
                     			target - target_pointer_shift + target_pos, target_delta_x,0,0,
                     			query + query_pos, query_delta,0,query_delta);
