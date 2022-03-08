@@ -21,7 +21,7 @@ namespace wavefront {
 
 #define MAX_LEN_FOR_PURE_WFA    20000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
-#define MAX_DIST_THRESHOLD      256
+//#define MAX_DIST_THRESHOLD      1024
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
@@ -178,52 +178,62 @@ void wflign_affine_wavefront(
     float inception_score_max_ratio = 3;
     float max_mash_dist_to_evaluate = 1;
     float mash_sketch_rate = 1;
+    int wf_max_dist_threshold = 256;
 
     if (mashmap_estimated_identity >= 0.99) {
         max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 2;
         erode_k = 13;
+        wf_max_dist_threshold = 8192;
     } else if (mashmap_estimated_identity >= 0.98) {
         max_mash_dist_to_evaluate = 0.05;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 2;
         erode_k = 13;
+        wf_max_dist_threshold = 4096;
     } else if (mashmap_estimated_identity >= 0.97) {
         max_mash_dist_to_evaluate = 0.075;
         mash_sketch_rate = 0.125;
         inception_score_max_ratio = 3;
         erode_k = 11;
+        wf_max_dist_threshold = 2048;
     } else if (mashmap_estimated_identity >= 0.95) {
         max_mash_dist_to_evaluate = 0.15;
         mash_sketch_rate = 0.25;
         inception_score_max_ratio = 3;
         erode_k = 9;
+        wf_max_dist_threshold = 1024;
     } else if (mashmap_estimated_identity >= 0.9) {
         max_mash_dist_to_evaluate = 0.3;
         mash_sketch_rate = 0.3;
         inception_score_max_ratio = 4;
         erode_k = 7;
+        wf_max_dist_threshold = 512;
     } else if (mashmap_estimated_identity >= 0.85) {
         max_mash_dist_to_evaluate = 0.4;
         mash_sketch_rate = 0.35;
         inception_score_max_ratio = 5;
         erode_k = 0;
+        wf_max_dist_threshold = 256;
     } else if (mashmap_estimated_identity >= 0.8) {
         max_mash_dist_to_evaluate = 0.5;
         mash_sketch_rate = 0.4;
         inception_score_max_ratio = 6;
         erode_k = 0;
+        wf_max_dist_threshold = 256;
     } else if (mashmap_estimated_identity >= 0.75) {
         max_mash_dist_to_evaluate = 0.6;
         mash_sketch_rate = 0.45;
         inception_score_max_ratio = 7;
         erode_k = 0;
+        wf_max_dist_threshold = 256;
     } else {
         max_mash_dist_to_evaluate = 0.7;
         mash_sketch_rate = 0.5;
         inception_score_max_ratio = 8;
         erode_k = 0;
+        wf_max_dist_threshold = 256;
     }
 
     // override erosion if given on input
@@ -257,7 +267,7 @@ void wflign_affine_wavefront(
                                                                            true);
         wfa::wavefront_reduction_set_adaptive(&wf_aligner->reduction,
                                               MIN_WF_LENGTH,
-                                              MAX_DIST_THRESHOLD);
+                                              wf_max_dist_threshold);
 
         auto *aln = new alignment_t();
         wfa::wavefront_aligner_resize(wf_aligner, target_length, query_length);
@@ -333,7 +343,7 @@ void wflign_affine_wavefront(
                 wflign_max_len_major, wflign_max_len_minor,
                 erode_k,
                 inception_score_max_ratio,
-                MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                MIN_WF_LENGTH, wf_max_dist_threshold,
                 prefix_wavefront_plot_in_png, wfplot_max_size);
 
         // Free
@@ -862,7 +872,7 @@ void wflign_affine_wavefront(
                         wflign_max_len_major, wflign_max_len_minor,
                         erode_k,
                         inception_score_max_ratio,
-                        MIN_WF_LENGTH, MAX_DIST_THRESHOLD,
+                        MIN_WF_LENGTH, wf_max_dist_threshold,
                         prefix_wavefront_plot_in_png, wfplot_max_size);
             } else {
                 // todo old implementation (and SAM format is not supported)
