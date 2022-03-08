@@ -21,7 +21,7 @@ namespace wavefront {
 
 #define MAX_LEN_FOR_PURE_WFA    20000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
-#define MAX_DIST_THRESHOLD      256
+#define MAX_DIST_THRESHOLD      4096
 
 wfa::wavefront_aligner_t* get_wavefront_aligner(
     const wfa::affine_penalties_t& wfa_affine_penalties,
@@ -1360,7 +1360,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 0; //128;
+    const uint64_t min_wfa_patch_length = 16; //128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
