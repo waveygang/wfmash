@@ -1760,9 +1760,11 @@ void write_merged_alignment(
 
                         { //if (false) {
 
-                            int32_t distance_close_indels = -1; /* (query_delta > 3 || target_delta > 3) ?
-                                distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
-                                -1;*/
+                            int32_t distance_close_indels
+                                = (query_delta > 3 || target_delta > 3) ?
+                                distance_close_big_enough_indels(std::max(query_delta, target_delta),
+                                                                 q, unpatched)
+                                : -1;
                             // std::cerr << "distance_close_indels " <<
                             // distance_close_indels << std::endl;
                             // Trigger the patching if there is a dropout
@@ -2008,7 +2010,6 @@ void write_merged_alignment(
 
                                     // Check if there are too many indels in the
                                     // patch
-                                    /*
                                     uint32_t size_indel = 0;
                                     for (int i = end_idx - 1; i >= start_idx;
                                          --i) {
@@ -2047,7 +2048,6 @@ void write_merged_alignment(
                                     } else {
                                         size_region_to_repatch = 0;
                                     }
-                                    */
                                 }
                             }
                         } // if false --- to disable patching
