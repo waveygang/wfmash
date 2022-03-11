@@ -410,14 +410,6 @@ namespace skch
           }
         }
 
-        //filter mappings best over query sequence axis
-        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-            skch::Filter::query::filterMappings(output->readMappings,
-                                                (input->len < param.segLength ?
-                                                 param.numMappingsForShortSequence
-                                                 : param.numMappingsForSegment) - 1);
-        }
-
         // remove short merged mappings when we are merging
         if (split_mapping) {
             // filter mappings that didn't reach the min block length through merging
@@ -441,6 +433,14 @@ namespace skch
             }
             filterFailedSubMappings(unmerged, x);
             output->readMappings = unmerged;
+        }
+
+        //filter mappings best over query sequence axis
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+            skch::Filter::query::filterMappings(output->readMappings,
+                                                (input->len < param.segLength ?
+                                                 param.numMappingsForShortSequence
+                                                 : param.numMappingsForSegment) - 1);
         }
 
         // remove self-mode don't-maps
