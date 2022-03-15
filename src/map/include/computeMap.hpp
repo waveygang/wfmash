@@ -408,6 +408,11 @@ namespace skch
           }
         }
 
+        // how many mappings to keep
+        int n_mappings = (input->len < param.segLength ?
+                          param.numMappingsForShortSequence
+                          : param.numMappingsForSegment) - 1;
+
         // remove short merged mappings when we are merging
         if (split_mapping) {
             // filter mappings that didn't reach the min block length through merging
@@ -416,10 +421,7 @@ namespace skch
             auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap);
             // filter the merged mappings using plane sweep
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings,
-                                                    (input->len < param.segLength ?
-                                                     param.numMappingsForShortSequence
-                                                     : param.numMappingsForSegment) - 1);
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
             // remove short chains that didn't exceed 2x block length
             filterShortMappings(output->readMappings, param.block_length * 2);
@@ -435,10 +437,7 @@ namespace skch
 
         //filter mappings best over query sequence axis
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-            skch::Filter::query::filterMappings(output->readMappings,
-                                                (input->len < param.segLength ?
-                                                 param.numMappingsForShortSequence
-                                                 : param.numMappingsForSegment) - 1);
+            skch::Filter::query::filterMappings(output->readMappings, n_mappings);
         }
 
         // remove self-mode don't-maps
@@ -1022,15 +1021,18 @@ namespace skch
                   if (it2->strand == it->strand) {
                       auto ref_dist = it2->refStartPos - it->refEndPos;
                       auto dist = std::numeric_limits<double>::max();
+                      auto score = std::numeric_limits<double>::max();
                       if (it->strand == strnd::FWD && it->queryEndPos <= it2->queryStartPos) {
                           auto query_dist = it2->queryStartPos - it->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
+                          score = std::pow(query_dist - ref_dist, 2);
                       } else if (it->strand != strnd::FWD && it->queryStartPos >= it2->queryEndPos) {
                           auto query_dist = it->queryStartPos - it2->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
+                          score = std::pow(query_dist - ref_dist, 2);
                       }
                       if (dist < max_dist) {
-                          distances.push_back(std::make_pair(dist, it2->splitMappingId));
+                          distances.push_back(std::make_pair(dist + score, it2->splitMappingId));
                       }
                   }
               }
