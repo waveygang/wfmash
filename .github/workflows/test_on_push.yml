@@ -29,7 +29,7 @@ jobs:
       - name: Test with a subset of the LPA dataset (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -X -n 10 -T wflign_info. > LPA.subset.paf && head LPA.subset.paf
       - name: Test with a subset of the LPA dataset (SAM output)
-        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -X -N -a -T wflign_info. > LPA.subset.sam && samtools view LPA.subset.sam -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam && samtools view LPA.subset.bam | head | cut -f 1-9
+        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -X -N -a -T wflign_info. -u ./ -z 1000 > LPA.subset.sam && samtools view LPA.subset.sam -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam && samtools view LPA.subset.bam | head | cut -f 1-9
       - name: Test with a subset of the LPA dataset, setting a lower identity threshold (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz data/LPA.subset.fa.gz -X -p 90 -n 10 -T wflign_info. > LPA.subset.p90.paf && head LPA.subset.p90.paf
       - name: Test aligning short reads (500 bps) to a reference (SAM output)
