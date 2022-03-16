@@ -12,8 +12,8 @@ set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcx16 -march=native -g")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcx16 -march=native -g")
-#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -mcx16  -march=native -g -fsanitize=address")
-#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -mcx16  -march=native -g -fsanitize=address")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -mcx16  -march=native -g -fsanitize=address")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -mcx16  -march=native -g -fsanitize=address")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -30,14 +30,14 @@ add_executable(wfmash
         src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
 
 target_include_directories(wfmash PRIVATE
-  src
-  src/common
-  src/common/wflign/deps
-  src/common/wflign/deps/wflambdav2
-  src/common/wflign/deps/WFAv2
-  #src/common/wflign/abseil-cpp
-  )
-
+        src
+        src/common
+        src/common/wflign/deps
+        src/common/wflign/deps/WFA2-lib
+        #src/common/wflign/abseil-cpp
+        )
+target_link_directories(wfmash PRIVATE
+        src/common/wflign/deps/WFA2-lib/lib)
 target_link_libraries(wfmash
   gsl
   gslcblas
@@ -45,8 +45,7 @@ target_link_libraries(wfmash
   pthread
   libwflign_static
   hts
-  wflambda
-  wfa
+  wfacpp
   jemalloc
   z
   #absl::flat_hash_map
