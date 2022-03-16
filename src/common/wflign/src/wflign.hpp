@@ -95,7 +95,7 @@ public:
 		const float wflign_max_mash_dist,
 		const uint64_t wflign_max_len_major,
 		const uint64_t wflign_max_len_minor,
-		const uint16_t erode_k);
+		const int erode_k);
 	// Set output configuration
 	void set_output(
 		std::ostream* const out,

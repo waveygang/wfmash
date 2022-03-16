@@ -15,7 +15,7 @@ namespace wavefront {
 /*
  * Configuration
  */
-#define MAX_LEN_FOR_PURE_WFA    50000
+#define MAX_LEN_FOR_PURE_WFA    50000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
 #define MAX_DIST_THRESHOLD      4096
 
@@ -34,6 +34,8 @@ typedef struct {
 	int wfa_min_wavefront_length;
 	int wfa_max_distance_threshold;
 	float max_mash_dist_to_evaluate;
+	float mash_sketch_rate;
+	float inception_score_max_ratio;
 	// Sequences data
     int v_max;
     int h_max;
@@ -85,7 +87,7 @@ WFlign::WFlign(
 		const float wflign_max_mash_dist,
 		const uint64_t wflign_max_len_major,
 		const uint64_t wflign_max_len_minor,
-		const uint16_t erode_k) {
+		const int erode_k) {
 	// Parameters
 	this->segment_length = segment_length;
 	this->min_identity = min_identity;
@@ -210,7 +212,8 @@ int wflambda_extend_match(
 						extend_data->wfa_min_wavefront_length,
 						extend_data->wfa_max_distance_threshold,
 						extend_data->max_mash_dist_to_evaluate,
-						wflign.mashmap_estimated_identity,
+						extend_data->mash_sketch_rate,
+						extend_data->inception_score_max_ratio,
 						*extend_data->wf_aligner,
 						*extend_data->wfa_affine_penalties,
 						*aln);
@@ -365,37 +368,127 @@ void WFlign::wflign_affine_wavefront(
     	wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
         minhash_kmer_size = 17;
     } else {
-        if (mashmap_estimated_identity >= 0.99999) {
-        	wfa_affine_penalties.match = 0;
-        	wfa_affine_penalties.mismatch = 15;
-        	wfa_affine_penalties.gap_opening = 25;
-        	wfa_affine_penalties.gap_extension = 1;
+        if (mashmap_estimated_identity >= 0.99) {
+            wfa_affine_penalties.match = 0;
+            wfa_affine_penalties.mismatch = 19;
+            wfa_affine_penalties.gap_opening = 31;
+            wfa_affine_penalties.gap_extension = 1;
+            minhash_kmer_size = 19;
+        } else if (mashmap_estimated_identity >= 0.98) {
+            wfa_affine_penalties.match = 0;
+            wfa_affine_penalties.mismatch = 15;
+            wfa_affine_penalties.gap_opening = 25;
+            wfa_affine_penalties.gap_extension = 1;
             minhash_kmer_size = 17;
         } else if (mashmap_estimated_identity >= 0.97) {
         	wfa_affine_penalties.match = 0;
-        	wfa_affine_penalties.mismatch = 9;
-        	wfa_affine_penalties.gap_opening = 13;
+        	wfa_affine_penalties.mismatch = 13;
+        	wfa_affine_penalties.gap_opening = 21;
         	wfa_affine_penalties.gap_extension = 1;
             minhash_kmer_size = 17;
-        } else if (mashmap_estimated_identity >= 0.9) {
+        } else if (mashmap_estimated_identity >= 0.95) {
+            wfa_affine_penalties.match = 0;
+            wfa_affine_penalties.mismatch = 11;
+            wfa_affine_penalties.gap_opening = 17;
+            wfa_affine_penalties.gap_extension = 1;
+            minhash_kmer_size = 15;
+        } else if (mashmap_estimated_identity >= 0.90) {
         	wfa_affine_penalties.match = 0;
         	wfa_affine_penalties.mismatch = 7;
         	wfa_affine_penalties.gap_opening = 11;
         	wfa_affine_penalties.gap_extension = 1;
-            minhash_kmer_size = 16;
-        } else if (mashmap_estimated_identity >= 0.8) {
+            minhash_kmer_size = 13;
+        } else if (mashmap_estimated_identity >= 0.85) {
+            wfa_affine_penalties.match = 0;
+            wfa_affine_penalties.mismatch = 6;
+            wfa_affine_penalties.gap_opening = 9;
+            wfa_affine_penalties.gap_extension = 1;
+            minhash_kmer_size = 11;
+        } else if (mashmap_estimated_identity >= 0.80) {
+        	wfa_affine_penalties.match = 0;
+        	wfa_affine_penalties.mismatch = 5;
+        	wfa_affine_penalties.gap_opening = 8;
+        	wfa_affine_penalties.gap_extension = 1;
+            minhash_kmer_size = 11;
+        } else if (mashmap_estimated_identity >= 0.75) {
+            wfa_affine_penalties.match = 0;
+            wfa_affine_penalties.mismatch = 4;
+            wfa_affine_penalties.gap_opening = 6;
+            wfa_affine_penalties.gap_extension = 1;
+            minhash_kmer_size = 11;
+        } else {
         	wfa_affine_penalties.match = 0;
         	wfa_affine_penalties.mismatch = 3;
         	wfa_affine_penalties.gap_opening = 5;
         	wfa_affine_penalties.gap_extension = 1;
-            minhash_kmer_size = 15;
-        } else {
-        	wfa_affine_penalties.match = 0;
-        	wfa_affine_penalties.mismatch = 2;
-        	wfa_affine_penalties.gap_opening = 4;
-        	wfa_affine_penalties.gap_extension = 1;
-            minhash_kmer_size = 13;
+            minhash_kmer_size = 9;
         }
+    }
+
+    // heuristic bound on the max mash dist, adaptive based on estimated
+    // identity the goal here is to sparsify the set of alignments in the
+    // wflambda layer we then patch up the gaps between them
+
+    int tmp_erode_k = erode_k;
+    float inception_score_max_ratio = 3;
+    float tmp_max_mash_dist_to_evaluate = wflign_max_mash_dist;
+    float mash_sketch_rate = 1;
+
+    if (mashmap_estimated_identity >= 0.99) {
+        wflign_max_mash_dist = 0.05;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 2;
+        erode_k = 13;
+    } else if (mashmap_estimated_identity >= 0.98) {
+        wflign_max_mash_dist = 0.05;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 2;
+        erode_k = 13;
+    } else if (mashmap_estimated_identity >= 0.97) {
+        wflign_max_mash_dist = 0.075;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 3;
+        erode_k = 11;
+    } else if (mashmap_estimated_identity >= 0.95) {
+        wflign_max_mash_dist = 0.15;
+        mash_sketch_rate = 0.25;
+        inception_score_max_ratio = 3;
+        erode_k = 9;
+    } else if (mashmap_estimated_identity >= 0.9) {
+        wflign_max_mash_dist = 0.3;
+        mash_sketch_rate = 0.3;
+        inception_score_max_ratio = 4;
+        erode_k = 7;
+    } else if (mashmap_estimated_identity >= 0.85) {
+        wflign_max_mash_dist = 0.4;
+        mash_sketch_rate = 0.35;
+        inception_score_max_ratio = 5;
+        erode_k = 0;
+    } else if (mashmap_estimated_identity >= 0.8) {
+        wflign_max_mash_dist = 0.5;
+        mash_sketch_rate = 0.4;
+        inception_score_max_ratio = 6;
+        erode_k = 0;
+    } else if (mashmap_estimated_identity >= 0.75) {
+        wflign_max_mash_dist = 0.6;
+        mash_sketch_rate = 0.45;
+        inception_score_max_ratio = 7;
+        erode_k = 0;
+    } else {
+        wflign_max_mash_dist = 0.7;
+        mash_sketch_rate = 0.5;
+        inception_score_max_ratio = 8;
+        erode_k = 0;
+    }
+
+    // override erosion if given on input
+    if (tmp_erode_k >= 0) {
+        erode_k = tmp_erode_k;
+    }
+
+    // override max mash dist if given on input
+    if (tmp_max_mash_dist_to_evaluate > 0) {
+        wflign_max_mash_dist = tmp_max_mash_dist_to_evaluate;
     }
 
     // accumulate runs of matches in reverse order
@@ -403,7 +496,10 @@ void WFlign::wflign_affine_wavefront(
     std::vector<alignment_t*> trace;
     const auto start_time = std::chrono::steady_clock::now();
 
-    if (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
+    // if we expect the alignment to be low divergence, and the mapping is less than 50kb
+    // it's faster to just align directly with WFA
+    if (mashmap_estimated_identity >= 0.95 // about the limit of what our reduction thresholds allow
+    && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA) {
         uint64_t num_alignments = 0;
         uint64_t num_alignments_performed = 0;
     	wfa::WFAlignerGapAffine* wf_aligner =
@@ -486,6 +582,7 @@ void WFlign::wflign_affine_wavefront(
                 target_total_length,
                 target_offset,
                 target_length,
+                segment_length,
                 MAX_LEN_FOR_PURE_WFA,
                 min_identity,
                 elapsed_time_wflambda_ms,
@@ -495,12 +592,15 @@ void WFlign::wflign_affine_wavefront(
                 wflign_max_len_major,
                 wflign_max_len_minor,
                 erode_k,
+                inception_score_max_ratio,
                 MIN_WF_LENGTH,
-                MAX_DIST_THRESHOLD);
+                MAX_DIST_THRESHOLD,
+                *prefix_wavefront_plot_in_png, wfplot_max_size);
 
         // Free
         delete wf_aligner;
     } else {
+        // regular wflign
         if (emit_tsv) {
             *out_tsv << "# query_name=" << query_name << std::endl;
             *out_tsv << "# query_start=" << query_offset << std::endl;
@@ -540,50 +640,10 @@ void WFlign::wflign_affine_wavefront(
         	wflambda_affine_penalties.gap_opening = wflign_gap_opening_score;
         	wflambda_affine_penalties.gap_extension = wflign_gap_extension_score;
         } else {
-            if (mashmap_estimated_identity >= 0.99999) {
-            	wflambda_affine_penalties.match = 0;
-            	wflambda_affine_penalties.mismatch = 17;
-            	wflambda_affine_penalties.gap_opening = 27;
-            	wflambda_affine_penalties.gap_extension = 1;
-            } else if (mashmap_estimated_identity >= 0.97) {
-            	wflambda_affine_penalties.match = 0;
-            	wflambda_affine_penalties.mismatch = 13;
-            	wflambda_affine_penalties.gap_opening = 21;
-            	wflambda_affine_penalties.gap_extension = 1;
-            } else if (mashmap_estimated_identity >= 0.9) {
-            	wflambda_affine_penalties.match = 0;
-            	wflambda_affine_penalties.mismatch = 9;
-            	wflambda_affine_penalties.gap_opening = 14;
-            	wflambda_affine_penalties.gap_extension = 1;
-            } else if (mashmap_estimated_identity >= 0.8) {
-            	wflambda_affine_penalties.match = 0;
-            	wflambda_affine_penalties.mismatch = 7;
-            	wflambda_affine_penalties.gap_opening = 11;
-            	wflambda_affine_penalties.gap_extension = 1;
-            } else {
-            	wflambda_affine_penalties.match = 0;
-            	wflambda_affine_penalties.mismatch = 4;
-            	wflambda_affine_penalties.gap_opening = 6;
-            	wflambda_affine_penalties.gap_extension = 1;
-            }
-        }
-
-        float max_mash_dist_to_evaluate = 1.0;
-        if (wflign_max_mash_dist > 0) {
-            max_mash_dist_to_evaluate = wflign_max_mash_dist;
-        } else {
-            // heuristic bound on the max mash dist, adaptive based on estimated
-            // identity the goal here is to sparsify the set of alignments in the
-            // wflambda layer we then patch up the gaps between them
-            if (mashmap_estimated_identity >= 0.97) {
-                max_mash_dist_to_evaluate = 0.05;
-            } else if (mashmap_estimated_identity >= 0.9) {
-                max_mash_dist_to_evaluate = 0.2;
-            } else if (mashmap_estimated_identity >= 0.8) {
-                max_mash_dist_to_evaluate = 0.7;
-            } else if (mashmap_estimated_identity >= 0.7) {
-                max_mash_dist_to_evaluate = 0.9;
-            }
+            wflambda_affine_penalties.match = 0; //wfa_affine_penalties.match,
+            wflambda_affine_penalties.mismatch = wfa_affine_penalties.mismatch;
+            wflambda_affine_penalties.gap_opening = wfa_affine_penalties.gap_opening;
+            wflambda_affine_penalties.gap_extension = wfa_affine_penalties.gap_extension;
         }
 
         //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
@@ -602,7 +662,12 @@ void WFlign::wflign_affine_wavefront(
     					wfa_affine_penalties.gap_extension,
     					wfa::WFAligner::Alignment,
     					wfa::WFAligner::MemoryMed);
-        if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
+
+        const uint64_t _wflambda_max_distance_threshold =
+                std::min((uint64_t)_wflambda_max_distance_threshold,
+                         std::max((uint64_t)query_length, (uint64_t)target_length)/10) / step_size;
+
+        if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
             wflambda_aligner->setHeuristicWFadaptive(wflambda_min_wavefront_length,wflambda_max_distance_threshold);
         } else {
             wflambda_aligner->setHeuristicNone();
@@ -637,7 +702,9 @@ void WFlign::wflign_affine_wavefront(
     	extend_data.minhash_kmer_size = minhash_kmer_size;
     	extend_data.wfa_min_wavefront_length = wfa_min_wavefront_length;
     	extend_data.wfa_max_distance_threshold = wfa_max_distance_threshold;
-    	extend_data.max_mash_dist_to_evaluate = max_mash_dist_to_evaluate;
+    	extend_data.max_mash_dist_to_evaluate = wflign_max_mash_dist;
+    	extend_data.mash_sketch_rate = mash_sketch_rate;
+    	extend_data.inception_score_max_ratio = inception_score_max_ratio;
     	extend_data.v_max = 0;
     	extend_data.h_max = 0;
     	extend_data.alignments = &alignments;
@@ -970,6 +1037,7 @@ void WFlign::wflign_affine_wavefront(
                         target_offset,
                         target_length,
                         segment_length_to_use,
+                        MAX_LEN_FOR_PURE_WFA,
                         min_identity,
                         elapsed_time_wflambda_ms,
                         extend_data.num_alignments,
@@ -978,8 +1046,10 @@ void WFlign::wflign_affine_wavefront(
                         wflign_max_len_major,
                         wflign_max_len_minor,
                         erode_k,
+                        inception_score_max_ratio,
                         MIN_WF_LENGTH,
-                        MAX_DIST_THRESHOLD);
+                        MAX_DIST_THRESHOLD,
+                        *prefix_wavefront_plot_in_png, wfplot_max_size);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {

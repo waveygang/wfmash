@@ -30,6 +30,11 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 #include "common/filesystem.hpp"
+#include "robin-hood-hashing/robin_hood.h"
+// if we ever want to do the union-find chaining in parallel
+//#include "common/dset64-gccAtomic.hpp"
+// this is for single-threaded use, but is more portable
+#include "common/dset64.hpp"
 
 namespace skch
 {
@@ -234,13 +239,14 @@ namespace skch
        * @param[in]   input   mappings
        * @return              void
        */
-      void filterShortMappings(MappingResultsVector_t &readMappings)
+      void filterShortMappings(MappingResultsVector_t &readMappings, int64_t length)
       {
           readMappings.erase(
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 return e.blockLength < param.block_length_min;
+                                      return e.queryLen > e.blockLength
+                                      && e.blockLength < length;
                              }),
               readMappings.end());
       }
@@ -278,11 +284,31 @@ namespace skch
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
-                                 return len_id_bound < param.percentageIdentity;
+                                 // don't trust the mapping if the id bound is < 50%
+                                 return len_id_bound < 0.7;
                              }),
               readMappings.end());
       }
 
+
+      /**
+     * @brief               helper to main mapping function
+     * @details             filters mappings whose split ids aren't to be kept
+     * @param[in]   input   mappings
+     * @param[in]   input
+     * @return              void
+     */
+      void filterFailedSubMappings(MappingResultsVector_t &readMappings,
+                                   const robin_hood::unordered_set<offset_t>& kept_chains)
+                                   {
+          readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){
+                      return kept_chains.count(e.splitMappingId) == 0;
+                  }),
+                  readMappings.end());
+                                   }
 
       /**
        * @brief               main mapping function given an input read
@@ -299,7 +325,7 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
 
-        if(! param.split || input->len < param.segLength || input->len <= param.block_length_min * 2)
+        if(! param.split || input->len < param.segLength || input->len <= param.block_length)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -377,12 +403,12 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
+              // query head-to-tail merge
               mergeMappings(output->readMappings);
+              // find the best mapping in the query/target 2D of length 0.75 * block length
+              mergeMappingsInRange(output->readMappings, param.block_length / 2);
           }
         }
-
-        // remove self-mode don't-maps
-        this->filterSelfingLongToShorts(output->readMappings);
 
         //filter mappings best over query sequence axis
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
@@ -394,8 +420,31 @@ namespace skch
 
         // remove short merged mappings when we are merging
         if (split_mapping) {
-            this->filterShortMappings(output->readMappings);
+            // filter mappings that didn't reach the min block length through merging
+            filterShortMappings(output->readMappings, param.block_length);
+            // merge mappings in range and get a copy of the unmerged, annotated with segment id
+            auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap);
+            // filter the merged mappings using plane sweep
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings,
+                                                    (input->len < param.segLength ?
+                                                    param.numMappingsForShortSequence
+                                                    : param.numMappingsForSegment) - 1);
+            }
+            // remove short chains
+            filterShortMappings(output->readMappings, param.block_length * 2);
+            // use this to filter the unmerged mappings by merged mapping
+            robin_hood::unordered_set<offset_t> x;
+            // do this w/o the hash table
+            for (auto& m : output->readMappings) {
+                x.insert(m.splitMappingId);
+            }
+            filterFailedSubMappings(unmerged, x);
+            output->readMappings = unmerged;
         }
+
+        // remove self-mode don't-maps
+        this->filterSelfingLongToShorts(output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
         this->filterFalseHighIdentity(output->readMappings);
@@ -497,7 +546,12 @@ namespace skch
           ///1. Compute the minimizers
 
           if (param.spaced_seeds.empty()) {
-            CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);//, param.high_freq_kmers);
+              CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);//, param.high_freq_kmers);
+              if (param.world_minimizers) {
+                  CommonFunc::addWorldMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);
+              } else {
+                  CommonFunc::addMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter);
+              }
           } else {
             CommonFunc::addSpacedSeedMinimizers(Q.minimizerTableQuery, Q.seq, Q.len, param.kmerSize, param.windowSize, param.alphabetSize, Q.seqCounter, param.spaced_seeds);
           }
@@ -817,6 +871,21 @@ namespace skch
           return slidemap.sharedSketchElements * 1.0 / Q.sketchSize;
         }
 
+        /**
+         * @brief                       Merge the consecutive fragment mappings reported in each query
+         * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
+         */
+        template <typename VecIn>
+        void expandMappings(VecIn &readMappings, int expansion)
+        {
+            for (auto& m : readMappings) {
+                m.refStartPos -= expansion;
+                m.refEndPos += expansion;
+                m.queryStartPos -= expansion;
+                m.queryEndPos += expansion;
+            }
+        }
+
       /**
        * @brief                       Merge the consecutive fragment mappings reported in each query 
        * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
@@ -909,6 +978,128 @@ namespace skch
           readMappings.erase( 
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
               readMappings.end());
+       }
+
+       /**
+ * @brief                       Merge fragment mappings by convolution of a 2D range over the alignment matrix
+ * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
+ * @param[in]     max_dist      Distance to look in target and query
+ */
+       template <typename VecIn>
+       VecIn mergeMappingsInRange(VecIn &readMappings, int max_dist) {
+           assert(param.split == true);
+
+           if(readMappings.size() < 2)
+               return readMappings;
+
+           //Sort the mappings by reference (then query) position
+           std::sort(
+                   readMappings.begin(), readMappings.end(),
+                   [](const MappingResult &a, const MappingResult &b) {
+                       return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
+                       < std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
+                   });
+
+           //First assign a unique id to each split mapping in the sorted order
+           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
+               it->splitMappingId = std::distance(readMappings.begin(), it);
+               it->discard = 0;
+           }
+
+           // set up our union find data structure to track merges
+           std::vector<dsets::DisjointSets::Aint> ufv(readMappings.size());
+           // this initializes everything
+           auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
+
+           //Start the procedure to identify the chains
+           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
+               std::vector<std::pair<uint64_t, uint64_t>> distances;
+               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
+                   //If this mapping is too far from current mapping being evaluated, stop finding a merge
+                   if (it2->refSeqId != it->refSeqId || it2->refStartPos > it->refEndPos + max_dist) {
+                       break;
+                   }
+
+                   //If the next mapping is within range, check if it's in range and
+                   if (it2->strand == it->strand) {
+                       auto ref_dist = it2->refStartPos - it->refEndPos;
+                       auto score = std::numeric_limits<uint64_t>::max();
+                       bool ok = false;
+                       if (it->strand == strnd::FWD && it->queryStartPos < it2->queryStartPos) {
+                           auto query_dist = it2->queryStartPos - it->queryEndPos;
+                           ok = query_dist + ref_dist < max_dist;
+                           score = ref_dist + query_dist;
+                       } else if (it->strand != strnd::FWD && it->queryEndPos > it2->queryEndPos) {
+                           auto query_dist = it->queryStartPos - it2->queryEndPos;
+                           ok = query_dist + ref_dist < max_dist;
+                           score = ref_dist + query_dist;
+                       }
+                       if (ok) distances.push_back(std::make_pair(score, it2->splitMappingId));
+                       //if (ok) disjoint_sets.unite(it->splitMappingId, it2->splitMappingId);
+                   }
+               }
+               if (distances.size()) {
+                   std::sort(distances.begin(), distances.end());
+                   disjoint_sets.unite(it->splitMappingId, distances.front().second);
+               }
+           }
+
+           //Assign the merged mapping ids
+           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
+               it->splitMappingId = disjoint_sets.find(it->splitMappingId);
+           }
+
+           //Sort the mappings by post-merge split mapping id
+           std::sort(
+                   readMappings.begin(),
+                   readMappings.end(),
+                   [](const MappingResult &a, const MappingResult &b) {
+                       return a.splitMappingId < b.splitMappingId;
+                   });
+
+           // copy for independent return of merged and unmerged
+           auto unmergedReadMappings = readMappings;
+
+           for(auto it = readMappings.begin(); it != readMappings.end();) {
+
+               //Bucket by each chain
+               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
+
+               //std::cerr << "Got chain with " <<
+
+               //[it -- it_end) represents same chain
+
+               //Incorporate chain information into first mapping
+
+               //compute chain length
+               std::for_each(it, it_end, [&](MappingResult &e)
+               {
+                   it->queryStartPos = std::min( it->queryStartPos, e.queryStartPos);
+                   it->refStartPos = std::min( it->refStartPos, e.refStartPos);
+
+                   it->queryEndPos = std::max( it->queryEndPos, e.queryEndPos);
+                   it->refEndPos = std::max( it->refEndPos, e.refEndPos);
+
+                   it->blockLength = std::max(it->refEndPos - it->refStartPos, it->queryEndPos - it->queryStartPos);
+                   it->approxMatches = std::round(it->nucIdentity * it->blockLength / 100.0);
+               });
+
+               //Mean identity of all mappings in the chain
+               it->nucIdentity = (   std::accumulate(it, it_end, 0.0,
+                                                     [](double x, MappingResult &e){ return x + e.nucIdentity; })     )/ std::distance(it, it_end);
+
+               //Discard other mappings of this chain
+               std::for_each( std::next(it), it_end, [&](MappingResult &e){ e.discard = 1; });
+
+               //advance the iterator
+               it = it_end;
+           }
+
+           readMappings.erase(
+                   std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
+                   readMappings.end());
+
+           return unmergedReadMappings;
        }
 
       /**

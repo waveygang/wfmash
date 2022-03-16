@@ -57,8 +57,9 @@ bool do_wfa_segment_alignment(
 		const uint64_t& minhash_kmer_size,
 		const int& min_wavefront_length,
 		const int& max_distance_threshold,
-		const float& max_mash_dist,
-		const float& mashmap_estimated_identity,
+		const float &max_mash_dist,
+		const float &mash_sketch_rate,
+		const float &inception_score_max_ratio,
 		wfa::WFAlignerGapAffine& wf_aligner,
 		const wflign_penalties_t& affine_penalties,
 		alignment_t& aln) {
@@ -67,17 +68,18 @@ bool do_wfa_segment_alignment(
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
         *query_sketch = rkmh::hash_sequence(
-            query + j, segment_length_q, minhash_kmer_size, segment_length_q / 8);
+        query + j, segment_length_q, minhash_kmer_size, segment_length_q * mash_sketch_rate);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
         *target_sketch = rkmh::hash_sequence(
-            target + i, segment_length_t, minhash_kmer_size, segment_length_t / 8);
+        target + i, segment_length_t, minhash_kmer_size, segment_length_t * mash_sketch_rate);
     }
 
     // first check if our mash dist is inbounds
     const float mash_dist =
         rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+    //std::cerr << "mash_dist is " << mash_dist << std::endl;
 
     // this threshold is set low enough that we tend to randomly sample wflambda
     // matrix cells for alignment the threshold is adaptive, based on the mash
@@ -89,7 +91,7 @@ bool do_wfa_segment_alignment(
     } else {
         // if it is, we'll align
 
-        const int max_score = std::max(segment_length_q, segment_length_t) * (0.75 + mash_dist);
+        const int max_score = std::max(segment_length_q, segment_length_t) * inception_score_max_ratio;
         wf_aligner.setMaxAlignmentScore(max_score);
         const int status = wf_aligner.alignEnd2End(
         		target + i,segment_length_t,
@@ -212,6 +214,7 @@ void do_wfa_patch_alignment(
 		const int& segment_length,
 		const int& min_wavefront_length,
 		const int& max_distance_threshold,
+		const float& inception_score_max_ratio,
 		wfa::WFAlignerGapAffine& _wf_aligner,
 		const wflign_penalties_t& affine_penalties,
 		alignment_t& aln) {
@@ -254,7 +257,7 @@ void do_wfa_patch_alignment(
     } else {
         wf_aligner->setHeuristicWFadaptive(min_wavefront_length,max_distance_threshold);
     }
-    const int max_score = 2 * std::max(target_length, query_length);
+    const int max_score = std::max(target_length, query_length) * inception_score_max_ratio * 4;
     wf_aligner->setMaxAlignmentScore(max_score);
     const int status = wf_aligner->alignEnd2End(target + i,target_length,query + j,query_length);
 
@@ -305,6 +308,7 @@ void write_merged_alignment(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const uint16_t& segment_length,
+    const uint64_t &max_pure_wfa,
     const float& min_identity,
     const long& elapsed_time_wflambda_ms,
     const uint64_t& num_alignments,
@@ -312,9 +316,11 @@ void write_merged_alignment(
     const float& mashmap_estimated_identity,
     const uint64_t& wflign_max_len_major,
     const uint64_t& wflign_max_len_minor,
-    const uint16_t& erode_k,
+    const int& erode_k,
+    const float &inception_score_max_ratio,
     const int& min_wf_length,
     const int& max_dist_threshold,
+    const std::string &prefix_wavefront_plot_in_png, const uint64_t &wfplot_max_size,
     const bool& with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -323,7 +329,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 128;
+    const uint64_t min_wfa_patch_length = 0; //128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -427,6 +433,7 @@ void write_merged_alignment(
                          &wflign_max_len_major,
                          &wflign_max_len_minor,
                          &distance_close_big_enough_indels, &min_wf_length,
+                         &inception_score_max_ratio,
                          &max_dist_threshold, &wf_aligner,
                          &affine_penalties](std::vector<char> &unpatched,
                                             std::vector<char> &patched) {
@@ -932,7 +939,7 @@ void write_merged_alignment(
                             // problem long enough For affine WFA to be correct
                             // (to avoid trace-back errors), it must be at least
                             // 10 nt
-                            if (query_delta >= 10 && target_delta >= 10) {
+                            //if (query_delta >= 10 && target_delta >= 10) {
                                 alignment_t patch_aln;
                                 // WFA is only global
                                 do_wfa_patch_alignment(
@@ -940,6 +947,7 @@ void write_merged_alignment(
                                     target - target_pointer_shift, target_pos,
                                     target_delta, segment_length,
                                     min_wf_length, max_dist_threshold,
+                                    inception_score_max_ratio,
                                     wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
@@ -995,7 +1003,7 @@ void write_merged_alignment(
                                         size_region_to_repatch = 0;
                                     }
                                 }
-                            }
+                            //}
                         }
                     }
 
@@ -1341,9 +1349,14 @@ void write_merged_alignment(
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
             patching(erodev, pre_tracev);
+            if (erode_k > 0) {
+                patching(erodev, pre_tracev);
+            } else {
+                pre_tracev = erodev;
+            }
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(pre_tracev, query,
+            if (!validate_trace(tracev, query,
                                 target - target_pointer_shift, query_length,
                                 target_length_mut, query_start, target_start)) {
                 std::cerr << "cigar failure in pre_tracev "
@@ -1365,16 +1378,21 @@ void write_merged_alignment(
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(pre_tracev);
+            sort_indels(tracev);
         }
 
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
         patching(pre_tracev, tracev);
+        if (erode_k > 0) {
+            patching(pre_tracev, tracev);
+        } else {
+            tracev = pre_tracev;
+        }
     }
 
     // normalize the indels
-    sort_indels(tracev);
+    //sort_indels(tracev);
 
 #ifdef WFLIGN_DEBUG
     std::cerr
@@ -1588,9 +1606,9 @@ query_start : query_end)
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
                 << "\t"
-                << "gi:f:" << gap_compressed_identity << "\t"
+                << "gi:f:" << gap_compressed_identity * 100.0 << "\t"
                 << "bi:f:"
-                << block_identity
+                << block_identity * 100.0
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
@@ -1599,7 +1617,7 @@ query_start : query_end)
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
                 << "\t"
-                << "md:f:" << mashmap_estimated_identity;
+                << "md:f:" << mashmap_estimated_identity * 100.0;
 
             if (emit_md_tag) {
                 out << "\t";
