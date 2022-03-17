@@ -420,24 +420,12 @@ namespace skch
             int merge_iter = 0;
             do {
                 mapping_count = output->readMappings.size();
-                auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap,
-                                                     std::pow(param.percentageIdentity, 2),
-                                                     std::pow(param.percentageIdentity, 0.1));
-                {
-                    // filter the merged mappings using plane sweep
-                    if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                        skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-                    }  
-                    // remove short chains that didn't exceed 2x block length
-                    //filterShortMappings(output->readMappings, param.block_length * 2);
-                    // use this to filter the unmerged mappings by merged mapping
-                    robin_hood::unordered_set<offset_t> x;
-                    // do this w/o the hash table
-                    for (auto& m : output->readMappings) {
-                        x.insert(m.splitMappingId);
-                    }
-                    filterFailedSubMappings(unmerged, x);
-                    output->readMappings = unmerged;
+                mergeMappingsInRange(output->readMappings, param.chain_gap,
+                                     std::pow(param.percentageIdentity, 1),
+                                     std::pow(param.percentageIdentity, 0.01));
+                // filter the merged mappings using plane sweep
+                if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                    skch::Filter::query::filterMappings(output->readMappings, n_mappings);
                 }
             } while (output->readMappings.size() < mapping_count && ++merge_iter < 2);
             // remove short chains that didn't exceed block length
