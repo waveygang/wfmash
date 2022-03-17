@@ -187,51 +187,51 @@ void wflign_affine_wavefront(
         erode_k = 13;
         wf_max_dist_threshold = 8192;
     } else if (mashmap_estimated_identity >= 0.98) {
-        max_mash_dist_to_evaluate = 0.05;
-        mash_sketch_rate = 0.125;
-        inception_score_max_ratio = 2;
-        erode_k = 13;
-        wf_max_dist_threshold = 4096;
-    } else if (mashmap_estimated_identity >= 0.97) {
         max_mash_dist_to_evaluate = 0.075;
         mash_sketch_rate = 0.125;
-        inception_score_max_ratio = 3;
+        inception_score_max_ratio = 2.5;
         erode_k = 11;
+        wf_max_dist_threshold = 4096;
+    } else if (mashmap_estimated_identity >= 0.97) {
+        max_mash_dist_to_evaluate = 0.1;
+        mash_sketch_rate = 0.125;
+        inception_score_max_ratio = 3;
+        erode_k = 9;
         wf_max_dist_threshold = 2048;
     } else if (mashmap_estimated_identity >= 0.95) {
         max_mash_dist_to_evaluate = 0.15;
         mash_sketch_rate = 0.25;
-        inception_score_max_ratio = 3;
-        erode_k = 9;
+        inception_score_max_ratio = 4;
+        erode_k = 7;
         wf_max_dist_threshold = 1024;
     } else if (mashmap_estimated_identity >= 0.9) {
         max_mash_dist_to_evaluate = 0.3;
         mash_sketch_rate = 0.3;
-        inception_score_max_ratio = 4;
-        erode_k = 7;
+        inception_score_max_ratio = 5;
+        erode_k = 3;
         wf_max_dist_threshold = 512;
     } else if (mashmap_estimated_identity >= 0.85) {
         max_mash_dist_to_evaluate = 0.4;
         mash_sketch_rate = 0.35;
-        inception_score_max_ratio = 5;
+        inception_score_max_ratio = 6;
         erode_k = 0;
         wf_max_dist_threshold = 256;
     } else if (mashmap_estimated_identity >= 0.8) {
         max_mash_dist_to_evaluate = 0.5;
         mash_sketch_rate = 0.4;
-        inception_score_max_ratio = 6;
+        inception_score_max_ratio = 7;
         erode_k = 0;
         wf_max_dist_threshold = 256;
     } else if (mashmap_estimated_identity >= 0.75) {
         max_mash_dist_to_evaluate = 0.6;
         mash_sketch_rate = 0.45;
-        inception_score_max_ratio = 7;
+        inception_score_max_ratio = 8;
         erode_k = 0;
         wf_max_dist_threshold = 256;
     } else {
         max_mash_dist_to_evaluate = 0.7;
         mash_sketch_rate = 0.5;
-        inception_score_max_ratio = 8;
+        inception_score_max_ratio = 9;
         erode_k = 0;
         wf_max_dist_threshold = 256;
     }
@@ -1109,11 +1109,12 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
                                              max_distance_threshold);
     }
 
-    const int max_score = affine_penalties->gap_opening +
-        (std::max(4 * (uint64_t)segment_length, std::max(target_length, query_length))
-         * affine_penalties->gap_extension * inception_score_max_ratio * 4);
+    const int max_score
+        = (affine_penalties->gap_opening
+           + (affine_penalties->gap_extension
+              * std::max((int)256, (int)std::min(target_length, query_length))));
 
-    wfa::wavefront_aligner_resize(wf_aligner, target_length,
+wfa::wavefront_aligner_resize(wf_aligner, target_length,
                                          query_length);
 
     wfa::wavefront_aligner_set_max_alignment_score(wf_aligner, max_score);
@@ -1370,7 +1371,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 16; //128;
+    const uint64_t min_wfa_patch_length = 0; //16; //128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1770,11 +1771,13 @@ void write_merged_alignment(
 
                         { //if (false) {
 
-                            int32_t distance_close_indels
+                            int32_t distance_close_indels = -1;
+                            /*
                                 = (query_delta > 3 || target_delta > 3) ?
                                 distance_close_big_enough_indels(std::max(query_delta, target_delta),
                                                                  q, unpatched)
                                 : -1;
+                            */
                             // std::cerr << "distance_close_indels " <<
                             // distance_close_indels << std::endl;
                             // Trigger the patching if there is a dropout

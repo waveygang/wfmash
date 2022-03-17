@@ -421,8 +421,8 @@ namespace skch
             do {
                 mapping_count = output->readMappings.size();
                 mergeMappingsInRange(output->readMappings, param.chain_gap,
-                                     std::pow(param.percentageIdentity, 1),
-                                     std::pow(param.percentageIdentity, 0.01));
+                                     std::pow(param.percentageIdentity, 3),
+                                     std::pow(param.percentageIdentity, 2));
                 // filter the merged mappings using plane sweep
                 if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                     skch::Filter::query::filterMappings(output->readMappings, n_mappings);
@@ -1029,8 +1029,8 @@ namespace skch
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           score = std::pow(query_dist - ref_dist, 2);
                       }
-                      int query_mapping_len = (it->queryEndPos - it->queryStartPos)
-                          + (it2->queryEndPos - it2->queryStartPos);
+                      int query_mapping_len = std::min(it->queryEndPos - it->queryStartPos,
+                                                       it2->queryEndPos - it2->queryStartPos);
                       if (dist < max_dist
                           && (length_fraction == 0
                               || dist < query_mapping_len * length_fraction
