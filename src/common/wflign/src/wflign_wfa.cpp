@@ -1397,7 +1397,7 @@ void write_merged_alignment(
                const std::vector<char> &trace) {
                 const uint32_t min_indel_len_to_find = indel_len / 3;
                 const uint16_t max_dist_to_look_at =
-                    std::min(indel_len * 64, (uint32_t)4096);
+                    std::min(indel_len * 16, (uint32_t)1024);
 
                 // std::cerr << "min_indel_len_to_find " <<
                 // min_indel_len_to_find << std::endl; std::cerr <<
@@ -1753,11 +1753,14 @@ void write_merged_alignment(
 
                         { //if (false) {
 
-                            int32_t distance_close_indels
+                            // TODO this should only happen if we're at >99% identity
+                            int32_t distance_close_indels = -1;
+                            /*
                                 = (query_delta > 3 || target_delta > 3) ?
                                 distance_close_big_enough_indels(std::max(query_delta, target_delta),
                                                                  q, unpatched)
                                 : -1;
+                            */
 
                             // std::cerr << "distance_close_indels " <<
                             // distance_close_indels << std::endl;
