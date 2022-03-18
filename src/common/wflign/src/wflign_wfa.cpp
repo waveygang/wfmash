@@ -118,7 +118,7 @@ void wflign_affine_wavefront(
                 .gap_opening = 21,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 17;
+            minhash_kmer_size = 16;
         } else if (mashmap_estimated_identity >= 0.95) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -181,59 +181,41 @@ void wflign_affine_wavefront(
     int wf_max_dist_threshold = 256;
 
     if (mashmap_estimated_identity >= 0.99) {
-        max_mash_dist_to_evaluate = 0.05;
-        mash_sketch_rate = 0.125;
+        max_mash_dist_to_evaluate = 0.3;
         inception_score_max_ratio = 2;
         erode_k = 13;
-        wf_max_dist_threshold = 8192;
     } else if (mashmap_estimated_identity >= 0.98) {
-        max_mash_dist_to_evaluate = 0.075;
-        mash_sketch_rate = 0.125;
+        max_mash_dist_to_evaluate = 0.3;
         inception_score_max_ratio = 2.5;
         erode_k = 11;
-        wf_max_dist_threshold = 4096;
     } else if (mashmap_estimated_identity >= 0.97) {
-        max_mash_dist_to_evaluate = 0.1;
-        mash_sketch_rate = 0.125;
+        max_mash_dist_to_evaluate = 0.4;
         inception_score_max_ratio = 3;
         erode_k = 9;
-        wf_max_dist_threshold = 2048;
     } else if (mashmap_estimated_identity >= 0.95) {
-        max_mash_dist_to_evaluate = 0.15;
-        mash_sketch_rate = 0.25;
+        max_mash_dist_to_evaluate = 0.5;
         inception_score_max_ratio = 4;
         erode_k = 7;
-        wf_max_dist_threshold = 1024;
     } else if (mashmap_estimated_identity >= 0.9) {
-        max_mash_dist_to_evaluate = 0.3;
-        mash_sketch_rate = 0.3;
+        max_mash_dist_to_evaluate = 0.6;
         inception_score_max_ratio = 5;
         erode_k = 3;
-        wf_max_dist_threshold = 512;
     } else if (mashmap_estimated_identity >= 0.85) {
-        max_mash_dist_to_evaluate = 0.4;
-        mash_sketch_rate = 0.35;
+        max_mash_dist_to_evaluate = 0.7;
         inception_score_max_ratio = 6;
         erode_k = 0;
-        wf_max_dist_threshold = 256;
     } else if (mashmap_estimated_identity >= 0.8) {
-        max_mash_dist_to_evaluate = 0.5;
-        mash_sketch_rate = 0.4;
+        max_mash_dist_to_evaluate = 0.8;
         inception_score_max_ratio = 7;
         erode_k = 0;
-        wf_max_dist_threshold = 256;
     } else if (mashmap_estimated_identity >= 0.75) {
-        max_mash_dist_to_evaluate = 0.6;
-        mash_sketch_rate = 0.45;
+        max_mash_dist_to_evaluate = 0.9;
         inception_score_max_ratio = 8;
         erode_k = 0;
-        wf_max_dist_threshold = 256;
     } else {
-        max_mash_dist_to_evaluate = 0.7;
-        mash_sketch_rate = 0.5;
+        max_mash_dist_to_evaluate = 0.95;
         inception_score_max_ratio = 9;
         erode_k = 0;
-        wf_max_dist_threshold = 256;
     }
 
     // override erosion if given on input
