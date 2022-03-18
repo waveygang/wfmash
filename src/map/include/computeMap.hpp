@@ -402,8 +402,8 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
-              // merge through best mappings in the query/target 2D at up to 3x segment length
-              mergeMappingsInRange(output->readMappings, param.segLength * 3, 0, 0);
+              // merge through best mappings in the query/target 2D
+              mergeMappingsInRange(output->readMappings, param.segLength * std::sqrt(2), 0, 0);
           }
         }
         
