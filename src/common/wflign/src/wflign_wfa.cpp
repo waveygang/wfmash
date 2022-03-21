@@ -175,46 +175,28 @@ void wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     int erode_k = 0;
-    float inception_score_max_ratio = 3;
-    float max_mash_dist_to_evaluate = 1;
+    float inception_score_max_ratio = 1.5 / std::pow(mashmap_estimated_identity,3);
+    float max_mash_dist_to_evaluate = 0.3 / std::pow(mashmap_estimated_identity,3);
     float mash_sketch_rate = 1;
     int wf_max_dist_threshold = 256;
 
     if (mashmap_estimated_identity >= 0.99) {
-        max_mash_dist_to_evaluate = 0.3;
-        inception_score_max_ratio = 2;
         erode_k = 13;
     } else if (mashmap_estimated_identity >= 0.98) {
-        max_mash_dist_to_evaluate = 0.3;
-        inception_score_max_ratio = 2.5;
         erode_k = 11;
     } else if (mashmap_estimated_identity >= 0.97) {
-        max_mash_dist_to_evaluate = 0.4;
-        inception_score_max_ratio = 3;
         erode_k = 9;
     } else if (mashmap_estimated_identity >= 0.95) {
-        max_mash_dist_to_evaluate = 0.5;
-        inception_score_max_ratio = 4;
         erode_k = 7;
     } else if (mashmap_estimated_identity >= 0.9) {
-        max_mash_dist_to_evaluate = 0.6;
-        inception_score_max_ratio = 5;
         erode_k = 3;
     } else if (mashmap_estimated_identity >= 0.85) {
-        max_mash_dist_to_evaluate = 0.7;
-        inception_score_max_ratio = 6;
         erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.8) {
-        max_mash_dist_to_evaluate = 0.8;
-        inception_score_max_ratio = 7;
         erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.75) {
-        max_mash_dist_to_evaluate = 0.9;
-        inception_score_max_ratio = 8;
         erode_k = 0;
     } else {
-        max_mash_dist_to_evaluate = 0.95;
-        inception_score_max_ratio = 9;
         erode_k = 0;
     }
 

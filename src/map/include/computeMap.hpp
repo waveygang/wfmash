@@ -284,7 +284,7 @@ namespace skch
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
-                                 return len_id_bound < param.percentageIdentity;
+                                 return len_id_bound < std::pow(param.percentageIdentity,3);
                              }),
               readMappings.end());
       }
@@ -420,8 +420,8 @@ namespace skch
             do {
                 mapping_count = output->readMappings.size();
                 mergeMappingsInRange(output->readMappings, param.chain_gap,
-                                     1.0/std::pow(param.percentageIdentity, 3),
-                                     1.0/std::pow(param.percentageIdentity, 2));
+                                     std::pow(param.percentageIdentity, 3),
+                                     std::pow(param.percentageIdentity, 2));
                 // filter the merged mappings using plane sweep
                 if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                     skch::Filter::query::filterMappings(output->readMappings, n_mappings);
