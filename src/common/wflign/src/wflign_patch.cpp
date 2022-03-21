@@ -259,9 +259,10 @@ void do_wfa_patch_alignment(
         wf_aligner->setHeuristicWFadaptive(min_wavefront_length,max_distance_threshold);
     }
 
-    const int max_score = affine_penalties.gap_opening +
-            (std::max(4 * (uint64_t)segment_length, std::max(target_length, query_length))
-            * affine_penalties.gap_extension * inception_score_max_ratio * 4);
+    const int max_score
+            = (affine_penalties.gap_opening
+               + (affine_penalties.gap_extension
+                  * std::max((int)256, (int)std::min(target_length, query_length))));
 
     wf_aligner->setMaxAlignmentScore(max_score);
     const int status = wf_aligner->alignEnd2End(target + i,target_length,query + j,query_length);
@@ -334,7 +335,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 16; //128;
+    const uint64_t min_wfa_patch_length = 0; //128;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -378,7 +379,7 @@ void write_merged_alignment(
                const std::vector<char> &trace) {
                 const uint32_t min_indel_len_to_find = indel_len / 3;
                 const uint16_t max_dist_to_look_at =
-                    std::min(indel_len * 64, (uint32_t)4096);
+                    std::min(indel_len * 16, (uint32_t)1024);
 
                 // std::cerr << "min_indel_len_to_find " <<
                 // min_indel_len_to_find << std::endl; std::cerr <<
@@ -725,9 +726,11 @@ void write_merged_alignment(
 						(query_delta < wflign_max_len_major && target_delta < wflign_max_len_major) &&
 						(query_delta < wflign_max_len_minor || target_delta < wflign_max_len_minor)) {
 
-                        int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
+                        // TODO this should only happen if we're at >99% identity
+                        int32_t distance_close_indels = -1;
+                        /*int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
                             distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
-                            -1;
+                            -1;*/
                         // std::cerr << "distance_close_indels " <<
                         // distance_close_indels << std::endl;
                         // Trigger the patching if there is a dropout
