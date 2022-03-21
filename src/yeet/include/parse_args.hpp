@@ -60,7 +60,7 @@ void parse_args(int argc,
     // mashmap arguments
     args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 5k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length"});
-    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 50*segment-length]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100*segment-length]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
@@ -327,7 +327,7 @@ void parse_args(int argc,
         }
         map_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 50 * map_parameters.segLength;
+        map_parameters.chain_gap = 100 * map_parameters.segLength;
     }
 
     if (drop_low_map_pct_identity) {
