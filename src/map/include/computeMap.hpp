@@ -284,7 +284,7 @@ namespace skch
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
-                                 return len_id_bound < std::pow(param.percentageIdentity,3);
+                                 return len_id_bound < param.percentageIdentity;
                              }),
               readMappings.end());
       }
@@ -420,8 +420,8 @@ namespace skch
             do {
                 mapping_count = output->readMappings.size();
                 mergeMappingsInRange(output->readMappings, param.chain_gap,
-                                     std::pow(param.percentageIdentity, 3),
-                                     std::pow(param.percentageIdentity, 2));
+                                     1.0/std::pow(param.percentageIdentity, 3),
+                                     1.0/std::pow(param.percentageIdentity, 2));
                 // filter the merged mappings using plane sweep
                 if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                     skch::Filter::query::filterMappings(output->readMappings, n_mappings);
@@ -1028,8 +1028,8 @@ namespace skch
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           score = std::pow(query_dist - ref_dist, 2);
                       }
-                      int query_mapping_len = std::min(it->queryEndPos - it->queryStartPos,
-                                                       it2->queryEndPos - it2->queryStartPos);
+                      int query_mapping_len = std::min((it->queryEndPos - it->queryStartPos),
+                                                       (it2->queryEndPos - it2->queryStartPos));
                       if (dist < max_dist
                           && (length_fraction == 0
                               || dist < query_mapping_len * length_fraction
