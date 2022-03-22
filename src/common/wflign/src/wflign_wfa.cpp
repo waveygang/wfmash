@@ -82,7 +82,7 @@ void wflign_affine_wavefront(
         return;
     }
 
-    auto minhash_kmer_size = _minhash_kmer_size;
+    auto minhash_kmer_size = std::max(8, std::min(19, (int)std::round(1.0 / (1.0 - mashmap_estimated_identity))));
 
     // Set penalties
     wfa::affine_penalties_t wfa_affine_penalties;
@@ -93,7 +93,6 @@ void wflign_affine_wavefront(
                 .gap_opening = wfa_gap_opening_score,
                 .gap_extension = wfa_gap_extension_score
         };
-        minhash_kmer_size = 17;
     } else {
         if (mashmap_estimated_identity >= 0.99) {
             wfa_affine_penalties = {
@@ -102,7 +101,6 @@ void wflign_affine_wavefront(
                 .gap_opening = 31,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 19;
         } else if (mashmap_estimated_identity >= 0.98) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -110,7 +108,6 @@ void wflign_affine_wavefront(
                 .gap_opening = 25,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 17;
         } else if (mashmap_estimated_identity >= 0.97) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -118,7 +115,6 @@ void wflign_affine_wavefront(
                 .gap_opening = 21,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 16;
         } else if (mashmap_estimated_identity >= 0.95) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -126,7 +122,6 @@ void wflign_affine_wavefront(
                 .gap_opening = 17,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 15;
         } else if (mashmap_estimated_identity >= 0.90) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -134,7 +129,6 @@ void wflign_affine_wavefront(
                 .gap_opening = 11,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 13;
         } else if (mashmap_estimated_identity >= 0.85) {
             wfa_affine_penalties = {
                 .match = 0,
@@ -142,23 +136,13 @@ void wflign_affine_wavefront(
                 .gap_opening = 9,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 11;
         } else if (mashmap_estimated_identity >= 0.80) {
-            wfa_affine_penalties = {
-                .match = 0,
-                .mismatch = 5,
-                .gap_opening = 8,
-                .gap_extension = 1,
-            };
-            minhash_kmer_size = 11;
-        } else if (mashmap_estimated_identity >= 0.75) {
             wfa_affine_penalties = {
                 .match = 0,
                 .mismatch = 4,
                 .gap_opening = 6,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 11;
         } else {
             wfa_affine_penalties = {
                 .match = 0,
@@ -166,7 +150,6 @@ void wflign_affine_wavefront(
                 .gap_opening = 5,
                 .gap_extension = 1,
             };
-            minhash_kmer_size = 9;
         }
     }
 
@@ -175,8 +158,8 @@ void wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     int erode_k = 0;
-    float inception_score_max_ratio = 1.5 / std::pow(mashmap_estimated_identity,3);
-    float max_mash_dist_to_evaluate = 0.3 / std::pow(mashmap_estimated_identity,3);
+    float inception_score_max_ratio = 1.618 / std::pow(mashmap_estimated_identity,2);
+    float max_mash_dist_to_evaluate = std::min(0.95, 0.25 / std::pow(mashmap_estimated_identity,2));
     float mash_sketch_rate = 1;
     int wf_max_dist_threshold = 256;
 
