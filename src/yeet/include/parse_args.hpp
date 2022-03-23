@@ -60,7 +60,7 @@ void parse_args(int argc,
     // mashmap arguments
     args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 5k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length"});
-    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 50*segment-length]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100*segment-length]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
@@ -75,7 +75,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic), minimum 5*-k]", {'w', "window-size"});
+    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic), minimum -k]", {'w', "window-size"});
     args::Flag window_minimizers(parser, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
@@ -295,8 +295,8 @@ void parse_args(int argc,
     }
 
     if (map_pct_identity) {
-        if (args::get(map_pct_identity) < 70) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%." << std::endl;
+        if (args::get(map_pct_identity) < 50) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%." << std::endl;
             exit(1);
         }
         map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
@@ -314,20 +314,9 @@ void parse_args(int argc,
 
         map_parameters.block_length = l;
     } else {
-        map_parameters.block_length = 3 * map_parameters.segLength;
-        // Automatic block length selection based on mapping identity bound.
-        // We scale the block length minimum by the mapping target divergence:
-        //  - at low divergence, we might expect many segment mappings to occur in a row,
-        //  - but at high divergence, this assumption may no longer hold due to SVs.
-        /*
-        if (map_parameters.percentageIdentity > 0.95) {
-            map_parameters.block_length = 3 * map_parameters.segLength;
-        } else if (map_parameters.percentageIdentity > 0.90) {
-            map_parameters.block_length = 2 * map_parameters.segLength;
-        } else {
-            map_parameters.block_length = 1.25 * map_parameters.segLength;
-        }
-        */
+        // n.b. we map-merge across gaps up to 3x segment length
+        // and then filter for things that are at least block_length long
+        map_parameters.block_length = 5 * map_parameters.segLength;
     }
 
     if (chain_gap) {
@@ -338,7 +327,7 @@ void parse_args(int argc,
         }
         map_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 50 * map_parameters.segLength;
+        map_parameters.chain_gap = 100 * map_parameters.segLength;
     }
 
     if (drop_low_map_pct_identity) {
@@ -497,18 +486,12 @@ void parse_args(int argc,
         if (ws > 0) {
             map_parameters.windowSize = ws;
         } else {
-            // If the input window size is <= 0, compute the best window size using `skch::fixed::pval_cutoff` as p-value cutoff
-            const int64_t windowSize = skch::Stat::recommendedWindowSize(
-                    skch::fixed::pval_cutoff,
-                    skch::fixed::confidence_interval,
-                    map_parameters.kmerSize,
-                    map_parameters.alphabetSize,
-                    map_parameters.percentageIdentity,
-                    map_parameters.segLength,
-                    map_parameters.referenceSize);
+            // Compute the window size with a heuristic function
+            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 6)
+                * map_parameters.segLength / 5000;
 
             // Avoid tiny windows to improve runtime
-            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize*5, windowSize);
+            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
 
             // Avoid too big values to improve the accuracy
             map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);

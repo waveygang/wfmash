@@ -284,8 +284,7 @@ namespace skch
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
-                                 // don't trust the mapping if the id bound is < 50%
-                                 return len_id_bound < 0.7;
+                                 return len_id_bound < std::pow(param.percentageIdentity,3);
                              }),
               readMappings.end());
       }
@@ -403,44 +402,33 @@ namespace skch
 
           // merge mappings
           if (param.mergeMappings) {
-              // query head-to-tail merge
-              mergeMappings(output->readMappings);
-              // find the best mapping in the query/target 2D of length 0.75 * block length
-              mergeMappingsInRange(output->readMappings, param.block_length / 2);
+              // merge through best mappings in the query/target 2D
+              mergeMappingsInRange(output->readMappings, param.segLength * 2, 0, 0);
           }
         }
-
-        //filter mappings best over query sequence axis
-        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-            skch::Filter::query::filterMappings(output->readMappings,
-                                                (input->len < param.segLength ?
-                                                 param.numMappingsForShortSequence
-                                                 : param.numMappingsForSegment) - 1);
-        }
+        
+        // how many mappings to keep
+        int n_mappings = (input->len < param.segLength ?
+                          param.numMappingsForShortSequence
+                          : param.numMappingsForSegment) - 1;
 
         // remove short merged mappings when we are merging
         if (split_mapping) {
-            // filter mappings that didn't reach the min block length through merging
+            // iterative merging to close small gaps
+            uint64_t mapping_count = 0;
+            int merge_iter = 0;
+            do {
+                mapping_count = output->readMappings.size();
+                mergeMappingsInRange(output->readMappings, param.chain_gap,
+                                     std::pow(param.percentageIdentity, 3),
+                                     std::pow(param.percentageIdentity, 2));
+                // filter the merged mappings using plane sweep
+                if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                    skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+                }
+            } while (output->readMappings.size() < mapping_count && ++merge_iter < 2);
+            // remove short chains that didn't exceed block length
             filterShortMappings(output->readMappings, param.block_length);
-            // merge mappings in range and get a copy of the unmerged, annotated with segment id
-            auto unmerged = mergeMappingsInRange(output->readMappings, param.chain_gap);
-            // filter the merged mappings using plane sweep
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings,
-                                                    (input->len < param.segLength ?
-                                                     param.numMappingsForShortSequence
-                                                     : param.numMappingsForSegment) - 1);
-            }
-            // remove short chains
-            filterShortMappings(output->readMappings, param.block_length * 2);
-            // use this to filter the unmerged mappings by merged mapping
-            robin_hood::unordered_set<offset_t> x;
-            // do this w/o the hash table
-            for (auto& m : output->readMappings) {
-                x.insert(m.splitMappingId);
-            }
-            filterFailedSubMappings(unmerged, x);
-            output->readMappings = unmerged;
         }
 
         // remove self-mode don't-maps
@@ -986,7 +974,10 @@ namespace skch
        * @param[in]     max_dist      Distance to look in target and query
        */
       template <typename VecIn>
-      VecIn mergeMappingsInRange(VecIn &readMappings, int max_dist) {
+      VecIn mergeMappingsInRange(VecIn &readMappings,
+                                 int _max_dist,
+                                 float length_fraction,
+                                 float gap_max_deviation) {
           assert(param.split == true);
 
           if(readMappings.size() < 2)
@@ -1013,29 +1004,39 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::pair<uint64_t, uint64_t>> distances;
+              int max_dist = (length_fraction != 0
+                              ? std::min((int)(it->queryEndPos - it->queryStartPos), _max_dist)
+                              : _max_dist);
+              std::vector<std::pair<double, uint64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is too far from current mapping being evaluated, stop finding a merge
                   if (it2->refSeqId != it->refSeqId || it2->refStartPos > it->refEndPos + max_dist) {
                       break;
                   }
-
                   //If the next mapping is within range, check if it's in range and 
                   if (it2->strand == it->strand) {
-                      auto ref_dist = it2->refStartPos - it->refEndPos;
-                      auto score = std::numeric_limits<uint64_t>::max();
-                      bool ok = false;
-                      if (it->strand == strnd::FWD && it->queryStartPos < it2->queryStartPos) {
-                          auto query_dist = it2->queryStartPos - it->queryEndPos;
-                          ok = query_dist + ref_dist < max_dist;
-                          score = ref_dist + query_dist;
-                      } else if (it->strand != strnd::FWD && it->queryEndPos > it2->queryEndPos) {
-                          auto query_dist = it->queryStartPos - it2->queryEndPos;
-                          ok = query_dist + ref_dist < max_dist;
-                          score = ref_dist + query_dist;
+                      int ref_dist = it2->refStartPos - it->refEndPos;
+                      int query_dist = 0;
+                      auto dist = std::numeric_limits<double>::max();
+                      auto score = std::numeric_limits<double>::max();
+                      if (it->strand == strnd::FWD && it->queryEndPos <= it2->queryStartPos) {
+                          query_dist = it2->queryStartPos - it->queryEndPos;
+                          dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
+                          score = std::pow(query_dist - ref_dist, 2);
+                      } else if (it->strand != strnd::FWD && it->queryStartPos >= it2->queryEndPos) {
+                          query_dist = it->queryStartPos - it2->queryEndPos;
+                          dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
+                          score = std::pow(query_dist - ref_dist, 2);
                       }
-                      if (ok) distances.push_back(std::make_pair(score, it2->splitMappingId));
-                      //if (ok) disjoint_sets.unite(it->splitMappingId, it2->splitMappingId);
+                      int query_mapping_len = std::min((it->queryEndPos - it->queryStartPos),
+                                                       (it2->queryEndPos - it2->queryStartPos));
+                      if (dist < max_dist
+                          && (length_fraction == 0
+                              || dist < query_mapping_len * length_fraction
+                              && (std::abs(ref_dist - query_dist)
+                                  < (ref_dist + query_dist) * gap_max_deviation))) {
+                          distances.push_back(std::make_pair(dist + score, it2->splitMappingId));
+                      }
                   }
               }
               if (distances.size()) {
