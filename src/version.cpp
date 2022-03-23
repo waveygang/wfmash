@@ -41,7 +41,8 @@ namespace wfmash {
             {"v0.5", "sensitive mapping and stable wfling-ing"},
             {"v0.6", "sparsify and use low-memory WFA"},
             {"v0.6.1", "Handy"},
-            {"v0.7.0", "Educazione"}
+            {"v0.7.0", "Educazione"},
+            {"v0.8.0", "pensiero divergente"}
             // Add more codenames here
     };
 
