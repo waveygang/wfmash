@@ -159,7 +159,7 @@ void wflign_affine_wavefront(
 
     int erode_k = 0;
     float inception_score_max_ratio = 1.618 / std::pow(mashmap_estimated_identity,2);
-    float max_mash_dist_to_evaluate = std::min(0.95, 0.25 / std::pow(mashmap_estimated_identity,2));
+    float max_mash_dist_to_evaluate = std::min(0.95, 0.3 / std::pow(mashmap_estimated_identity,2) - 0.15);
     float mash_sketch_rate = 1;
     int wf_max_dist_threshold = 256;
 
