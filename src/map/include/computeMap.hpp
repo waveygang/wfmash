@@ -429,6 +429,11 @@ namespace skch
             } while (output->readMappings.size() < mapping_count && ++merge_iter < 2);
             // remove short chains that didn't exceed block length
             filterShortMappings(output->readMappings, param.block_length);
+        } else {
+            // filter the merged mappings using plane sweep
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+            }
         }
 
         // remove self-mode don't-maps
