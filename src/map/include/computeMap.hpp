@@ -1024,11 +1024,11 @@ namespace skch
                       int query_dist = 0;
                       auto dist = std::numeric_limits<double>::max();
                       auto score = std::numeric_limits<double>::max();
-                      if (it->strand == strnd::FWD && it->queryEndPos <= it2->queryStartPos) {
+                      if (it->strand == strnd::FWD && it->queryStartPos <= it2->queryStartPos) {
                           query_dist = it2->queryStartPos - it->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           score = std::pow(query_dist - ref_dist, 2);
-                      } else if (it->strand != strnd::FWD && it->queryStartPos >= it2->queryEndPos) {
+                      } else if (it->strand != strnd::FWD && it->queryEndPos >= it2->queryEndPos) {
                           query_dist = it->queryStartPos - it2->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           score = std::pow(query_dist - ref_dist, 2);
