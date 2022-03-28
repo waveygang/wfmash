@@ -58,8 +58,8 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 5k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 3*segment-length]", {'l', "block-length"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 10k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 5*segment-length]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100*segment-length]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
@@ -291,7 +291,7 @@ void parse_args(int argc,
         }
         map_parameters.segLength = s;
     } else {
-        map_parameters.segLength = 5000;
+        map_parameters.segLength = 10000;
     }
 
     if (map_pct_identity) {
