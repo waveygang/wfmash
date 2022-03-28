@@ -42,7 +42,8 @@ namespace wfmash {
             {"v0.6", "sparsify and use low-memory WFA"},
             {"v0.6.1", "Handy"},
             {"v0.7.0", "Educazione"},
-            {"v0.8.0", "pensiero divergente"}
+            {"v0.8.0", "pensiero divergente"},
+            {"v0.8.1", "Divergenza"}
             // Add more codenames here
     };
 
