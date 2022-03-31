@@ -10,7 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are use
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_BUILD_TYPE Release)
 
-# set(EXTRA_FLAGS "-Ofast -march=native ")
+# set(EXTRA_FLAGS "-Ofast -mcx16 -march=native ")
 
 if (${CMAKE_BUILD_TYPE} MATCHES "Release")
     if (EXTRA_FLAGS)
