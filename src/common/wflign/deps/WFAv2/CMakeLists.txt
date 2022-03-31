@@ -29,8 +29,8 @@ if (${CMAKE_BUILD_TYPE} MATCHES "Release")
         set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
     endif (EXTRA_FLAGS)
     # Use all standard-compliant optimizations - always add these:
-    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -Wno-pointer-arith -D__STDC_FORMAT_MACROS -mtune=native")
-    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -Wno-pointer-arith -D__STDC_FORMAT_MACROS -mtune=native")
+    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -Wno-pointer-arith -D__STDC_FORMAT_MACROS -march=native")
+    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -Wno-pointer-arith -D__STDC_FORMAT_MACROS -march=native")
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
