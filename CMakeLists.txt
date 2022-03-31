@@ -30,8 +30,8 @@ if (${CMAKE_BUILD_TYPE} MATCHES "Release")
         set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
     endif (EXTRA_FLAGS)
     # Use all standard-compliant optimizations - always add these:
-    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -mtune=generic")
+    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -mtune=generic")
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
