@@ -306,10 +306,10 @@ void wflign_affine_wavefront(
             };
         } else {
             wflambda_affine_penalties = {
-                .match = wfa_affine_penalties.match,
-                .mismatch = wfa_affine_penalties.mismatch,
-                .gap_opening = wfa_affine_penalties.gap_opening,
-                .gap_extension = wfa_affine_penalties.gap_extension
+                .match = 0, //wfa_affine_penalties.match,
+                .mismatch = 4, //wfa_affine_penalties.mismatch,
+                .gap_opening = 6, //wfa_affine_penalties.gap_opening,
+                .gap_extension = 1 //wfa_affine_penalties.gap_extension
             };
         }
 
