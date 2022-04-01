@@ -127,6 +127,13 @@ cmake --build build -- -j 3
 
 The `wfmash` binary will be in `build/bin`.
 
+#### Notes for distribution
+
+If you need to avoid machine-specific optimizations, use the `CMAKE_BUILD_TYPE=Generic` build type:
+
+```shell
+cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Generic && cmake --build build -- -j 3
+```
 
 #### Notes on dependencies
 

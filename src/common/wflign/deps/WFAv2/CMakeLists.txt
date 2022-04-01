@@ -10,33 +10,25 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are use
 
 #set(CMAKE_BUILD_TYPE Release)
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING
-            "Choose the type of build, options are: Release Debug." FORCE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING
+            "Choose the type of build, options are: Release Debug Generic." FORCE)
 endif()
 
-IF(CMAKE_BUILD_TYPE MATCHES Debug)
-    message("Debug build.")
-ELSEIF(CMAKE_BUILD_TYPE MATCHES Release)
-    message("Release build.")
-ELSE()
-    message("Some other build type.")
-ENDIF()
+message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
-# set(EXTRA_FLAGS "-Ofast -mcx16 -march=native ")
+if (${CMAKE_BUILD_TYPE} MATCHES Release)
+    set(EXTRA_FLAGS "-Ofast -march=native")
+    set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
+endif ()
 
-if (${CMAKE_BUILD_TYPE} MATCHES "Release")
-    if (EXTRA_FLAGS)
-        set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
-    endif (EXTRA_FLAGS)
+if (${CMAKE_BUILD_TYPE} MATCHES Debug)
+    # Debug use the defaults - so commenting out:
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -g -fsanitize=address -Wno-pointer-arith -D__STDC_FORMAT_MACROS")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address -Wno-pointer-arith -D__STDC_FORMAT_MACROS")
+else()
     # Use all standard-compliant optimizations - always add these:
     set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -Wno-pointer-arith -D__STDC_FORMAT_MACROS")
     set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS} -Wno-pointer-arith -D__STDC_FORMAT_MACROS")
-endif ()
-
-if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
-    # Debug use the defaults - so commenting out:
-    # set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -g -fsanitize=address")
-    # set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address")
 endif ()
 
 # Build wfa as static library by default
