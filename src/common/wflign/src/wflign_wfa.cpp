@@ -94,7 +94,49 @@ void wflign_affine_wavefront(
                 .gap_extension = wfa_gap_extension_score
         };
     } else {
-        if (mashmap_estimated_identity >= 0.90) {
+        if (mashmap_estimated_identity >= 0.99) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 19,
+                    .gap_opening = 31,
+                    .gap_extension = 1,
+            };
+        } else if (mashmap_estimated_identity >= 0.98) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 15,
+                    .gap_opening = 25,
+                    .gap_extension = 1,
+            };
+        } else if (mashmap_estimated_identity >= 0.97) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 13,
+                    .gap_opening = 21,
+                    .gap_extension = 1,
+            };
+        } else if (mashmap_estimated_identity >= 0.95) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 11,
+                    .gap_opening = 17,
+                    .gap_extension = 1,
+            };
+        } else if (mashmap_estimated_identity >= 0.90) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 7,
+                    .gap_opening = 11,
+                    .gap_extension = 1,
+            };
+        } else if (mashmap_estimated_identity >= 0.85) {
+            wfa_affine_penalties = {
+                    .match = 0,
+                    .mismatch = 6,
+                    .gap_opening = 9,
+                    .gap_extension = 1,
+            };
+        } else if (mashmap_estimated_identity >= 0.80) {
             wfa_affine_penalties = {
                 .match = 0,
                 .mismatch = 4,
