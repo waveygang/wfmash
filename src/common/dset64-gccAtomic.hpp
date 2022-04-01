@@ -60,11 +60,6 @@
  *
  */
 
-// Sanity check that we are compiling on x86_64.
-#if !__x86_64__
-#error "wfmash can only be built on an x86_64 machine (64-bit Intel/AMD)"
-#endif
-
 namespace dsets {
 
 class DisjointSets {
