@@ -120,7 +120,7 @@ void wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     int erode_k = 0;
-    float inception_score_max_ratio = 1 / std::pow(mashmap_estimated_identity,2);
+    float inception_score_max_ratio = 1 + 0.5 / std::pow(mashmap_estimated_identity,5);
     float max_mash_dist_to_evaluate = std::min(0.95, 0.25 / std::pow(mashmap_estimated_identity,2));
     float mash_sketch_rate = 1;
     int wf_max_dist_threshold = 256;
@@ -1029,8 +1029,8 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
            + (affine_penalties->gap_extension
               * std::max((int)256, (int)std::min(target_length, query_length))));
 
-wfa::wavefront_aligner_resize(wf_aligner, target_length,
-                                         query_length);
+    wfa::wavefront_aligner_resize(wf_aligner, target_length,
+                                  query_length);
 
     wfa::wavefront_aligner_set_max_alignment_score(wf_aligner, max_score);
     const int status =
