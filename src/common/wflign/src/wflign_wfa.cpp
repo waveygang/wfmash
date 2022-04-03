@@ -94,11 +94,15 @@ void wflign_affine_wavefront(
                 .gap_extension = wfa_gap_extension_score
         };
     } else {
-        if (mashmap_estimated_identity >= 0.90) {
+        if (mashmap_estimated_identity >= 0.80) {
+            // Polynomial fitting
+            const int mismatch = (int)ceil(9190.56599005*pow(mashmap_estimated_identity, 3) -24087.9418638*pow(mashmap_estimated_identity, 2) + 21032.49248734*mashmap_estimated_identity -6111.50339641);
+            const int gap_opening = (int)ceil(11826.71109956*pow(mashmap_estimated_identity, 3) -30851.33099739 * pow(mashmap_estimated_identity, 2) + 26827.95391065*mashmap_estimated_identity -7767.00185348);
+
             wfa_affine_penalties = {
                 .match = 0,
-                .mismatch = 4,
-                .gap_opening = 6,
+                .mismatch = mismatch,
+                .gap_opening = gap_opening,
                 .gap_extension = 1,
             };
         } else {
@@ -116,7 +120,7 @@ void wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     int erode_k = 0;
-    float inception_score_max_ratio = 1 / std::pow(mashmap_estimated_identity,2);
+    float inception_score_max_ratio = 1 + 0.5 / std::pow(mashmap_estimated_identity,5);
     float max_mash_dist_to_evaluate = std::min(0.95, 0.25 / std::pow(mashmap_estimated_identity,2));
     float mash_sketch_rate = 1;
     int wf_max_dist_threshold = 256;
@@ -302,10 +306,10 @@ void wflign_affine_wavefront(
             };
         } else {
             wflambda_affine_penalties = {
-                .match = wfa_affine_penalties.match,
-                .mismatch = wfa_affine_penalties.mismatch,
-                .gap_opening = wfa_affine_penalties.gap_opening,
-                .gap_extension = wfa_affine_penalties.gap_extension
+                .match = 0,
+                .mismatch = 4,
+                .gap_opening = 6,
+                .gap_extension = 1
             };
         }
 
@@ -1025,8 +1029,8 @@ void do_wfa_patch_alignment(const char *query, const uint64_t &j,
            + (affine_penalties->gap_extension
               * std::max((int)256, (int)std::min(target_length, query_length))));
 
-wfa::wavefront_aligner_resize(wf_aligner, target_length,
-                                         query_length);
+    wfa::wavefront_aligner_resize(wf_aligner, target_length,
+                                  query_length);
 
     wfa::wavefront_aligner_set_max_alignment_score(wf_aligner, max_score);
     const int status =
