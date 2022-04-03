@@ -305,25 +305,12 @@ void wflign_affine_wavefront(
                     .gap_extension = wflign_gap_extension_score
             };
         } else {
-            if (mashmap_estimated_identity >= 0.80) {
-                // Polynomial fitting
-                const int wflign_mismatch = (int)ceil(7345.53751746*pow(mashmap_estimated_identity, 3) -19100.74331358*pow(mashmap_estimated_identity, 2) + 16543.62901529*mashmap_estimated_identity -4767.43746727);
-                const int wflign_opening = (int)ceil(9328.53084633*pow(mashmap_estimated_identity, 3) -24254.80859121*pow(mashmap_estimated_identity, 2) + 21002.90450761*mashmap_estimated_identity -6049.6163511);
-
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = wflign_mismatch,
-                        .gap_opening = wflign_opening,
-                        .gap_extension = 1
-                };
-            } else {
-                wflambda_affine_penalties = {
-                        .match = 0,
-                        .mismatch = 4,
-                        .gap_opening = 6,
-                        .gap_extension = 1
-                };
-            }
+            wflambda_affine_penalties = {
+                .match = 0,
+                .mismatch = 4,
+                .gap_opening = 6,
+                .gap_extension = 1
+            };
         }
 
         //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
