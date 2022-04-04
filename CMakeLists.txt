@@ -44,17 +44,17 @@ add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 add_executable(wfmash
   src/common/utils.cpp
   src/yeet/yeet_main.cpp
-        src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
+  src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
 
 target_include_directories(wfmash PRIVATE
   src
   src/common
   src/common/wflign/deps
-  src/common/wflign/deps/wflambdav2
-  src/common/wflign/deps/WFAv2
+  src/common/wflign/deps/WFA
   #src/common/wflign/abseil-cpp
   )
-
+target_link_directories(wfmash PRIVATE
+        src/common/wflign/deps/WFA/lib)
 target_link_libraries(wfmash
   gsl
   gslcblas
@@ -62,17 +62,13 @@ target_link_libraries(wfmash
   pthread
   libwflign_static
   hts
-  wflambda
-  wfa
+  wfacpp
   jemalloc
   z
   #absl::flat_hash_map
 )
 
 install(TARGETS wfmash DESTINATION bin)
-
-#set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_BUILD_TYPE Release)
 
 # version stuff
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/include)

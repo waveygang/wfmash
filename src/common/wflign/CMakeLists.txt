@@ -36,46 +36,54 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_subdirectory(deps/wflambdav2 EXCLUDE_FROM_ALL)
-add_subdirectory(deps/WFAv2 EXCLUDE_FROM_ALL)
+#
+# WFA Build
+#
+add_custom_target(
+        wfa_lib
+        COMMAND make clean all
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA
+)
 
-add_executable(wflign
-  deps/atomic_image.cpp
-  deps/lodepng/lodepng.cpp
-  deps/atomic_image.cpp
-  src/wflign_wfa.cpp
-  src/wfa_edit_callback.cpp
-  src/rkmh.cpp
-  src/murmur3.cpp)
+#
+# WFling
+#
+add_executable(
+        wflign
+        deps/atomic_image.cpp
+        deps/lodepng/lodepng.cpp
+        deps/atomic_image.cpp
+        src/wflign.cpp
+        src/wflign_alignment.cpp
+        src/wflign_patch.cpp
+        src/rkmh.cpp
+        src/murmur3.cpp)
+target_include_directories(
+        wflign PRIVATE deps/
+        deps/
+        deps/robin-hood-hashing
+        deps/WFA)
 
-target_include_directories(wflign PRIVATE
-  deps/)
-
-target_link_libraries(wflign
-  wfa
-  wflambda
-  z
-  )
-
-add_library(libwflign_static STATIC
-  deps/atomic_image.cpp
-  deps/lodepng/lodepng.cpp
-  deps/atomic_image.cpp
-  src/wflign_wfa.cpp
-  src/wfa_edit_callback.cpp
-  src/rkmh.cpp
-  src/murmur3.cpp
-  )
+#
+# WFling library
+#
+target_link_libraries(wflign z)
+add_library(
+        libwflign_static STATIC
+        deps/atomic_image.cpp
+        deps/lodepng/lodepng.cpp
+        deps/atomic_image.cpp
+        src/wflign.cpp
+        src/wflign_alignment.cpp
+        src/wflign_patch.cpp
+        src/rkmh.cpp
+        src/murmur3.cpp)
 set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
-target_include_directories(libwflign_static PRIVATE
-  deps/
-  deps/lodepng
-  deps/PicoSHA2
-  deps/robin-hood-hashing
-  deps/wflambdav2
-  deps/WFAv2
-  )
-# not clear if necessary
-#set_target_properties(libodgi_static PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-
-#set(CMAKE_BUILD_TYPE Release)
+target_include_directories(
+        libwflign_static PRIVATE
+        deps/
+        deps/lodepng
+        deps/PicoSHA2
+        deps/robin-hood-hashing
+        deps/WFA)
+add_dependencies(libwflign_static wfa_lib)

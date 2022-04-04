@@ -100,7 +100,7 @@ void parse_args(int argc,
     // patching parameter
     args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
     args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
-    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-match-mismatch"});
+    args::ValueFlag<int> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
