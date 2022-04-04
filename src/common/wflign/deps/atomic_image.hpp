@@ -10,7 +10,7 @@
 #include <cmath>
 #include <memory>
 #include <iostream>
-#include "picosha2.h"
+#include "PicoSHA2/picosha2.h"
 
 namespace wflign {
 
