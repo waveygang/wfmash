@@ -775,7 +775,9 @@ namespace skch
           auto prev_beg_iter = mi_L2iter.sw_beg;
           auto prev_end_iter = mi_L2iter.sw_end;
 
-          int beginOptimalPos, lastOptimalPos;
+          // int64_t prevents overflow when these two variables are averaged
+          // (then summed) before being assigned to an int32_t variable
+          int64_t beginOptimalPos, lastOptimalPos;
 
           while ( std::distance(mi_L2iter.sw_end, lastSuperWindowRangeEnd) >= 0)
           {
