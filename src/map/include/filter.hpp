@@ -52,7 +52,7 @@ namespace skch
           auto x_score = vec[x].qlen() * vec[x].nucIdentity;
           auto y_score = vec[y].qlen() * vec[y].nucIdentity;
 
-          return std::tie(x_score, vec[x].queryStartPos) > std::tie(y_score, vec[y].queryStartPos);
+          return std::tie(x_score, vec[x].queryStartPos, vec[x].refSeqId) > std::tie(y_score, vec[y].queryStartPos, vec[y].refSeqId);
         }
 
         //Greater than comparison by score
