@@ -4,7 +4,7 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef BASE_TYPES_MAP_HPP 
+#ifndef BASE_TYPES_MAP_HPP
 #define BASE_TYPES_MAP_HPP
 
 #include <tuple>
@@ -31,18 +31,18 @@ namespace skch
 
     //Lexographical less than comparison
     bool operator <(const MinimizerInfo& x) {
-      return std::tie(hash, seqId, wpos, strand) 
+      return std::tie(hash, seqId, wpos, strand)
         < std::tie(x.hash, x.seqId, x.wpos, x.strand);
     }
 
     //Lexographical equality comparison
     bool operator ==(const MinimizerInfo& x) {
-      return std::tie(hash, seqId, wpos, strand) 
+      return std::tie(hash, seqId, wpos, strand)
         == std::tie(x.hash, x.seqId, x.wpos, x.strand);
     }
 
     bool operator !=(const MinimizerInfo& x) {
-      return std::tie(hash, seqId, wpos, strand) 
+      return std::tie(hash, seqId, wpos, strand)
         != std::tie(x.hash, x.seqId, x.wpos, x.strand);
     }
 
@@ -65,7 +65,7 @@ namespace skch
     strand_t strand;        //strand information
 
     bool operator <(const MinimizerMetaData& x) const {
-      return std::tie(seqId, wpos, strand) 
+      return std::tie(seqId, wpos, strand)
         < std::tie(x.seqId, x.wpos, x.strand);
     }
   };
@@ -83,9 +83,9 @@ namespace skch
   //Label tags for strand information
   enum strnd : strand_t
   {
-    FWD = 1,  
+    FWD = 1,
     REV = -1
-  };  
+  };
 
   enum event : int
   {
@@ -100,6 +100,13 @@ namespace skch
     ONETOONE = 2,                         //filter by query axis and reference axis
     NONE = 3                              //no filtering
   };
+
+  template <class T>
+  inline void hash_combine(std::size_t & s, const T & v)
+  {
+      std::hash<T> h;
+      s^= h(v) + 0x9e3779b9 + (s<< 6) + (s>> 2);
+  }
 
   //Fragment mapping result
   //Do not save variable sized objects in this struct
@@ -126,13 +133,33 @@ namespace skch
     uint8_t discard;                                    // set to 1 for deletion
     bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
 
-    offset_t qlen() {                                   //length of this mapping on query axis 
+    offset_t qlen() {                                   //length of this mapping on query axis
       return queryEndPos - queryStartPos + 1;
     }
 
-    offset_t rlen() {                                   //length of this mapping on reference axis 
+    offset_t rlen() {                                   //length of this mapping on reference axis
       return refEndPos - refStartPos + 1;
     }
+
+    size_t hash(void) {
+      size_t res = 0;
+      hash_combine(res, queryLen);
+      hash_combine(res, refStartPos);
+      hash_combine(res, refEndPos);
+      hash_combine(res, queryStartPos);
+      hash_combine(res, queryEndPos);
+      hash_combine(res, refSeqId);
+      hash_combine(res, querySeqId);
+      hash_combine(res, blockLength);
+      hash_combine(res, nucIdentity);
+      hash_combine(res, nucIdentityUpperBound);
+      hash_combine(res, sketchSize);
+      hash_combine(res, conservedSketches);
+      hash_combine(res, strand);
+      hash_combine(res, approxMatches);
+      return res;
+    }
+
   };
 
   typedef std::vector<MappingResult> MappingResultsVector_t;
@@ -141,7 +168,7 @@ namespace skch
   struct InputSeqContainer
   {
     seqno_t seqCounter;                 //sequence counter
-    offset_t len;                       //sequence length             
+    offset_t len;                       //sequence length
     std::string seq;                    //sequence string
     std::string seqName;                //sequence id
 
@@ -176,13 +203,13 @@ namespace skch
   template <typename MinimizerVec>
     struct QueryMetaData
     {
-      char *seq;                          //query sequence pointer 
+      char *seq;                          //query sequence pointer
       seqno_t seqCounter;                 //query sequence counter
       offset_t len;                       //length of this query sequence
       offset_t fullLen;                   //length of the full sequence it derives from
       int sketchSize;                     //sketch size
       std::string seqName;                //sequence name
-      MinimizerVec minimizerTableQuery;   //Vector of minimizers in the query 
+      MinimizerVec minimizerTableQuery;   //Vector of minimizers in the query
     };
 }
 

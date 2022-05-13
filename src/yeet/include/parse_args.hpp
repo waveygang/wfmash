@@ -68,6 +68,7 @@ void parse_args(int argc,
     args::Flag drop_low_map_pct_identity(parser, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=% x 0.75", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
+    args::ValueFlag<double> map_sparsification(parser, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
@@ -123,6 +124,8 @@ void parse_args(int argc,
     args::Flag version(parser, "version", "show long version number including github commit", {'v', "version"});
 
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
+
+    //parser.helpParams.width = 120;
 
     try {
         parser.ParseCLI(argc, argv);
@@ -198,6 +201,19 @@ void parse_args(int argc,
         } else {
             map_parameters.filterMode = skch::filter::MAP;
         }
+    }
+
+    if (map_sparsification) {
+        if (args::get(map_sparsification) == 1) {
+            // overflows
+            map_parameters.sparsity_hash_threshold = std::numeric_limits<uint64_t>::max();
+        } else {
+            map_parameters.sparsity_hash_threshold
+                = args::get(map_sparsification) * std::numeric_limits<uint64_t>::max();
+        }
+    } else {
+        map_parameters.sparsity_hash_threshold
+            = std::numeric_limits<uint64_t>::max();
     }
 
     if (!args::get(wfa_score_params).empty()) {
