@@ -431,25 +431,16 @@ namespace skch
                           param.numMappingsForShortSequence
                           : param.numMappingsForSegment) - 1;
 
-        // remove short merged mappings when we are merging
         if (split_mapping) {
-            // iterative merging to close small gaps
-            uint64_t mapping_count = 0;
-            int merge_iter = 0;
-            do {
-                mapping_count = output->readMappings.size();
-                mergeMappingsInRange(output->readMappings, param.chain_gap,
-                                     std::pow(param.percentageIdentity, 3),
-                                     std::pow(param.percentageIdentity, 2));
-                // filter the merged mappings using plane sweep
-                if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                    skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-                }
-            } while (output->readMappings.size() < mapping_count && ++merge_iter < 2);
+            // hardcore merge using the chain gap
+            mergeMappingsInRange(output->readMappings, param.chain_gap, 0, 0);
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+            }
             // remove short chains that didn't exceed block length
             filterShortMappings(output->readMappings, param.block_length);
         } else {
-            // filter the merged mappings using plane sweep
+            // filter the non-split mappings using plane sweep
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                 skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
