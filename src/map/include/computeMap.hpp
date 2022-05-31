@@ -235,18 +235,18 @@ namespace skch
 
       /**
        * @brief               helper to main mapping function
-       * @details             filters mappings shorter than our minimum block length
+       * @details             filters mappings with fewer than the target number of merged base mappings
        * @param[in]   input   mappings
        * @return              void
        */
-      void filterShortMappings(MappingResultsVector_t &readMappings, int64_t length)
+      void filterWeakMappings(MappingResultsVector_t &readMappings, int64_t min_count)
       {
           readMappings.erase(
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
                                  return e.queryLen > e.blockLength
-                                     && e.blockLength < length;
+                                     && e.n_merged < min_count;
                              }),
               readMappings.end());
       }
@@ -438,7 +438,7 @@ namespace skch
                 skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
             // remove short chains that didn't exceed block length
-            filterShortMappings(output->readMappings, param.block_length);
+            filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
         } else {
             // filter the non-split mappings using plane sweep
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
@@ -994,14 +994,13 @@ namespace skch
        * @param[in]     max_dist      Distance to look in target and query
        */
       template <typename VecIn>
-      VecIn mergeMappingsInRange(VecIn &readMappings,
-                                 int _max_dist,
-                                 float length_fraction,
-                                 float gap_max_deviation) {
+      void mergeMappingsInRange(VecIn &readMappings,
+                                int _max_dist,
+                                float length_fraction,
+                                float gap_max_deviation) {
           assert(param.split == true);
 
-          if(readMappings.size() < 2)
-              return readMappings;
+          if(readMappings.size() < 2) return;
 
           //Sort the mappings by reference (then query) position
           std::sort(
@@ -1078,9 +1077,6 @@ namespace skch
                   return a.splitMappingId < b.splitMappingId;
               });
 
-          // copy for independent return of merged and unmerged
-          auto unmergedReadMappings = readMappings;
-
           for(auto it = readMappings.begin(); it != readMappings.end();) {
 
               //Bucket by each chain
@@ -1105,9 +1101,11 @@ namespace skch
                       it->approxMatches = std::round(it->nucIdentity * it->blockLength / 100.0);
                   });
 
+              it->n_merged = std::distance(it, it_end);
+
               //Mean identity of all mappings in the chain
               it->nucIdentity = (   std::accumulate(it, it_end, 0.0,
-                                                    [](double x, MappingResult &e){ return x + e.nucIdentity; })     )/ std::distance(it, it_end);
+                                                    [](double x, MappingResult &e){ return x + e.nucIdentity; })     )/ it->n_merged;
 
               //Discard other mappings of this chain
               std::for_each( std::next(it), it_end, [&](MappingResult &e){ e.discard = 1; });
@@ -1120,7 +1118,6 @@ namespace skch
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
               readMappings.end());
 
-          return unmergedReadMappings;
       }
 
      /**
