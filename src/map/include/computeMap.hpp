@@ -418,12 +418,6 @@ namespace skch
 
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
-
-          // merge mappings
-          if (param.mergeMappings) {
-              // merge through best mappings in the query/target 2D
-              mergeMappingsInRange(output->readMappings, param.segLength * 2, 0, 0);
-          }
         }
 
         // how many mappings to keep
@@ -432,6 +426,9 @@ namespace skch
                           : param.numMappingsForSegment) - 1;
 
         if (split_mapping) {
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+            }
             // hardcore merge using the chain gap
             mergeMappingsInRange(output->readMappings, param.chain_gap, 0, 0);
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
@@ -1107,12 +1104,12 @@ namespace skch
               it->nucIdentity = ( std::accumulate(
                                       it, it_end, 0.0,
                                       [](double x, MappingResult &e){ return x + e.nucIdentity; })
-                  ) /// it->n_merged;
+                  ) /// it->n_merged; // this would scale directly by the number of mappings in the chain
                   // this scales slightly by the amount of missing segments
                   / ( (double)it->n_merged
                       + std::pow(
                           std::log((double)it->blockLength / param.segLength),
-                          0.02));
+                          0.01));
 
 
               //Discard other mappings of this chain
