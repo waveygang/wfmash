@@ -1104,8 +1104,16 @@ namespace skch
               it->n_merged = std::distance(it, it_end);
 
               //Mean identity of all mappings in the chain
-              it->nucIdentity = (   std::accumulate(it, it_end, 0.0,
-                                                    [](double x, MappingResult &e){ return x + e.nucIdentity; })     )/ it->n_merged;
+              it->nucIdentity = ( std::accumulate(
+                                      it, it_end, 0.0,
+                                      [](double x, MappingResult &e){ return x + e.nucIdentity; })
+                  ) /// it->n_merged;
+                  // this scales slightly by the amount of missing segments
+                  / ( (double)it->n_merged
+                      + std::pow(
+                          std::log((double)it->blockLength / param.segLength),
+                          0.02));
+
 
               //Discard other mappings of this chain
               std::for_each( std::next(it), it_end, [&](MappingResult &e){ e.discard = 1; });
