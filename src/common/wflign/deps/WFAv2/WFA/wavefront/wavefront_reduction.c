@@ -111,7 +111,9 @@ void wavefront_reduce_wavefront_end2end(
   const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
   int lo_reduced = wavefront->lo;
   for (k=wavefront->lo;k<top_limit;++k) {
-    const int distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    const int t_distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    const int p_distance = wf_offset_distance_to_pattern(offsets[k],pattern_length,text_length,k);
+    const int distance = MIN(t_distance, p_distance);
     if (distance - min_distance  <= max_distance_threshold) break;
     ++lo_reduced;
   }
@@ -120,7 +122,9 @@ void wavefront_reduce_wavefront_end2end(
   const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
   int hi_reduced = wavefront->hi;
   for (k=wavefront->hi;k>botton_limit;--k) {
-    const int distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    const int t_distance = wf_offset_distance_to_target_end2end(offsets[k],pattern_length,text_length,k);
+    const int p_distance = wf_offset_distance_to_pattern(offsets[k],pattern_length,text_length,k);
+    const int distance = MIN(t_distance, p_distance);
     if (distance - min_distance <= max_distance_threshold) break;
     --hi_reduced;
   }
