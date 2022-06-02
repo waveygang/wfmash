@@ -330,7 +330,7 @@ void wflign_affine_wavefront(
         // attributes.affine2p_penalties = affine2p_penalties;
 
         uint64_t wflambda_max_distance_threshold =
-            std::min((uint64_t)_wflambda_max_distance_threshold,
+            std::max((uint64_t)_wflambda_max_distance_threshold,
                      std::max((uint64_t)std::abs((int64_t)query_length-(int64_t)target_length),
                               (uint64_t)std::max(query_length,target_length)/10)) / step_size;
 
