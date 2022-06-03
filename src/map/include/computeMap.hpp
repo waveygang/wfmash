@@ -430,7 +430,7 @@ namespace skch
                 skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
             // hardcore merge using the chain gap
-            mergeMappingsInRange(output->readMappings, param.chain_gap, 0, 0);
+            mergeMappingsInRange(output->readMappings, param.chain_gap);
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                 skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
@@ -992,9 +992,7 @@ namespace skch
        */
       template <typename VecIn>
       void mergeMappingsInRange(VecIn &readMappings,
-                                int _max_dist,
-                                float length_fraction,
-                                float gap_max_deviation) {
+                                int max_dist) {
           assert(param.split == true);
 
           if(readMappings.size() < 2) return;
@@ -1020,9 +1018,6 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              int max_dist = (length_fraction != 0
-                              ? std::min((int)(it->queryEndPos - it->queryStartPos), _max_dist)
-                              : _max_dist);
               std::vector<std::pair<double, uint64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is too far from current mapping being evaluated, stop finding a merge
@@ -1046,11 +1041,7 @@ namespace skch
                       }
                       int query_mapping_len = std::min((it->queryEndPos - it->queryStartPos),
                                                        (it2->queryEndPos - it2->queryStartPos));
-                      if (dist < max_dist
-                          && (length_fraction == 0
-                              || dist < query_mapping_len * length_fraction
-                              && (std::abs(ref_dist - query_dist)
-                                  < (ref_dist + query_dist) * gap_max_deviation))) {
+                      if (dist < max_dist) {
                           distances.push_back(std::make_pair(dist + score, it2->splitMappingId));
                       }
                   }
