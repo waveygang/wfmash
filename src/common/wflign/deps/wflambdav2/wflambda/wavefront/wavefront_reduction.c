@@ -57,13 +57,13 @@ void wavefront_reduction_set_dynamic(
 int wavefront_distance_to_target_global(
     const int pattern_length,
     const int text_length,
+    const int m,
     const wf_offset_t offset,
     const int k) {
   const int v = WAVEFRONT_V(k,offset);
   const int h = WAVEFRONT_H(k,offset);
-  const int left_v = pattern_length - v;
-  const int left_h = text_length - h;
-  //return left_v + left_h;
+  const int left_v = ((float)(pattern_length - v)/pattern_length * m);
+  const int left_h = ((float)(text_length - h)/text_length * m);
   return MAX(left_v,left_h);
 }
 int wavefront_distance_to_target_semiglobal(
@@ -93,6 +93,8 @@ void wavefront_reduce_mwavefront_global(
     const int min_distance,
     const int max_distance_threshold,
     const int alignment_k) {
+  // mean sequence length
+  const int ml = ((float)(pattern_length + text_length) / 2);
   // Parameters
   const wf_offset_t* const offsets = wavefront->offsets;
   int k;
@@ -100,8 +102,8 @@ void wavefront_reduce_mwavefront_global(
   const int top_limit = MIN(alignment_k-1,wavefront->hi); // Preserve target-diagonal
   int lo_reduced = wavefront->lo;
   for (k=wavefront->lo;k<top_limit;++k) {
-    const int distance = wavefront_distance_to_target_global(pattern_length,text_length,offsets[k],k);
-    if (distance - min_distance  <= max_distance_threshold) break;
+    const int distance = wavefront_distance_to_target_global(pattern_length,text_length,ml,offsets[k],k);
+    if (distance - min_distance <= max_distance_threshold) break;
     ++lo_reduced;
   }
   wavefront->lo = lo_reduced;
@@ -109,7 +111,7 @@ void wavefront_reduce_mwavefront_global(
   const int botton_limit = MAX(alignment_k+1,wavefront->lo); // Preserve target-diagonal
   int hi_reduced = wavefront->hi;
   for (k=wavefront->hi;k>botton_limit;--k) {
-    const int distance = wavefront_distance_to_target_global(pattern_length,text_length,offsets[k],k);
+    const int distance = wavefront_distance_to_target_global(pattern_length,text_length,ml,offsets[k],k);
     if (distance - min_distance <= max_distance_threshold) break;
     --hi_reduced;
   }
@@ -129,6 +131,8 @@ void wavefront_reduce(
   const int min_wavefront_length = wf_aligner->reduction.min_wavefront_length;
   const int max_distance_threshold = wf_aligner->reduction.max_distance_threshold;
   const int alignment_k = WAVEFRONT_DIAGONAL(text_length,pattern_length);
+  // mean sequence length
+  const int ml = ((float)(pattern_length + text_length) / 2);
   // Fetch m-wavefront
   wavefront_t* const mwavefront = wf_aligner->mwavefronts[score];
   if (mwavefront==NULL) return;
@@ -139,7 +143,7 @@ void wavefront_reduce(
   int k;
   for (k=mwavefront->lo;k<=mwavefront->hi;++k) {
     const int distance = wavefront_distance_to_target_global(
-        pattern_length,text_length,offsets[k],k);
+        pattern_length,text_length,ml,offsets[k],k);
     min_distance = MIN(min_distance,distance);
   }
   // Reduce m-wavefront
