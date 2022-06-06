@@ -5,18 +5,24 @@
 
 _A DNA sequence read mapper based on mash distances and the wavefront alignment algorithm._
 
-`wfmash` is a fork of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using [WFA](https://github.com/Martinsos/WFA), via the [`wflign`](https://github.com/ekg/wflign) tiled wavefront global alignment algorithm.
-It completes MashMap with a high-performance alignment module capable of computing base-level alignments for very large sequences.
+`wfmash` is an extension of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using [WFA](https://github.com/Martinsos/WFA), via the [`wflign`](https://github.com/ekg/wflign) tiled wavefront global alignment algorithm.
+It updates MashMap with an improved segment chaining algorithm, and adds a high-performance alignment module capable of computing base-level alignments for very large sequences.
+
+`wfmash` is designed to make whole genome alignment easy.
+On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence.
+It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
+
+`wfmash` is the key algorithm in `pggb` (the [PanGenome Graph Builder](https://github.com/pangenome/pggb)), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph.
 
 ## process
 
 Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]`.
-These segments are then mapped using MashMap's sliding minhash mapping algorithm and subsequent filtering steps.
-To reduce memory, a temporary file is used to store initial mappings.
-Each mapping location is then used as a target for alignment using the wavefront inception algorithm in `wflign`.
+These segments are then mapped using MashMap's mapping algorithm.
+Unlike MashMap, `wfmash` merges aggressively across large gaps, finding the best neighboring segment up to `-c[N], --chain-gap=[N]` base-pairs away.
 
+Each mapping location is then used as a target for alignment using the wavefront inception algorithm in `wflign`.
 The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
-Approximate mapping (equivalent to `MashMap2` with a block length filter) can be obtained with `-m, --approx-map`.
+Approximate mappings can be obtained with `-m, --approx-map`.
 
 Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
 The number of threads must be set manually, using `-t`, and defaults to 1.
@@ -30,13 +36,16 @@ Seven parameters shape the length, number, identity, and alignment divergence of
 
 ### mapping settings
 
-These parameters affect the structure of the alignments:
+These parameters affect the structure of the mappings:
 
-* `-s[N], --segment-length=[N]` is the length of the mapping seed (when `-N` is not set), consecutive segment mappings are merged and the merged mapping is aligned
-* `-l[N], --block-length-min=[N]` defines a minimum length filter on our merged mappings
-* `-N, --no-split` avoids splitting queries into segments, and instead maps them in their full length
+* `-s[N], --segment-length=[N]` is the length of the mapping seed (default: `1k`). The best pairs of consecutive segment mappings are merged where separated by less than `-c[N], --chain-gap=[N]` bases.
+* `-l[N], --block-length-min=[N]` requires seed mappings in a merged mapping to sum to more than the given length (default 5kb).
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
 * `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length-min` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
+
+By default, we obtain base-level alignments by applying a high-order version of WFA to the mappings.
+Various settings affect the behavior of the pairwise alignment, but in general the alignment parameters are adjusted based on expected divergence between the mapped subsequences.
+Specifying `-m, --approx-map` lets us stop before alignment and obtain the approximate mappings (akin to `minimap2` without `-c`).
 
 ### all-to-all mapping
 
@@ -72,16 +81,22 @@ Map a set of query sequences against a reference genome:
 wfmash reference.fa query.fa >aln.paf
 ```
 
-Setting a longer segment length to reduce spurious alignment:
+Setting a longer segment length forces the alignments to be more collinear:
 
 ```sh
-wfmash -s 50000 reference.fa query.fa >aln.paf
+wfmash -s 20k reference.fa query.fa >aln.paf
 ```
 
 Self-mapping of sequences:
 
 ```sh
 wfmash -X query.fa query.fa >aln.paf
+```
+
+Or just
+
+```sh
+wfmash query.fa >aln.paf
 ```
 
 ## sequence indexing
@@ -121,7 +136,7 @@ cmake -H. -Bbuild && cmake --build build -- -j 3
 If your system has several versions of the `gcc`/`g++` compilers you might tell `cmake` which one to use with:
 
 ```
-cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10' 
+cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10'
 cmake --build build -- -j 3
 ```
 
@@ -200,7 +215,7 @@ For more details about how to handle Guix channels, go to https://git.genenetwor
 
 ## running wfmash on a cluster
 
-When aligning a large number of very large sequences, one wants to distribute the calculations across a whole cluster. 
+When aligning a large number of very large sequences, one wants to distribute the calculations across a whole cluster.
 This can be achieved by dividing the approximate mappings `.paf` into chunks of similar difficult alignment problems using [split_approx_mappings_in_chunks.py](scripts/split_approx_mappings_in_chunks.py).
 
 ### example
@@ -227,7 +242,7 @@ approximate_mappings.paf.chunk_3.paf
 approximate_mappings.paf.chunk_4.paf
 ```
 
-3. Dependent on your cluster workload manager, create a command line to submit 5 jobs to your cluster. 
+3. Dependent on your cluster workload manager, create a command line to submit 5 jobs to your cluster.
 
 One example without specifying a workflow manager:
 
