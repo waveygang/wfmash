@@ -235,18 +235,18 @@ namespace skch
 
       /**
        * @brief               helper to main mapping function
-       * @details             filters mappings shorter than our minimum block length
+       * @details             filters mappings with fewer than the target number of merged base mappings
        * @param[in]   input   mappings
        * @return              void
        */
-      void filterShortMappings(MappingResultsVector_t &readMappings, int64_t length)
+      void filterWeakMappings(MappingResultsVector_t &readMappings, int64_t min_count)
       {
           readMappings.erase(
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
                                  return e.queryLen > e.blockLength
-                                     && e.blockLength < length;
+                                     && e.n_merged < min_count;
                              }),
               readMappings.end());
       }
@@ -284,7 +284,7 @@ namespace skch
                                  int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
-                                 return len_id_bound < std::pow(param.percentageIdentity,3);
+                                 return len_id_bound < std::min(0.7, std::pow(param.percentageIdentity,3));
                              }),
               readMappings.end());
       }
@@ -418,12 +418,6 @@ namespace skch
 
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
-
-          // merge mappings
-          if (param.mergeMappings) {
-              // merge through best mappings in the query/target 2D
-              mergeMappingsInRange(output->readMappings, param.segLength * 2, 0, 0);
-          }
         }
 
         // how many mappings to keep
@@ -431,25 +425,19 @@ namespace skch
                           param.numMappingsForShortSequence
                           : param.numMappingsForSegment) - 1;
 
-        // remove short merged mappings when we are merging
         if (split_mapping) {
-            // iterative merging to close small gaps
-            uint64_t mapping_count = 0;
-            int merge_iter = 0;
-            do {
-                mapping_count = output->readMappings.size();
-                mergeMappingsInRange(output->readMappings, param.chain_gap,
-                                     std::pow(param.percentageIdentity, 3),
-                                     std::pow(param.percentageIdentity, 2));
-                // filter the merged mappings using plane sweep
-                if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                    skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-                }
-            } while (output->readMappings.size() < mapping_count && ++merge_iter < 2);
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+            }
+            // hardcore merge using the chain gap
+            mergeMappingsInRange(output->readMappings, param.chain_gap);
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+            }
             // remove short chains that didn't exceed block length
-            filterShortMappings(output->readMappings, param.block_length);
+            filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
         } else {
-            // filter the merged mappings using plane sweep
+            // filter the non-split mappings using plane sweep
             if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                 skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
@@ -1003,14 +991,11 @@ namespace skch
        * @param[in]     max_dist      Distance to look in target and query
        */
       template <typename VecIn>
-      VecIn mergeMappingsInRange(VecIn &readMappings,
-                                 int _max_dist,
-                                 float length_fraction,
-                                 float gap_max_deviation) {
+      void mergeMappingsInRange(VecIn &readMappings,
+                                int max_dist) {
           assert(param.split == true);
 
-          if(readMappings.size() < 2)
-              return readMappings;
+          if(readMappings.size() < 2) return;
 
           //Sort the mappings by reference (then query) position
           std::sort(
@@ -1033,9 +1018,6 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              int max_dist = (length_fraction != 0
-                              ? std::min((int)(it->queryEndPos - it->queryStartPos), _max_dist)
-                              : _max_dist);
               std::vector<std::pair<double, uint64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is too far from current mapping being evaluated, stop finding a merge
@@ -1059,11 +1041,7 @@ namespace skch
                       }
                       int query_mapping_len = std::min((it->queryEndPos - it->queryStartPos),
                                                        (it2->queryEndPos - it2->queryStartPos));
-                      if (dist < max_dist
-                          && (length_fraction == 0
-                              || dist < query_mapping_len * length_fraction
-                              && (std::abs(ref_dist - query_dist)
-                                  < (ref_dist + query_dist) * gap_max_deviation))) {
+                      if (dist < max_dist) {
                           distances.push_back(std::make_pair(dist + score, it2->splitMappingId));
                       }
                   }
@@ -1086,9 +1064,6 @@ namespace skch
               [](const MappingResult &a, const MappingResult &b) {
                   return a.splitMappingId < b.splitMappingId;
               });
-
-          // copy for independent return of merged and unmerged
-          auto unmergedReadMappings = readMappings;
 
           for(auto it = readMappings.begin(); it != readMappings.end();) {
 
@@ -1114,9 +1089,19 @@ namespace skch
                       it->approxMatches = std::round(it->nucIdentity * it->blockLength / 100.0);
                   });
 
+              it->n_merged = std::distance(it, it_end);
+
               //Mean identity of all mappings in the chain
-              it->nucIdentity = (   std::accumulate(it, it_end, 0.0,
-                                                    [](double x, MappingResult &e){ return x + e.nucIdentity; })     )/ std::distance(it, it_end);
+              it->nucIdentity = ( std::accumulate(
+                                      it, it_end, 0.0,
+                                      [](double x, MappingResult &e){ return x + e.nucIdentity; })
+                  ) /// it->n_merged; // this would scale directly by the number of mappings in the chain
+                  // this scales slightly by the amount of missing segments
+                  / ( (double)it->n_merged
+                      + std::pow(
+                          std::log((double)it->blockLength / param.segLength),
+                          0.01));
+
 
               //Discard other mappings of this chain
               std::for_each( std::next(it), it_end, [&](MappingResult &e){ e.discard = 1; });
@@ -1129,7 +1114,6 @@ namespace skch
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
               readMappings.end());
 
-          return unmergedReadMappings;
       }
 
      /**

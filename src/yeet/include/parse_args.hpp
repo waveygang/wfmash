@@ -58,9 +58,9 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping [default: 10k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length(parser, "N", "keep mappings with at least this block length [default: 5*segment-length]", {'l', "block-length"});
-    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100*segment-length]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segmen seed length for mapping [default: 1k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length(parser, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
+    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
@@ -307,7 +307,7 @@ void parse_args(int argc,
         }
         map_parameters.segLength = s;
     } else {
-        map_parameters.segLength = 10000;
+        map_parameters.segLength = 1000;
     }
 
     if (map_pct_identity) {
@@ -343,7 +343,7 @@ void parse_args(int argc,
         }
         map_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 100 * map_parameters.segLength;
+        map_parameters.chain_gap = 100000;
     }
 
     if (drop_low_map_pct_identity) {

@@ -330,9 +330,11 @@ void wflign_affine_wavefront(
         // attributes.affine2p_penalties = affine2p_penalties;
 
         uint64_t wflambda_max_distance_threshold =
-            std::min((uint64_t)_wflambda_max_distance_threshold,
-                     std::max((uint64_t)std::abs((int64_t)query_length-(int64_t)target_length),
-                              (uint64_t)std::max(query_length,target_length)/10)) / step_size;
+            std::min((uint64_t)std::max(query_length,target_length)/10,
+                     (uint64_t)_wflambda_max_distance_threshold) / step_size;
+
+        //std::cerr << "wflambda_max_distance_threshold = "
+        //          << wflambda_max_distance_threshold * step_size << std::endl;
 
         if (wflambda_min_wavefront_length || wflambda_max_distance_threshold) {
             attributes.reduction.reduction_strategy =
@@ -1286,7 +1288,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 0; //16; //128;
+    const uint64_t min_wfa_patch_length = 8;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -2326,11 +2328,7 @@ void write_merged_alignment(
 
             // std::cerr << "FIRST PATCH ROUND
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            if (erode_k > 0) {
-                patching(erodev, pre_tracev);
-            } else {
-                pre_tracev = erodev;
-            }
+            patching(erodev, pre_tracev);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(tracev, query,
@@ -2360,11 +2358,7 @@ void write_merged_alignment(
 
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        if (erode_k > 0) {
-            patching(pre_tracev, tracev);
-        } else {
-            tracev = pre_tracev;
-        }
+        patching(pre_tracev, tracev);
     }
 
     // normalize the indels
@@ -2513,7 +2507,7 @@ query_start : query_end)
                                                  source_width, source_height,
                                                  source_min_x, source_min_y);
 
-            
+
             uint64_t v = query_start; // position in the pattern
             uint64_t h = target_start; // position in the text
             int64_t last_v = -1;

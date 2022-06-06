@@ -129,6 +129,7 @@ namespace skch
 
                                                         //--for split read mapping
 
+    int n_merged;                                       // how many mappings we've merged into this one
     offset_t splitMappingId;                            // To identify split mappings that are chained
     uint8_t discard;                                    // set to 1 for deletion
     bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
