@@ -81,7 +81,7 @@ void parse_args(int argc,
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
 
-    args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
+    args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
