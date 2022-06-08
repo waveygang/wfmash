@@ -382,7 +382,8 @@ namespace skch {
                                                  const std::vector<ales::spaced_seed> &spaced_seeds) {
 
             makeUpperCaseAndValidDNA(seq, len);
-
+            size_t minimizer_range_start = minimizerIndex.size();
+            
             //Compute reverse complement of seq
             char* seqRev = new char[len];
 
@@ -394,54 +395,66 @@ namespace skch {
                 CommonFunc::reverseComplement(seq, seqRev, len);
             }
 
-            for (uint32_t spaced_seed_number = 0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
-                const auto &s = spaced_seeds[spaced_seed_number];
-                size_t seed_length = s.length;
-                char* ss = s.seed;
+            // we increment this value once a spaced seed would go out of bounds of the sequence
+            int handled_seed_count = 0;
+            // start position on the sequence
+            offset_t i = 0;
+            // while we still have spaced seeds whose hashes can be computers
+            while (handled_seed_count < spaced_seeds.size()) {
 
-                // std::cerr << seed_length << " " << s.seed << std::endl;
+                for (uint32_t spaced_seed_number = 0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
+                    const auto &s = spaced_seeds[spaced_seed_number];
+                    size_t seed_length = s.length;
+                    char *ss = s.seed;
 
-                for (offset_t i = 0; i < len - seed_length + 1; i++) {
-                  char* forward_start_char = seq+i;
-                  char* reverse_start_char = seqRev + len - i - seed_length;
-                  char new_forward_kmer[seed_length];
-                  char new_reverse_kmer[seed_length];
-
-                  for (size_t j=0; j<seed_length; ++j, ++ss, ++forward_start_char) {
-                    new_forward_kmer[j] = *ss == '1' ? *forward_start_char : '*';
-                  }
-                  ss = s.seed;
-                  for (size_t j=0; j<seed_length; ++j, ++ss, ++reverse_start_char) {
-                    new_reverse_kmer[j] = *ss == '1' ? *reverse_start_char : '*';
-                  }
-                  ss = s.seed; // reset the seed for the next iteration of the loop
-
-                  /* debug print
-                  std::cerr << seed_length << " " << s.seed
-                            << " forward " << new_forward_kmer
-                            << " reverse " << new_reverse_kmer << std::endl;
-                 */
-
-
-                  //Hash kmers
-                  hash_t hashFwd = CommonFunc::getHash(&new_forward_kmer[0], seed_length);
-                  hash_t hashBwd;
-
-                  if(alphabetSize == 4)
-                    hashBwd = CommonFunc::getHash(&new_reverse_kmer[0], seed_length);
-                  else  //proteins
-                    hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
-
-                  // Consider non-symmetric kmers only
-                  if(hashBwd != hashFwd) {
-                    if (hashFwd < samplingBound) {
-                      minimizerIndex.push_back(MinimizerInfo{hashFwd, seqCounter, i, strnd::FWD});
+                    // if the (spaced) seed would go out of bounds, skip it
+                    if (i + seed_length >= len) {
+                        handled_seed_count = handled_seed_count + 1;
+                        continue;
                     }
-                    if (hashBwd < samplingBound) {
-                      minimizerIndex.push_back(MinimizerInfo{hashBwd, seqCounter, i, strnd::REV});
+
+                    char *forward_start_char = seq + i;
+                    char *reverse_start_char = seqRev + len - i - seed_length;
+                    char new_forward_kmer[seed_length];
+                    char new_reverse_kmer[seed_length];
+
+                    for (size_t j = 0; j < seed_length; ++j, ++ss, ++forward_start_char) {
+                        new_forward_kmer[j] = *ss == '1' ? *forward_start_char : '*';
                     }
-                  }
+                    ss = s.seed;
+                    for (size_t j = 0; j < seed_length; ++j, ++ss, ++reverse_start_char) {
+                        new_reverse_kmer[j] = *ss == '1' ? *reverse_start_char : '*';
+                    }
+                    ss = s.seed;// reset the seed for the next iteration of the loop
+
+                    /* debug print
+                       std::cerr << seed_length << " " << s.seed
+                       << " forward " << new_forward_kmer
+                       << " reverse " << new_reverse_kmer << std::endl;
+                    */
+
+
+                    //Hash kmers
+                    hash_t hashFwd = CommonFunc::getHash(&new_forward_kmer[0], seed_length);
+                    hash_t hashBwd;
+
+                    if (alphabetSize == 4)
+                        hashBwd = CommonFunc::getHash(&new_reverse_kmer[0], seed_length);
+                    else                                             //proteins
+                        hashBwd = std::numeric_limits<hash_t>::max();//Pick a dummy high value so that it is ignored later
+
+                    // Consider non-symmetric kmers only
+                    if (hashBwd != hashFwd) {
+                        if (hashFwd < samplingBound) {
+                            minimizerIndex.push_back(MinimizerInfo{hashFwd, seqCounter, i, strnd::FWD});
+                        }
+                        if (hashBwd < samplingBound) {
+                            minimizerIndex.push_back(MinimizerInfo{hashBwd, seqCounter, i, strnd::REV});
+                        }
+                    }
                 }
+
+                i = i + 1;
             }
 
             delete[] seqRev;
