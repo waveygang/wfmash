@@ -12,6 +12,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <numeric>
 
 //Own includes
 #include "map/include/map_parameters.hpp"
@@ -383,7 +384,7 @@ namespace skch {
 
             makeUpperCaseAndValidDNA(seq, len);
             size_t minimizer_range_start = minimizerIndex.size();
-            
+
             //Compute reverse complement of seq
             char* seqRev = new char[len];
 
@@ -395,12 +396,19 @@ namespace skch {
                 CommonFunc::reverseComplement(seq, seqRev, len);
             }
 
+            // a lookup for whether k-mers can still be computed for a given spaced seed
+            // initialize with 0s
+            size_t number_of_spaced_seeds = spaced_seeds.size();
+            int handled[number_of_spaced_seeds] = {0};
+
             // we increment this value once a spaced seed would go out of bounds of the sequence
             int handled_seed_count = 0;
+
             // start position on the sequence
             offset_t i = 0;
-            // while we still have spaced seeds whose hashes can be computers
-            while (handled_seed_count < spaced_seeds.size()) {
+
+            // do while we still have spaced seeds which are within bounds
+            while (std::accumulate(handled, handled + number_of_spaced_seeds, 0) < number_of_spaced_seeds) {
 
                 for (uint32_t spaced_seed_number = 0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
                     const auto &s = spaced_seeds[spaced_seed_number];
@@ -409,8 +417,8 @@ namespace skch {
 
                     // if the (spaced) seed would go out of bounds, skip it
                     if (i + seed_length >= len) {
-                        handled_seed_count = handled_seed_count + 1;
-                        continue;
+                      handled[spaced_seed_number] = 1;
+                      continue;
                     }
 
                     char *forward_start_char = seq + i;
