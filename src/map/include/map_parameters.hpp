@@ -3,7 +3,7 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef SKETCH_CONFIG_HPP 
+#ifndef SKETCH_CONFIG_HPP
 #define SKETCH_CONFIG_HPP
 
 #include <vector>
@@ -57,6 +57,7 @@ struct Parameters
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
     bool world_minimizers;
+    uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
 
     //std::unordered_set<std::string> high_freq_kmers;  //
 };

@@ -43,7 +43,8 @@ namespace wfmash {
             {"v0.6.1", "Handy"},
             {"v0.7.0", "Educazione"},
             {"v0.8.0", "pensiero divergente"},
-            {"v0.8.1", "Divergenza"}
+            {"v0.8.1", "Divergenza"},
+            {"v0.8.2", "Pasticcione"}
             // Add more codenames here
     };
 

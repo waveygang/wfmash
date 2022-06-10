@@ -4,14 +4,14 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef FILTER_MAP_HPP 
+#ifndef FILTER_MAP_HPP
 #define FILTER_MAP_HPP
 
 #include <vector>
 #include <algorithm>
 #include <set>
 #include <fstream>
-#include <zlib.h>  
+#include <zlib.h>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -52,7 +52,7 @@ namespace skch
           auto x_score = vec[x].qlen() * vec[x].nucIdentity;
           auto y_score = vec[y].qlen() * vec[y].nucIdentity;
 
-          return std::tie(x_score, vec[x].queryStartPos) > std::tie(y_score, vec[y].queryStartPos);
+          return std::tie(x_score, vec[x].queryStartPos, vec[x].refSeqId) > std::tie(y_score, vec[y].queryStartPos, vec[y].refSeqId);
         }
 
         //Greater than comparison by score
@@ -94,7 +94,7 @@ namespace skch
       };
 
      /**
-       * @brief                       filter mappings (best for query sequence) 
+       * @brief                       filter mappings (best for query sequence)
        * @details                     evaluate best cover mapping for each base pair
        * @param[in/out] readMappings  Mappings computed by Mashmap
        */
@@ -106,7 +106,7 @@ namespace skch
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });  
+          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });
 
           //Initialize object of Helper struct
           Helper obj (readMappings);
@@ -118,7 +118,7 @@ namespace skch
           //Event point schedule
           //vector of triplets <position, event type, segment id>
           typedef std::tuple<offset_t, int, int> eventRecord_t;
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());  
+          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
 
           for(int i = 0; i < readMappings.size(); i++)
           {
@@ -140,9 +140,9 @@ namespace skch
             //update sweep line status by adding/removing segments
             std::for_each(it, it2, [&](const eventRecord_t &e)
                                     {
-                                      if (std::get<1>(e) == event::BEGIN) 
+                                      if (std::get<1>(e) == event::BEGIN)
                                         bst.insert (std::get<2>(e));
-                                      else 
+                                      else
                                         bst.erase (std::get<2>(e));
                                     });
 
@@ -153,7 +153,7 @@ namespace skch
           }
 
           //Remove bad mappings
-          readMappings.erase( 
+          readMappings.erase(
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
               readMappings.end());
         }
@@ -323,7 +323,7 @@ namespace skch
       };
 
       /**
-       * @brief                       filter mappings (best for reference sequence) 
+       * @brief                       filter mappings (best for reference sequence)
        * @param[in/out] readMappings  Mappings computed by Mashmap (post merge step)
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
@@ -335,7 +335,7 @@ namespace skch
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });  
+          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });
 
           //Initialize object of Helper struct
           Helper obj (readMappings);
@@ -346,7 +346,7 @@ namespace skch
 
           //Event point schedule
           //vector of triplets <position, event type, segment id>
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());  
+          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
 
           for(int i = 0; i < readMappings.size(); i++)
           {
@@ -354,7 +354,7 @@ namespace skch
 
             eventRecord_t endEvent = std::make_tuple(readMappings[i].refSeqId, readMappings[i].refEndPos, event::END, i);
             //add one to above coordinate
-            obj.refPosDoPlusOne(endEvent, refsketch);  
+            obj.refPosDoPlusOne(endEvent, refsketch);
             eventSchedule.push_back (endEvent);
           }
 
@@ -372,9 +372,9 @@ namespace skch
             //update sweep line status by adding/removing segments
             std::for_each(it, it2, [&](const eventRecord_t &e)
                                     {
-                                      if (std::get<2>(e) == event::BEGIN) 
+                                      if (std::get<2>(e) == event::BEGIN)
                                         bst.insert (std::get<3>(e));
-                                      else 
+                                      else
                                         bst.erase (std::get<3>(e));
                                     });
 
@@ -385,10 +385,10 @@ namespace skch
           }
 
           //Remove bad mappings
-          readMappings.erase( 
+          readMappings.erase(
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
               readMappings.end());
-        } 
+        }
     } //End of reference namespace
   }
 }
