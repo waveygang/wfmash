@@ -58,7 +58,7 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segmen seed length for mapping [default: 1k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment seed length for mapping [default: 1k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(parser, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});

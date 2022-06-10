@@ -601,9 +601,11 @@ void WFlign::wflign_affine_wavefront(
                         wfa::WFAligner::MemoryMed);
 
         uint64_t _wflambda_max_distance_threshold =
-                std::min((uint64_t)wflambda_max_distance_threshold,
-                         std::max((uint64_t)std::abs((int64_t)query_length-(int64_t)target_length),
-                                  (uint64_t)std::max(query_length,target_length)/10)) / step_size;
+                std::min((uint64_t)std::max(query_length,target_length)/10,
+                         (uint64_t)_wflambda_max_distance_threshold) / step_size;
+
+        //std::cerr << "wflambda_max_distance_threshold = "
+        //          << wflambda_max_distance_threshold * step_size << std::endl;
 
         if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
             wflambda_aligner->setHeuristicWFadaptive(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
@@ -665,9 +667,6 @@ void WFlign::wflign_affine_wavefront(
         // Extract the trace
         extend_data.num_alignments += wflambda_trace_match(
                 alignments,*wflambda_aligner,trace,pattern_length,text_length);
-
-        std::cerr << "MIAO A " << wflambda_aligner->getAlignmentScore() << std::endl;
-        std::cerr << "MIAO B " << trace.size() << std::endl;
 
         // Free
         delete wflambda_aligner;

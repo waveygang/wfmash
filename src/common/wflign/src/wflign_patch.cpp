@@ -329,7 +329,7 @@ void write_merged_alignment(
 
     // patching parameters
     // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 0; //16; //128;
+    const uint64_t min_wfa_patch_length = 8;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -1353,11 +1353,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            if (erode_k > 0) {
-                patching(erodev, pre_tracev);
-            } else {
-                pre_tracev = erodev;
-            }
+            patching(erodev, pre_tracev);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -1387,11 +1383,7 @@ void write_merged_alignment(
 
         // std::cerr << "SECOND PATCH ROUND
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        if (erode_k > 0) {
-            patching(pre_tracev, tracev);
-        } else {
-            tracev = pre_tracev;
-        }
+        patching(pre_tracev, tracev);
     }
 
     // normalize the indels
