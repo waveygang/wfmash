@@ -66,7 +66,7 @@ void wavefront_align_status_clear(
 /*
  * Setup
  */
-void wavefront_aligner_set_penalties(
+void wavefront_aligner_init_penalties(
     wavefront_aligner_t* const wf_aligner,
     wavefront_aligner_attr_t* const attributes) {
   switch (attributes->distance_metric) {
@@ -96,7 +96,7 @@ void wavefront_aligner_set_penalties(
       break;
   }
 }
-void wavefront_aligner_set_heuristic(
+void wavefront_aligner_init_heuristic(
     wavefront_aligner_t* const wf_aligner,
     wavefront_aligner_attr_t* const attributes) {
   // Parameters
@@ -128,7 +128,58 @@ void wavefront_aligner_set_heuristic(
     }
   }
 }
-void wavefront_aligner_set_system(
+void wavefront_aligner_init_alignment(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_aligner_attr_t* const attributes,
+    const bool memory_modular,
+    const bool bt_piggyback) {
+  // Parameters
+  const int pattern_length = wf_aligner->pattern_length;
+  const int text_length = wf_aligner->text_length;
+  // Score & form
+  wf_aligner->alignment_scope = attributes->alignment_scope;
+  wf_aligner->alignment_form = attributes->alignment_form;
+  // Penalties
+  wavefront_aligner_init_penalties(wf_aligner,attributes);
+  // Memory mode
+  wf_aligner->memory_mode = attributes->memory_mode;
+  wavefront_aligner_init_heuristic(wf_aligner,attributes);
+  // Custom matching functions
+  wf_aligner->match_funct = attributes->match_funct;
+  wf_aligner->match_funct_arguments = attributes->match_funct_arguments;
+  // Wavefront components
+  wavefront_components_allocate(
+      &wf_aligner->wf_components,pattern_length,text_length,
+      &wf_aligner->penalties,memory_modular,bt_piggyback,
+      wf_aligner->mm_allocator);
+  wf_aligner->component_begin = affine2p_matrix_M;
+  wf_aligner->component_end = affine2p_matrix_M;
+  // Wavefront bidirectional
+  const bool bidirectional_alignment = (attributes->memory_mode == wavefront_memory_ultralow);
+  wf_aligner->bidirectional_alignment = bidirectional_alignment;
+  if (bidirectional_alignment) {
+    // Configure subsidiary aligners
+    wavefront_aligner_attr_t subsidiary_attr = wavefront_aligner_attr_default;
+    // Inherit attributes from master aligner
+    subsidiary_attr.distance_metric = attributes->distance_metric;
+    subsidiary_attr.linear_penalties = attributes->linear_penalties;
+    subsidiary_attr.affine_penalties = attributes->affine_penalties;
+    subsidiary_attr.affine2p_penalties = attributes->affine2p_penalties;
+    subsidiary_attr.match_funct = attributes->match_funct;
+    subsidiary_attr.match_funct_arguments = attributes->match_funct_arguments;
+    // Set specifics for subsidiary aligners
+    subsidiary_attr.heuristic.strategy = wf_heuristic_none;
+    subsidiary_attr.memory_mode = wavefront_memory_high;
+    subsidiary_attr.alignment_scope = compute_score;
+    // Allocate subsidiary aligners
+    wf_aligner->aligner_forward = wavefront_aligner_new(&subsidiary_attr);
+    wf_aligner->aligner_reverse = wavefront_aligner_new(&subsidiary_attr);
+  } else {
+    wf_aligner->aligner_forward = NULL;
+    wf_aligner->aligner_reverse = NULL;
+  }
+}
+void wavefront_aligner_init_system(
     wavefront_aligner_t* const wf_aligner,
     alignment_system_t* const system) {
   // Copy all parameters
@@ -151,13 +202,17 @@ void wavefront_aligner_set_system(
 }
 wavefront_aligner_t* wavefront_aligner_new(
     wavefront_aligner_attr_t* attributes) {
-  // Attributes
+  // Parameters
   const int pattern_length = PATTERN_LENGTH_INIT;
   const int text_length = TEXT_LENGTH_INIT;
   if (attributes == NULL) attributes = &wavefront_aligner_attr_default;
   const bool score_only = (attributes->alignment_scope == compute_score);
-  const bool memory_modular = (attributes->memory_mode > 0) || score_only;
-  const bool bt_piggyback = (attributes->memory_mode > 0) && !score_only;
+  const bool memory_modular = score_only ||
+      attributes->memory_mode == wavefront_memory_med ||
+      attributes->memory_mode == wavefront_memory_low;
+  const bool bt_piggyback = !score_only &&
+      (attributes->memory_mode == wavefront_memory_med ||
+       attributes->memory_mode == wavefront_memory_low);
   // MM
   mm_allocator_t* mm_allocator = attributes->mm_allocator;
   bool mm_allocator_own = false;
@@ -169,27 +224,18 @@ wavefront_aligner_t* wavefront_aligner_new(
   wavefront_aligner_t* const wf_aligner = mm_allocator_alloc(mm_allocator,wavefront_aligner_t);
   wf_aligner->mm_allocator = mm_allocator;
   wf_aligner->mm_allocator_own = mm_allocator_own;
-  wf_aligner->wavefront_slab = wavefront_slab_new(1000,bt_piggyback,mm_allocator);
-  // Configuration
+  const wf_slab_mode_t slab_mode = (memory_modular) ? wf_slab_reuse : wf_slab_tight;
+  wf_aligner->wavefront_slab = wavefront_slab_new(1000,bt_piggyback,slab_mode,mm_allocator);
+  // Sequences
   wf_aligner->pattern_length = pattern_length;
   wf_aligner->text_length = text_length;
   wf_aligner->sequences = NULL;
-  wf_aligner->alignment_scope = attributes->alignment_scope;
-  wf_aligner->alignment_form = attributes->alignment_form;
-  wavefront_aligner_set_penalties(wf_aligner,attributes);
-  // Memory mode
-  wf_aligner->memory_mode = attributes->memory_mode;
-  // Heuristic strategy
-  wavefront_aligner_set_heuristic(wf_aligner,attributes);
-  // Custom matching functions
-  wf_aligner->match_funct = attributes->match_funct;
-  wf_aligner->match_funct_arguments = attributes->match_funct_arguments;
-  // Wavefront components
-  wavefront_components_allocate(
-      &wf_aligner->wf_components,pattern_length,text_length,
-      &wf_aligner->penalties,memory_modular,bt_piggyback,mm_allocator);
+  // Alignment
+  wavefront_aligner_init_alignment(wf_aligner,attributes,memory_modular,bt_piggyback);
   // CIGAR
-  cigar_allocate(&wf_aligner->cigar,2*(pattern_length+text_length),mm_allocator);
+  if (!score_only) {
+    cigar_allocate(&wf_aligner->cigar,2*(pattern_length+text_length),mm_allocator);
+  }
   // Display
   wf_aligner->plot_params = attributes->plot_params;
   if (attributes->plot_params.plot_enabled) {
@@ -199,7 +245,7 @@ wavefront_aligner_t* wavefront_aligner_new(
         &wf_aligner->plot_params);
   }
   // System
-  wavefront_aligner_set_system(wf_aligner,&attributes->system);
+  wavefront_aligner_init_system(wf_aligner,&attributes->system);
   // Return
   return wf_aligner;
 }
@@ -208,7 +254,10 @@ void wavefront_aligner_resize(
     const char* const pattern,
     const int pattern_length,
     const char* const text,
-    const int text_length) {
+    const int text_length,
+    const bool reverse_sequences) {
+  // Parameters
+  const bool score_only = (wf_aligner->alignment_scope == compute_score);
   // Configure sequences and status
   wf_aligner->pattern_length = pattern_length;
   wf_aligner->text_length = text_length;
@@ -216,7 +265,8 @@ void wavefront_aligner_resize(
     if (wf_aligner->sequences != NULL) strings_padded_delete(wf_aligner->sequences);
     wf_aligner->sequences = strings_padded_new_rhomb(
             pattern,pattern_length,text,text_length,
-            SEQUENCES_PADDING,wf_aligner->mm_allocator);
+            SEQUENCES_PADDING,reverse_sequences,
+            wf_aligner->mm_allocator);
     wf_aligner->pattern = wf_aligner->sequences->pattern_padded;
     wf_aligner->text = wf_aligner->sequences->text_padded;
   } else {
@@ -231,7 +281,9 @@ void wavefront_aligner_resize(
   wavefront_components_resize(&wf_aligner->wf_components,
       pattern_length,text_length,&wf_aligner->penalties);
   // CIGAR
-  cigar_resize(&wf_aligner->cigar,2*(pattern_length+text_length));
+  if (!score_only) {
+    cigar_resize(&wf_aligner->cigar,2*(pattern_length+text_length));
+  }
   // Slab
   wavefront_slab_clear(wf_aligner->wavefront_slab);
   // Display
@@ -243,7 +295,7 @@ void wavefront_aligner_resize(
         &wf_aligner->plot_params);
   }
   // System
-  wavefront_aligner_set_system(wf_aligner,&wf_aligner->system);
+  wavefront_aligner_init_system(wf_aligner,&wf_aligner->system);
 }
 void wavefront_aligner_reap(
     wavefront_aligner_t* const wf_aligner) {
@@ -253,12 +305,16 @@ void wavefront_aligner_reap(
   }
   // Wavefront components
   wavefront_components_reap(&wf_aligner->wf_components);
+  // Subsidiary aligners
+  if (wf_aligner->aligner_forward != NULL) wavefront_aligner_reap(wf_aligner->aligner_forward);
+  if (wf_aligner->aligner_reverse != NULL) wavefront_aligner_reap(wf_aligner->aligner_reverse);
   // Slab
-  wavefront_slab_reap(wf_aligner->wavefront_slab,wf_slab_reap_all);
+  wavefront_slab_reap(wf_aligner->wavefront_slab);
 }
 void wavefront_aligner_delete(
     wavefront_aligner_t* const wf_aligner) {
   // Parameters
+  const bool score_only = (wf_aligner->alignment_scope == compute_score);
   mm_allocator_t* const mm_allocator = wf_aligner->mm_allocator;
   // Padded sequences
   if (wf_aligner->sequences != NULL) {
@@ -266,8 +322,13 @@ void wavefront_aligner_delete(
   }
   // Wavefront components
   wavefront_components_free(&wf_aligner->wf_components);
+  // Subsidiary aligners
+  if (wf_aligner->aligner_forward != NULL) wavefront_aligner_delete(wf_aligner->aligner_forward);
+  if (wf_aligner->aligner_reverse != NULL) wavefront_aligner_delete(wf_aligner->aligner_reverse);
   // CIGAR
-  cigar_free(&wf_aligner->cigar);
+  if (!score_only) {
+    cigar_free(&wf_aligner->cigar);
+  }
   // Slab
   wavefront_slab_delete(wf_aligner->wavefront_slab);
   // Display
@@ -355,14 +416,12 @@ void wavefront_aligner_set_match_funct(
 void wavefront_aligner_set_max_alignment_score(
     wavefront_aligner_t* const wf_aligner,
     const int max_alignment_score) {
-  wf_aligner->alignment_form.max_alignment_score = max_alignment_score;
+  wf_aligner->system.max_alignment_score = max_alignment_score;
 }
 void wavefront_aligner_set_max_memory(
     wavefront_aligner_t* const wf_aligner,
-    const uint64_t max_memory_compact,
     const uint64_t max_memory_resident,
     const uint64_t max_memory_abort) {
-  wf_aligner->system.max_memory_compact = max_memory_compact;
   wf_aligner->system.max_memory_resident = max_memory_resident;
   wf_aligner->system.max_memory_abort = max_memory_abort;
 }
