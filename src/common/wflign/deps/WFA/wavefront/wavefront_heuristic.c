@@ -108,15 +108,32 @@ void wavefront_heuristic_clear(
 /*
  * Utils
  */
+//#define ERIKS_REDUCTON
+#ifdef ERIKS_REDUCTON
 int wf_compute_distance_end2end(
     const wf_offset_t offset,
     const int k,
+    const int m,
+    const int pattern_length,
+    const int text_length) {
+  const int v = WAVEFRONT_V(k,offset);
+  const int h = WAVEFRONT_H(k,offset);
+  const int left_v = ((float)(pattern_length - v)/pattern_length * m);
+  const int left_h = ((float)(text_length - h)/text_length * m);
+  return (offset >= 0) ? MAX(left_v,left_h) : -WAVEFRONT_OFFSET_NULL;
+}
+#else
+int wf_compute_distance_end2end(
+    const wf_offset_t offset,
+    const int k,
+    const int m,
     const int pattern_length,
     const int text_length) {
   const int left_v = pattern_length - WAVEFRONT_V(k,offset);
   const int left_h = text_length - WAVEFRONT_H(k,offset);
   return (offset >= 0) ? MAX(left_v,left_h) : -WAVEFRONT_OFFSET_NULL;
 }
+#endif
 int wf_compute_distance_endsfree(
     const wf_offset_t offset,
     const int k,
@@ -197,13 +214,13 @@ void wavefront_cufoff_banded_adaptive(
     const int leeway = (wf_length - max_wf_length) / 2;
     const int quarter = wf_length / 4;
     const int dist_p0 = wf_compute_distance_end2end(
-        offsets[lo],lo,pattern_length,text_length);
+        offsets[lo],lo,1,pattern_length,text_length);
     const int dist_p1 = wf_compute_distance_end2end(
-        offsets[lo+quarter],lo+quarter,pattern_length,text_length);
+        offsets[lo+quarter],lo+quarter,1,pattern_length,text_length);
     const int dist_p2 = wf_compute_distance_end2end(
-        offsets[lo+2*quarter],lo+2*quarter,pattern_length,text_length);
+        offsets[lo+2*quarter],lo+2*quarter,1,pattern_length,text_length);
     const int dist_p3 = wf_compute_distance_end2end(
-        offsets[hi],hi,pattern_length,text_length);
+        offsets[hi],hi,1,pattern_length,text_length);
     // Heuristically decide where to place the band
     int new_lo = lo;
     if (dist_p0 > dist_p3) new_lo += leeway;
@@ -225,13 +242,15 @@ int wavefront_compute_distance_end2end(
     const int pattern_length,
     const int text_length,
     wf_offset_t* const distances) {
+	// Mean sequence length
+  const int ml = ((float)(pattern_length + text_length) / 2);
   // Compute min-distance
   const wf_offset_t* const offsets = wavefront->offsets;
   int k, min_distance = MAX(pattern_length,text_length);
   PRAGMA_LOOP_VECTORIZE
   for (k=wavefront->lo;k<=wavefront->hi;++k) {
     const int distance = wf_compute_distance_end2end(
-        offsets[k],k,pattern_length,text_length);
+        offsets[k],k,ml,pattern_length,text_length);
     distances[k] = distance;
     min_distance = MIN(min_distance,distance);
   }
