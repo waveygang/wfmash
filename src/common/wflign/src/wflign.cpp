@@ -367,7 +367,6 @@ void WFlign::wflign_affine_wavefront(
         wfa_affine_penalties.mismatch = wfa_mismatch_score;
         wfa_affine_penalties.gap_opening = wfa_gap_opening_score;
         wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
-        minhash_kmer_size = 17;
     } else {
         if (mashmap_estimated_identity >= 0.80) {
             // Polynomial fitting
