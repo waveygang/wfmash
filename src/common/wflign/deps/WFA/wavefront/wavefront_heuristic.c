@@ -108,7 +108,7 @@ void wavefront_heuristic_clear(
 /*
  * Utils
  */
-//#define ERIKS_REDUCTON
+#define ERIKS_REDUCTON
 #ifdef ERIKS_REDUCTON
 int wf_compute_distance_end2end(
     const wf_offset_t offset,
