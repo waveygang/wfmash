@@ -226,7 +226,7 @@ void do_wfa_patch_alignment(
                 affine_penalties.gap_opening,
                 affine_penalties.gap_extension,
                 wfa::WFAligner::Alignment,
-                wfa::WFAligner::MemoryMed);
+                wfa::WFAligner::MemoryUltralow);
     }
 
     /*
@@ -250,18 +250,23 @@ void do_wfa_patch_alignment(
     */
 
     // Reduction strategy
+    wf_aligner->setHeuristicNone();
+    /*
     if (query_length < max_distance_threshold &&
         target_length < max_distance_threshold) {
         wf_aligner->setHeuristicNone();
     } else {
         wf_aligner->setHeuristicWFadaptive(min_wavefront_length,max_distance_threshold);
     }
+    */
 
+    /*
     const int max_score
             = (affine_penalties.gap_opening
                + (affine_penalties.gap_extension
                   * std::max((int)256, (int)std::min(target_length, query_length))));
-    wf_aligner->setMaxAlignmentScore(max_score);
+                  */
+    //wf_aligner->setMaxAlignmentScore(max_score);
     const int status = wf_aligner->alignEnd2End(target + i,target_length,query + j,query_length);
 
     aln.ok = (status == 0);
@@ -367,13 +372,13 @@ void write_merged_alignment(
         // gaps in query and ref and adding our results to the final trace as we
         // go
 
-#define MAX_NUM_INDELS_TO_LOOK_AT 3
+#define MAX_NUM_INDELS_TO_LOOK_AT 10
         auto distance_close_big_enough_indels =
                 [](const uint32_t indel_len, auto iterator,
                    const std::vector<char> &trace) {
                     const uint32_t min_indel_len_to_find = indel_len / 3;
                     const uint16_t max_dist_to_look_at =
-                            std::min(indel_len * 64, (uint32_t)4096);
+                            std::min(indel_len * 64, (uint32_t)8096);
 
                     // std::cerr << "min_indel_len_to_find " <<
                     // min_indel_len_to_find << std::endl; std::cerr <<
@@ -724,10 +729,10 @@ void write_merged_alignment(
                          target_delta < wflign_max_len_minor))) {
 
                         // TODO this should only happen if we're at >99% identity
-                        int32_t distance_close_indels = -1;
-                        /*int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
+                        //int32_t distance_close_indels =
+                        int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
                                                         distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
-                                                        -1;*/
+                                                        -1;
 
                         // std::cerr << "distance_close_indels " <<
                         // distance_close_indels << std::endl;

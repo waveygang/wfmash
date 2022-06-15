@@ -397,28 +397,21 @@ void WFlign::wflign_affine_wavefront(
 
     if (mashmap_estimated_identity >= 0.99) {
         mash_sketch_rate = 0.1;
-        _erode_k = 13;
     } else if (mashmap_estimated_identity >= 0.98) {
         mash_sketch_rate = 0.15;
-        _erode_k = 11;
     } else if (mashmap_estimated_identity >= 0.97) {
         mash_sketch_rate = 0.2;
-        _erode_k = 9;
     } else if (mashmap_estimated_identity >= 0.95) {
         mash_sketch_rate = 0.25;
-        _erode_k = 7;
     } else if (mashmap_estimated_identity >= 0.9) {
         mash_sketch_rate = 0.5;
-        _erode_k = 3;
     } else if (mashmap_estimated_identity >= 0.85) {
-        _erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.8) {
-        _erode_k = 0;
     } else if (mashmap_estimated_identity >= 0.75) {
-        _erode_k = 0;
     } else {
-        _erode_k = 0;
     }
+
+    _erode_k = std::max(127.0,std::round(1.0/(1.0-mashmap_estimated_identity)));
 
     // override erosion if not given on input
     if (erode_k < 0) {
@@ -448,8 +441,8 @@ void WFlign::wflign_affine_wavefront(
                         wfa_affine_penalties.gap_opening,
                         wfa_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
-                        wfa::WFAligner::MemoryMed);
-        wf_aligner->setHeuristicWFadaptive(MIN_WF_LENGTH,wf_max_dist_threshold);
+                        wfa::WFAligner::MemoryUltralow);
+        //wf_aligner->setHeuristicWFadaptive(MIN_WF_LENGTH,wf_max_dist_threshold);
         const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
 
         auto *aln = new alignment_t();
