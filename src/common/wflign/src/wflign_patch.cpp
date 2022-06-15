@@ -372,7 +372,7 @@ void write_merged_alignment(
         // gaps in query and ref and adding our results to the final trace as we
         // go
 
-#define MAX_NUM_INDELS_TO_LOOK_AT 10
+#define MAX_NUM_INDELS_TO_LOOK_AT 4
         auto distance_close_big_enough_indels =
                 [](const uint32_t indel_len, auto iterator,
                    const std::vector<char> &trace) {
@@ -729,10 +729,12 @@ void write_merged_alignment(
                          target_delta < wflign_max_len_minor))) {
 
                         // TODO this should only happen if we're at >99% identity
-                        //int32_t distance_close_indels =
+                        int32_t distance_close_indels = -1;
+                        /*
                         int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
                                                         distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
                                                         -1;
+                        */
 
                         // std::cerr << "distance_close_indels " <<
                         // distance_close_indels << std::endl;
