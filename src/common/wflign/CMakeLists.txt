@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard it not
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+#set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) # does not work
+
 #set(CMAKE_BUILD_TYPE Release)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -18,6 +20,7 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
+    #set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
     set(EXTRA_FLAGS "-Ofast -march=native")
     set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
 endif ()

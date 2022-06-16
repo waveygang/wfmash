@@ -214,11 +214,12 @@ void do_wfa_patch_alignment(
         const int& segment_length,
         const int& min_wavefront_length,
         const int& max_distance_threshold,
-        wfa::WFAlignerGapAffine& _wf_aligner,
+        wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
+    /*
     const long max_seg_len = 3 * segment_length;
-    const bool big_wave = (query_length > max_seg_len || target_length > max_seg_len);
+    const bool big_wave = true; //(query_length > max_seg_len || target_length > max_seg_len);
     wfa::WFAlignerGapAffine* wf_aligner = &_wf_aligner;
     if (big_wave) {
         wf_aligner = new wfa::WFAlignerGapAffine(
@@ -228,6 +229,7 @@ void do_wfa_patch_alignment(
                 wfa::WFAligner::Alignment,
                 wfa::WFAligner::MemoryUltralow);
     }
+    */
 
     /*
      std::cerr << "do_wfa_patch q:" << j << " qlen:" << query_length
@@ -250,7 +252,7 @@ void do_wfa_patch_alignment(
     */
 
     // Reduction strategy
-    wf_aligner->setHeuristicNone();
+    //wf_aligner->setHeuristicNone();
     /*
     if (query_length < max_distance_threshold &&
         target_length < max_distance_threshold) {
@@ -267,7 +269,7 @@ void do_wfa_patch_alignment(
                   * std::max((int)256, (int)std::min(target_length, query_length))));
                   */
     //wf_aligner->setMaxAlignmentScore(max_score);
-    const int status = wf_aligner->alignEnd2End(target + i,target_length,query + j,query_length);
+    const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
 
     aln.ok = (status == 0);
     if (aln.ok) {
@@ -289,12 +291,14 @@ void do_wfa_patch_alignment(
 }
 #endif
 
-        wflign_edit_cigar_copy(*wf_aligner,&aln.edit_cigar);
+        wflign_edit_cigar_copy(wf_aligner,&aln.edit_cigar);
     }
 
+    /*
     if (big_wave) {
         delete wf_aligner;
     }
+    */
 }
 void write_merged_alignment(
         std::ostream &out,

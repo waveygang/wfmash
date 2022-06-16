@@ -496,6 +496,18 @@ void WFlign::wflign_affine_wavefront(
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time).count();
 
+        // Free old aligner
+        delete wf_aligner;
+
+        // use biWFA for all patching
+        wf_aligner = new wfa::WFAlignerGapAffine(
+            wfa_affine_penalties.mismatch,
+            wfa_affine_penalties.gap_opening,
+            wfa_affine_penalties.gap_extension,
+            wfa::WFAligner::Alignment,
+            wfa::WFAligner::MemoryUltralow);
+        wf_aligner->setHeuristicNone();
+
         // write a merged alignment
         write_merged_alignment(
                 *out,
@@ -528,8 +540,9 @@ void WFlign::wflign_affine_wavefront(
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold);
 
-        // Free
+        // Free biWFA aligner
         delete wf_aligner;
+
     } else {
         if (emit_tsv) {
             *out_tsv << "# query_name=" << query_name << std::endl;
@@ -949,6 +962,19 @@ void WFlign::wflign_affine_wavefront(
             }
 
             if (merge_alignments) {
+
+                // Free old aligner
+                delete wf_aligner;
+
+                // use biWFA for all patching
+                wf_aligner = new wfa::WFAlignerGapAffine(
+                    wfa_affine_penalties.mismatch,
+                    wfa_affine_penalties.gap_opening,
+                    wfa_affine_penalties.gap_extension,
+                    wfa::WFAligner::Alignment,
+                    wfa::WFAligner::MemoryUltralow);
+                wf_aligner->setHeuristicNone();
+
                 // write a merged alignment
                 write_merged_alignment(
                         *out,
