@@ -745,7 +745,7 @@ void WFlign::wflign_affine_wavefront(
                 auto bytes = image.to_bytes();
                 const std::string filename = *prefix_wavefront_plot_in_png +
                                              query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                                             "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".anchors.png";
+                                             "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".1.anchors.png";
                 encodeOneStep(filename.c_str(), bytes, width, height);
             }
 
@@ -794,7 +794,7 @@ void WFlign::wflign_affine_wavefront(
                 auto bytes = image.to_bytes();
                 const std::string filename = *prefix_wavefront_plot_in_png +
                                              query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-                                             "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".png";
+                                             "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".0.wflign.png";
                 encodeOneStep(filename.c_str(), bytes, width, height);
             }
         }
