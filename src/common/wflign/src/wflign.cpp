@@ -544,7 +544,9 @@ void WFlign::wflign_affine_wavefront(
                 wflign_max_len_minor,
                 erode_k,
                 MIN_WF_LENGTH,
-                wf_max_dist_threshold);
+                wf_max_dist_threshold,
+                prefix_wavefront_plot_in_png,
+                wfplot_max_size);
 
         // Free biWFA aligner
         delete wf_aligner;
@@ -1011,7 +1013,9 @@ void WFlign::wflign_affine_wavefront(
                         wflign_max_len_minor,
                         erode_k,
                         MIN_WF_LENGTH,
-                        wf_max_dist_threshold);
+                        wf_max_dist_threshold,
+                        prefix_wavefront_plot_in_png,
+                        wfplot_max_size);
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {

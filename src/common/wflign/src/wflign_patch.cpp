@@ -339,6 +339,8 @@ void write_merged_alignment(
         const int& erode_k,
         const int& min_wf_length,
         const int& max_dist_threshold,
+        const std::string* prefix_wavefront_plot_in_png,
+        const uint64_t& wfplot_max_size,
         const bool& with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -1503,9 +1505,8 @@ query_start : query_end)
     }
 #endif
     */
-    int wfplot_max_size = 1000;
-    std::string prefix_wavefront_plot_in_png = "cia";
-    bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
+
+    bool emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
     if (emit_png) {
         const int step_size = (segment_length / 2);
 
@@ -1596,7 +1597,7 @@ query_start : query_end)
             }
 
             auto bytes = image.to_bytes();
-            const std::string filename = prefix_wavefront_plot_in_png +
+            const std::string filename = *prefix_wavefront_plot_in_png +
                                          query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
                                          "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".2.trace.png";
             encodeOneStep(filename.c_str(), bytes, width, height);
