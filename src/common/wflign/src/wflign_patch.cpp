@@ -3,10 +3,19 @@
 #include <cstdlib>
 #include <iterator>
 #include <string>
+#include <atomic_image.hpp>
 #include "rkmh.hpp"
 #include "wflign_patch.hpp"
 
 namespace wflign {
+
+    void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
+        //Encode the image
+        unsigned error = lodepng::encode(filename, image, width, height);
+
+        //if there's an error, display it
+        if (error) std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+    }
 
     namespace wavefront {
 
@@ -1494,105 +1503,105 @@ query_start : query_end)
     }
 #endif
     */
+    int wfplot_max_size = 1000;
+    std::string prefix_wavefront_plot_in_png = "cia";
+    bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
+    if (emit_png) {
+        const int step_size = (segment_length / 2);
 
-//    bool emit_png = !prefix_wavefront_plot_in_png.empty() && wfplot_max_size > 0;
-//    if (emit_png) {
-//
-//        const int step_size = (segment_length / 2);
-//
-//        //const int pattern_length = (int)query_length;
-//        //const int text_length = (int)target_length;
-//        const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
-//        const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
-//
-//        const int wfplot_vmin = 0, wfplot_vmax = pattern_length;
-//        const int wfplot_hmin = 0, wfplot_hmax = text_length;
-//
-//        int v_max = wfplot_vmax - wfplot_vmin;
-//        int h_max = wfplot_hmax - wfplot_hmin;
-//
-//        const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
-//        const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
-//        const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
-//
-//        const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
-//
-//        const uint64_t width = (int)(scale * (double)v_max);
-//        const uint64_t height = (int)(scale * (double)h_max);
-//        const double source_width = (double)width;
-//        const double source_height = (double)height;
-//
-//        const double x_off = 0, y_off = 0;
-//        const double line_width = 1.0;
-//        const double source_min_x = 0, source_min_y = 0;
-//
-//        auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
-//                          ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
-//                    image.layer_pixel(point.x, point.y, color);
-//                }
-//                          : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
-//                    wflign::algorithms::wu_calc_wide_line(
-//                            point, point,
-//                            color,
-//                            image);
-//                };
-//
-//        // Plot the traceback
-//        {
-//            algorithms::atomic_image_buf_t image(width, height,
-//                                                 source_width, source_height,
-//                                                 source_min_x, source_min_y);
-//
-//
-//            uint64_t v = query_start; // position in the pattern
-//            uint64_t h = target_start; // position in the text
-//            int64_t last_v = -1;
-//            int64_t last_h = -1;
-//            for (const auto& c : tracev) {
-//                switch (c) {
-//                    case 'M':
-//                    case 'X':
-//                        ++v;
-//                        ++h;
-//                        {
-//                            uint64_t _v = (v / step_size);
-//                            uint64_t _h = (h / step_size);
-//                            if ((_v != last_v && _h != last_h)
-//                                && _v >= wfplot_vmin && _v <= wfplot_vmax
-//                                && _h >= wfplot_hmin && _h <= wfplot_hmax) {
-//                                algorithms::xy_d_t xy0 = {
-//                                        (_v * scale) - x_off,
-//                                        (_h * scale) + y_off
-//                                };
-//                                xy0.into(source_min_x, source_min_y,
-//                                         source_width, source_height,
-//                                         0, 0,
-//                                         width, height);
-//                                plot_point(xy0, image, COLOR_WFA_MATCH);
-//                                last_v = _v;
-//                                last_h = _h;
-//                            }
-//                        }
-//                        break;
-//                    case 'I':
-//                        ++v;
-//                        break;
-//                    case 'D':
-//                        ++h;
-//                        break;
-//                    default:
-//                        break;
-//                }
-//                //std::cerr << "plot cell " << v << "," << h << std::endl;
-//            }
-//
-//            auto bytes = image.to_bytes();
-//            const std::string filename = prefix_wavefront_plot_in_png +
-//                                         query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
-//                                         "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".2.trace.png";
-//            encodeOneStep(filename.c_str(), bytes, width, height);
-//        }
-//    }
+        //const int pattern_length = (int)query_length;
+        //const int text_length = (int)target_length;
+        const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
+        const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
+
+        const int wfplot_vmin = 0, wfplot_vmax = pattern_length;
+        const int wfplot_hmin = 0, wfplot_hmax = text_length;
+
+        int v_max = wfplot_vmax - wfplot_vmin;
+        int h_max = wfplot_hmax - wfplot_hmin;
+
+        const algorithms::color_t COLOR_MASH_MISMATCH = { 0xffefefef };
+        const algorithms::color_t COLOR_WFA_MISMATCH = { 0xffff0000 };
+        const algorithms::color_t COLOR_WFA_MATCH = { 0xff00ff00 };
+
+        const double scale = std::min(1.0, (double)wfplot_max_size / (double)std::max(v_max, h_max));
+
+        const uint64_t width = (int)(scale * (double)v_max);
+        const uint64_t height = (int)(scale * (double)h_max);
+        const double source_width = (double)width;
+        const double source_height = (double)height;
+
+        const double x_off = 0, y_off = 0;
+        const double line_width = 1.0;
+        const double source_min_x = 0, source_min_y = 0;
+
+        auto plot_point = (v_max <= wfplot_max_size && h_max <= wfplot_max_size)
+                          ? [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                    image.layer_pixel(point.x, point.y, color);
+                }
+                          : [](const algorithms::xy_d_t &point, algorithms::atomic_image_buf_t& image, const algorithms::color_t &color) {
+                    wflign::algorithms::wu_calc_wide_line(
+                            point, point,
+                            color,
+                            image);
+                };
+
+        // Plot the traceback
+        {
+            algorithms::atomic_image_buf_t image(width, height,
+                                                 source_width, source_height,
+                                                 source_min_x, source_min_y);
+
+
+            uint64_t v = query_start; // position in the pattern
+            uint64_t h = target_start; // position in the text
+            int64_t last_v = -1;
+            int64_t last_h = -1;
+            for (const auto& c : tracev) {
+                switch (c) {
+                    case 'M':
+                    case 'X':
+                        ++v;
+                        ++h;
+                        {
+                            uint64_t _v = (v / step_size);
+                            uint64_t _h = (h / step_size);
+                            if ((_v != last_v && _h != last_h)
+                                && _v >= wfplot_vmin && _v <= wfplot_vmax
+                                && _h >= wfplot_hmin && _h <= wfplot_hmax) {
+                                algorithms::xy_d_t xy0 = {
+                                        (_v * scale) - x_off,
+                                        (_h * scale) + y_off
+                                };
+                                xy0.into(source_min_x, source_min_y,
+                                         source_width, source_height,
+                                         0, 0,
+                                         width, height);
+                                plot_point(xy0, image, COLOR_WFA_MATCH);
+                                last_v = _v;
+                                last_h = _h;
+                            }
+                        }
+                        break;
+                    case 'I':
+                        ++v;
+                        break;
+                    case 'D':
+                        ++h;
+                        break;
+                    default:
+                        break;
+                }
+                //std::cerr << "plot cell " << v << "," << h << std::endl;
+            }
+
+            auto bytes = image.to_bytes();
+            const std::string filename = prefix_wavefront_plot_in_png +
+                                         query_name + "_" + std::to_string(query_offset) + "_" + std::to_string(query_offset+query_length) + " _ " + (query_is_rev ? "-" : "+") +
+                                         "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".2.trace.png";
+            encodeOneStep(filename.c_str(), bytes, width, height);
+        }
+    }
 
     // convert trace to cigar, get correct start and end coordinates
     char *cigarv = alignment_to_cigar(

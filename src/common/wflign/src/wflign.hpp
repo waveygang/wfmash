@@ -28,7 +28,6 @@
 #include "lodepng/lodepng.h"
 
 
-
 /*
  * Namespaces
  */
@@ -120,16 +119,10 @@ namespace wflign {
                     const uint64_t target_total_length,
                     const uint64_t target_offset,
                     const uint64_t target_length);
-            void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
-                //Encode the image
-                unsigned error = lodepng::encode(filename, image, width, height);
-
-                //if there's an error, display it
-                if (error) std::cout << "encoder error " << error << ": " << lodepng_error_text(error) << std::endl;
-            }
         };
 
     } /* namespace wavefront */
+
 } /* namespace wflign */
 
 #endif /* WFLIGN_HPP_ */

@@ -11,6 +11,7 @@
 #include <sstream>
 #include <functional>
 #include <fstream>
+#include <lodepng/lodepng.h>
 
 #include "dna.hpp"
 #include "rkmh.hpp"
@@ -113,6 +114,8 @@ namespace wflign {
         void sort_indels(std::vector<char>& v);
 
     } /* namespace wavefront */
+
+    void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height);
 } /* namespace wflign */
 
 #endif /* WFLIGN_PATCH_HPP_ */
