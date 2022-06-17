@@ -226,50 +226,6 @@ void do_wfa_patch_alignment(
         wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
-    /*
-    const long max_seg_len = 3 * segment_length;
-    const bool big_wave = true; //(query_length > max_seg_len || target_length > max_seg_len);
-    wfa::WFAlignerGapAffine* wf_aligner = &_wf_aligner;
-    if (big_wave) {
-        wf_aligner = new wfa::WFAlignerGapAffine(
-                affine_penalties.mismatch,
-                affine_penalties.gap_opening,
-                affine_penalties.gap_extension,
-                wfa::WFAligner::Alignment,
-                wfa::WFAligner::MemoryUltralow);
-    }
-    */
-
-    /*
-     std::cerr << "do_wfa_patch q:" << j << " qlen:" << query_length
-               << " t:" << i << " tlen:" << target_length << std::endl;
-
-     {
-         //std::hash
-         std::string query_seq(query+j, query_length);
-         //query + j, query_length
-         std::string target_seq(query+j, query_length);
-         //target + i, target_length
-         std::stringstream namess;
-         auto target_hash = std::hash<std::string>{}(target_seq);
-         auto query_hash = std::hash<std::string>{}(query_seq);
-         namess << "wfpatch_" << target_length << "x" << query_length << "_" << target_hash << "_" << query_hash << ".fa";
-         std::ofstream out(namess.str());
-         out << ">" << target_hash << std::endl << target_seq << std::endl
-             << ">" << query_hash << std::endl << query_seq << std::endl;
-     }
-    */
-
-    // Reduction strategy
-    //wf_aligner->setHeuristicNone();
-    /*
-    if (query_length < max_distance_threshold &&
-        target_length < max_distance_threshold) {
-        wf_aligner->setHeuristicNone();
-    } else {
-        wf_aligner->setHeuristicWFadaptive(min_wavefront_length,max_distance_threshold);
-    }
-    */
 
     const int max_score
             = (affine_penalties.gap_opening
@@ -301,13 +257,8 @@ void do_wfa_patch_alignment(
 
         wflign_edit_cigar_copy(wf_aligner,&aln.edit_cigar);
     }
-
-    /*
-    if (big_wave) {
-        delete wf_aligner;
-    }
-    */
 }
+
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
