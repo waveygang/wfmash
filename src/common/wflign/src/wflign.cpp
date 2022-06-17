@@ -418,7 +418,7 @@ void WFlign::wflign_affine_wavefront(
     }
 
     // heuristic setting of erosion
-    _erode_k = std::min(127.0,std::round(1.0/(1.0-mashmap_estimated_identity))/2);
+    _erode_k = std::min(127.0,std::round(1.0/(1.0-mashmap_estimated_identity)));
 
     // override erosion if not given on input
     if (erode_k < 0) {
