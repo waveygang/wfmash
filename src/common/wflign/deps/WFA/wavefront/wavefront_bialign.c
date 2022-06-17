@@ -482,6 +482,9 @@ void wavefront_bialign(
   } else if (pattern_length == 0) {
     cigar_append_insertion(cigar,text_length);
     return;
+  } else if (wf_aligner->aligner_forward->align_status.status == WF_STATUS_MAX_SCORE_REACHED) {
+    wf_aligner->align_status.status = WF_STATUS_MAX_SCORE_REACHED;
+    return;
   }
   // Fallback to regular WFA
   if (score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE) {
