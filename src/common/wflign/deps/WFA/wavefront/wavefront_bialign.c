@@ -395,6 +395,10 @@ void wavefront_bialign_find_breakpoint(
     max_ak = wavefront_extend_end2end_max(wf_aligner_reverse,score_reverse);
     if (reverse_max_ak < max_ak) reverse_max_ak = max_ak;
     last_wf_forward = false;
+    if (score_reverse + score_forward > wf_aligner_forward->system.max_alignment_score) {
+        wf_aligner_forward->align_status.status = WF_STATUS_MAX_SCORE_REACHED;
+        return;
+    }
   }
   // Advance until overlap is found
   const int max_score_scope = wf_aligner_forward->wf_components.max_score_scope;
@@ -492,12 +496,18 @@ void wavefront_bialign(
     return;
   }
   // Find breakpoint in the alignment
+  //if (score_reverse + score_forward > wf_aligner_forward->system.max_alignment_score) {
+  wf_aligner->aligner_forward->system.max_alignment_score = wf_aligner->system.max_alignment_score;
   wf_bialign_breakpoint_t breakpoint;
   wavefront_bialign_find_breakpoint(
       wf_aligner->aligner_forward,wf_aligner->aligner_reverse,
       pattern,pattern_length,text,text_length,
       wf_aligner->penalties.distance_metric,
       form,component_begin,component_end,&breakpoint);
+  if (wf_aligner->aligner_forward->align_status.status == WF_STATUS_MAX_SCORE_REACHED) {
+      wf_aligner->align_status.status = WF_STATUS_MAX_SCORE_REACHED;
+      return;
+  }
   const int breakpoint_h = WAVEFRONT_H(breakpoint.k_forward,breakpoint.offset_forward);
   const int breakpoint_v = WAVEFRONT_V(breakpoint.k_forward,breakpoint.offset_forward);
   // DEBUG
@@ -520,5 +530,3 @@ void wavefront_bialign(
   // Set score
   cigar->score = -breakpoint.score;
 }
-
-

@@ -271,16 +271,15 @@ void do_wfa_patch_alignment(
     }
     */
 
-    /*
     const int max_score
             = (affine_penalties.gap_opening
                + (affine_penalties.gap_extension
                   * std::max((int)256, (int)std::min(target_length, query_length))));
-                  */
-    //wf_aligner->setMaxAlignmentScore(max_score);
-    const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
-
-    aln.ok = (status == 0);
+    wf_aligner.setMaxAlignmentScore(max_score);
+    wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
+    // hack hack hack... this should be returned correctly from the C++ wrapper
+    const int status = wf_aligner.getAlignmentStatus();
+    aln.ok = (status == WF_STATUS_SUCCESSFUL);
     if (aln.ok) {
         // No more necessary: correct X/M errors in the cigar
         // hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);

@@ -207,6 +207,9 @@ void WFAligner::setMaxMemory(
 int WFAligner::getAlignmentScore() {
   return wfAligner->cigar.score;
 }
+int WFAligner::getAlignmentStatus() {
+  return wfAligner->align_status.status;
+}
 void WFAligner::getAlignmentCigar(
     char** const cigarOperations,
     int* cigarLength) {
@@ -307,4 +310,3 @@ WFAlignerGapAffine2Pieces::WFAlignerGapAffine2Pieces(
 }
 
 } /* namespace wfa */
-
