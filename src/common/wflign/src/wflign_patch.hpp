@@ -48,7 +48,7 @@ namespace wflign {
                 const float& max_mash_dist,
                 const float &mash_sketch_rate,
                 const float &inception_score_max_ratio,
-                wfa::WFAlignerGapAffine& wf_aligner,
+                wfa::WFAlignerGapAffine2Pieces& wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 alignment_t& aln);
         void do_wfa_patch_alignment(
@@ -61,13 +61,13 @@ namespace wflign {
                 const int& segment_length,
                 const int& min_wavefront_length,
                 const int& max_distance_threshold,
-                wfa::WFAlignerGapAffine& _wf_aligner,
+                wfa::WFAlignerGapAffine2Pieces& _wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 alignment_t& aln);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
-                wfa::WFAlignerGapAffine& wf_aligner,
+                wfa::WFAlignerGapAffine2Pieces& wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 const bool& emit_md_tag,
                 const bool& paf_format_else_sam,

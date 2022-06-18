@@ -69,7 +69,7 @@ bool do_wfa_segment_alignment(
         const float& max_mash_dist,
         const float &mash_sketch_rate,
         const float &inception_score_max_ratio,
-        wfa::WFAlignerGapAffine& wf_aligner,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
 
@@ -99,7 +99,11 @@ bool do_wfa_segment_alignment(
         return false;
     } else {
         // if it is, we'll align
-        const int max_score = std::max(segment_length_q, segment_length_t) * inception_score_max_ratio;
+        const int max_score =
+            (affine_penalties.gap_opening2
+             + (affine_penalties.gap_extension2
+                * (int)std::max(target_length, query_length))) * inception_score_max_ratio;
+        //const int max_score = std::max(segment_length_q, segment_length_t) * inception_score_max_ratio;
 
         wf_aligner.setMaxAlignmentScore(max_score);
         const int status = wf_aligner.alignEnd2End(
@@ -223,14 +227,14 @@ void do_wfa_patch_alignment(
         const int& segment_length,
         const int& min_wavefront_length,
         const int& max_distance_threshold,
-        wfa::WFAlignerGapAffine& wf_aligner,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
 
     const int max_score
-            = (affine_penalties.gap_opening
-               + (affine_penalties.gap_extension
-                  * std::max((int)256, (int)std::min(target_length, query_length))));
+        (affine_penalties.gap_opening2
+         + (affine_penalties.gap_extension2
+            * std::max((int)256, (int)std::min(target_length, query_length))));
     wf_aligner.setMaxAlignmentScore(max_score);
     wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
     // hack hack hack... this should be returned correctly from the C++ wrapper
@@ -262,7 +266,7 @@ void do_wfa_patch_alignment(
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
-        wfa::WFAlignerGapAffine& wf_aligner,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         const bool& emit_md_tag,
         const bool& paf_format_else_sam,
@@ -550,11 +554,13 @@ void write_merged_alignment(
 //                        }
 //                        std::cerr << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_heads =
-                                new wfa::WFAlignerGapAffine(
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_heads =
+                                new wfa::WFAlignerGapAffine2Pieces(
                                         affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                                        affine_penalties.gap_opening1,
+                                        affine_penalties.gap_extension1,
+                                        affine_penalties.gap_opening2,
+                                        affine_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
                                         wfa::WFAligner::MemoryMed);
                         wf_aligner_heads->setHeuristicWFadaptive(min_wf_length,max_dist_threshold);
@@ -1085,11 +1091,13 @@ void write_merged_alignment(
 //                                  << target_delta_x
 //                                  << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_tails =
-                                new wfa::WFAlignerGapAffine(
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails =
+                                new wfa::WFAlignerGapAffine2Pieces(
                                         affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                                        affine_penalties.gap_opening1,
+                                        affine_penalties.gap_extension1,
+                                        affine_penalties.gap_opening2,
+                                        affine_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
                                         wfa::WFAligner::MemoryMed);
                         wf_aligner_tails->setHeuristicWFadaptive(min_wf_length,max_dist_threshold);
