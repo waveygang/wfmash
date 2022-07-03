@@ -44,7 +44,7 @@ namespace wfmash {
             {"v0.7.0", "Educazione"},
             {"v0.8.0", "pensiero divergente"},
             {"v0.8.1", "Divergenza"},
-            {"v0.8.2", "Pasticcione"}
+            {"v0.8.2", "Pasticcione"},
             {"v0.9.0", "Mutamento"}
             // Add more codenames here
     };
