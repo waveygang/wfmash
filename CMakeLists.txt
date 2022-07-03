@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard it not
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+#set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) # does not work
+
 #set(CMAKE_BUILD_TYPE Release)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -18,6 +20,7 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
+    #set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
     set(EXTRA_FLAGS "-Ofast -march=native")
     set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
 endif ()
@@ -44,17 +47,17 @@ add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 add_executable(wfmash
   src/common/utils.cpp
   src/yeet/yeet_main.cpp
-        src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
+  src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
 
 target_include_directories(wfmash PRIVATE
   src
   src/common
   src/common/wflign/deps
-  src/common/wflign/deps/wflambdav2
-  src/common/wflign/deps/WFAv2
+  src/common/wflign/deps/WFA
   #src/common/wflign/abseil-cpp
   )
-
+target_link_directories(wfmash PRIVATE
+        src/common/wflign/deps/WFA/lib)
 target_link_libraries(wfmash
   gsl
   gslcblas
@@ -62,17 +65,13 @@ target_link_libraries(wfmash
   pthread
   libwflign_static
   hts
-  wflambda
-  wfa
+  wfacpp
   jemalloc
   z
   #absl::flat_hash_map
 )
 
 install(TARGETS wfmash DESTINATION bin)
-
-#set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_BUILD_TYPE Release)
 
 # version stuff
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/include)

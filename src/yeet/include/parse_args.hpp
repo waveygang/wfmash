@@ -58,13 +58,13 @@ void parse_args(int argc,
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segmen seed length for mapping [default: 1k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment seed length for mapping [default: 5k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(parser, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
     args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
-    args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.5]", {'H', "kmer-threshold"});
+    args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
-    args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
+    args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
     args::Flag drop_low_map_pct_identity(parser, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=% x 0.75", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
@@ -101,7 +101,7 @@ void parse_args(int argc,
     // patching parameter
     args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
     args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
-    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-match-mismatch"});
+    args::ValueFlag<int> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
@@ -307,7 +307,7 @@ void parse_args(int argc,
         }
         map_parameters.segLength = s;
     } else {
-        map_parameters.segLength = 1000;
+        map_parameters.segLength = 5000;
     }
 
     if (map_pct_identity) {
@@ -368,7 +368,7 @@ void parse_args(int argc,
     if (kmer_pct_threshold) {
         map_parameters.kmer_pct_threshold = args::get(kmer_pct_threshold);
     } else {
-        map_parameters.kmer_pct_threshold = 0.5; // in percent! so we keep 99.5%
+        map_parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
     }
 
     if (spaced_seed_params) {
