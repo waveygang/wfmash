@@ -31,8 +31,8 @@ class alignment_t {
 public:
     int j;
     int i;
-    uint16_t query_length;
-    uint16_t target_length;
+    uint32_t query_length;
+    uint32_t target_length;
     bool ok = false;
     bool keep = false;
     wflign_cigar_t edit_cigar;

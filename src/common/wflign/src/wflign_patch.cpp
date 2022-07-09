@@ -116,34 +116,6 @@ bool do_wfa_segment_alignment(
         if (aln.ok) {
             aln.query_length = segment_length_q;
             aln.target_length = segment_length_t;
-#ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(wf_aligner->cigar, query, target,
-                        segment_length_q, segment_length_t, aln.j, aln.i)) {
-        std::cerr << "cigar failure at alignment " << aln.j << " "
-                  << aln.i << std::endl;
-        unpack_display_cigar(wf_aligner->cigar, query,
-                             target, segment_length_q, segment_length_t,
-                             aln.j, aln.i);
-        std::cerr << ">query" << std::endl
-                  << std::string(query + j, segment_length_q)
-                  << std::endl;
-        std::cerr << ">target" << std::endl
-                  << std::string(target + i, segment_length_t)
-                  << std::endl;
-        assert(false);
-    }
-#endif
-
-            wflign_edit_cigar_copy(wf_aligner,&aln.edit_cigar);
-
-#ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
-                        segment_length_t, aln.j, aln.i)) {
-        std::cerr << "cigar failure after cigar copy in alignment "
-                  << aln.j << " " << aln.i << std::endl;
-        assert(false);
-    }
-#endif
         }
 
         return true;
