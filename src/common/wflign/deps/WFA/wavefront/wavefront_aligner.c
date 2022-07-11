@@ -48,7 +48,7 @@ char* wf_error_msg[] =
 {
   /* WF_STATUS_OOM                  == -3 */ "[WFA] Alignment failed. Maximum memory threshold reached",
   /* WF_STATUS_MAX_SCORE_REACHED    == -2 */ "[WFA] Alignment failed. Maximum score reached",
-  /* WF_STATUS_HEURISTICALY_DROPPED == -1 */ "[WFA] Alignment dropped heuristically",
+  /* WF_STATUS_UNFEASIBLE           == -1 */ "[WFA] Alignment unfeasible (possible due to heuristic parameters)",
   /* WF_STATUS_SUCCESSFUL           ==  0 */ "[WFA] Alignment successful",
   /* WF_STATUS_IN_PROGRESS          ==  1 */ "[WFA] Alignment in progress",
 };
@@ -79,20 +79,17 @@ void wavefront_aligner_init_penalties(
     case gap_linear:
       wavefronts_penalties_set_linear(
           &wf_aligner->penalties,
-          &attributes->linear_penalties,
-          wavefronts_penalties_shifted_penalties);
+          &attributes->linear_penalties);
       break;
     case gap_affine:
       wavefronts_penalties_set_affine(
           &wf_aligner->penalties,
-          &attributes->affine_penalties,
-          wavefronts_penalties_shifted_penalties);
+          &attributes->affine_penalties);
       break;
     case gap_affine_2p:
       wavefronts_penalties_set_affine2p(
           &wf_aligner->penalties,
-          &attributes->affine2p_penalties,
-          wavefronts_penalties_shifted_penalties);
+          &attributes->affine2p_penalties);
       break;
   }
 }
@@ -104,28 +101,22 @@ void wavefront_aligner_init_heuristic(
   // Select and configure heuristics
   if (wf_heuristic->strategy == wf_heuristic_none) {
     wavefront_heuristic_set_none(&wf_aligner->heuristic);
-  } else {
-    if ((wf_heuristic->strategy & wf_heuristic_banded_static) != 0) {
-      wavefront_heuristic_set_banded_static(&wf_aligner->heuristic,
-          wf_heuristic->min_k,wf_heuristic->max_k);
-    }
-    if ((wf_heuristic->strategy & wf_heuristic_banded_adaptive) != 0) {
-      wavefront_heuristic_set_banded_adaptive(&wf_aligner->heuristic,
-          wf_heuristic->min_k,wf_heuristic->max_k,wf_heuristic->steps_between_cutoffs);
-    }
-    if ((wf_heuristic->strategy & wf_heuristic_wfadaptive) != 0) {
-      wavefront_heuristic_set_wfadaptive(
-          &wf_aligner->heuristic,wf_heuristic->min_wavefront_length,
-          wf_heuristic->max_distance_threshold,wf_heuristic->steps_between_cutoffs);
-    }
-    if ((wf_heuristic->strategy & wf_heuristic_xdrop) != 0) {
-      wavefront_heuristic_set_xdrop(&wf_aligner->heuristic,
-          wf_heuristic->xdrop,wf_heuristic->steps_between_cutoffs);
-    }
-    if ((wf_heuristic->strategy & wf_heuristic_zdrop) != 0) {
-      wavefront_heuristic_set_zdrop(&wf_aligner->heuristic,
-          wf_heuristic->zdrop,wf_heuristic->steps_between_cutoffs);
-    }
+  } else if (wf_heuristic->strategy == wf_heuristic_banded_static) {
+    wavefront_heuristic_set_banded_static(&wf_aligner->heuristic,
+        wf_heuristic->min_k,wf_heuristic->max_k);
+  } else if (wf_heuristic->strategy == wf_heuristic_banded_adaptive) {
+    wavefront_heuristic_set_banded_adaptive(&wf_aligner->heuristic,
+        wf_heuristic->min_k,wf_heuristic->max_k,wf_heuristic->steps_between_cutoffs);
+  } else if (wf_heuristic->strategy == wf_heuristic_wfadaptive) {
+    wavefront_heuristic_set_wfadaptive(
+        &wf_aligner->heuristic,wf_heuristic->min_wavefront_length,
+        wf_heuristic->max_distance_threshold,wf_heuristic->steps_between_cutoffs);
+  } else if (wf_heuristic->strategy == wf_heuristic_xdrop) {
+    wavefront_heuristic_set_xdrop(&wf_aligner->heuristic,
+        wf_heuristic->xdrop,wf_heuristic->steps_between_cutoffs);
+  } else if (wf_heuristic->strategy == wf_heuristic_zdrop) {
+    wavefront_heuristic_set_zdrop(&wf_aligner->heuristic,
+        wf_heuristic->zdrop,wf_heuristic->steps_between_cutoffs);
   }
 }
 void wavefront_aligner_init_alignment(
@@ -168,9 +159,11 @@ void wavefront_aligner_init_alignment(
     subsidiary_attr.match_funct = attributes->match_funct;
     subsidiary_attr.match_funct_arguments = attributes->match_funct_arguments;
     // Set specifics for subsidiary aligners
-    subsidiary_attr.heuristic.strategy = wf_heuristic_none;
-    subsidiary_attr.memory_mode = wavefront_memory_high;
+    subsidiary_attr.heuristic = attributes->heuristic; // Inherit same heuristic
+    subsidiary_attr.memory_mode = wavefront_memory_high; // Classic WFA
     subsidiary_attr.alignment_scope = compute_score;
+    // Set other parameter for subsidiary aligners
+    subsidiary_attr.system = attributes->system;
     // Allocate subsidiary aligners
     wf_aligner->aligner_forward = wavefront_aligner_new(&subsidiary_attr);
     wf_aligner->aligner_reverse = wavefront_aligner_new(&subsidiary_attr);
@@ -432,11 +425,19 @@ uint64_t wavefront_aligner_get_size(
     wavefront_aligner_t* const wf_aligner) {
   // Parameters
   wavefront_components_t* const wf_components = &wf_aligner->wf_components;
-  // Compute size
+  uint64_t sub_aligners = 0;
+  if (wf_aligner->aligner_forward != NULL) {
+    sub_aligners += wavefront_aligner_get_size(wf_aligner->aligner_forward);
+  }
+  if (wf_aligner->aligner_reverse != NULL) {
+    sub_aligners += wavefront_aligner_get_size(wf_aligner->aligner_reverse);
+  }
+  // Compute aligner size
   const uint64_t bt_buffer_size = (wf_components->bt_buffer) ?
       wf_backtrace_buffer_get_size_allocated(wf_components->bt_buffer) : 0;
   const uint64_t slab_size = wavefront_slab_get_size(wf_aligner->wavefront_slab);
-  return bt_buffer_size + slab_size;
+  // Return overall size
+  return sub_aligners + bt_buffer_size + slab_size;
 }
 /*
  * Display
