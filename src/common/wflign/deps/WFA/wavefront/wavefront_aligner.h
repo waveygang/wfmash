@@ -52,6 +52,7 @@
  */
 #define WF_STATUS_SUCCESSFUL               0
 #define WF_STATUS_IN_PROGRESS              1
+#define WF_STATUS_END_REACHED              2 /* Internal */
 #define WF_STATUS_UNFEASIBLE              -1
 #define WF_STATUS_MAX_SCORE_REACHED       -2
 #define WF_STATUS_OOM                     -3
@@ -110,6 +111,7 @@ typedef struct _wavefront_aligner_t {
   wavefront_aligner_t* aligner_forward;       // Forward aligner
   wavefront_aligner_t* aligner_reverse;       // Reverse aligner
   wf_bialign_breakpoint_t bialign_breakpoint; // Breakpoint of two wavefronts (bialigner)
+  cigar_t bialign_cigar;                      // Global BiWFA Alignment CIGAR
   // CIGAR
   cigar_t cigar;                              // Alignment CIGAR
   // MM
