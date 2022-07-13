@@ -368,11 +368,13 @@ void WFlign::wflign_affine_wavefront(
         wfa_affine_penalties.gap_opening = wfa_gap_opening_score;
         wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
     } else {
+        /*
         wfa_affine_penalties.match = 0;
         wfa_affine_penalties.mismatch = 4;
         wfa_affine_penalties.gap_opening = 6;
         wfa_affine_penalties.gap_extension = 1;
-        /*
+         */
+
         if (mashmap_estimated_identity >= 0.80) {
             // Polynomial fitting
             const int mismatch = (int)ceil(9190.56599005*pow(mashmap_estimated_identity, 3) -24087.9418638*pow(mashmap_estimated_identity, 2) + 21032.49248734*mashmap_estimated_identity -6111.50339641);
@@ -388,7 +390,6 @@ void WFlign::wflign_affine_wavefront(
             wfa_affine_penalties.gap_opening = 5;
             wfa_affine_penalties.gap_extension = 1;
         }
-        */
     }
 
     // heuristic bound on the max mash dist, adaptive based on estimated
