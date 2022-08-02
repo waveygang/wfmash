@@ -1,6 +1,6 @@
 # wfmash
 
-_*a pangenome-scale aligner*_
+_**a pangenome-scale aligner**_
 
 [![build and test](https://github.com/ekg/wfmash/actions/workflows/test_on_push.yml/badge.svg)](https://github.com/ekg/wfmash/actions/workflows/test_on_push.yml)
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](https://anaconda.org/bioconda/wfmash)
