@@ -1,18 +1,21 @@
 # wfmash
 
+_**a pangenome-scale aligner**_
+
 [![build and test](https://github.com/ekg/wfmash/actions/workflows/test_on_push.yml/badge.svg)](https://github.com/ekg/wfmash/actions/workflows/test_on_push.yml)
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](https://anaconda.org/bioconda/wfmash)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6949373.svg)](https://doi.org/10.5281/zenodo.6949373)
 
-_A DNA sequence read mapper based on mash distances and the wavefront alignment algorithm._
+`wfmash` is an aligner for pangenomes based on sparse homology mapping and wavefront inception.
 
-`wfmash` is an extension of [MashMap](https://github.com/marbl/MashMap) that implements base-level alignment using [WFA](https://github.com/Martinsos/WFA), via the [`wflign`](https://github.com/ekg/wflign) tiled wavefront global alignment algorithm.
-It updates MashMap with an improved segment chaining algorithm, and adds a high-performance alignment module capable of computing base-level alignments for very large sequences.
+`wfmash` uses a variant of [MashMap](https://github.com/marbl/MashMap) to find large-scale sequence homologies.
+It then obtains base-level alignments using [WFA](https://github.com/smarco/WFA2-lib), via the [`wflign`](https://github.com/waveygang/wfmash/tree/master/src/common/wflign) hierarchical wavefront alignment algorithm.
 
-`wfmash` is designed to make whole genome alignment easy.
-On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence.
+`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence.
 It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
 
-`wfmash` is the key algorithm in `pggb` (the [PanGenome Graph Builder](https://github.com/pangenome/pggb)), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph.
+`wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph.
+It can scale to support the all-to-all alignment of hundreds of human genomes.
 
 ## process
 
