@@ -22,9 +22,9 @@ endif
 ifndef BUILD_TOOLS
 BUILD_TOOLS=0
 endif
-ifndef BUILD_WFA_PARALLEL
-BUILD_WFA_PARALLEL=0
-endif
+
+BUILD_WFA_PARALLEL=1
+
 
 ###############################################################################
 # Configuration rules
