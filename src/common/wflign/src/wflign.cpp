@@ -369,8 +369,8 @@ void WFlign::wflign_affine_wavefront(
         wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
     } else {
         wfa_affine_penalties.match = 0;
-        wfa_affine_penalties.mismatch = 7;
-        wfa_affine_penalties.gap_opening = 11;
+        wfa_affine_penalties.mismatch = 11;
+        wfa_affine_penalties.gap_opening = 17;
         wfa_affine_penalties.gap_extension = 1;
 
 //        #xm = np.array([0.80, 0.85, 0.90,  0.95,  0.97,  0.98,  0.99,   1])
