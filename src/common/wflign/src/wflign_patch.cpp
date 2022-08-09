@@ -108,6 +108,7 @@ bool do_wfa_segment_alignment(
 
         aln.j = j;
         aln.i = i;
+        std::cerr << i << "\t" << j << "\t" << wf_aligner.getAlignmentScore() << "\t" << max_score << "\t" << status << std::endl;
 
         // aln.mash_dist = mash_dist;
         aln.ok = (status == 0);
