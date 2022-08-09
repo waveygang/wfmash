@@ -80,13 +80,10 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     // MM
     .mm_allocator = NULL, // Use private MM
     // Display
-    .plot_params = {
-        .plot_enabled = false,
+    .plot = {
+        .enabled = false,
         .resolution_points = 2000,
-        .min_v = -1,
-        .max_v = -1,
-        .min_h = -1,
-        .max_h = -1,
+        .align_level = 0,
     },
     // System
     .system = {
@@ -98,7 +95,7 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .max_memory_abort = UINT64_MAX, // Unlimited
         .verbose = 0, // Quiet
         .check_alignment_correct = false,
-        .max_num_threads = 16,           // Single thread by default
+        .max_num_threads = 1,           // Single thread by default
         .min_offsets_per_thread = 500   // Minimum WF-length to spawn a thread
     },
 };
