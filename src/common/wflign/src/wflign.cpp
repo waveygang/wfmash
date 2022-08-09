@@ -640,7 +640,7 @@ void WFlign::wflign_affine_wavefront(
                         wfa_affine_penalties.gap_opening,
                         wfa_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
-                        wfa::WFAligner::MemoryUltralow);
+                        wfa::WFAligner::MemoryHigh);
         wf_aligner->setHeuristicNone();
 
         // Save mismatches if wfplots are requsted
