@@ -56,7 +56,8 @@ typedef struct {
 /*
  * Setup
  */
-cigar_t* cigar_new(
+void cigar_allocate(
+    cigar_t* const cigar,
     const int max_operations,
     mm_allocator_t* const mm_allocator);
 void cigar_clear(

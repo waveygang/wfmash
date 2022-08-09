@@ -58,54 +58,55 @@ typedef struct {
   int gap_extension1;    // (E1 > 0)
   int gap_opening2;      // (O2 >= 0)
   int gap_extension2;    // (E2 > 0)
-} wavefront_penalties_t;
+} wavefronts_penalties_t;
 
 /*
  * Compute SW-score equivalent (thanks to Eizenga's formula)
  */
-#define WF_SCORE_TO_SW_SCORE(swg_match,plen,tlen,wf_score) ((swg_match*(plen+tlen) - wf_score)/2)
+#define WF_PENALTIES_GET_SW_SCORE(swg_match_score,plen,tlen,wf_score) \
+  (swg_match_score*(plen+tlen))/2 - wf_score
 
 /*
  * Penalties adjustment
  */
-void wavefront_penalties_set_indel(
-    wavefront_penalties_t* const wf_penalties);
-void wavefront_penalties_set_edit(
-    wavefront_penalties_t* const wf_penalties);
-void wavefront_penalties_set_linear(
-    wavefront_penalties_t* const wf_penalties,
+void wavefronts_penalties_set_indel(
+    wavefronts_penalties_t* const wavefronts_penalties);
+void wavefronts_penalties_set_edit(
+    wavefronts_penalties_t* const wavefronts_penalties);
+void wavefronts_penalties_set_linear(
+    wavefronts_penalties_t* const wavefronts_penalties,
     linear_penalties_t* const linear_penalties);
-void wavefront_penalties_set_affine(
-    wavefront_penalties_t* const wf_penalties,
+void wavefronts_penalties_set_affine(
+    wavefronts_penalties_t* const wavefronts_penalties,
     affine_penalties_t* const affine_penalties);
-void wavefront_penalties_set_affine2p(
-    wavefront_penalties_t* const wf_penalties,
+void wavefronts_penalties_set_affine2p(
+    wavefronts_penalties_t* const wavefronts_penalties,
     affine2p_penalties_t* const affine2p_penalties);
 
 /*
  * Score conversion
  */
-int wavefront_penalties_get_score_indel(
-    wavefront_penalties_t* const wf_penalties,
+int wavefronts_penalties_get_score_indel(
+    wavefronts_penalties_t* const wavefronts_penalties,
     const int score);
-int wavefront_penalties_get_score_edit(
-    wavefront_penalties_t* const wf_penalties,
+int wavefronts_penalties_get_score_edit(
+    wavefronts_penalties_t* const wavefronts_penalties,
     const int score);
-int wavefront_penalties_get_score_linear(
-    wavefront_penalties_t* const wf_penalties,
+int wavefronts_penalties_get_score_linear(
+    wavefronts_penalties_t* const wavefronts_penalties,
     const int score);
-int wavefront_penalties_get_score_affine(
-    wavefront_penalties_t* const wf_penalties,
+int wavefronts_penalties_get_score_affine(
+    wavefronts_penalties_t* const wavefronts_penalties,
     const int score);
-int wavefront_penalties_get_score_affine2p(
-    wavefront_penalties_t* const wf_penalties,
+int wavefronts_penalties_get_score_affine2p(
+    wavefronts_penalties_t* const wavefronts_penalties,
     const int score);
 
 /*
  * Display
  */
-void wavefront_penalties_print(
+void wavefronts_penalties_print(
     FILE* const stream,
-    wavefront_penalties_t* const wf_penalties);
+    wavefronts_penalties_t* const wavefronts_penalties);
 
 #endif /* WAVEFRONT_WAVEFRONT_PENALTIES_H_ */

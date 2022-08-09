@@ -7,8 +7,7 @@
 
 # Parameters
 FILE1=$1
-FILE2=$2
+FILE2=$1
 
 # Compare
-diff  <( awk '{print $1}' $FILE1 ) <( awk '{print $1}' $FILE2 )
-
+diff  <(awk '{if ($1<0) print -$1; else print $1}' $FILE1) <(awk '{if ($1<0) print -$1; else print $1}' $FILE2)

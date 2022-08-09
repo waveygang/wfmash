@@ -42,14 +42,10 @@ void wavefront_debug_prologue(
     const char* const pattern,
     const int pattern_length,
     const char* const text,
-    const int text_length);
+    const int text_length,
+    const bool subalignment);
 void wavefront_debug_epilogue(
-    wavefront_aligner_t* const wf_aligner);
-
-/*
- * Check
- */
-void wavefront_debug_check_correct(
-    wavefront_aligner_t* const wf_aligner);
+    wavefront_aligner_t* const wf_aligner,
+    const bool subalignment);
 
 #endif /* WAVEFRONT_DEBUG_H_ */
