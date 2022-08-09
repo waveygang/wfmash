@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <cstdint>
-#include "WFA/bindings/cpp/WFAligner.hpp"
+#include "WFA2-lib/bindings/cpp/WFAligner.hpp"
 
 /*
  * Cigar
