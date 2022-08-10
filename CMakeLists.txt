@@ -57,7 +57,7 @@ target_include_directories(wfmash PRIVATE
   #src/common/wflign/abseil-cpp
   )
 target_link_directories(wfmash PRIVATE
- src/common/wflign/deps/WFA2-lib/lib)
+        src/common/wflign/deps/WFA2-lib/lib)
 target_link_libraries(wfmash
   gsl
   gslcblas
