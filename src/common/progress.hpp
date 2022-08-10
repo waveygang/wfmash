@@ -22,11 +22,15 @@ public:
         completed = 0;
         logger = std::thread(
             [&](void) {
+                do_print();
+                auto last = 0;
                 while (completed < total) {
-                    if (completed > 0) {
+                    auto curr = completed - last;
+                    if (curr > 0) {
                         do_print();
+                        last = completed;
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 }
             });
     };
@@ -34,7 +38,7 @@ public:
         auto curr = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = curr-start_time;
         double rate = completed / elapsed_seconds.count();
-        double seconds_to_completion = (total - completed) / rate;
+        double seconds_to_completion = (completed > 0 ? (total - completed) / rate : 0);
         std::cerr << "\r" << banner << " "
                   << std::defaultfloat
                   << std::setfill(' ')

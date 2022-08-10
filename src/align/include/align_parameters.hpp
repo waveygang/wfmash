@@ -20,6 +20,7 @@ struct Parameters {
     //int wf_min;                                   // minimum wavefront length to trigger WF_reduce wavefront pruning
     //int wf_diff;                                  // max distance threshold that a wavefront may lag behind the best wavefront and not be removed
     //bool exact_wfa;                               // use exact WFA, avoiding adaptive wavefront reduction
+    bool split;                                       //Split read mapping (done if this is true)
 
     //wflambda
     uint16_t wflambda_segment_length;             //segment length for wflambda
@@ -36,16 +37,22 @@ struct Parameters {
     float wflign_max_mash_dist;
     uint64_t wflign_max_len_major;
     uint64_t wflign_max_len_minor;
-    uint16_t wflign_erode_k;
+    int wflign_erode_k;
     int kmerSize;                                 //kmer size for pre-checking before aligning a fragment
 
     std::vector<std::string> refSequences;        //reference sequence(s)
     std::vector<std::string> querySequences;      //query sequence(s)
     std::string mashmapPafFile;                   //mashmap paf mapping file
-    std::string pafOutputFile;                    //sam output file name
+    std::string pafOutputFile;                    //paf/sam output file name
+    std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
 
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
+    bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
+
+    // plotting
+    uint64_t wfplot_max_size;                     // Max size (width/height) of the wfplot
+    std::string prefix_wavefront_plot_in_png;     // Prefix of PNG files with wavefront plot for each alignment
 };
 
 }

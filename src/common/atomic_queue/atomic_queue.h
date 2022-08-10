@@ -29,12 +29,14 @@ namespace details {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template<size_t elements_per_cache_line> struct GetCacheLineIndexBits { static int constexpr value = 0; };
-template<> struct GetCacheLineIndexBits<64> { static int constexpr value = 6; };
-template<> struct GetCacheLineIndexBits<32> { static int constexpr value = 5; };
-template<> struct GetCacheLineIndexBits<16> { static int constexpr value = 4; };
-template<> struct GetCacheLineIndexBits< 8> { static int constexpr value = 3; };
-template<> struct GetCacheLineIndexBits< 4> { static int constexpr value = 2; };
-template<> struct GetCacheLineIndexBits< 2> { static int constexpr value = 1; };
+template<> struct GetCacheLineIndexBits<256> { static int constexpr value = 8; };
+template<> struct GetCacheLineIndexBits<128> { static int constexpr value = 7; };
+template<> struct GetCacheLineIndexBits< 64> { static int constexpr value = 6; };
+template<> struct GetCacheLineIndexBits< 32> { static int constexpr value = 5; };
+template<> struct GetCacheLineIndexBits< 16> { static int constexpr value = 4; };
+template<> struct GetCacheLineIndexBits<  8> { static int constexpr value = 3; };
+template<> struct GetCacheLineIndexBits<  4> { static int constexpr value = 2; };
+template<> struct GetCacheLineIndexBits<  2> { static int constexpr value = 1; };
 
 template<bool minimize_contention, unsigned array_size, size_t elements_per_cache_line>
 struct GetIndexShuffleBits {
@@ -76,8 +78,8 @@ constexpr T& map(T* elements, unsigned index) noexcept {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Implement a "bit-twiddling hack" for finding the next power of 2
-// in either 32 bits or 64 bits in C++11 compatible constexpr functions
+// Implement a "bit-twiddling hack" for finding the next power of 2 in either 32 bits or 64 bits
+// in C++11 compatible constexpr functions. The library no longer maintains C++11 compatibility.
 
 // "Runtime" version for 32 bits
 // --a;
@@ -89,22 +91,22 @@ constexpr T& map(T* elements, unsigned index) noexcept {
 // ++a;
 
 template<class T>
-constexpr T decrement(T x) {
+constexpr T decrement(T x) noexcept {
     return x - 1;
 }
 
 template<class T>
-constexpr T increment(T x) {
+constexpr T increment(T x) noexcept {
     return x + 1;
 }
 
 template<class T>
-constexpr T or_equal(T x, unsigned u) {
-    return (x | x >> u);
+constexpr T or_equal(T x, unsigned u) noexcept {
+    return x | x >> u;
 }
 
 template<class T, class... Args>
-constexpr T or_equal(T x, unsigned u, Args... rest) {
+constexpr T or_equal(T x, unsigned u, Args... rest) noexcept {
     return or_equal(or_equal(x, u), rest...);
 }
 
@@ -211,7 +213,7 @@ protected:
         else {
             for(;;) {
                 unsigned char expected = STORED;
-                if(ATOMIC_QUEUE_LIKELY(state.compare_exchange_strong(expected, LOADING, X, X))) {
+                if(ATOMIC_QUEUE_LIKELY(state.compare_exchange_strong(expected, LOADING, A, X))) {
                     T element{std::move(q_element)};
                     state.store(EMPTY, R);
                     return element;
@@ -236,7 +238,7 @@ protected:
         else {
             for(;;) {
                 unsigned char expected = EMPTY;
-                if(ATOMIC_QUEUE_LIKELY(state.compare_exchange_strong(expected, STORING, X, X))) {
+                if(ATOMIC_QUEUE_LIKELY(state.compare_exchange_strong(expected, STORING, A, X))) {
                     q_element = std::forward<U>(element);
                     state.store(STORED, R);
                     return;

@@ -10,6 +10,7 @@ inline bool canonical(const char *x, int len) {
     }
     return !trip;
 };
+
 /* Reverse complement the string seq
  * (assumes seq is DNA, and returns non-ACTG letters as-is*/
 
@@ -47,13 +48,13 @@ inline void calc_hashes_(const char *seq, const uint64_t &len,
     char rhash[16];
     char fhash[16];
     for (int i = 0; i < numhashes; ++i) {
-        reverse_complement(seq + i, reverse, k);
-        MurmurHash3_x64_128(seq + i, k, 42, &fhash);
-        MurmurHash3_x64_128(reverse, k, 42, &rhash);
-        hash_t tmp_fwd = *((hash_t*)fhash);
-        hash_t tmp_rev = *((hash_t*)rhash);
-        hashes[i] = (tmp_fwd < tmp_rev ? tmp_fwd : tmp_rev);
-        //std::cerr << "hashes[" << i << "] = " << hashes[i] << std::endl;
+        if (canonical(seq + i, k)) {
+            MurmurHash3_x64_128(seq + i, k, 42, &fhash);
+            hashes[i] = *((hash_t*)fhash);
+            //std::cerr << "hashes[" << i << "] = " << hashes[i] << std::endl;
+        } else {
+            hashes[i] = std::numeric_limits<hash_t>::max();
+        }
     }
 };
 
@@ -83,10 +84,14 @@ std::vector<hash_t> hash_sequence(const char* seq,
                                   const uint64_t& sketch_size) {
     std::vector<hash_t> hashes = calc_hashes(seq, len, k);
     std::sort(hashes.begin(), hashes.end());
-    //auto last = std::unique(hashes.begin(), hashes.end());
-    //hashes.erase(last, hashes.end());
     if (hashes.size() > sketch_size) {
         hashes.erase(hashes.begin()+sketch_size, hashes.end());
+    }
+    // we remove non-canonical hashes which sort last
+    if (hashes.back() == std::numeric_limits<hash_t>::max()) {
+        hashes.erase(std::find(hashes.begin(), hashes.end(),
+                               std::numeric_limits<hash_t>::max()),
+                     hashes.end());
     }
     return hashes;
 }
@@ -96,15 +101,7 @@ float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta,
     int j = 0;
 
     uint64_t common = 0;
-    uint64_t denom;
-
-    while (i < alpha.size() && alpha[i] == 0) {
-        i++;
-    }
-    while (j < beta.size() && beta[j] == 0) {
-        j++;
-    }
-    denom = i + j;
+    uint64_t denom = 0;
 
     while (i < alpha.size() && j < beta.size()) {
         if (alpha[i] == beta[j]) {
@@ -133,7 +130,7 @@ float compare(const std::vector<hash_t>& alpha, const std::vector<hash_t>& beta,
         //const double jaccard = double(common) / denom;
         //distance = log(double(common + 1) / (denom + 1)) / log(1. / (denom + 1));
         //distance = -log(2 * jaccard / (1. + jaccard)) / k;
-        distance = -log(2.0 * common / (double(denom) + common)) / k;
+        distance = -log(2.0 * common / (double(denom) + common)) / (double)k;
         if (distance > 1) {
             distance = 1.0;
         }

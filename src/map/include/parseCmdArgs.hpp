@@ -118,6 +118,52 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     }
   }
 
+  bool ends_with_string(std::string const& str, std::string const& what) {
+      return what.size() <= str.size()
+      && str.find(what, str.size() - what.size()) != str.npos;
+  }
+
+  bool checkIndexFileExists(std::string fastaName, const char* suffix){
+      std::string indexFileName(fastaName);
+      indexFileName = indexFileName + suffix;
+      std::ifstream in(indexFileName);
+      return !in.fail();
+  }
+
+  /**
+ * @brief                     check if the indexes for the input file exist (.fai for fasta, .fai + .gzi for bgzipped fasta)
+ * @param[in] fileName        file name
+ */
+  void validateInputFileIndexes(std::string &fileName)
+  {
+      bool indexesExist = true;
+
+      if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
+          indexesExist &= checkIndexFileExists(fileName, ".fai");
+      }else if (ends_with_string(fileName, ".fa.gz") || ends_with_string(fileName, ".fasta.gz") || ends_with_string(fileName, ".fna.gz")) {
+          indexesExist &= checkIndexFileExists(fileName, ".fai");
+          indexesExist &= checkIndexFileExists(fileName, ".gzi");
+      } else {
+          std::cerr << "\tUnknown type for file: "<< fileName << std::endl;
+          exit(1);
+      }
+
+      if (!indexesExist)
+      {
+          std::cerr << "ERROR, skch::validateInputFileIndexes, missing index(es) for the file "<< fileName << std::endl;
+          if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
+              std::cerr << "\tWe recommend to build the indexes on BGZIP files by executing:" << std::endl;
+              std::cerr << "\tbgzip -@ number_of_threads "<< fileName << std::endl;
+              std::cerr << "\tsamtools faidx "<< fileName << ".gz" << std::endl;
+          } else {
+              std::cerr << "\tIf the compressed file is in BGZIP, execute:" << std::endl;
+              std::cerr << "\tsamtools faidx "<< fileName << std::endl;
+          }
+
+          exit(1);
+      }
+  }
+
   /**
    * @brief                     validate the reference and query file(s)
    * @param[in] querySequences  vector containing query file names
@@ -130,8 +176,10 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       for(auto &e : querySequences)
         validateInputFile(e);
 
-      for(auto &e : refSequences)
-        validateInputFile(e);
+      for(auto &e : refSequences) {
+          validateInputFile(e);
+          validateInputFileIndexes(e);
+      }
     }
 
   /**
@@ -145,20 +193,22 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     std::cerr << "[wfmash::map] Kmer size = " << parameters.kmerSize << std::endl;
     std::cerr << "[wfmash::map] Window size = " << parameters.windowSize << std::endl;
     std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cerr << "[wfmash::map] Block length min = " << parameters.block_length_min << std::endl;
-    std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
+    std::cerr << "[wfmash::map] Block length min = " << parameters.block_length << std::endl;
+    std::cerr << "[wfmash::map] Chaining gap max = " << parameters.chain_gap << std::endl;
+    //std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
     std::cerr << "[wfmash::map] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[wfmash::map] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
     std::cerr << "[wfmash::map] Mapping output file = " << parameters.outFileName << std::endl;
     std::cerr << "[wfmash::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
     std::cerr << "[wfmash::map] Execution threads  = " << parameters.threads << std::endl;
-      if (parameters.use_spaced_seeds) {
-          std::cerr << "[wfmash::map] Spaced seed parameters  = "
-                    << "(weight = " << parameters.spaced_seed_params.weight
-                    << ", count = " << parameters.spaced_seed_params.seed_count
-                    << ", similarity = " << parameters.spaced_seed_params.similarity
-                    << ", region length = " << parameters.spaced_seed_params.region_length
-                    << " )"<< std::endl;
-      }
+    if (parameters.use_spaced_seeds) {
+        std::cerr << "[wfmash::map] Spaced seed parameters  = "
+                  << "(weight = " << parameters.spaced_seed_params.weight
+                  << ", count = " << parameters.spaced_seed_params.seed_count
+                  << ", similarity = " << parameters.spaced_seed_params.similarity
+                  << ", region length = " << parameters.spaced_seed_params.region_length
+                  << " )"<< std::endl;
+    }
   }
 
   /**

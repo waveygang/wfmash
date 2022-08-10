@@ -13,6 +13,8 @@
 #include "yeet/include/temp_file.hpp"
 #include "common/utils.hpp"
 
+#include "../../version.hpp"
+
 namespace yeet {
 
 struct Parameters {
@@ -49,34 +51,37 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm");
+    args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm " + wfmash::Version::get_version() + ": " + wfmash::Version::get_codename());
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<int> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
-    args::ValueFlag<std::string> target_sequence_file_list(parser, "targets", "alignment target file list", {'L', "target-file-list"});
     args::PositionalList<std::string> query_sequence_files(parser, "queries", "query sequences");
     args::ValueFlag<std::string> query_sequence_file_list(parser, "queries", "alignment query file list", {'Q', "query-file-list"});
     // mashmap arguments
-    args::ValueFlag<std::string> segment_length(parser, "N", "segment length for mapping (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 5000]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length_min(parser, "N", "keep mappings with at least this block length (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 3*segment-length]", {'l', "block-length-min"});
-    args::ValueFlag<int> kmer_size(parser, "N", "kmer size <= 16 [default: 16]", {'k', "kmer"});
+    args::ValueFlag<std::string> segment_length(parser, "N", "segment seed length for mapping [default: 5k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length(parser, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
+    args::ValueFlag<std::string> chain_gap(parser, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
+    args::ValueFlag<int> kmer_size(parser, "N", "kmer size [default: 19]", {'k', "kmer"});
+    args::ValueFlag<float> kmer_pct_threshold(parser, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::Flag no_split(parser, "no-split", "disable splitting of input sequences during mapping [enabled by default]", {'N',"no-split"});
-    args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 95]", {'p', "map-pct-id"});
-    args::Flag keep_low_map_pct_identity(parser, "K", "keep mappings with estimated identity below --map-pct-id=%", {'K', "keep-low-map-id"});
-    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=%", {'O', "keep-low-align-id"});
+    args::ValueFlag<float> map_pct_identity(parser, "%", "use this percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
+    args::Flag drop_low_map_pct_identity(parser, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
+    args::Flag keep_low_align_pct_identity(parser, "A", "keep alignments with gap-compressed identity below --map-pct-id=% x 0.75", {'O', "keep-low-align-id"});
     args::Flag no_filter(parser, "MODE", "disable mapping filtering", {'f', "no-filter"});
-    args::ValueFlag<uint16_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
-    args::ValueFlag<uint16_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
+    args::ValueFlag<double> map_sparsification(parser, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
+    args::ValueFlag<uint32_t> num_mappings_for_segments(parser, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
+    args::ValueFlag<uint32_t> num_mappings_for_short_seq(parser, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::Flag skip_self(parser, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
-    args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the given character C", {'Y', "skip-prefix"});
+    args::ValueFlag<char> skip_prefix(parser, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(parser, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_merge(parser, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
-    args::ValueFlag<int> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size applying 0 as p-value cutoff [default: automatically computed applying 1e-120 as p-value cutoff]", {'w', "window-size"});
+    args::ValueFlag<int64_t> window_size(parser, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0 (automatic), minimum -k]", {'w', "window-size"});
+    args::Flag window_minimizers(parser, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
 
     //args::ValueFlag<std::string> path_high_frequency_kmers(parser, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
 
-    args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seed", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seed"});
+    args::ValueFlag<std::string> spaced_seed_params(parser, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     // align parameters
     args::ValueFlag<std::string> align_input_paf(parser, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -85,10 +90,7 @@ void parse_args(int argc,
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                             {'g', "wfa-params"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 100000]", {'D', "wflambda-diff"});
-
-    //Unsupported
-    //args::Flag exact_wflambda(parser, "N", "compute the exact wflambda, don't use adaptive wavefront reduction", {'xxx', "exact-wflambda"});
+    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront [default: 100k]", {'D', "wflambda-diff"});
 
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(parser, "mismatch,gap1,ext1",
@@ -97,20 +99,33 @@ void parse_args(int argc,
     args::ValueFlag<float> wflign_max_mash_dist(parser, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
 
     // patching parameter
-    args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 512*segment-length]", {'C', "max-patch-major"});
-    args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis (1k = 1K = 1000, 1m = 1M = 10^6, 1g = 1G = 10^9) [default: 128*segment-length]", {'F', "max-patch-minor"});
-    args::ValueFlag<uint16_t> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: 13]", {'E', "erode-math-mismatch"});
+    args::ValueFlag<std::string> wflign_max_len_major(parser, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
+    args::ValueFlag<std::string> wflign_max_len_minor(parser, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
+    args::ValueFlag<int> wflign_erode_k(parser, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
 
     // format parameters
     args::Flag emit_md_tag(parser, "N", "output the MD tag", {'d', "md-tag"});
+
+    // sam format
     args::Flag sam_format(parser, "N", "output in the SAM format (PAF by default)", {'a', "sam-format"});
+    args::Flag no_seq_in_sam(parser, "N", "do not fill the sequence field in the SAM format", {'q', "no-seq-in-sam"});
 
     // general parameters
     args::ValueFlag<std::string> tmp_base(parser, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
-    args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'T', "keep-temp"});
+    args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'Z', "keep-temp"});
+
+    // debugging
+    args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
+
+    args::ValueFlag<std::string> prefix_wavefront_plot_in_png(parser, "PREFIX", " write wavefronts' plot for each alignment in PNG format files with this PREFIX", {'u', "prefix-png"});
+    args::ValueFlag<uint64_t> wfplot_max_size(parser, "N", "max size of the wfplot [default: 1500]", {'z', "wfplot-max-size"});
+
+    // version
+    args::Flag version(parser, "version", "show long version number including github commit", {'v', "version"});
 
     //args::Flag show_progress(parser, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
-    //args::Flag verbose_debug(parser, "verbose-debug", "enable verbose debugging", {'V', "verbose-debug"});
+
+    //parser.helpParams.width = 120;
 
     try {
         parser.ParseCLI(argc, argv);
@@ -130,14 +145,28 @@ void parse_args(int argc,
         //return; // 1;
     }
 
+    if (version) {
+        std::cerr << wfmash::Version::get_version() << std::endl;
+        exit(0);
+    }
+
+    if (skip_self) {
+        map_parameters.skip_self = true;
+    } else {
+        map_parameters.skip_self = false;
+    }
+
+    if (skip_prefix) {
+        map_parameters.skip_prefix = true;
+        map_parameters.prefix_delim = args::get(skip_prefix);
+    } else {
+        map_parameters.skip_prefix = false;
+        map_parameters.prefix_delim = '\0';
+    }
 
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
         align_parameters.refSequences.push_back(args::get(target_sequence_file));
-    }
-    if (target_sequence_file_list) {
-        skch::parseFileList(args::get(target_sequence_file_list), map_parameters.refSequences);
-        skch::parseFileList(args::get(target_sequence_file_list), align_parameters.refSequences);
     }
     map_parameters.referenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
@@ -152,12 +181,19 @@ void parse_args(int argc,
         skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
 
+    // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
+    if (target_sequence_file && map_parameters.querySequences.empty()) {
+        map_parameters.skip_self = true;
+        map_parameters.querySequences.push_back(map_parameters.refSequences.back());
+        align_parameters.querySequences.push_back(align_parameters.refSequences.back());
+    }
+
     map_parameters.alphabetSize = 4;
 
     if (no_filter) {
         map_parameters.filterMode = skch::filter::NONE;
     } else {
-        if (skip_self || skip_prefix) {
+        if (map_parameters.skip_self || map_parameters.skip_prefix) {
             // before we set skch::filter::ONETOONE here
             // but this does not provide a clear benefit in all-to-all
             // as it sometimes introduces cases of over-filtering
@@ -167,25 +203,23 @@ void parse_args(int argc,
         }
     }
 
-    auto split = [](const string& s, const string& delimiter) {
-      size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-      string token;
-      vector<string> res;
-
-      while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
-          token = s.substr (pos_start, pos_end - pos_start);
-          pos_start = pos_end + delim_len;
-          res.push_back (token);
-      }
-
-      res.push_back (s.substr (pos_start));
-      return res;
-    };
+    if (map_sparsification) {
+        if (args::get(map_sparsification) == 1) {
+            // overflows
+            map_parameters.sparsity_hash_threshold = std::numeric_limits<uint64_t>::max();
+        } else {
+            map_parameters.sparsity_hash_threshold
+                = args::get(map_sparsification) * std::numeric_limits<uint64_t>::max();
+        }
+    } else {
+        map_parameters.sparsity_hash_threshold
+            = std::numeric_limits<uint64_t>::max();
+    }
 
     if (!args::get(wfa_score_params).empty()) {
-        const std::vector<std::string> params_str = split(args::get(wfa_score_params), ",");
+        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params."//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
                       << std::endl;
             exit(1);
         }
@@ -212,9 +246,9 @@ void parse_args(int argc,
     }
 
     if (!args::get(wflign_score_params).empty()) {
-        const std::vector<std::string> params_str = split(args::get(wflign_score_params), ",");
+        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wflign_score_params), ',');
         if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -G/--wflign-params"//either 3 or 5 scoring parameters must be given to -G/--wflign-params
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -G/--wflign-params."//either 3 or 5 scoring parameters must be given to -G/--wflign-params
                       << std::endl;
             exit(1);
         }
@@ -241,8 +275,8 @@ void parse_args(int argc,
     }
 
     if (wflign_max_mash_dist) {
-        if (args::get(wflign_max_mash_dist) <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance has to be greater than 0" << std::endl;
+        if (args::get(wflign_max_mash_dist) <= 0 || args::get(wflign_max_mash_dist) > 1) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance must be greater than 0 and less than or equal to 1." << std::endl;
             exit(1);
         }
         align_parameters.wflign_max_mash_dist = args::get(wflign_max_mash_dist);
@@ -252,12 +286,9 @@ void parse_args(int argc,
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
+    align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
     map_parameters.split = !args::get(no_split);
-
-    if (align_parameters.sam_format && map_parameters.split) {
-        std::cerr << "[wfmash] ERROR, skch::parseandSave, Disable splitting of input sequences (with -N) in order to enable the SAM format" << std::endl;
-        exit(1);
-    }
+    align_parameters.split = !args::get(no_split);
 
     map_parameters.mergeMappings = !args::get(no_merge);
 
@@ -279,33 +310,46 @@ void parse_args(int argc,
         map_parameters.segLength = 5000;
     }
 
-    if (block_length_min) {
-        const int64_t l = wfmash::handy_parameter(args::get(block_length_min));
+    if (map_pct_identity) {
+        if (args::get(map_pct_identity) < 50) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%." << std::endl;
+            exit(1);
+        }
+        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
+    } else {
+        map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+    }
+
+    if (block_length) {
+        const int64_t l = wfmash::handy_parameter(args::get(block_length));
 
         if (l < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
             exit(1);
         }
 
-        map_parameters.block_length_min = l;
+        map_parameters.block_length = l;
     } else {
-        map_parameters.block_length_min = 3 * map_parameters.segLength;
+        // n.b. we map-merge across gaps up to 3x segment length
+        // and then filter for things that are at least block_length long
+        map_parameters.block_length = 5 * map_parameters.segLength;
     }
 
-    if (map_pct_identity) {
-        if (args::get(map_pct_identity) < 70) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%" << std::endl;
+    if (chain_gap) {
+        const int64_t l = wfmash::handy_parameter(args::get(chain_gap));
+        if (l < 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
             exit(1);
         }
-        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
+        map_parameters.chain_gap = l;
     } else {
-        map_parameters.percentageIdentity = 0.95;
+        map_parameters.chain_gap = 100000;
     }
 
-    if (keep_low_map_pct_identity) {
-        map_parameters.keep_low_pct_id = true;
-    } else {
+    if (drop_low_map_pct_identity) {
         map_parameters.keep_low_pct_id = false;
+    } else {
+        map_parameters.keep_low_pct_id = true;
     }
 
     if (kmer_size) {
@@ -314,9 +358,17 @@ void parse_args(int argc,
         // Smaller values of k are more sensitive for divergent genomes, but lose specificity for large
         // genomes due to chance k-mer collisions. However, too large of a k-mer will reduce sensitivity
         // and so choosing the smallest k that avoids chance collisions is recommended.
-
+        /*
         map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
+        */
+        map_parameters.kmerSize = 19;
+    }
+
+    if (kmer_pct_threshold) {
+        map_parameters.kmer_pct_threshold = args::get(kmer_pct_threshold);
+    } else {
+        map_parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
     }
 
     if (spaced_seed_params) {
@@ -329,14 +381,13 @@ void parse_args(int argc,
         } else if (foobar.find(':') !=  std::string::npos) {
             delimeter = ':';
         } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params." << std::endl;
             exit(1);
         }
 
-        const std::string delimeter_str(1, delimeter);
-        const std::vector<std::string> p = split(foobar, delimeter_str);
+        const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
         if (p.size() != 4) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds" << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds." << std::endl;
             exit(1);
         }
 
@@ -372,11 +423,12 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
+
     if (keep_low_align_pct_identity || align_input_paf) {
         // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
         align_parameters.min_identity = 0; // now unused
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity; // in [0,1]
+        align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
     }
 
     if (wflambda_segment_length) {
@@ -403,7 +455,6 @@ void parse_args(int argc,
     } else {
         align_parameters.wflambda_max_distance_threshold = 100000;
     }
-    align_parameters.wflambda_max_distance_threshold /= (align_parameters.wflambda_segment_length / 2); // set relative to WFA matrix
 
     if (wflign_max_len_major) {
         const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
@@ -434,15 +485,8 @@ void parse_args(int argc,
     if (wflign_erode_k) {
         align_parameters.wflign_erode_k = args::get(wflign_erode_k);
     } else {
-        align_parameters.wflign_erode_k = map_parameters.percentageIdentity >= 0.97 ? 21 : (map_parameters.percentageIdentity >= 0.9 ? 17 : 13);
+        align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
     }
-
-    // Unsupported
-    //if (exact_wflambda) {
-    //    // set exact computation of wflambda
-    //    align_parameters.wflambda_min_wavefront_length = 0;
-    //    align_parameters.wflambda_max_distance_threshold = 0;
-    //}
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
@@ -452,27 +496,28 @@ void parse_args(int argc,
         align_parameters.threads = 1;
     }
 
-    /*
-     * Compute window size for sketching
-     */
-
-    //Compute optimal window size
+    // Compute optimal window size for sketching
     {
-        const int ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
+        const int64_t ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
         if (ws > 0) {
             map_parameters.windowSize = ws;
         } else {
-            // If the input window size is 0, compute the best window size using 0 as p-value cutoff
-            const int64_t windowSize = skch::Stat::recommendedWindowSize(
-                    ws == 0 ? 0.0 : skch::fixed::pval_cutoff,
-                    skch::fixed::confidence_interval,
-                    map_parameters.kmerSize,
-                    map_parameters.alphabetSize,
-                    map_parameters.percentageIdentity,
-                    map_parameters.segLength,
-                    map_parameters.referenceSize);
-            map_parameters.windowSize = std::min((int64_t)256, windowSize);
+            // Compute the window size with a heuristic function
+            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 6)
+                * map_parameters.segLength / 5000;
+
+            // Avoid tiny windows to improve runtime
+            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
+
+            // Avoid too big values to improve the accuracy
+            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
         }
+    }
+
+    if (window_minimizers) {
+        map_parameters.world_minimizers = false;
+    } else {
+        map_parameters.world_minimizers = true;
     }
 
     if (approx_mapping) {
@@ -500,6 +545,20 @@ void parse_args(int argc,
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 
+    align_parameters.tsvOutputPrefix = (prefix_wavefront_info_in_tsv && !args::get(prefix_wavefront_info_in_tsv).empty())
+            ? args::get(prefix_wavefront_info_in_tsv)
+            : "";
+
+    // wfplotting
+    if (prefix_wavefront_plot_in_png) {
+        align_parameters.prefix_wavefront_plot_in_png = args::get(prefix_wavefront_plot_in_png);
+    }
+    if (wfplot_max_size) {
+        align_parameters.wfplot_max_size = args::get(wfplot_max_size);
+    } else {
+        align_parameters.wfplot_max_size = 1500;
+    }
+
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {
             map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
@@ -520,20 +579,6 @@ void parse_args(int argc,
         }
     } else {
         map_parameters.numMappingsForShortSequence = 1;
-    }
-
-    if (skip_self) {
-        map_parameters.skip_self = true;
-    } else {
-        map_parameters.skip_self = false;
-    }
-
-    if (skip_prefix) {
-        map_parameters.skip_prefix = true;
-        map_parameters.prefix_delim = args::get(skip_prefix);
-    } else {
-        map_parameters.skip_prefix = false;
-        map_parameters.prefix_delim = '\0';
     }
 
     //Check if files are valid

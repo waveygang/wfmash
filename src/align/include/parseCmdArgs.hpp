@@ -49,7 +49,7 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
 
     cmd.defineOption("mappingFile", "mashmap file containing mapping information", ArgvParser::OptionRequiresValue | ArgvParser::OptionRequired);
 
-    cmd.defineOption("perc_identity", "edlib threshold for alignment identity [0-100]", ArgvParser::OptionRequiresValue | ArgvParser::OptionRequired);
+    cmd.defineOption("perc_identity", "threshold for alignment identity [0-100]", ArgvParser::OptionRequiresValue | ArgvParser::OptionRequired);
     cmd.defineOptionAlternative("perc_identity","pi");
 
     cmd.defineOption("threads", "count of threads for parallel execution [default : 1]", ArgvParser::OptionRequiresValue);

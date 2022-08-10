@@ -8,50 +8,85 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard it not allowed.
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_BUILD_TYPE Release)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcx16 -march=native -g")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcx16 -march=native -g")
-#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -mcx16 -march=native -g -fsanitize=address")
-#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -mcx16 -march=native -g -fsanitize=address")
+#set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) # does not work
+
+#set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING
+            "Choose the type of build, options are: Release Debug Generic." FORCE)
+endif()
+
+message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
+
+if (${CMAKE_BUILD_TYPE} MATCHES Release)
+    #set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
+    set(EXTRA_FLAGS "-Ofast -march=native")
+    set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
+endif ()
+
+if (${CMAKE_BUILD_TYPE} MATCHES Debug)
+    # Debug use the defaults - so commenting out:
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -g -fsanitize=address")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address")
+else()
+    # Use all standard-compliant optimizations - always add these:
+    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+endif ()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_subdirectory(deps/edlib EXCLUDE_FROM_ALL)
-add_subdirectory(deps/wflambdav2 EXCLUDE_FROM_ALL)
-add_subdirectory(deps/WFAv2 EXCLUDE_FROM_ALL)
+#
+# WFA2-lib Build
+#
+add_custom_target(
+        wfa_lib
+        COMMAND make clean all
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA2-lib
+)
 
-add_executable(wflign
-  src/main.cpp
-  src/wflign_wfa.cpp
-  src/wfa_edit_callback.cpp
-  src/rkmh.cpp
-  src/murmur3.cpp)
+#
+# WFling
+#
+add_executable(
+        wflign
+        deps/atomic_image.cpp
+        deps/lodepng/lodepng.cpp
+        deps/atomic_image.cpp
+        src/wflign.cpp
+        src/wflign_alignment.cpp
+        src/wflign_patch.cpp
+        src/rkmh.cpp
+        src/murmur3.cpp)
+target_include_directories(
+        wflign PRIVATE deps/
+        deps/
+        deps/robin-hood-hashing
+        deps/WFA2-lib)
 
-target_include_directories(wflign PRIVATE
-  deps/)
-
-target_link_libraries(wflign
-  edlib
-  wfa
-  wflambda
-  z)
-
-add_library(libwflign_static STATIC
-  src/wflign_wfa.cpp
-  src/wfa_edit_callback.cpp
-  src/rkmh.cpp
-  src/murmur3.cpp)
+#
+# WFling library
+#
+target_link_libraries(wflign z)
+add_library(
+        libwflign_static STATIC
+        deps/atomic_image.cpp
+        deps/lodepng/lodepng.cpp
+        deps/atomic_image.cpp
+        src/wflign.cpp
+        src/wflign_alignment.cpp
+        src/wflign_patch.cpp
+        src/rkmh.cpp
+        src/murmur3.cpp)
 set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
-target_include_directories(libwflign_static PRIVATE
-  deps/
-  deps/robin-hood-hashing
-  deps/wflambdav2
-  deps/WFAv2
-  deps/edlib/edlib/include)
-# not clear if necessary
-#set_target_properties(libodgi_static PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-
-#set(CMAKE_BUILD_TYPE Release)
+target_include_directories(
+        libwflign_static PRIVATE
+        deps/
+        deps/lodepng
+        deps/PicoSHA2
+        deps/robin-hood-hashing
+        deps/WFA2-lib)
+add_dependencies(libwflign_static wfa_lib)

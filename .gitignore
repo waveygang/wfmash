@@ -23,11 +23,15 @@ wfmash
 src/common/wflign/build
 build
 
+# include directory
+include
+
 #Others
 *.cache
 *~
 \#*
 .\#*
-src/common/WFA/bin/
+src/common/WFA2-lib/bin/
+src/wfmash_git_version.hpp
 
 test/

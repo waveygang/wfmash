@@ -3,7 +3,7 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef SKETCH_CONFIG_HPP 
+#ifndef SKETCH_CONFIG_HPP
 #define SKETCH_CONFIG_HPP
 
 #include <vector>
@@ -29,16 +29,18 @@ struct ales_params {
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
+    float kmer_pct_threshold;                         //use only kmers not in the top kmer_pct_threshold %-ile
     int64_t windowSize;                               //window size used for sketching
     int64_t segLength;                                //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
-    int64_t block_length_min;                         // minimum (potentially merged) block to keep if we aren't split
+    int64_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
+    int64_t chain_gap;                                // max distance for 2d range union-find mapping chaining
     int alphabetSize;                                 //alphabet size
     uint64_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
     int filterMode;                                   //filtering mode in mashmap
-    uint16_t numMappingsForSegment;                   //how many mappings to retain for each segment
-    uint16_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
+    uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment
+    uint32_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
     int threads;                                      //execution thread count
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
@@ -54,25 +56,28 @@ struct Parameters
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
+    bool world_minimizers;
+    uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
 
     //std::unordered_set<std::string> high_freq_kmers;  //
 };
 
 
 /**
- * @brief     Internal figures not exposed at the command line interface
+ * @brief     Default values or internal figures not exposed at the command line interface
  */
 namespace fixed
 {
 
-//float filter_score_best_range = .99;              //mapping score above a certain fraction of best score is
+//float filter_score_best_range = .99;              // mapping score above a certain fraction of best score is
 //considered good by filtering algorithm
 
-//int max_best_mappings_per_position = 25;          //At a particular position, if algorithm finds more than a certain best
+//int max_best_mappings_per_position = 25;          // At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
-double pval_cutoff = 0.0;//1e-120;                  //p-value cutoff for determining window size
-float confidence_interval = 0.95;                   //Confidence interval to relax jaccard cutoff for mapping (0-1)
+double pval_cutoff = 1e-3;                          // p-value cutoff for determining window size
+float confidence_interval = 0.95;                   // Confidence interval to relax jaccard cutoff for mapping (0-1)
+float percentage_identity = 0.90;                   // Percent identity in the mapping step
 }
 }
 
