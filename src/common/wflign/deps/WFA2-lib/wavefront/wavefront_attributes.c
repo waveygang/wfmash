@@ -80,10 +80,13 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     // MM
     .mm_allocator = NULL, // Use private MM
     // Display
-    .plot = {
-        .enabled = false,
+    .plot_params = {
+        .plot_enabled = false,
         .resolution_points = 2000,
-        .align_level = 0,
+        .min_v = -1,
+        .max_v = -1,
+        .min_h = -1,
+        .max_h = -1,
     },
     // System
     .system = {
