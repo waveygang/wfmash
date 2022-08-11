@@ -368,30 +368,30 @@ void WFlign::wflign_affine_wavefront(
         wfa_affine_penalties.gap_opening = wfa_gap_opening_score;
         wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
     } else {
-//        wfa_affine_penalties.match = 0;
-//        wfa_affine_penalties.mismatch = 11;
-//        wfa_affine_penalties.gap_opening = 17;
-//        wfa_affine_penalties.gap_extension = 1;
+        wfa_affine_penalties.match = 0;
+        wfa_affine_penalties.mismatch = 4;
+        wfa_affine_penalties.gap_opening = 6;
+        wfa_affine_penalties.gap_extension = 1;
 
 //        //xm = np.array([0.80, 0.85, 0.90,  0.95,  0.97,  0.98,  0.99,   1])
 //        //ym = np.array([ 4  , 6   , 7   , 11   , 13   , 15   , 19   ,  25])
 //        //xo = np.array([0.80, 0.85, 0.90,  0.95,  0.97,  0.98,  0.99,  1])
 //        //yo = np.array([ 6  , 9   , 11  , 17   , 21   , 25   , 31   ,  37])
-        if (mashmap_estimated_identity >= 0.80) {
-            // Polynomial fitting
-            const int mismatch = (int)ceil(9190.56599005*pow(mashmap_estimated_identity, 3) -24087.9418638*pow(mashmap_estimated_identity, 2) + 21032.49248734*mashmap_estimated_identity -6111.50339641);
-            const int gap_opening = (int)ceil(11826.71109956*pow(mashmap_estimated_identity, 3) -30851.33099739 * pow(mashmap_estimated_identity, 2) + 26827.95391065*mashmap_estimated_identity -7767.00185348);
-
-            wfa_affine_penalties.match = 0;
-            wfa_affine_penalties.mismatch = mismatch;
-            wfa_affine_penalties.gap_opening = gap_opening;
-            wfa_affine_penalties.gap_extension = 1;
-        } else {
-            wfa_affine_penalties.match = 0;
-            wfa_affine_penalties.mismatch = 3;
-            wfa_affine_penalties.gap_opening = 5;
-            wfa_affine_penalties.gap_extension = 1;
-        }
+//        if (mashmap_estimated_identity >= 0.80) {
+//            // Polynomial fitting
+//            const int mismatch = (int)ceil(9190.56599005*pow(mashmap_estimated_identity, 3) -24087.9418638*pow(mashmap_estimated_identity, 2) + 21032.49248734*mashmap_estimated_identity -6111.50339641);
+//            const int gap_opening = (int)ceil(11826.71109956*pow(mashmap_estimated_identity, 3) -30851.33099739 * pow(mashmap_estimated_identity, 2) + 26827.95391065*mashmap_estimated_identity -7767.00185348);
+//
+//            wfa_affine_penalties.match = 0;
+//            wfa_affine_penalties.mismatch = mismatch;
+//            wfa_affine_penalties.gap_opening = gap_opening;
+//            wfa_affine_penalties.gap_extension = 1;
+//        } else {
+//            wfa_affine_penalties.match = 0;
+//            wfa_affine_penalties.mismatch = 3;
+//            wfa_affine_penalties.gap_opening = 5;
+//            wfa_affine_penalties.gap_extension = 1;
+//        }
     }
 
     // heuristic bound on the max mash dist, adaptive based on estimated
