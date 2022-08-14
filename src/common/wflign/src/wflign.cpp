@@ -442,11 +442,8 @@ void WFlign::wflign_affine_wavefront(
     std::vector<alignment_t*> trace;
     const auto start_time = std::chrono::steady_clock::now();
 
-    if (
-            (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
-            (mashmap_estimated_identity >= 0.99 // about the limit of what our reduction thresholds allow
-             && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA)
-            ) {
+    if ((query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
+        (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA && mashmap_estimated_identity >= 0.98)) {
         uint64_t num_alignments = 0;
         uint64_t num_alignments_performed = 0;
         wfa::WFAlignerGapAffine* wf_aligner =
