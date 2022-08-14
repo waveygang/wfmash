@@ -19,6 +19,10 @@ namespace wavefront {
 #define MIN_WF_LENGTH           256
 //#define MAX_DIST_THRESHOLD      1024
 
+// Intra-sequence parallelization
+#define MAX_THREADS_INTRA_SEQ   2
+#define MIN_OFFSETS_PER_THREAD  16384 // A value high enough to avoid excessive thread spawning
+
 /*
 * DTO ()
 */
@@ -452,7 +456,14 @@ void WFlign::wflign_affine_wavefront(
                         wfa_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-        //wf_aligner->setHeuristicWFadaptive(MIN_WF_LENGTH,wf_max_dist_threshold);
+        wf_aligner->setHeuristicNone();
+
+        if (query_length >= MIN_OFFSETS_PER_THREAD || target_length >= MIN_OFFSETS_PER_THREAD) {
+            // Intra-sequence parallelization
+            wf_aligner->setMaxNumThreads(MIN(MAX_THREADS_INTRA_SEQ, num_threads));
+            wf_aligner->setMinOffsetsPerThread(MIN_OFFSETS_PER_THREAD);
+        }
+
         const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
 
         auto *aln = new alignment_t();
@@ -987,8 +998,8 @@ void WFlign::wflign_affine_wavefront(
                 wf_aligner->setHeuristicNone();
 
                 // Intra-sequence parallelization
-                wf_aligner->setMaxNumThreads(MIN(2, num_threads));
-                wf_aligner->setMinOffsetsPerThread(16384); // A value high enough to avoid excessive thread spawning
+                wf_aligner->setMaxNumThreads(MIN(MAX_THREADS_INTRA_SEQ, num_threads));
+                wf_aligner->setMinOffsetsPerThread(MIN_OFFSETS_PER_THREAD);
 
                 // write a merged alignment
                 write_merged_alignment(
