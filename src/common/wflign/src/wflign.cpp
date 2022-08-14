@@ -87,7 +87,8 @@ WFlign::WFlign(
     const float wflign_max_mash_dist,
     const uint64_t wflign_max_len_major,
     const uint64_t wflign_max_len_minor,
-    const int erode_k) {
+    const int erode_k,
+    const int num_threads) {
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
@@ -118,6 +119,8 @@ WFlign::WFlign(
     this->target_total_length = 0;
     this->target_offset = 0;
     this->target_length = 0;
+    // Parallelization
+    this->num_threads = num_threads;
     // Output
     this->out = NULL;
     this->emit_tsv = false;
@@ -982,6 +985,10 @@ void WFlign::wflign_affine_wavefront(
                     wfa::WFAligner::Alignment,
                     wfa::WFAligner::MemoryUltralow);
                 wf_aligner->setHeuristicNone();
+
+                // Intra-sequence parallelization
+                wf_aligner->setMaxNumThreads(MIN(2, num_threads));
+                wf_aligner->setMinOffsetsPerThread(16384); // A value high enough to avoid excessive thread spawning
 
                 // write a merged alignment
                 write_merged_alignment(
