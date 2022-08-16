@@ -633,7 +633,7 @@ void WFlign::wflign_affine_wavefront(
         //          << wflambda_max_distance_threshold * step_size << std::endl;
 
         if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
-            wflambda_aligner->setHeuristicWFadaptive(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
+            wflambda_aligner->setHeuristicWFmash(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
         } else {
             wflambda_aligner->setHeuristicNone();
         }
