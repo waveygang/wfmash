@@ -449,7 +449,7 @@ void WFlign::wflign_affine_wavefront(
                         wfa_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-        //wf_aligner->setHeuristicWFadaptive(MIN_WF_LENGTH,wf_max_dist_threshold);
+        //wf_aligner->setHeuristicWFmash(MIN_WF_LENGTH,wf_max_dist_threshold);
         const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
 
         auto *aln = new alignment_t();
@@ -622,7 +622,7 @@ void WFlign::wflign_affine_wavefront(
         //          << wflambda_max_distance_threshold * step_size << std::endl;
 
         if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
-            wflambda_aligner->setHeuristicWFadaptive(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
+            wflambda_aligner->setHeuristicWFmash(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
         } else {
             wflambda_aligner->setHeuristicNone();
         }
