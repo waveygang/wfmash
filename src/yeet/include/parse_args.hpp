@@ -90,7 +90,7 @@ void parse_args(int argc,
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                             {'g', "wfa-params"});
     args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront [default: 100k]", {'D', "wflambda-diff"});
+    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront [default: 200k]", {'D', "wflambda-diff"});
 
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(parser, "mismatch,gap1,ext1",
@@ -453,7 +453,7 @@ void parse_args(int argc,
 
         align_parameters.wflambda_max_distance_threshold = wflambda_max_distance_threshold_;
     } else {
-        align_parameters.wflambda_max_distance_threshold = 100000;
+        align_parameters.wflambda_max_distance_threshold = 200000;
     }
 
     if (wflign_max_len_major) {
