@@ -67,6 +67,8 @@ namespace wflign {
             uint64_t target_total_length;
             uint64_t target_offset;
             uint64_t target_length;
+            // Parallelization
+            int num_threads;
             // Output
             std::ostream* out;
             bool emit_tsv;
@@ -94,7 +96,8 @@ namespace wflign {
                     const float wflign_max_mash_dist,
                     const uint64_t wflign_max_len_major,
                     const uint64_t wflign_max_len_minor,
-                    const int erode_k);
+                    const int erode_k,
+                    const int num_threads);
             // Set output configuration
             void set_output(
                     std::ostream* const out,

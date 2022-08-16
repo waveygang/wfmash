@@ -19,6 +19,10 @@ namespace wavefront {
 #define MIN_WF_LENGTH           256
 //#define MAX_DIST_THRESHOLD      1024
 
+// Intra-sequence parallelization
+#define MAX_THREADS_INTRA_SEQ   2
+#define MIN_OFFSETS_PER_THREAD  16384 // A value high enough to avoid excessive thread spawning
+
 /*
 * DTO ()
 */
@@ -87,7 +91,8 @@ WFlign::WFlign(
     const float wflign_max_mash_dist,
     const uint64_t wflign_max_len_major,
     const uint64_t wflign_max_len_minor,
-    const int erode_k) {
+    const int erode_k,
+    const int num_threads) {
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
@@ -118,6 +123,8 @@ WFlign::WFlign(
     this->target_total_length = 0;
     this->target_offset = 0;
     this->target_length = 0;
+    // Parallelization
+    this->num_threads = num_threads;
     // Output
     this->out = NULL;
     this->emit_tsv = false;
@@ -435,11 +442,8 @@ void WFlign::wflign_affine_wavefront(
     std::vector<alignment_t*> trace;
     const auto start_time = std::chrono::steady_clock::now();
 
-    if (
-            (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
-            (mashmap_estimated_identity >= 0.99 // about the limit of what our reduction thresholds allow
-             && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA)
-            ) {
+    if ((query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
+        (query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA && mashmap_estimated_identity >= 0.98)) {
         uint64_t num_alignments = 0;
         uint64_t num_alignments_performed = 0;
         wfa::WFAlignerGapAffine* wf_aligner =
@@ -449,7 +453,14 @@ void WFlign::wflign_affine_wavefront(
                         wfa_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-        //wf_aligner->setHeuristicWFmash(MIN_WF_LENGTH,wf_max_dist_threshold);
+        wf_aligner->setHeuristicNone();
+
+        if (query_length >= MIN_OFFSETS_PER_THREAD || target_length >= MIN_OFFSETS_PER_THREAD) {
+            // Intra-sequence parallelization
+            wf_aligner->setMaxNumThreads(MIN(MAX_THREADS_INTRA_SEQ, num_threads));
+            wf_aligner->setMinOffsetsPerThread(MIN_OFFSETS_PER_THREAD);
+        }
+
         const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
 
         auto *aln = new alignment_t();
@@ -982,6 +993,10 @@ void WFlign::wflign_affine_wavefront(
                     wfa::WFAligner::Alignment,
                     wfa::WFAligner::MemoryUltralow);
                 wf_aligner->setHeuristicNone();
+
+                // Intra-sequence parallelization
+                wf_aligner->setMaxNumThreads(MIN(MAX_THREADS_INTRA_SEQ, num_threads));
+                wf_aligner->setMinOffsetsPerThread(MIN_OFFSETS_PER_THREAD);
 
                 // write a merged alignment
                 write_merged_alignment(

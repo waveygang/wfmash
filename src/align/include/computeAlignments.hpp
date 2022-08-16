@@ -486,7 +486,8 @@ namespace align
                 param.wflign_max_mash_dist,
                 param.wflign_max_len_major,
                 param.wflign_max_len_minor,
-                param.wflign_erode_k);
+                param.wflign_erode_k,
+                param.threads);
         wflign->set_output(
                 &output,
                 !param.tsvOutputPrefix.empty(),

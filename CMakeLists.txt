@@ -35,6 +35,33 @@ else()
     set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
 endif ()
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin") # untested
+    # assumes clang build
+    # we can't reliably detect when we're using clang, so for the time being we assume
+    # TODO: can't we though?
+    # adapted from https://stackoverflow.com/questions/46414660/macos-cmake-and-openmp
+    # find_package(OpenMP) does not work reliably on macOS, so we do its work ourselves
+    set (OpenMP_C "${CMAKE_C_COMPILER}")
+    set (OpenMP_C_FLAGS " -Xpreprocessor -fopenmp -I/opt/local/include/libomp -I/usr/local/include -L/opt/local/lib/libomp -L/usr/local/lib")
+    set (OpenMP_C_LIB_NAMES "libomp" "libgomp" "libiomp5")
+    set (OpenMP_CXX "${CMAKE_CXX_COMPILER}")
+    set (OpenMP_CXX_FLAGS " -Xpreprocessor -fopenmp -I/opt/local/include/libomp -I/usr/local/include -L/opt/local/lib/libomp -L/usr/local/lib")
+    set (OpenMP_CXX_LIB_NAMES "libomp" "libgomp" "libiomp5")
+    set (OpenMP_libomp_LIBRARY "omp")
+    set (OpenMP_libgomp_LIBRARY "gomp")
+    set (OpenMP_libiomp5_LIBRARY "iomp5")
+    # and now add the OpenMP parameters to the compile flags
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS} -lomp")
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    find_package(OpenMP REQUIRED)
+    # add the flags it detects to the compile flags
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS} -fopenmp")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} -fopenmp")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
