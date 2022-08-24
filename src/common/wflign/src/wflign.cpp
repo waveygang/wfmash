@@ -614,13 +614,10 @@ void WFlign::wflign_affine_wavefront(
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
 
-        uint64_t _wflambda_max_distance_threshold =
-                std::min((uint64_t)std::max(query_length,target_length)/10,
-                         (uint64_t)wflambda_max_distance_threshold) / step_size;
-
-        //std::cerr << "wflambda_max_distance_threshold = "
-        //          << wflambda_max_distance_threshold * step_size << std::endl;
-
+// The reduction is disabled with BiWFlambda
+//        uint64_t _wflambda_max_distance_threshold =
+//                std::min((uint64_t)std::max(query_length,target_length)/10,
+//                         (uint64_t)wflambda_max_distance_threshold) / step_size;
 //        if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
 //            wflambda_aligner->setHeuristicWFmash(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
 //        } else {
