@@ -268,7 +268,7 @@ int wflambda_extend_match(
         }
     } else if (h < 0 || v < 0) { // It can be removed using an edit-distance
         // mode as high-level of WF-inception
-        is_a_match = true;
+        is_a_match = false;
     }
     return is_a_match;
 }
@@ -612,7 +612,7 @@ void WFlign::wflign_affine_wavefront(
                         wflambda_affine_penalties.gap_opening,
                         wflambda_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
-                        wfa::WFAligner::MemoryMed);
+                        wfa::WFAligner::MemoryUltralow);
 
         uint64_t _wflambda_max_distance_threshold =
                 std::min((uint64_t)std::max(query_length,target_length)/10,
@@ -621,11 +621,11 @@ void WFlign::wflign_affine_wavefront(
         //std::cerr << "wflambda_max_distance_threshold = "
         //          << wflambda_max_distance_threshold * step_size << std::endl;
 
-        if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
-            wflambda_aligner->setHeuristicWFmash(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
-        } else {
+//        if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
+//            wflambda_aligner->setHeuristicWFmash(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
+//        } else {
             wflambda_aligner->setHeuristicNone();
-        }
+//        }
 
         // Save computed alignments in a pair-indexed map
         robin_hood::unordered_flat_map<uint64_t,alignment_t*> alignments;
