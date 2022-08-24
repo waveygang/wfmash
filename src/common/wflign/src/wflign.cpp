@@ -716,7 +716,7 @@ void WFlign::wflign_affine_wavefront(
                     };
 
             // Plot with only fragments belonging to the best alignment (that is, only the anchors)
-            {
+            if (!trace.empty()) {
                 algorithms::atomic_image_buf_t image(width, height,
                                                      source_width, source_height,
                                                      source_min_x, source_min_y);
