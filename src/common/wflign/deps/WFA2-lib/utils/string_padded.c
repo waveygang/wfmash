@@ -64,7 +64,7 @@ void strings_padded_add_padding(
   memset(*buffer_padded_begin+buffer_length,padding_value,end_padding_length);
 }
 /*
- * Strings (text/pattern) padded
+ * Strings (text/pattern) lambda padded
  */
 void strings_padded_add_padding_lambda(
     const int* const buffer,
