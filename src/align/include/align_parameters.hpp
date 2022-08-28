@@ -27,8 +27,6 @@ struct Parameters {
     int wfa_mismatch_score;
     int wfa_gap_opening_score;
     int wfa_gap_extension_score;
-    int wflambda_min_wavefront_length;            //wavefront length to trigger reduction (how wide should it be)
-    int wflambda_max_distance_threshold;          //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
 
     // wflign
     int wflign_mismatch_score;

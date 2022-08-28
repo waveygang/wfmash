@@ -477,8 +477,6 @@ namespace align
                 param.wfa_mismatch_score,
                 param.wfa_gap_opening_score,
                 param.wfa_gap_extension_score,
-                param.wflambda_min_wavefront_length,
-                param.wflambda_max_distance_threshold,
                 currentRecord.mashmap_estimated_identity,
                 param.wflign_mismatch_score,
                 param.wflign_gap_opening_score,

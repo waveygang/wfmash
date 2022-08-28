@@ -89,9 +89,6 @@ void parse_args(int argc,
     args::ValueFlag<std::string> wfa_score_params(parser, "mismatch,gap1,ext1",
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                             {'g', "wfa-params"});
-// The reduction is disabled with BiWFlambda
-//    args::ValueFlag<int> wflambda_min_wavefront_length(parser, "N", "minimum wavefront length (width) to trigger reduction [default: 100]", {'A', "wflamda-min"});
-//    args::ValueFlag<std::string> wflambda_max_distance_threshold(parser, "N", "maximum distance (in base-pairs) that a wavefront may be behind the best wavefront [default: 200k]", {'D', "wflambda-diff"});
 
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(parser, "mismatch,gap1,ext1",
@@ -437,25 +434,6 @@ void parse_args(int argc,
     } else {
         align_parameters.wflambda_segment_length = 256;
     }
-
-//    if (wflambda_min_wavefront_length) {
-//        align_parameters.wflambda_min_wavefront_length = args::get(wflambda_min_wavefront_length);
-//    } else {
-        align_parameters.wflambda_min_wavefront_length = 100;
-//    }
-
-//    if (wflambda_max_distance_threshold) {
-//        const int wflambda_max_distance_threshold_ = (int)wfmash::handy_parameter(args::get(wflambda_max_distance_threshold));
-//
-//        if (wflambda_max_distance_threshold_ <= 0) {
-//            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum distance that a wavefront may be behind the best wavefront has to be a float value greater than 0." << std::endl;
-//            exit(1);
-//        }
-//
-//        align_parameters.wflambda_max_distance_threshold = wflambda_max_distance_threshold_;
-//    } else {
-        align_parameters.wflambda_max_distance_threshold = 200000;
-//    }
 
     if (wflign_max_len_major) {
         const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));

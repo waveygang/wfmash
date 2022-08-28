@@ -78,8 +78,6 @@ WFlign::WFlign(
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
-    const int wflambda_min_wavefront_length,
-    const int wflambda_max_distance_threshold,
     const float mashmap_estimated_identity,
     const int wflign_mismatch_score,
     const int wflign_gap_opening_score,
