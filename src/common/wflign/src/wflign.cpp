@@ -36,9 +36,6 @@ typedef struct {
     float max_mash_dist_to_evaluate;
     float mash_sketch_rate;
     float inception_score_max_ratio;
-    // Sequences data
-    int v_max;
-    int h_max;
     // Alignments and sketches
     robin_hood::unordered_flat_map<uint64_t,alignment_t*>* alignments;
     std::vector<std::vector<rkmh::hash_t>*>* query_sketches;
@@ -240,7 +237,7 @@ int wflambda_extend_match(
                 delete aln;
             }
 
-            // cleanup old sketches
+            // cleanup old sketches (disabled with BiWFlambda)
             /*if (v > extend_data->v_max) {
                 extend_data->v_max = v;
                 if (v >= wflign.wflambda_max_distance_threshold) {
@@ -268,56 +265,41 @@ int wflambda_extend_match(
     }
     return is_a_match;
 }
-//auto trace_match = [&](const int &v, const int &h) {
-//    if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
-//        const uint64_t k = encode_pair(v, h);
-//        const auto f = alignments.find(k);
-//        if (f != alignments.end() && alignments[k] != nullptr) {
-//            auto *aln = alignments[k];
-//            trace.push_back(aln);
-//            aln->keep = true;
-//            ++num_alignments;
-//            return true;
-//        }
-//        return false;
-//    } else {
-//        return false;
-//    }
-//};
+
 int wflambda_trace_match(
     robin_hood::unordered_flat_map<uint64_t,alignment_t*>& alignments,
     wfa::WFAlignerGapAffine& wflambda_aligner,
     std::vector<alignment_t*>& trace,
     const int pattern_length,
     const int text_length) {
-// Retrieve CIGAR
-char* cigar_ops;
-int cigar_length;
-wflambda_aligner.getAlignmentCigar(&cigar_ops,&cigar_length);
-// Traverse CIGAR tracing matches
-int v = pattern_length-1;
-int h = text_length-1;
-int i, num_alignments = 0;
-for (i=cigar_length-1;i>=0;--i) {
-    switch (cigar_ops[i]) {
-        case 'I':      --h; break;
-        case 'D': --v;      break;
-        case 'X': --v; --h; break;
-        case 'M': {
-            // Add alignment to trace
-            uint64_t k = encode_pair(v,h);
-            alignment_t* aln = alignments[k];
-            trace.push_back(aln);
-            aln->keep = true;
-            ++num_alignments;
-            // Next
-            --v;
-            --h;
-            break;
+    // Retrieve CIGAR
+    char* cigar_ops;
+    int cigar_length;
+    wflambda_aligner.getAlignmentCigar(&cigar_ops,&cigar_length);
+    // Traverse CIGAR tracing matches
+    int v = pattern_length-1;
+    int h = text_length-1;
+    int i, num_alignments = 0;
+    for (i=cigar_length-1;i>=0;--i) {
+        switch (cigar_ops[i]) {
+            case 'I':      --h; break;
+            case 'D': --v;      break;
+            case 'X': --v; --h; break;
+            case 'M': {
+                // Add alignment to trace
+                uint64_t k = encode_pair(v,h);
+                alignment_t* aln = alignments[k];
+                trace.push_back(aln);
+                aln->keep = true;
+                ++num_alignments;
+                // Next
+                --v;
+                --h;
+                break;
+            }
         }
     }
-}
-return num_alignments;
+    return num_alignments;
 }
 /*
 * WFling align
@@ -643,8 +625,6 @@ void WFlign::wflign_affine_wavefront(
         extend_data.max_mash_dist_to_evaluate = max_mash_dist_to_evaluate;
         extend_data.mash_sketch_rate = mash_sketch_rate;
         extend_data.inception_score_max_ratio = inception_score_max_ratio;
-        extend_data.v_max = 0;
-        extend_data.h_max = 0;
         extend_data.alignments = &alignments;
         extend_data.query_sketches = &query_sketches;
         extend_data.target_sketches = &target_sketches;
