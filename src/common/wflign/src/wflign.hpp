@@ -43,8 +43,6 @@ namespace wflign {
             int wfa_mismatch_score;
             int wfa_gap_opening_score;
             int wfa_gap_extension_score;
-            int wflambda_min_wavefront_length; // with these set at 0 we do exact WFA for wflambda
-            int wflambda_max_distance_threshold;
             float mashmap_estimated_identity;
             // WFlign parameters
             int wflign_mismatch_score;

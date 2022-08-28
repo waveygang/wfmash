@@ -93,8 +93,6 @@ WFlign::WFlign(
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
     this->wfa_gap_extension_score = wfa_gap_extension_score;
-    this->wflambda_min_wavefront_length = wflambda_min_wavefront_length;
-    this->wflambda_max_distance_threshold = wflambda_max_distance_threshold;
     this->mashmap_estimated_identity = mashmap_estimated_identity;
     this->wflign_mismatch_score = wflign_mismatch_score;
     this->wflign_gap_opening_score = wflign_gap_opening_score;
@@ -243,7 +241,7 @@ int wflambda_extend_match(
             }
 
             // cleanup old sketches
-            if (v > extend_data->v_max) {
+            /*if (v > extend_data->v_max) {
                 extend_data->v_max = v;
                 if (v >= wflign.wflambda_max_distance_threshold) {
                     auto &s = query_sketches[v - wflign.wflambda_max_distance_threshold];
@@ -262,7 +260,7 @@ int wflambda_extend_match(
                     delete s;
                     s = nullptr;
                 }
-            }
+            }*/
         }
     } else if (h < 0 || v < 0) { // It can be removed using an edit-distance
         // mode as high-level of WF-inception
@@ -611,16 +609,7 @@ void WFlign::wflign_affine_wavefront(
                         wflambda_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-
-// The reduction is disabled with BiWFlambda
-//        uint64_t _wflambda_max_distance_threshold =
-//                std::min((uint64_t)std::max(query_length,target_length)/10,
-//                         (uint64_t)wflambda_max_distance_threshold) / step_size;
-//        if (wflambda_min_wavefront_length || _wflambda_max_distance_threshold) {
-//            wflambda_aligner->setHeuristicWFmash(wflambda_min_wavefront_length,_wflambda_max_distance_threshold);
-//        } else {
-            wflambda_aligner->setHeuristicNone();
-//        }
+        wflambda_aligner->setHeuristicNone();
 
         // Save computed alignments in a pair-indexed map
         robin_hood::unordered_flat_map<uint64_t,alignment_t*> alignments;
