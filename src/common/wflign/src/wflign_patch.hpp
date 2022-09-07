@@ -43,8 +43,6 @@ namespace wflign {
                 const uint16_t& segment_length_t,
                 const uint16_t& step_size,
                 const uint64_t& minhash_kmer_size,
-                const int& min_wavefront_length,
-                const int& max_distance_threshold,
                 const float& max_mash_dist,
                 const float &mash_sketch_rate,
                 const float &inception_score_max_ratio,
@@ -59,8 +57,6 @@ namespace wflign {
                 const uint64_t& i,
                 const uint64_t& target_length,
                 const int& segment_length,
-                const int& min_wavefront_length,
-                const int& max_distance_threshold,
                 wfa::WFAlignerGapAffine& _wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 alignment_t& aln);

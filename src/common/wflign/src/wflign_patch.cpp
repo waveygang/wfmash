@@ -19,31 +19,6 @@ namespace wflign {
 
     namespace wavefront {
 
-//wfa::wavefront_aligner_t* get_wavefront_aligner(
-//    const wfa::affine_penalties_t& wfa_affine_penalties,
-//    //ToDo: to remove if wavefront_aligner_new will not re-take the seqs' lens in input
-//    const uint64_t& target_length,
-//    const uint64_t& query_length,
-//    const bool& low_memory) {
-//    // Configure the attributes of the wf-aligner
-//    wfa::wavefront_aligner_attr_t attributes =
-//        wfa::wavefront_aligner_attr_default;
-//    attributes.distance_metric = wfa::gap_affine;
-//    attributes.affine_penalties = wfa_affine_penalties;
-//    // attributes.distance_metric = gap_affine2p;
-//    // attributes.affine2p_penalties = affine2p_penalties;
-//    attributes.reduction.reduction_strategy =
-//        wfa::wavefront_reduction_none; // wavefront_reduction_dynamic
-//    // attributes.reduction.min_wavefront_length = 10;
-//    // attributes.reduction.max_distance_threshold = 50;
-//    attributes.alignment_scope =
-//        wfa::compute_alignment; // alignment_scope_score
-//    attributes.low_memory = low_memory;
-//    //wfa::wavefront_aligner_t *const wf_aligner =
-//    //return wfa::wavefront_aligner_new(target_length, query_length, &attributes);
-//    return wfa::wavefront_aligner_new(&attributes);
-//}
-
 // accumulate alignment objects
 // run the traceback determine which are part of the main chain
 // order them and write them out
@@ -64,8 +39,6 @@ bool do_wfa_segment_alignment(
         const uint16_t& segment_length_t,
         const uint16_t& step_size,
         const uint64_t& minhash_kmer_size,
-        const int& min_wavefront_length,
-        const int& max_distance_threshold,
         const float& max_mash_dist,
         const float &mash_sketch_rate,
         const float &inception_score_max_ratio,
@@ -109,7 +82,6 @@ bool do_wfa_segment_alignment(
         aln.j = j;
         aln.i = i;
 
-        // aln.mash_dist = mash_dist;
         aln.ok = (status == 0);
 
         // fill the alignment info if we aligned
@@ -221,8 +193,6 @@ void do_wfa_patch_alignment(
         const uint64_t& i,
         const uint64_t& target_length,
         const int& segment_length,
-        const int& min_wavefront_length,
-        const int& max_distance_threshold,
         wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
@@ -924,7 +894,6 @@ void write_merged_alignment(
                                         query, query_pos, query_delta,
                                         target - target_pointer_shift, target_pos,
                                         target_delta, segment_length,
-                                        min_wf_length, max_dist_threshold,
                                         wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
@@ -1842,7 +1811,6 @@ void write_alignment(
                 << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:"
                 << block_identity
-                //<< "\t" << "md:f:" << aln.mash_dist
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
                 //<< "\t" << "ni:i:" << insertions
