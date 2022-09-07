@@ -211,6 +211,15 @@ void WFAligner::setMatchFunct(
   wavefront_aligner_set_match_funct(wfAligner,matchFunct,matchFunctArguments);
 }
 /*
+ * Bidirectional
+ */
+void WFAligner::getLastBreakpoint(
+        int *v,
+        int *h) {
+    *h = WAVEFRONT_H(wfAligner->last_breakpoint.k_forward,wfAligner->last_breakpoint.offset_forward);
+    *v = WAVEFRONT_V(wfAligner->last_breakpoint.k_forward,wfAligner->last_breakpoint.offset_forward);
+}
+/*
  * Limits
  */
 void WFAligner::setMaxAlignmentScore(

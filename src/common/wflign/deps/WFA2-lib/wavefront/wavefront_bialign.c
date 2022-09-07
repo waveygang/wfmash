@@ -663,6 +663,7 @@ void wavefront_bialign_alignment(
     return;
   }
   // Breakpoint found
+  wf_aligner->last_breakpoint = breakpoint; // Save it
   const int breakpoint_h = WAVEFRONT_H(breakpoint.k_forward,breakpoint.offset_forward);
   const int breakpoint_v = WAVEFRONT_V(breakpoint.k_forward,breakpoint.offset_forward);
   // DEBUG

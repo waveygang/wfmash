@@ -130,6 +130,10 @@ public:
   void setMatchFunct(
       int (*matchFunct)(int,int,void*),
       void* matchFunctArguments);
+  // Bidirectional
+  void getLastBreakpoint(
+          int *v,
+          int *h);
   // Limits
   void setMaxAlignmentScore(
       const int maxAlignmentScore);

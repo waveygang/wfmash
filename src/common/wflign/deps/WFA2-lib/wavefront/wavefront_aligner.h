@@ -120,6 +120,7 @@ typedef struct _wavefront_aligner_t {
   wavefront_pos_t alignment_end_pos;          // Alignment end position
   // Bidirectional Alignment
   wavefront_bialigner_t* bialigner;           // BiWFA aligner
+  wf_bialign_breakpoint_t last_breakpoint;    // Last identified breakpoint
   // CIGAR
   cigar_t* cigar;                             // Alignment CIGAR
   // MM
