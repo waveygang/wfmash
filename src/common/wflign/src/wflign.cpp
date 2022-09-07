@@ -39,6 +39,10 @@ typedef struct {
     std::vector<std::vector<rkmh::hash_t>*>* target_sketches;
     // Subsidiary WFAligner
     wfa::WFAlignerGapAffine* wf_aligner;
+    // Bidirectional
+    wfa::WFAlignerGapAffine* wflambda_aligner;
+    int last_breakpoint_v;
+    int last_breakpoint_h;
     wflign_penalties_t* wfa_affine_penalties;
     // Stats
     uint64_t num_alignments;
@@ -54,12 +58,18 @@ typedef struct {
 inline uint64_t encode_pair(
     int v,
     int h) {
-return ((uint64_t)v << 32) | (uint64_t)h;
+    return ((uint64_t)v << 32) | (uint64_t)h;
 }
-
 inline void decode_pair(uint64_t pair, int *v, int *h) {
-*v = pair >> 32;
-*h = pair & 0x00000000FFFFFFFF;
+    *v = pair >> 32;
+    *h = pair & 0x00000000FFFFFFFF;
+}
+void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
+    // The C++ language guarantees that `delete p` will do nothing if p is equal to NULL
+    for (auto &s : sketches) {
+        delete s;
+        s = nullptr;
+    }
 }
 
 /*
@@ -232,27 +242,17 @@ int wflambda_extend_match(
                 delete aln;
             }
 
-            // cleanup old sketches (disabled with BiWFlambda)
-            /*if (v > extend_data->v_max) {
-                extend_data->v_max = v;
-                if (v >= wflign.wflambda_max_distance_threshold) {
-                    auto &s = query_sketches[v - wflign.wflambda_max_distance_threshold];
-                    // The C++ language guarantees that delete p will do
-                    // nothing if p is equal to NULL
-                    delete s;
-                    s = nullptr;
-                }
+            // cleanup all sketches when the breakpoint changes
+            int last_breakpoint_v, last_breakpoint_h;
+            extend_data->wflambda_aligner->getLastBreakpoint(&last_breakpoint_v, &last_breakpoint_h);
+            if (extend_data->last_breakpoint_v != last_breakpoint_v || extend_data->last_breakpoint_h != last_breakpoint_h) {
+                //std::cerr << v << "\t" << h << "\t" << last_breakpoint_v << "\t" << last_breakpoint_h << std::endl;
+                extend_data->last_breakpoint_v = last_breakpoint_v;
+                extend_data->last_breakpoint_h = last_breakpoint_h;
+
+                clean_up_sketches(query_sketches);
+                clean_up_sketches(target_sketches);
             }
-            if (h > extend_data->h_max) {
-                extend_data->h_max = h;
-                if (h >= wflign.wflambda_max_distance_threshold) {
-                    auto &s = target_sketches[h - wflign.wflambda_max_distance_threshold];
-                    // The C++ language guarantees that delete p will do
-                    // nothing if p is equal to NULL
-                    delete s;
-                    s = nullptr;
-                }
-            }*/
         }
     } else if (h < 0 || v < 0) { // It can be removed using an edit-distance
         // mode as high-level of WF-inception
@@ -610,6 +610,9 @@ void WFlign::wflign_affine_wavefront(
         extend_data.query_sketches = &query_sketches;
         extend_data.target_sketches = &target_sketches;
         extend_data.wf_aligner = wf_aligner;
+        extend_data.wflambda_aligner = wflambda_aligner;
+        extend_data.last_breakpoint_v = 0;
+        extend_data.last_breakpoint_h = 0;
         extend_data.wfa_affine_penalties = &wfa_affine_penalties;
         extend_data.num_alignments = 0;
         extend_data.num_alignments_performed = 0;
@@ -764,17 +767,8 @@ void WFlign::wflign_affine_wavefront(
         << std::endl;
     #endif
 
-        // clean up sketches
-        // The C++ language guarantees that delete p will do nothing if p is equal
-        // to NULL
-        for (auto &s : query_sketches) {
-            delete s;
-            s = nullptr;
-        }
-        for (auto &s : target_sketches) {
-            delete s;
-            s = nullptr;
-        }
+        clean_up_sketches(query_sketches);
+        clean_up_sketches(target_sketches);
 
         // todo: implement alignment identifier based on hash of the input, params,
         // and commit annotate each PAF record with it and the full alignment score
