@@ -39,6 +39,8 @@ typedef struct {
     std::vector<std::vector<rkmh::hash_t>*>* target_sketches;
     // Subsidiary WFAligner
     wfa::WFAlignerGapAffine* wf_aligner;
+    // Reduction
+    int target_diagonal;
     // Bidirectional
     wfa::WFAlignerGapAffine* wflambda_aligner;
     int last_breakpoint_v;
@@ -242,17 +244,27 @@ int wflambda_extend_match(
                 delete aln;
             }
 
-            // cleanup all sketches when the breakpoint changes
-            int last_breakpoint_v, last_breakpoint_h;
-            extend_data->wflambda_aligner->getLastBreakpoint(&last_breakpoint_v, &last_breakpoint_h);
-            if (extend_data->last_breakpoint_v != last_breakpoint_v || extend_data->last_breakpoint_h != last_breakpoint_h) {
-                //std::cerr << v << "\t" << h << "\t" << last_breakpoint_v << "\t" << last_breakpoint_h << std::endl;
-                extend_data->last_breakpoint_v = last_breakpoint_v;
-                extend_data->last_breakpoint_h = last_breakpoint_h;
-
-                clean_up_sketches(query_sketches);
-                clean_up_sketches(target_sketches);
+            // cleanup sketches that are too far from the target diagonal
+#define MAX_DIST_THRESHOLD 131072 // 131072 * 128 / 1024 = 16384 kbps
+            const int diff = extend_data->target_diagonal - DPMATRIX_DIAGONAL(h,v);
+            if (ABS(diff) > MAX_DIST_THRESHOLD) {
+                delete query_sketches[v];
+                query_sketches[v] = nullptr;
+                delete target_sketches[h];
+                target_sketches[h] = nullptr;
             }
+
+//            // cleanup all sketches when the breakpoint changes
+//            int last_breakpoint_v, last_breakpoint_h;
+//            extend_data->wflambda_aligner->getLastBreakpoint(&last_breakpoint_v, &last_breakpoint_h);
+//            if (extend_data->last_breakpoint_v != last_breakpoint_v || extend_data->last_breakpoint_h != last_breakpoint_h) {
+//                //std::cerr << v << "\t" << h << "\t" << last_breakpoint_v << "\t" << last_breakpoint_h << std::endl;
+//                extend_data->last_breakpoint_v = last_breakpoint_v;
+//                extend_data->last_breakpoint_h = last_breakpoint_h;
+//
+//                clean_up_sketches(query_sketches);
+//                clean_up_sketches(target_sketches);
+//            }
         }
     } else if (h < 0 || v < 0) { // It can be removed using an edit-distance
         // mode as high-level of WF-inception
@@ -610,6 +622,7 @@ void WFlign::wflign_affine_wavefront(
         extend_data.query_sketches = &query_sketches;
         extend_data.target_sketches = &target_sketches;
         extend_data.wf_aligner = wf_aligner;
+        extend_data.target_diagonal = DPMATRIX_DIAGONAL(target_length,query_length);
         extend_data.wflambda_aligner = wflambda_aligner;
         extend_data.last_breakpoint_v = 0;
         extend_data.last_breakpoint_h = 0;
