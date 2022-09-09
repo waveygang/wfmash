@@ -48,6 +48,7 @@ namespace wflign {
                 const float &inception_score_max_ratio,
                 wfa::WFAlignerGapAffine& wf_aligner,
                 const wflign_penalties_t& affine_penalties,
+                uint64_t* num_sketches_allocated,
                 alignment_t& aln);
         void do_wfa_patch_alignment(
                 const char* query,

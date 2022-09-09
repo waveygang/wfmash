@@ -44,6 +44,7 @@ bool do_wfa_segment_alignment(
         const float &inception_score_max_ratio,
         wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
+        uint64_t* num_sketches_allocated,
         alignment_t& aln) {
 
     // first make the sketches if we haven't yet
@@ -51,11 +52,13 @@ bool do_wfa_segment_alignment(
         query_sketch = new std::vector<rkmh::hash_t>();
         *query_sketch = rkmh::hash_sequence(
                 query + j, segment_length_q, minhash_kmer_size, segment_length_q * mash_sketch_rate);
+        ++(*num_sketches_allocated);
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
         *target_sketch = rkmh::hash_sequence(
                 target + i, segment_length_t, minhash_kmer_size, segment_length_t * mash_sketch_rate);
+        ++(*num_sketches_allocated);
     }
 
     // first check if our mash dist is inbounds
