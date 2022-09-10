@@ -113,10 +113,11 @@ void parse_args(int argc,
     args::Flag keep_temp_files(parser, "", "keep intermediate files generated during mapping and alignment", {'Z', "keep-temp"});
 
     // debugging
+#ifdef WFA_PNG_AND_TSV
     args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
-
     args::ValueFlag<std::string> prefix_wavefront_plot_in_png(parser, "PREFIX", " write wavefronts' plot for each alignment in PNG format files with this PREFIX", {'u', "prefix-png"});
     args::ValueFlag<uint64_t> wfplot_max_size(parser, "N", "max size of the wfplot [default: 1500]", {'z', "wfplot-max-size"});
+#endif
 
     // version
     args::Flag version(parser, "version", "show long version number including github commit", {'v', "version"});
@@ -524,6 +525,7 @@ void parse_args(int argc,
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 
+#ifdef WFA_PNG_AND_TSV
     align_parameters.tsvOutputPrefix = (prefix_wavefront_info_in_tsv && !args::get(prefix_wavefront_info_in_tsv).empty())
             ? args::get(prefix_wavefront_info_in_tsv)
             : "";
@@ -537,6 +539,7 @@ void parse_args(int argc,
     } else {
         align_parameters.wfplot_max_size = 1500;
     }
+#endif
 
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {

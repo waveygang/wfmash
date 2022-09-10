@@ -67,10 +67,12 @@ namespace wflign {
             uint64_t target_length;
             // Output
             std::ostream* out;
+#ifdef WFA_PNG_AND_TSV
             bool emit_tsv;
             std::ostream* out_tsv;
             const std::string* prefix_wavefront_plot_in_png;
             uint64_t wfplot_max_size;
+#endif
             bool merge_alignments;
             bool emit_md_tag;
             bool paf_format_else_sam;
@@ -94,10 +96,12 @@ namespace wflign {
             // Set output configuration
             void set_output(
                     std::ostream* const out,
+#ifdef WFA_PNG_AND_TSV
                     const bool emit_tsv,
                     std::ostream* const out_tsv,
                     const std::string &wfplot_filepath,
                     const uint64_t wfplot_max_size,
+#endif
                     const bool merge_alignments,
                     const bool emit_md_tag,
                     const bool paf_format_else_sam,
@@ -153,9 +157,11 @@ typedef struct {
     // For performance improvements
     uint64_t max_num_sketches_in_memory;
     uint64_t num_sketches_allocated;
+#ifdef WFA_PNG_AND_TSV
     // wfplot
     bool emit_png;
     robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;
+#endif
 } wflign_extend_data_t;
 
 #endif /* WFLIGN_HPP_ */

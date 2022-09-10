@@ -256,8 +256,10 @@ void write_merged_alignment(
         const int& erode_k,
         const int& min_wf_length,
         const int& max_dist_threshold,
+#ifdef WFA_PNG_AND_TSV
         const std::string* prefix_wavefront_plot_in_png,
         const uint64_t& wfplot_max_size,
+#endif
         const bool& with_endline) {
 
     int64_t target_pointer_shift = 0;
@@ -1422,6 +1424,7 @@ query_start : query_end)
 #endif
     */
 
+#ifdef WFA_PNG_AND_TSV
     bool emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
     if (emit_png) {
         const int step_size = (segment_length / 2);
@@ -1519,6 +1522,7 @@ query_start : query_end)
             encodeOneStep(filename.c_str(), bytes, width, height);
         }
     }
+#endif
 
     // convert trace to cigar, get correct start and end coordinates
     char *cigarv = alignment_to_cigar(

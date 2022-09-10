@@ -86,8 +86,10 @@ namespace wflign {
                 const int& erode_k,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
+#ifdef WFA_PNG_AND_TSV
                 const std::string* prefix_wavefront_plot_in_png,
                 const uint64_t& wfplot_max_size,
+#endif
                 const bool& with_endline = true);
         void write_alignment(
                 std::ostream& out,

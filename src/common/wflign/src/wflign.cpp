@@ -83,10 +83,12 @@ WFlign::WFlign(
     this->target_length = 0;
     // Output
     this->out = nullptr;
+#ifdef WFA_PNG_AND_TSV
     this->emit_tsv = false;
     this->out_tsv = nullptr;
     this->prefix_wavefront_plot_in_png = nullptr;
     this->wfplot_max_size = 0;
+#endif
     this->merge_alignments = false;
     this->emit_md_tag = false;
     this->paf_format_else_sam = false;
@@ -97,19 +99,23 @@ WFlign::WFlign(
 */
 void WFlign::set_output(
     std::ostream* const out,
+#ifdef WFA_PNG_AND_TSV
     const bool emit_tsv,
     std::ostream* const out_tsv,
     const std::string &wfplot_filepath,
     const uint64_t wfplot_max_size,
+#endif
     const bool merge_alignments,
     const bool emit_md_tag,
     const bool paf_format_else_sam,
     const bool no_seq_in_sam) {
     this->out = out;
+#ifdef WFA_PNG_AND_TSV
     this->emit_tsv = emit_tsv;
     this->out_tsv = out_tsv;
     this->prefix_wavefront_plot_in_png = &wfplot_filepath;
     this->wfplot_max_size = wfplot_max_size;
+#endif
     this->merge_alignments = merge_alignments;
     this->emit_md_tag = emit_md_tag;
     this->paf_format_else_sam = paf_format_else_sam;
@@ -135,9 +141,11 @@ int wflambda_extend_match(
     robin_hood::unordered_flat_map<uint64_t,alignment_t*>& alignments = *(extend_data->alignments);
     std::vector<std::vector<rkmh::hash_t>*>& query_sketches = *(extend_data->query_sketches);
     std::vector<std::vector<rkmh::hash_t>*>& target_sketches = *(extend_data->target_sketches);
+#ifdef WFA_PNG_AND_TSV
     // wfplots
     const bool emit_png = extend_data->emit_png;
     robin_hood::unordered_set<uint64_t>& high_order_dp_matrix_mismatch = *(extend_data->high_order_dp_matrix_mismatch);
+#endif
     // Check match
     bool is_a_match = false;
     if (v >= 0 && h >= 0 && v < pattern_length && h < text_length) {
@@ -173,6 +181,7 @@ int wflambda_extend_match(
                             step_size,
                             extend_data,
                             *aln);
+#ifdef WFA_PNG_AND_TSV
             if (wflign.emit_tsv) {
                 // 0) Mis-match, alignment skipped
                 // 1) Mis-match, alignment performed
@@ -181,8 +190,8 @@ int wflambda_extend_match(
                                   << (alignment_performed ? (aln->ok ? 2 : 1) : 0)
                                   << std::endl;
             }
+#endif
             ++(extend_data->num_alignments);
-
             if (alignment_performed) {
                 ++(extend_data->num_alignments_performed);
                 if (aln->ok){
@@ -191,12 +200,15 @@ int wflambda_extend_match(
                 } else {
                     alignments[k] = nullptr;
                 }
-            } else {
+            }
+#ifdef WFA_PNG_AND_TSV
+            else {
                 if (emit_png) {
                     // Save only the mismatches, as they are not cached
                     high_order_dp_matrix_mismatch.insert(encode_pair(v, h));
                 }
             }
+#endif
             if (!is_a_match) {
                 delete aln;
             }
@@ -484,13 +496,18 @@ void WFlign::wflign_affine_wavefront(
                 wflign_max_len_minor,
                 erode_k,
                 MIN_WF_LENGTH,
-                wf_max_dist_threshold,
+                wf_max_dist_threshold
+#ifdef WFA_PNG_AND_TSV
+                ,
                 prefix_wavefront_plot_in_png,
-                wfplot_max_size);
+                wfplot_max_size
+#endif
+                );
 
         // Free biWFA aligner
         delete wf_aligner;
     } else {
+#ifdef WFA_PNG_AND_TSV
         if (emit_tsv) {
             *out_tsv << "# query_name=" << query_name << std::endl;
             *out_tsv << "# query_start=" << query_offset << std::endl;
@@ -501,6 +518,7 @@ void WFlign::wflign_affine_wavefront(
             *out_tsv << "# info: 0) mismatch, mash-distance > threshold; 1) mismatch, WFA-score >= max_score; 2) match, WFA-score < max_score" << std::endl;
             *out_tsv << "v" << "\t" << "h" << "\t" << "info" << std::endl;
         }
+#endif
 
         const uint16_t segment_length_to_use =
                 (query_length < segment_length || target_length < segment_length)
@@ -590,8 +608,10 @@ void WFlign::wflign_affine_wavefront(
         extend_data.num_sketches_allocated = 0;
         // 1 GB / (hash_t*mash_sketch_rate*segment_length*2); 1 GB = 1×8×1024×1024×1024; '*2' to account query/target sequences
         extend_data.max_num_sketches_in_memory = std::ceil(8589934592.0 / (8.0*sizeof(rkmh::hash_t)*mash_sketch_rate*segment_length_to_use*2) );
+#ifdef WFA_PNG_AND_TSV
         extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
         extend_data.high_order_dp_matrix_mismatch = &high_order_dp_matrix_mismatch;
+#endif
         wflambda_aligner->setMatchFunct(wflambda_extend_match,(void*)&extend_data);
 
         // Align
@@ -606,6 +626,7 @@ void WFlign::wflign_affine_wavefront(
         // Free
         delete wflambda_aligner;
 
+#ifdef WFA_PNG_AND_TSV
         if (extend_data.emit_png) {
             const int wfplot_vmin = 0, wfplot_vmax = pattern_length; //v_max;
             const int wfplot_hmin = 0, wfplot_hmax = text_length; //h_max
@@ -717,6 +738,7 @@ void WFlign::wflign_affine_wavefront(
                                          "_" + target_name + "_" + std::to_string(target_offset) + "_" + std::to_string(target_offset+target_length) + ".0.wflign.png";
             encodeOneStep(filename.c_str(), bytes, width, height);
         }
+#endif
 
         // Clean alignments not to be kept (do not belong to the optimal alignment)
         for (const auto &p : alignments) {
@@ -922,9 +944,13 @@ void WFlign::wflign_affine_wavefront(
                         wflign_max_len_minor,
                         erode_k,
                         MIN_WF_LENGTH,
-                        wf_max_dist_threshold,
+                        wf_max_dist_threshold
+#ifdef WFA_PNG_AND_TSV
+                        ,
                         prefix_wavefront_plot_in_png,
-                        wfplot_max_size);
+                        wfplot_max_size
+#endif
+                        );
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
