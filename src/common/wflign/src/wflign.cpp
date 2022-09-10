@@ -1,8 +1,5 @@
-#include <stddef.h>
-#include <stdlib.h>
 #include <cassert>
 #include <chrono>
-#include <iterator>
 #include <string>
 
 #include "wflign.hpp"
@@ -17,43 +14,6 @@ namespace wavefront {
 */
 #define MAX_LEN_FOR_PURE_WFA    20000 // only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
-
-/*
-* DTO ()
-*/
-typedef struct {
-    // WFlign
-    WFlign* wflign;
-    // Parameters
-    int pattern_length;
-    int text_length;
-    uint16_t step_size;
-    uint16_t segment_length_to_use;
-    int minhash_kmer_size;
-    float max_mash_dist_to_evaluate;
-    float mash_sketch_rate;
-    float inception_score_max_ratio;
-    // Alignments and sketches
-    robin_hood::unordered_flat_map<uint64_t,alignment_t*>* alignments;
-    std::vector<std::vector<rkmh::hash_t>*>* query_sketches;
-    std::vector<std::vector<rkmh::hash_t>*>* target_sketches;
-    // Subsidiary WFAligner
-    wfa::WFAlignerGapAffine* wf_aligner;
-    // Bidirectional
-    wfa::WFAlignerGapAffine* wflambda_aligner;
-    int last_breakpoint_v;
-    int last_breakpoint_h;
-    wflign_penalties_t* wfa_affine_penalties;
-    // Stats
-    uint64_t num_alignments;
-    uint64_t num_alignments_performed;
-    // For performance improvements
-    uint64_t max_num_sketches_in_memory;
-    uint64_t num_sketches_allocated;
-    // wfplot
-    bool emit_png;
-    robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;
-} wflign_extend_data_t;
 
 /*
 * Utils
@@ -166,8 +126,8 @@ int wflambda_extend_match(
     wflign_extend_data_t* extend_data = (wflign_extend_data_t*)arguments;
     // Expand arguments
     const WFlign& wflign = *(extend_data->wflign);
-    const int query_length = wflign.query_length;
-    const int target_length = wflign.target_length;
+    const uint64_t query_length = wflign.query_length;
+    const uint64_t target_length = wflign.target_length;
     const int step_size = extend_data->step_size;
     const int segment_length_to_use = extend_data->segment_length_to_use;
     const int pattern_length = extend_data->pattern_length;
@@ -211,13 +171,7 @@ int wflambda_extend_match(
                             segment_length_to_use_q,
                             segment_length_to_use_t,
                             step_size,
-                            extend_data->minhash_kmer_size,
-                            extend_data->max_mash_dist_to_evaluate,
-                            extend_data->mash_sketch_rate,
-                            extend_data->inception_score_max_ratio,
-                            *extend_data->wf_aligner,
-                            *extend_data->wfa_affine_penalties,
-                            &extend_data->num_sketches_allocated,
+                            extend_data,
                             *aln);
             if (wflign.emit_tsv) {
                 // 0) Mis-match, alignment skipped
@@ -437,7 +391,7 @@ void WFlign::wflign_affine_wavefront(
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
 
-        const int status = wf_aligner->alignEnd2End(target,target_length,query,query_length);
+        const int status = wf_aligner->alignEnd2End(target,(int)target_length,query,(int)query_length);
 
         auto *aln = new alignment_t();
         aln->j = 0;
@@ -627,10 +581,10 @@ void WFlign::wflign_affine_wavefront(
         extend_data.query_sketches = &query_sketches;
         extend_data.target_sketches = &target_sketches;
         extend_data.wf_aligner = wf_aligner;
-        extend_data.wflambda_aligner = wflambda_aligner;
-        extend_data.last_breakpoint_v = 0;
-        extend_data.last_breakpoint_h = 0;
-        extend_data.wfa_affine_penalties = &wfa_affine_penalties;
+//        extend_data.wflambda_aligner = wflambda_aligner;
+//        extend_data.last_breakpoint_v = 0;
+//        extend_data.last_breakpoint_h = 0;
+//        extend_data.wfa_affine_penalties = &wfa_affine_penalties;
         extend_data.num_alignments = 0;
         extend_data.num_alignments_performed = 0;
         extend_data.num_sketches_allocated = 0;

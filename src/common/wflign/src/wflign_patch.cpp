@@ -1,7 +1,6 @@
-#include <stddef.h>
+#include <cstddef>
 #include <chrono>
 #include <cstdlib>
-#include <iterator>
 #include <string>
 #include <atomic_image.hpp>
 #include "rkmh.hpp"
@@ -29,56 +28,50 @@ bool do_wfa_segment_alignment(
         const char* query,
         std::vector<rkmh::hash_t>*& query_sketch,
         const uint64_t& query_length,
-        const uint64_t& j,
+        const int& j,
         const std::string& target_name,
         const char* target,
         std::vector<rkmh::hash_t>*& target_sketch,
         const uint64_t& target_length,
-        const uint64_t& i,
+        const int& i,
         const uint16_t& segment_length_q,
         const uint16_t& segment_length_t,
         const uint16_t& step_size,
-        const uint64_t& minhash_kmer_size,
-        const float& max_mash_dist,
-        const float &mash_sketch_rate,
-        const float &inception_score_max_ratio,
-        wfa::WFAlignerGapAffine& wf_aligner,
-        const wflign_penalties_t& affine_penalties,
-        uint64_t* num_sketches_allocated,
+        wflign_extend_data_t* extend_data,
         alignment_t& aln) {
 
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
         *query_sketch = rkmh::hash_sequence(
-                query + j, segment_length_q, minhash_kmer_size, segment_length_q * mash_sketch_rate);
-        ++(*num_sketches_allocated);
+                query + j, segment_length_q, extend_data->minhash_kmer_size, (uint64_t)((float)segment_length_q * extend_data->mash_sketch_rate));
+        ++extend_data->num_sketches_allocated;
     }
     if (target_sketch == nullptr) {
         target_sketch = new std::vector<rkmh::hash_t>();
         *target_sketch = rkmh::hash_sequence(
-                target + i, segment_length_t, minhash_kmer_size, segment_length_t * mash_sketch_rate);
-        ++(*num_sketches_allocated);
+                target + i, segment_length_t, extend_data->minhash_kmer_size, (uint64_t)((float)segment_length_t * extend_data->mash_sketch_rate));
+        ++extend_data->num_sketches_allocated;
     }
 
     // first check if our mash dist is inbounds
     const float mash_dist =
-            rkmh::compare(*query_sketch, *target_sketch, minhash_kmer_size);
+            rkmh::compare(*query_sketch, *target_sketch, extend_data->minhash_kmer_size);
     //std::cerr << "mash_dist is " << mash_dist << std::endl;
 
     // this threshold is set low enough that we tend to randomly sample wflambda
     // matrix cells for alignment the threshold is adaptive, based on the mash
     // distance of the mapping we are aligning we should obtain enough
     // alignments that we can still patch between them
-    if (mash_dist > max_mash_dist) {
+    if (mash_dist > extend_data->max_mash_dist_to_evaluate) {
         // if it isn't, return false
         return false;
     } else {
         // if it is, we'll align
-        const int max_score = std::max(segment_length_q, segment_length_t) * inception_score_max_ratio;
+        const int max_score = (int)((float)std::max(segment_length_q, segment_length_t) * extend_data->inception_score_max_ratio);
 
-        wf_aligner.setMaxAlignmentScore(max_score);
-        const int status = wf_aligner.alignEnd2End(
+        extend_data->wf_aligner->setMaxAlignmentScore(max_score);
+        const int status = extend_data->wf_aligner->alignEnd2End(
                 target + i,segment_length_t,
                 query + j,segment_length_q);
 
@@ -91,33 +84,34 @@ bool do_wfa_segment_alignment(
         if (aln.ok) {
             aln.query_length = segment_length_q;
             aln.target_length = segment_length_t;
-#ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(wf_aligner->cigar, query, target,
-                        segment_length_q, segment_length_t, aln.j, aln.i)) {
-        std::cerr << "cigar failure at alignment " << aln.j << " "
-                  << aln.i << std::endl;
-        unpack_display_cigar(wf_aligner->cigar, query,
-                             target, segment_length_q, segment_length_t,
-                             aln.j, aln.i);
-        std::cerr << ">query" << std::endl
-                  << std::string(query + j, segment_length_q)
-                  << std::endl;
-        std::cerr << ">target" << std::endl
-                  << std::string(target + i, segment_length_t)
-                  << std::endl;
-        assert(false);
-    }
-#endif
 
-            wflign_edit_cigar_copy(wf_aligner,&aln.edit_cigar);
+//#ifdef VALIDATE_WFA_WFLIGN
+//            if (!validate_cigar(wf_aligner->cigar, query, target,
+//                        segment_length_q, segment_length_t, aln.j, aln.i)) {
+//                std::cerr << "cigar failure at alignment " << aln.j << " "
+//                          << aln.i << std::endl;
+//                unpack_display_cigar(wf_aligner->cigar, query,
+//                                     target, segment_length_q, segment_length_t,
+//                                     aln.j, aln.i);
+//                std::cerr << ">query" << std::endl
+//                          << std::string(query + j, segment_length_q)
+//                          << std::endl;
+//                std::cerr << ">target" << std::endl
+//                          << std::string(target + i, segment_length_t)
+//                          << std::endl;
+//                assert(false);
+//            }
+//#endif
+
+            wflign_edit_cigar_copy(*extend_data->wf_aligner,&aln.edit_cigar);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(aln.edit_cigar, query, target, segment_length_q,
                         segment_length_t, aln.j, aln.i)) {
-        std::cerr << "cigar failure after cigar copy in alignment "
-                  << aln.j << " " << aln.i << std::endl;
-        assert(false);
-    }
+                std::cerr << "cigar failure after cigar copy in alignment "
+                          << aln.j << " " << aln.i << std::endl;
+                assert(false);
+            }
 #endif
         }
 
@@ -1369,11 +1363,11 @@ exit(1);
 #endif
 
     // trim deletions at start and end of tracev
-    uint64_t begin_offset = 0;
-    uint64_t end_offset = 0;
+    uint64_t begin_offset;
+    uint64_t end_offset;
     {
-        uint64_t trim_del_first = 0;
-        uint64_t trim_del_last = 0;
+        uint64_t trim_del_first ;
+        uint64_t trim_del_last ;
 
         // 1.) sort initial ins/del to put del < ins
         auto first_non_indel = tracev.begin();

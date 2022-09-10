@@ -15,6 +15,7 @@
 
 #include "dna.hpp"
 #include "rkmh.hpp"
+#include "wflign.hpp"
 #include "wflign_alignment.hpp"
 
 /*
@@ -33,22 +34,16 @@ namespace wflign {
                 const char* query,
                 std::vector<rkmh::hash_t>*& query_sketch,
                 const uint64_t& query_length,
-                const uint64_t& j,
+                const int& j,
                 const std::string& target_name,
                 const char* target,
                 std::vector<rkmh::hash_t>*& target_sketch,
                 const uint64_t& target_length,
-                const uint64_t& i,
+                const int& i,
                 const uint16_t& segment_length_q,
                 const uint16_t& segment_length_t,
                 const uint16_t& step_size,
-                const uint64_t& minhash_kmer_size,
-                const float& max_mash_dist,
-                const float &mash_sketch_rate,
-                const float &inception_score_max_ratio,
-                wfa::WFAlignerGapAffine& wf_aligner,
-                const wflign_penalties_t& affine_penalties,
-                uint64_t* num_sketches_allocated,
+                wflign_extend_data_t* extend_data,
                 alignment_t& aln);
         void do_wfa_patch_alignment(
                 const char* query,

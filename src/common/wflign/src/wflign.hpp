@@ -121,4 +121,41 @@ namespace wflign {
 
 } /* namespace wflign */
 
+/*
+* DTO ()
+*/
+typedef struct {
+    // WFlign
+    wflign::wavefront::WFlign* wflign;
+    // Parameters
+    int pattern_length;
+    int text_length;
+    uint16_t step_size;
+    uint16_t segment_length_to_use;
+    int minhash_kmer_size;
+    float max_mash_dist_to_evaluate;
+    float mash_sketch_rate;
+    float inception_score_max_ratio;
+    // Alignments and sketches
+    robin_hood::unordered_flat_map<uint64_t,alignment_t*>* alignments;
+    std::vector<std::vector<rkmh::hash_t>*>* query_sketches;
+    std::vector<std::vector<rkmh::hash_t>*>* target_sketches;
+    // Subsidiary WFAligner
+    wfa::WFAlignerGapAffine* wf_aligner;
+//    // Bidirectional
+//    wfa::WFAlignerGapAffine* wflambda_aligner;
+//    int last_breakpoint_v;
+//    int last_breakpoint_h;
+//    wflign_penalties_t* wfa_affine_penalties;
+    // Stats
+    uint64_t num_alignments;
+    uint64_t num_alignments_performed;
+    // For performance improvements
+    uint64_t max_num_sketches_in_memory;
+    uint64_t num_sketches_allocated;
+    // wfplot
+    bool emit_png;
+    robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;
+} wflign_extend_data_t;
+
 #endif /* WFLIGN_HPP_ */
