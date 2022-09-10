@@ -201,9 +201,7 @@ void do_wfa_patch_alignment(
                + (affine_penalties.gap_extension
                   * std::max((int)256, (int)std::min(target_length, query_length))));
     wf_aligner.setMaxAlignmentScore(max_score);
-    wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
-    // hack hack hack... this should be returned correctly from the C++ wrapper
-    const int status = wf_aligner.getAlignmentStatus();
+    const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
     aln.ok = (status == WF_STATUS_SUCCESSFUL);
     if (aln.ok) {
         // No more necessary: correct X/M errors in the cigar
@@ -538,15 +536,15 @@ void write_merged_alignment(
 #ifdef VALIDATE_WFA_WFLIGN
                             if (!validate_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
                                         target_rev.size(), 0, 0)) {
-                        std::cerr << "cigar failure at head alignment " << std::endl;
-                        unpack_display_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
-                                             target_rev.size(), 0, 0);
-                        std::cerr << ">query" << std::endl
-                                  << std::string(query_rev.c_str(), query_rev.size()) << std::endl;
-                        std::cerr << ">target" << std::endl
-                                  << std::string(target_rev.c_str(), target_rev.size()) << std::endl;
-                        assert(false);
-                    }
+                                std::cerr << "cigar failure at head alignment " << std::endl;
+                                unpack_display_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(),
+                                                     target_rev.size(), 0, 0);
+                                std::cerr << ">query" << std::endl
+                                          << std::string(query_rev.c_str(), query_rev.size()) << std::endl;
+                                std::cerr << ">target" << std::endl
+                                          << std::string(target_rev.c_str(), target_rev.size()) << std::endl;
+                                assert(false);
+                            }
 #endif
 
                             //std::cerr << "Head patching\n";
@@ -686,14 +684,14 @@ void write_merged_alignment(
                             // << "\n"; std::cerr << "distance_close_indel " <<
                             // distance_close_indel << "\n";
 
-                    std::cerr << "[wflign::wflign_affine_wavefront] "
-                                 "patching in "
-                              << query_name << " " << query_offset
-                              << " @ " << query_pos << " - "
-                              << query_delta << " " << target_name
-                              << " " << target_offset << " @ "
-                              << target_pos << " - " << target_delta
-                              << std::endl;
+                            std::cerr << "[wflign::wflign_affine_wavefront] "
+                                         "patching in "
+                                      << query_name << " " << query_offset
+                                      << " @ " << query_pos << " - "
+                                      << query_delta << " " << target_name
+                                      << " " << target_offset << " @ "
+                                      << target_pos << " - " << target_delta
+                                      << std::endl;
 #endif
                             /*
                               std::cerr << "A patching in "
@@ -1073,15 +1071,15 @@ void write_merged_alignment(
 #ifdef VALIDATE_WFA_WFLIGN
                             if (!validate_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
                                         target_delta_x, 0, 0)) {
-                        std::cerr << "cigar failure at head alignment " << std::endl;
-                        unpack_display_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
-                                             target_delta_x, 0, 0);
-                        std::cerr << ">query" << std::endl
-                                  << std::string(query + query_pos, query_delta) << std::endl;
-                        std::cerr << ">target" << std::endl
-                                  << std::string(target - target_pointer_shift + target_pos, target_delta_x) << std::endl;
-                        assert(false);
-                    }
+                                std::cerr << "cigar failure at head alignment " << std::endl;
+                                unpack_display_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta,
+                                                     target_delta_x, 0, 0);
+                                std::cerr << ">query" << std::endl
+                                          << std::string(query + query_pos, query_delta) << std::endl;
+                                std::cerr << ">target" << std::endl
+                                          << std::string(target - target_pointer_shift + target_pos, target_delta_x) << std::endl;
+                                assert(false);
+                            }
 #endif
 
                             //std::cerr << "Tail patching\n";
@@ -1131,10 +1129,10 @@ void write_merged_alignment(
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] got unsorted "
                  "patched traceback: ";
-    for (auto c : patched) {
-        std::cerr << c;
-    }
-    std::cerr << std::endl;
+            for (auto c : patched) {
+                std::cerr << c;
+            }
+            std::cerr << std::endl;
 #endif
         };
 
@@ -1147,8 +1145,8 @@ void write_merged_alignment(
                 // copy
 #ifdef WFLIGN_DEBUG
                 std::cerr
-            << "[wflign::wflign_affine_wavefront] copying traceback"
-            << std::endl;
+                    << "[wflign::wflign_affine_wavefront] copying traceback"
+                    << std::endl;
 #endif
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
                     auto &aln = **x;
@@ -1204,29 +1202,29 @@ void write_merged_alignment(
                 if (!validate_trace(rawv, query, target - target_pointer_shift,
                             query_length, target_length_mut,
                             query_start, target_start)) {
-            std::cerr
-                << "cigar failure in rawv (at end) "
-                << "\t" << query_name << "\t" << query_total_length
-                << "\t"
-                << query_offset + (query_is_rev
-                                       ? query_length - query_end
-                                       : query_start)
-                << "\t"
-                << query_offset + (query_is_rev
-                                       ? query_length - query_start
-                                       : query_end)
-                << "\t" << (query_is_rev ? "-" : "+") << "\t"
-                << target_name << "\t" << target_total_length << "\t"
-                << target_offset - target_pointer_shift + target_start
-                << "\t" << target_offset + target_end << std::endl;
-            exit(1);
-        }
+                    std::cerr
+                        << "cigar failure in rawv (at end) "
+                        << "\t" << query_name << "\t" << query_total_length
+                        << "\t"
+                        << query_offset + (query_is_rev
+                                               ? query_length - query_end
+                                               : query_start)
+                        << "\t"
+                        << query_offset + (query_is_rev
+                                               ? query_length - query_start
+                                               : query_end)
+                        << "\t" << (query_is_rev ? "-" : "+") << "\t"
+                        << target_name << "\t" << target_total_length << "\t"
+                        << target_offset - target_pointer_shift + target_start
+                        << "\t" << target_offset + target_end << std::endl;
+                    exit(1);
+                }
 #endif
 
 #ifdef WFLIGN_DEBUG
                 std::cerr << "[wflign::wflign_affine_wavefront] eroding "
-                     "traceback at k="
-                  << erode_k << std::endl;
+                             "traceback at k="
+                          << erode_k << std::endl;
 #endif
 
                 // erode by removing matches < k
@@ -1257,28 +1255,28 @@ void write_merged_alignment(
             if (!validate_trace(erodev, query, target - target_pointer_shift,
                         query_length, target_length_mut, query_start,
                         target_start)) {
-        std::cerr << "cigar failure in erodev "
-                  << "\t" << query_name << "\t" << query_total_length
-                  << "\t"
-                  << query_offset + (query_is_rev
-                                         ? query_length - query_end
-                                         : query_start)
-                  << "\t"
-                  << query_offset + (query_is_rev
-                                         ? query_length - query_start
-                                         : query_end)
-                  << "\t" << (query_is_rev ? "-" : "+") << "\t"
-                  << target_name << "\t" << target_total_length << "\t"
-                  << target_offset - target_pointer_shift + target_start
-                  << "\t" << target_offset + target_end << std::endl;
-        exit(1);
-    }
+                std::cerr << "cigar failure in erodev "
+                          << "\t" << query_name << "\t" << query_total_length
+                          << "\t"
+                          << query_offset + (query_is_rev
+                                                 ? query_length - query_end
+                                                 : query_start)
+                          << "\t"
+                          << query_offset + (query_is_rev
+                                                 ? query_length - query_start
+                                                 : query_end)
+                          << "\t" << (query_is_rev ? "-" : "+") << "\t"
+                          << target_name << "\t" << target_total_length << "\t"
+                          << target_offset - target_pointer_shift + target_start
+                          << "\t" << target_offset + target_end << std::endl;
+                exit(1);
+            }
 #endif
 
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] normalizing eroded "
-                 "traceback"
-              << std::endl;
+                         "traceback"
+                      << std::endl;
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
@@ -1287,10 +1285,10 @@ void write_merged_alignment(
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] got normalized "
                  "eroded traceback: ";
-    for (auto c : erodev) {
-        std::cerr << c;
-    }
-    std::cerr << std::endl;
+            for (auto c : erodev) {
+                std::cerr << c;
+            }
+            std::cerr << std::endl;
 #endif
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
@@ -1301,22 +1299,22 @@ void write_merged_alignment(
             if (!validate_trace(pre_tracev, query,
                         target - target_pointer_shift, query_length,
                         target_length_mut, query_start, target_start)) {
-        std::cerr << "cigar failure in pre_tracev "
-                  << "\t" << query_name << "\t" << query_total_length
-                  << "\t"
-                  << query_offset + (query_is_rev
-                                         ? query_length - query_end
-                                         : query_start)
-                  << "\t"
-                  << query_offset + (query_is_rev
-                                         ? query_length - query_start
-                                         : query_end)
-                  << "\t" << (query_is_rev ? "-" : "+") << "\t"
-                  << target_name << "\t" << target_total_length << "\t"
-                  << target_offset - target_pointer_shift + target_start
-                  << "\t" << target_offset + target_end << std::endl;
-        exit(1);
-    }
+                std::cerr << "cigar failure in pre_tracev "
+                          << "\t" << query_name << "\t" << query_total_length
+                          << "\t"
+                          << query_offset + (query_is_rev
+                                                 ? query_length - query_end
+                                                 : query_start)
+                          << "\t"
+                          << query_offset + (query_is_rev
+                                                 ? query_length - query_start
+                                                 : query_end)
+                          << "\t" << (query_is_rev ? "-" : "+") << "\t"
+                          << target_name << "\t" << target_total_length << "\t"
+                          << target_offset - target_pointer_shift + target_start
+                          << "\t" << target_offset + target_end << std::endl;
+                exit(1);
+            }
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
@@ -1332,38 +1330,37 @@ void write_merged_alignment(
     //sort_indels(tracev);
 
 #ifdef WFLIGN_DEBUG
-    std::cerr
-<< "[wflign::wflign_affine_wavefront] got full patched traceback: ";
-for (auto c : tracev) {
-std::cerr << c;
-}
-std::cerr << std::endl;
+    std::cerr << "[wflign::wflign_affine_wavefront] got full patched traceback: ";
+    for (auto c : tracev) {
+        std::cerr << c;
+    }
+    std::cerr << std::endl;
 #endif
 
 #ifdef VALIDATE_WFA_WFLIGN
-    //            std::cerr << "query_length: " << query_length << std::endl;
+//            std::cerr << "query_length: " << query_length << std::endl;
 //            std::cerr << "target_length_mut: " << target_length_mut <<
 //            std::endl; std::cerr << "query_start: " << query_start <<
 //            std::endl; std::cerr << "target_start: " << target_start <<
 //            std::endl;
 
-if (!validate_trace(tracev, query, target - target_pointer_shift,
-                query_length, target_length_mut, query_start,
-                target_start)) {
-std::cerr
-    << "cigar failure at alignment (before head/tail del trimming) "
-    << "\t" << query_name << "\t" << query_total_length << "\t"
-    << query_offset +
-           (query_is_rev ? query_length - query_end : query_start)
-    << "\t"
-    << query_offset +
-           (query_is_rev ? query_length - query_start : query_end)
-    << "\t" << (query_is_rev ? "-" : "+") << "\t" << target_name << "\t"
-    << target_total_length << "\t"
-    << target_offset - target_pointer_shift + target_start << "\t"
-    << target_offset + target_end << std::endl;
-exit(1);
-}
+    if (!validate_trace(tracev, query, target - target_pointer_shift,
+                    query_length, target_length_mut, query_start,
+                    target_start)) {
+        std::cerr
+            << "cigar failure at alignment (before head/tail del trimming) "
+            << "\t" << query_name << "\t" << query_total_length << "\t"
+            << query_offset +
+                   (query_is_rev ? query_length - query_end : query_start)
+            << "\t"
+            << query_offset +
+                   (query_is_rev ? query_length - query_start : query_end)
+            << "\t" << (query_is_rev ? "-" : "+") << "\t" << target_name << "\t"
+            << target_total_length << "\t"
+            << target_offset - target_pointer_shift + target_start << "\t"
+            << target_offset + target_end << std::endl;
+        exit(1);
+    }
 #endif
 
     // trim deletions at start and end of tracev
