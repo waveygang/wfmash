@@ -192,6 +192,11 @@ int wflambda_extend_match(
                     alignments[k] = nullptr;
                 }
             } else {
+                // Cache up to 26214400 (1×8×1024×1024×200÷64) mismatches => ~200 MB
+                if (extend_data->num_cached_mismatches < 26214401) {
+                    alignments[k] = nullptr; // cache it
+                    ++extend_data->num_cached_mismatches;
+                }
                 if (emit_png) {
                     // Save only the mismatches, as they are not cached
                     high_order_dp_matrix_mismatch.insert(encode_pair(v, h));
@@ -588,6 +593,7 @@ void WFlign::wflign_affine_wavefront(
         extend_data.num_alignments = 0;
         extend_data.num_alignments_performed = 0;
         extend_data.num_sketches_allocated = 0;
+        extend_data.num_cached_mismatches = 0;
         // 1 GB / (hash_t*mash_sketch_rate*segment_length*2); 1 GB = 1×8×1024×1024×1024; '*2' to account query/target sequences
         extend_data.max_num_sketches_in_memory = std::ceil(8589934592.0 / (8.0*sizeof(rkmh::hash_t)*mash_sketch_rate*segment_length_to_use*2) );
         extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;

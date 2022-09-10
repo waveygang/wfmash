@@ -153,6 +153,7 @@ typedef struct {
     // For performance improvements
     uint64_t max_num_sketches_in_memory;
     uint64_t num_sketches_allocated;
+    uint64_t num_cached_mismatches;
     // wfplot
     bool emit_png;
     robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;
