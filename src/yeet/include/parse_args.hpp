@@ -13,7 +13,12 @@
 #include "yeet/include/temp_file.hpp"
 #include "common/utils.hpp"
 
-#include "../../version.hpp"
+#include "wfmash_git_version.hpp"
+
+// If the WFMASH_GIT_VERSION doesn't exist at all, define a placeholder
+#ifndef WFMASH_GIT_VERSION
+#define WFMASH_GIT_VERSION "not-from-git"
+#endif
 
 namespace yeet {
 
@@ -51,7 +56,7 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash: base-accurate alignments using mashmap2 and the wavefront algorithm " + wfmash::Version::get_version() + ": " + wfmash::Version::get_codename());
+    args::ArgumentParser parser("wfmash: a pangenome-scale aligner, " + std::string(WFMASH_GIT_VERSION));
     args::HelpFlag help(parser, "help", "display this help menu", {'h', "help"});
     args::ValueFlag<int> thread_count(parser, "N", "use this many threads during parallel steps", {'t', "threads"});
     args::Positional<std::string> target_sequence_file(parser, "target", "alignment target or reference sequence file");
@@ -145,7 +150,7 @@ void parse_args(int argc,
     }
 
     if (version) {
-        std::cerr << wfmash::Version::get_version() << std::endl;
+        std::cerr << WFMASH_GIT_VERSION << std::endl;
         exit(0);
     }
 

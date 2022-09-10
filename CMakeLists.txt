@@ -51,8 +51,7 @@ add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
 add_executable(wfmash
   src/common/utils.cpp
-  src/yeet/yeet_main.cpp
-  src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
+  src/yeet/yeet_main.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
 target_include_directories(wfmash PRIVATE
   src
   src/common
@@ -81,8 +80,3 @@ install(TARGETS wfmash DESTINATION bin)
 # version stuff
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/include)
 execute_process(COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src)
-
-# debugging stuff
-#if(WFA_PNG_AND_TSV)
-#    target_compile_definitions(wfmash PUBLIC WFA_PNG_AND_TSV)
-#endif()
