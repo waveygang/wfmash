@@ -64,8 +64,8 @@ inline uint64_t encode_pair(
     return ((uint64_t)v << 32) | (uint64_t)h;
 }
 inline void decode_pair(uint64_t pair, int *v, int *h) {
-    *v = pair >> 32;
-    *h = pair & 0x00000000FFFFFFFF;
+    *v = (int)(pair >> 32);
+    *h = (int)(pair & 0x00000000FFFFFFFF);
 }
 void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
     // The C++ language guarantees that `delete p` will do nothing if p is equal to NULL
