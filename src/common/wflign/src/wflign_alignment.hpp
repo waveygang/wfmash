@@ -40,13 +40,13 @@ public:
     alignment_t();
     ~alignment_t();
     // Utils
-    bool validate(
-            const char* query,
-            const char* target);
+//    bool validate(
+//            const char* query,
+//            const char* target);
     void trim_front(int query_trim);
     void trim_back(int query_trim);
-    // Display
-    void display(void);
+//    // Display
+//    void display(void);
 };
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit

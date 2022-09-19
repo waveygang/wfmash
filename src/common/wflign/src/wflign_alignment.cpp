@@ -22,19 +22,19 @@ alignment_t::alignment_t() {
 alignment_t::~alignment_t() {
     free(edit_cigar.cigar_ops);
 }
-void alignment_t::display(void) {
-    std::cerr << j << " " << i << " " << query_length << " "
-              << target_length << " " << ok << std::endl;
-    for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
-        std::cerr << edit_cigar.cigar_ops[x];
-    }
-    std::cerr << std::endl;
-}
-bool alignment_t::validate(
-        const char *query,
-        const char *target) {
-    return validate_cigar(edit_cigar,query,target,query_length,target_length,j,i);
-}
+//void alignment_t::display(void) {
+//    std::cerr << j << " " << i << " " << query_length << " "
+//              << target_length << " " << ok << std::endl;
+//    for (int x = edit_cigar.begin_offset; x < edit_cigar.end_offset; ++x) {
+//        std::cerr << edit_cigar.cigar_ops[x];
+//    }
+//    std::cerr << std::endl;
+//}
+//bool alignment_t::validate(
+//        const char *query,
+//        const char *target) {
+//    return validate_cigar(edit_cigar,query,target,query_length,target_length,j,i);
+//}
 void alignment_t::trim_front(int query_trim) {
     // this kills the alignment
     if (query_trim >= query_length) {

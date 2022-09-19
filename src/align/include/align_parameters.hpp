@@ -27,8 +27,6 @@ struct Parameters {
     int wfa_mismatch_score;
     int wfa_gap_opening_score;
     int wfa_gap_extension_score;
-    int wflambda_min_wavefront_length;            //wavefront length to trigger reduction (how wide should it be)
-    int wflambda_max_distance_threshold;          //maximum distance (in WFA diagonals) that a wavefront can fall behind the furthest
 
     // wflign
     int wflign_mismatch_score;
@@ -44,15 +42,17 @@ struct Parameters {
     std::vector<std::string> querySequences;      //query sequence(s)
     std::string mashmapPafFile;                   //mashmap paf mapping file
     std::string pafOutputFile;                    //paf/sam output file name
-    std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
 
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
     bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
 
+#ifdef WFA_PNG_AND_TSV
     // plotting
+    std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
     uint64_t wfplot_max_size;                     // Max size (width/height) of the wfplot
     std::string prefix_wavefront_plot_in_png;     // Prefix of PNG files with wavefront plot for each alignment
+#endif
 };
 
 }

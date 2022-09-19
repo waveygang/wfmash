@@ -70,7 +70,14 @@ WFAligner::AlignmentStatus WFAligner::alignEnd2EndLambda(
   // Configure
   wavefront_aligner_set_alignment_end_to_end(wfAligner);
   // Align (using custom matching function)
-  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,NULL,patternLength,NULL,textLength);
+  int* pattern_lambda = (int*)mm_allocator_malloc(wfAligner->mm_allocator,patternLength*sizeof(int));
+  for (int i=0;i<patternLength;i++) { pattern_lambda[i] = i; }
+  int* text_lambda = (int*)mm_allocator_malloc(wfAligner->mm_allocator,textLength*sizeof(int));
+  for (int i=0;i<textLength;i++) { text_lambda[i] = i; }
+  int status = wavefront_align(wfAligner,NULL,pattern_lambda,patternLength,NULL,text_lambda,textLength);
+  mm_allocator_free(wfAligner->mm_allocator,pattern_lambda);
+  mm_allocator_free(wfAligner->mm_allocator,text_lambda);
+  return (WFAligner::AlignmentStatus) status;
 }
 WFAligner::AlignmentStatus WFAligner::alignEnd2End(
     const char* const pattern,
@@ -80,7 +87,7 @@ WFAligner::AlignmentStatus WFAligner::alignEnd2End(
   // Configure
   wavefront_aligner_set_alignment_end_to_end(wfAligner);
   // Align
-  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,pattern,patternLength,text,textLength);
+  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,pattern,NULL,patternLength,text,NULL,textLength);
 }
 WFAligner::AlignmentStatus WFAligner::alignEnd2End(
     std::string& pattern,
@@ -103,7 +110,13 @@ WFAligner::AlignmentStatus WFAligner::alignEndsFreeLambda(
       patternBeginFree,patternEndFree,
       textBeginFree,textEndFree);
   // Align (using custom matching function)
-  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,NULL,patternLength,NULL,textLength);
+  int* pattern_lambda = (int*)mm_allocator_malloc(wfAligner->mm_allocator,patternLength*sizeof(int));
+  for (int i=0;i<patternLength;i++) { pattern_lambda[i] = i; }
+  int* text_lambda = (int*)mm_allocator_malloc(wfAligner->mm_allocator,textLength*sizeof(int));
+  for (int i=0;i<textLength;i++) { text_lambda[i] = i; }
+  int status = wavefront_align(wfAligner,NULL,pattern_lambda,patternLength,NULL,text_lambda,textLength);
+  mm_allocator_free(wfAligner->mm_allocator,pattern_lambda);
+  return (WFAligner::AlignmentStatus) status;
 }
 WFAligner::AlignmentStatus WFAligner::alignEndsFree(
     const char* const pattern,
@@ -119,7 +132,7 @@ WFAligner::AlignmentStatus WFAligner::alignEndsFree(
       patternBeginFree,patternEndFree,
       textBeginFree,textEndFree);
   // Align
-  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,pattern,patternLength,text,textLength);
+  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,pattern,NULL,patternLength,text,NULL,textLength);
 }
 WFAligner::AlignmentStatus WFAligner::alignEndsFree(
     std::string& pattern,
@@ -196,6 +209,15 @@ void WFAligner::setMatchFunct(
     int (*matchFunct)(int,int,void*),
     void* matchFunctArguments) {
   wavefront_aligner_set_match_funct(wfAligner,matchFunct,matchFunctArguments);
+}
+/*
+ * Bidirectional
+ */
+void WFAligner::getLastBreakpoint(
+        int *v,
+        int *h) {
+    *h = WAVEFRONT_H(wfAligner->last_breakpoint.k_forward,wfAligner->last_breakpoint.offset_forward);
+    *v = WAVEFRONT_V(wfAligner->last_breakpoint.k_forward,wfAligner->last_breakpoint.offset_forward);
 }
 /*
  * Limits

@@ -15,6 +15,7 @@
 
 #include "dna.hpp"
 #include "rkmh.hpp"
+#include "wflign.hpp"
 #include "wflign_alignment.hpp"
 
 /*
@@ -33,23 +34,16 @@ namespace wflign {
                 const char* query,
                 std::vector<rkmh::hash_t>*& query_sketch,
                 const uint64_t& query_length,
-                const uint64_t& j,
+                const int& j,
                 const std::string& target_name,
                 const char* target,
                 std::vector<rkmh::hash_t>*& target_sketch,
                 const uint64_t& target_length,
-                const uint64_t& i,
+                const int& i,
                 const uint16_t& segment_length_q,
                 const uint16_t& segment_length_t,
                 const uint16_t& step_size,
-                const uint64_t& minhash_kmer_size,
-                const int& min_wavefront_length,
-                const int& max_distance_threshold,
-                const float& max_mash_dist,
-                const float &mash_sketch_rate,
-                const float &inception_score_max_ratio,
-                wfa::WFAlignerGapAffine& wf_aligner,
-                const wflign_penalties_t& affine_penalties,
+                wflign_extend_data_t* extend_data,
                 alignment_t& aln);
         void do_wfa_patch_alignment(
                 const char* query,
@@ -59,8 +53,6 @@ namespace wflign {
                 const uint64_t& i,
                 const uint64_t& target_length,
                 const int& segment_length,
-                const int& min_wavefront_length,
-                const int& max_distance_threshold,
                 wfa::WFAlignerGapAffine& _wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 alignment_t& aln);
@@ -94,8 +86,10 @@ namespace wflign {
                 const int& erode_k,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
+#ifdef WFA_PNG_AND_TSV
                 const std::string* prefix_wavefront_plot_in_png,
                 const uint64_t& wfplot_max_size,
+#endif
                 const bool& with_endline = true);
         void write_alignment(
                 std::ostream& out,

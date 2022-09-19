@@ -43,8 +43,6 @@ namespace wflign {
             int wfa_mismatch_score;
             int wfa_gap_opening_score;
             int wfa_gap_extension_score;
-            int wflambda_min_wavefront_length; // with these set at 0 we do exact WFA for wflambda
-            int wflambda_max_distance_threshold;
             float mashmap_estimated_identity;
             // WFlign parameters
             int wflign_mismatch_score;
@@ -69,10 +67,12 @@ namespace wflign {
             uint64_t target_length;
             // Output
             std::ostream* out;
+#ifdef WFA_PNG_AND_TSV
             bool emit_tsv;
             std::ostream* out_tsv;
             const std::string* prefix_wavefront_plot_in_png;
             uint64_t wfplot_max_size;
+#endif
             bool merge_alignments;
             bool emit_md_tag;
             bool paf_format_else_sam;
@@ -85,8 +85,6 @@ namespace wflign {
                     const int wfa_mismatch_score,
                     const int wfa_gap_opening_score,
                     const int wfa_gap_extension_score,
-                    const int wflambda_min_wavefront_length,
-                    const int wflambda_max_distance_threshold,
                     const float mashmap_estimated_identity,
                     const int wflign_mismatch_score,
                     const int wflign_gap_opening_score,
@@ -98,10 +96,12 @@ namespace wflign {
             // Set output configuration
             void set_output(
                     std::ostream* const out,
+#ifdef WFA_PNG_AND_TSV
                     const bool emit_tsv,
                     std::ostream* const out_tsv,
                     const std::string &wfplot_filepath,
                     const uint64_t wfplot_max_size,
+#endif
                     const bool merge_alignments,
                     const bool emit_md_tag,
                     const bool paf_format_else_sam,
@@ -124,5 +124,44 @@ namespace wflign {
     } /* namespace wavefront */
 
 } /* namespace wflign */
+
+/*
+* DTO ()
+*/
+typedef struct {
+    // WFlign
+    wflign::wavefront::WFlign* wflign;
+    // Parameters
+    int pattern_length;
+    int text_length;
+    uint16_t step_size;
+    uint16_t segment_length_to_use;
+    int minhash_kmer_size;
+    float max_mash_dist_to_evaluate;
+    float mash_sketch_rate;
+    float inception_score_max_ratio;
+    // Alignments and sketches
+    robin_hood::unordered_flat_map<uint64_t,alignment_t*>* alignments;
+    std::vector<std::vector<rkmh::hash_t>*>* query_sketches;
+    std::vector<std::vector<rkmh::hash_t>*>* target_sketches;
+    // Subsidiary WFAligner
+    wfa::WFAlignerGapAffine* wf_aligner;
+//    // Bidirectional
+//    wfa::WFAlignerGapAffine* wflambda_aligner;
+//    int last_breakpoint_v;
+//    int last_breakpoint_h;
+//    wflign_penalties_t* wfa_affine_penalties;
+    // Stats
+    uint64_t num_alignments;
+    uint64_t num_alignments_performed;
+    // For performance improvements
+    uint64_t max_num_sketches_in_memory;
+    uint64_t num_sketches_allocated;
+#ifdef WFA_PNG_AND_TSV
+    // wfplot
+    bool emit_png;
+    robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;
+#endif
+} wflign_extend_data_t;
 
 #endif /* WFLIGN_HPP_ */

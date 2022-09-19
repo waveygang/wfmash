@@ -305,6 +305,7 @@ namespace align
                   }
               };
 
+#ifdef WFA_PNG_AND_TSV
           auto writer_thread_tsv =
                   [&]() {
               if (!param.tsvOutputPrefix.empty()) {
@@ -327,6 +328,7 @@ namespace align
                   }
               }
           };
+#endif
 
           // worker, takes candidate alignments and runs wfa alignment on them
           auto worker_thread = 
@@ -340,11 +342,17 @@ namespace align
                           break;
                       } else if (rec != nullptr) {
                           std::stringstream output;
+#ifdef WFA_PNG_AND_TSV
                           std::stringstream output_tsv;
-                          doAlignment(output, output_tsv,
-                                      rec->currentRecord,
-                                      rec->mappingRecordLine,
-                                      rec->qSequence, tid);
+#endif
+                          doAlignment(
+                                  output,
+#ifdef WFA_PNG_AND_TSV
+                                  output_tsv,
+#endif
+                                  rec->currentRecord,
+                                  rec->mappingRecordLine,
+                                  rec->qSequence, tid);
                           progress.increment(rec->currentRecord.qEndPos - rec->currentRecord.qStartPos);
 
                           auto* paf_rec = new std::string(output.str());
@@ -354,12 +362,14 @@ namespace align
                               delete paf_rec;
                           }
 
+#ifdef WFA_PNG_AND_TSV
                           auto* tsv_rec = new std::string(output_tsv.str());
                           if (!tsv_rec->empty()) {
                               tsv_queue.push(tsv_rec);
                           } else {
                               delete tsv_rec;
                           }
+#endif
 
                           delete rec;
                       } else {
@@ -373,8 +383,10 @@ namespace align
           std::thread reader(reader_thread);
           // launch PAF/SAM writer
           std::thread writer(writer_thread);
+#ifdef WFA_PNG_AND_TSV
           // launch TSV writer
           std::thread writer_tsv(writer_thread_tsv);
+#endif
           // launch workers
           std::vector<std::thread> workers; workers.reserve(nthreads);
           for (uint64_t t = 0; t < nthreads; ++t) {
@@ -390,8 +402,9 @@ namespace align
           }
           // and finally the writer
           writer.join();
+#ifdef WFA_PNG_AND_TSV
           writer_tsv.join();
-
+#endif
           progress.finish();
           std::cerr << "[wfmash::align::computeAlignments] "
                     << "count of mapped reads = " << total_seqs
@@ -407,7 +420,9 @@ namespace align
        */
       void doAlignment(
               std::stringstream& output,
+#ifdef WFA_PNG_AND_TSV
               std::stringstream& output_tsv,
+#endif
               MappingBoundaryRow &currentRecord,
               const std::string &mappingRecordLine,
               const std::shared_ptr<std::string> &qSequence,
@@ -477,8 +492,6 @@ namespace align
                 param.wfa_mismatch_score,
                 param.wfa_gap_opening_score,
                 param.wfa_gap_extension_score,
-                param.wflambda_min_wavefront_length,
-                param.wflambda_max_distance_threshold,
                 currentRecord.mashmap_estimated_identity,
                 param.wflign_mismatch_score,
                 param.wflign_gap_opening_score,
@@ -489,10 +502,12 @@ namespace align
                 param.wflign_erode_k);
         wflign->set_output(
                 &output,
+#ifdef WFA_PNG_AND_TSV
                 !param.tsvOutputPrefix.empty(),
                 &output_tsv,
                 param.prefix_wavefront_plot_in_png,
                 param.wfplot_max_size,
+#endif
                 true, // merge alignments
                 param.emit_md_tag,
                 !param.sam_format,

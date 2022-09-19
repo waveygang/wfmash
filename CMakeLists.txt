@@ -35,6 +35,11 @@ else()
     set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
 endif ()
 
+if(WFA_PNG_AND_TSV)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWFA_PNG_AND_TSV")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWFA_PNG_AND_TSV")
+endif ()
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -46,9 +51,7 @@ add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
 add_executable(wfmash
   src/common/utils.cpp
-  src/yeet/yeet_main.cpp
-  src/version.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
-
+  src/interface/main.cpp) #$(CXX) $(CXXFLAGS) $(CPPFLAGS) -Lsrc/common/wflign/build/lib -Isrc/common/wflign/deps -Isrc/common $(SOURCE_1) -o wfmash @mathlib@ -lstdc++ -lz -lm -lpthread -lwflambda -lwflign
 target_include_directories(wfmash PRIVATE
   src
   src/common
@@ -57,7 +60,7 @@ target_include_directories(wfmash PRIVATE
   #src/common/wflign/abseil-cpp
   )
 target_link_directories(wfmash PRIVATE
-        src/common/wflign/deps/WFA2-lib/lib)
+  src/common/wflign/deps/WFA2-lib/lib)
 target_link_libraries(wfmash
   gsl
   gslcblas
