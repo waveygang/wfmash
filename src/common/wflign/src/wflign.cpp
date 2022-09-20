@@ -402,7 +402,8 @@ void WFlign::wflign_affine_wavefront(
                         wfa_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-
+        wf_aligner->setHeuristicNone();
+        
         const int status = wf_aligner->alignEnd2End(target,(int)target_length,query,(int)query_length);
 
         auto *aln = new alignment_t();
