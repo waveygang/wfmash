@@ -495,7 +495,7 @@ void WFlign::wflign_affine_wavefront(
                 mashmap_estimated_identity,
                 wflign_max_len_major,
                 wflign_max_len_minor,
-                erode_k,
+                0, // Erosion is disabled, because standard WFA was performed on the whole mapping
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
 #ifdef WFA_PNG_AND_TSV
