@@ -226,6 +226,8 @@ void do_wfa_patch_alignment(
     }
 }
 
+#define MIN_WFA_HEAD_TAIL_PATCH_LENGTH 256
+
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
@@ -400,12 +402,21 @@ void write_merged_alignment(
                 if (query_delta > 0 && query_delta < wflign_max_len_minor) {
                     // Semi-global mode for patching the heads
 
-                    // TODO: when we will have semi-global WFA
                     // nibble forward if we're below the correct length
-                    // ...
-                    // TODO: when we will have semi-global WFA
+                    // this gives a bit of context for the alignment
+                    while (q != unpatched.end() &&
+                           (query_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH || target_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH)) {
+                        const auto &c = *q++;
+                        switch (c) {
+                            case 'M': case 'X':
+                                ++query_delta; ++target_delta; break;
+                            case 'I': ++query_delta; break;
+                            case 'D': ++target_delta; break;
+                            default: break;
+                        }
+                    }
 
-//                    std::cerr << "HEAD patching in"
+//                    std::cerr << "A HEAD patching in"
 //                              << query_name << " "
 //                              << query_offset << "@ " << query_pos <<
 //                              " - " << query_delta
@@ -417,7 +428,7 @@ void write_merged_alignment(
 //                              << std::endl;
 
                     // min_wfa_patch_length-bps of margins to manage insertions in the query
-                    const uint64_t delta_to_ask = query_delta + min_wfa_patch_length <= target_delta ? 0 : query_delta + min_wfa_patch_length - target_delta;
+                    const uint64_t delta_to_ask = query_delta <= target_delta ? 0 : query_delta - target_delta;
 
                     uint64_t target_delta_to_shift = 0;
                     uint64_t target_pos_x, target_start_x;
@@ -934,24 +945,6 @@ void write_merged_alignment(
 
             // Tail patching
             {
-                // TODO: when we will have semi-global WFA
-                // nibble backward if we're below the correct length
-                /*bool nibble_fwd = true;
-                while (!patched.empty() && query_delta < min_wfa_patch_length) {
-                    const auto& c = patched.back();
-                    switch (c) {
-                        case 'M': case 'X':
-                            --query_pos; --target_pos;
-                            ++query_delta; ++target_delta; break;
-                        case 'I': ++query_delta; --query_pos; break;
-                        case 'D': ++target_delta; --target_pos; break;
-                        default: break;
-                    }
-                    patched.pop_back();
-                }
-                */
-                // TODO: when we will have semi-global WFA
-
                 // Important: the last patch (in the middle of the traceback)
                 // can generate a tail check backward if there are other Is/Ds
                 // to merge in the current patch
@@ -975,6 +968,22 @@ void write_merged_alignment(
                 got_alignment = false;
 
                 if (query_delta > 0 && query_delta < wflign_max_len_minor) {
+                    // nibble backward if we're below the correct length
+                    // this gives a bit of context for the alignment
+                    while (!patched.empty() &&
+                           (query_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH || target_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH)) {
+                        const auto& c = patched.back();
+                        switch (c) {
+                            case 'M': case 'X':
+                                --query_pos; --target_pos;
+                                ++query_delta; ++target_delta; break;
+                            case 'I': ++query_delta; --query_pos; break;
+                            case 'D': ++target_delta; --target_pos; break;
+                            default: break;
+                        }
+                        patched.pop_back();
+                    }
+
 //                    std::cerr << "A TAIL patching in "
 //                              << query_name << " " <<
 //                              query_offset << " @ " <<
@@ -987,7 +996,7 @@ void write_merged_alignment(
 //                              << std::endl;
 
                     // min_wfa_patch_length-bps of margins to manage insertions in the query
-                    const uint64_t delta_to_ask = query_delta + min_wfa_patch_length <= target_delta ? 0 : query_delta + min_wfa_patch_length - target_delta;
+                    const uint64_t delta_to_ask = query_delta <= target_delta ? 0 : query_delta - target_delta;
 
                     // there is a piece of query
                     auto target_delta_x =
@@ -1081,7 +1090,8 @@ void write_merged_alignment(
                         patched.push_back('D');
                     }
                 }
-                // query_pos += query_delta; // not used
+                // not used
+                // query_pos += query_delta;
                 // target_pos += target_delta;
             }
 
@@ -1326,8 +1336,8 @@ void write_merged_alignment(
     uint64_t begin_offset;
     uint64_t end_offset;
     {
-        uint64_t trim_del_first ;
-        uint64_t trim_del_last ;
+        uint64_t trim_del_first;
+        uint64_t trim_del_last;
 
         // 1.) sort initial ins/del to put del < ins
         auto first_non_indel = tracev.begin();
