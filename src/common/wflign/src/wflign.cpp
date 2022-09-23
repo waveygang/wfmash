@@ -490,7 +490,7 @@ void WFlign::wflign_affine_wavefront(
                 mashmap_estimated_identity,
                 wflign_max_len_major,
                 wflign_max_len_minor,
-                0, // Erosion and middle patching are disabled, because standard WFA was performed on the whole mapping
+                erode_k,
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
 #ifdef WFA_PNG_AND_TSV
