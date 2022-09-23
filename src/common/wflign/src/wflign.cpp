@@ -12,8 +12,8 @@ namespace wavefront {
 /*
 * Configuration
 */
-#define MAX_LEN_FOR_PURE_WFA    25000 // == default --block-length. Only for low-divergence, otherwise disabled
-#define MIN_WF_LENGTH           256
+#define MAX_LEN_FOR_STANDARD_WFA 25000 // default --block-length. Only for low-divergence, otherwise disabled
+#define MIN_WF_LENGTH            256
 
 /*
 * Utils
@@ -391,10 +391,8 @@ void WFlign::wflign_affine_wavefront(
     if (
             (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
             (mashmap_estimated_identity >= 0.99
-             && query_length <= MAX_LEN_FOR_PURE_WFA && target_length <= MAX_LEN_FOR_PURE_WFA)
+             && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)
             ) {
-        uint64_t num_alignments = 0;
-        uint64_t num_alignments_performed = 0;
         wfa::WFAlignerGapAffine* wf_aligner =
                 new wfa::WFAlignerGapAffine(
                         wfa_affine_penalties.mismatch,
@@ -446,9 +444,6 @@ void WFlign::wflign_affine_wavefront(
     #endif
         }
 
-        ++num_alignments;
-        ++num_alignments_performed;
-
         trace.push_back(aln);
 
         const long elapsed_time_wflambda_ms =
@@ -487,15 +482,15 @@ void WFlign::wflign_affine_wavefront(
                 target_total_length,
                 target_offset,
                 target_length,
-                MAX_LEN_FOR_PURE_WFA,
+                MAX_LEN_FOR_STANDARD_WFA,
                 min_identity,
                 elapsed_time_wflambda_ms,
-                num_alignments,
-                num_alignments_performed,
+                1,
+                1,
                 mashmap_estimated_identity,
                 wflign_max_len_major,
                 wflign_max_len_minor,
-                0, // Erosion is disabled, because standard WFA was performed on the whole mapping
+                0, // Erosion and middle patching are disabled, because standard WFA was performed on the whole mapping
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
 #ifdef WFA_PNG_AND_TSV
