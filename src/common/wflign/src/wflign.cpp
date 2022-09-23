@@ -12,7 +12,7 @@ namespace wavefront {
 /*
 * Configuration
 */
-#define MAX_LEN_FOR_PURE_WFA    20000 // only for low-divergence, otherwise disabled
+#define MAX_LEN_FOR_PURE_WFA    25000 // == default --block-length. Only for low-divergence, otherwise disabled
 #define MIN_WF_LENGTH           256
 
 /*
