@@ -74,9 +74,6 @@ namespace wflign {
                 const uint64_t& target_total_length,
                 const uint64_t& target_offset,
                 const uint64_t& target_length,
-#ifdef WFA_PNG_AND_TSV
-                const uint16_t& segment_length,
-#endif
                 const float& min_identity,
                 const long& elapsed_time_wflambda_ms,
                 const uint64_t& num_alignments,

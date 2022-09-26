@@ -482,9 +482,6 @@ void WFlign::wflign_affine_wavefront(
                 target_total_length,
                 target_offset,
                 target_length,
-#ifdef WFA_PNG_AND_TSV
-                2, // To fully plot query/target sequences
-#endif
                 min_identity,
                 elapsed_time_wflambda_ms,
                 1,
@@ -932,9 +929,6 @@ void WFlign::wflign_affine_wavefront(
                         target_total_length,
                         target_offset,
                         target_length,
-#ifdef WFA_PNG_AND_TSV
-                        segment_length_to_use,
-#endif
                         min_identity,
                         elapsed_time_wflambda_ms,
                         extend_data.num_alignments,
