@@ -191,7 +191,6 @@ void do_wfa_patch_alignment(
         const char* target,
         const uint64_t& i,
         const uint64_t& target_length,
-        const int& segment_length,
         wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
@@ -370,7 +369,6 @@ void write_merged_alignment(
                 &target_length_mut, &target_start, &target_offset,
                 &target_total_length, &target_end,
                 &target_pointer_shift,
-                &segment_length,
                 &wflign_max_len_major,
                 &wflign_max_len_minor,
                 &distance_close_big_enough_indels, &min_wf_length,
@@ -861,8 +859,7 @@ void write_merged_alignment(
                                 // WFA is only global
                                 do_wfa_patch_alignment(
                                         query, query_pos, query_delta,
-                                        target - target_pointer_shift, target_pos,
-                                        target_delta, segment_length,
+                                        target - target_pointer_shift, target_pos, target_delta,
                                         wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
