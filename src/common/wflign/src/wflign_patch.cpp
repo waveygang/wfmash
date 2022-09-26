@@ -191,7 +191,6 @@ void do_wfa_patch_alignment(
         const char* target,
         const uint64_t& i,
         const uint64_t& target_length,
-        const int& segment_length,
         wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln) {
@@ -247,7 +246,6 @@ void write_merged_alignment(
         const uint64_t& target_total_length,
         const uint64_t& target_offset,
         const uint64_t& target_length,
-        const uint16_t& segment_length,
         const float& min_identity,
         const long& elapsed_time_wflambda_ms,
         const uint64_t& num_alignments,
@@ -370,7 +368,6 @@ void write_merged_alignment(
                 &target_length_mut, &target_start, &target_offset,
                 &target_total_length, &target_end,
                 &target_pointer_shift,
-                &segment_length,
                 &wflign_max_len_major,
                 &wflign_max_len_minor,
                 &distance_close_big_enough_indels, &min_wf_length,
@@ -861,8 +858,7 @@ void write_merged_alignment(
                                 // WFA is only global
                                 do_wfa_patch_alignment(
                                         query, query_pos, query_delta,
-                                        target - target_pointer_shift, target_pos,
-                                        target_delta, segment_length,
+                                        target - target_pointer_shift, target_pos, target_delta,
                                         wf_aligner, affine_penalties, patch_aln);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
@@ -1395,12 +1391,8 @@ query_start : query_end)
 #ifdef WFA_PNG_AND_TSV
     bool emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
     if (emit_png) {
-        const int step_size = (segment_length / 2);
-
-        //const int pattern_length = (int)query_length;
-        //const int text_length = (int)target_length;
-        const int pattern_length = (int)query_length / step_size - (query_length % step_size != 0 ? 1 : 0);
-        const int text_length = (int)target_length / step_size - (target_length % step_size != 0 ? 1 : 0);
+        const int pattern_length = (int)query_length;
+        const int text_length = (int)target_length;
 
         const int wfplot_vmin = 0, wfplot_vmax = pattern_length;
         const int wfplot_hmin = 0, wfplot_hmax = text_length;
@@ -1452,8 +1444,8 @@ query_start : query_end)
                         ++v;
                         ++h;
                         {
-                            uint64_t _v = (v / step_size);
-                            uint64_t _h = (h / step_size);
+                            uint64_t _v = v;
+                            uint64_t _h = h;
                             if ((_v != last_v && _h != last_h)
                                 && _v >= wfplot_vmin && _v <= wfplot_vmax
                                 && _h >= wfplot_hmin && _h <= wfplot_hmax) {

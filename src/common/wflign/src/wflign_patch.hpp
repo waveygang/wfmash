@@ -52,7 +52,6 @@ namespace wflign {
                 const char* target,
                 const uint64_t& i,
                 const uint64_t& target_length,
-                const int& segment_length,
                 wfa::WFAlignerGapAffine& _wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 alignment_t& aln);
@@ -75,7 +74,6 @@ namespace wflign {
                 const uint64_t& target_total_length,
                 const uint64_t& target_offset,
                 const uint64_t& target_length,
-                const uint16_t& segment_length,
                 const float& min_identity,
                 const long& elapsed_time_wflambda_ms,
                 const uint64_t& num_alignments,
