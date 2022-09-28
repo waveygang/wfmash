@@ -352,7 +352,7 @@ void WFlign::wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     float inception_score_max_ratio = 1.0 + 0.5 / mashmap_estimated_identity;
-    float max_mash_dist_to_evaluate = std::min(0.95, 0.05 / std::pow(mashmap_estimated_identity,5));
+    float max_mash_dist_to_evaluate = std::min(0.95, 0.05 / std::pow(mashmap_estimated_identity,15));
     float mash_sketch_rate = 1.0;
     int wf_max_dist_threshold = 256;
 
