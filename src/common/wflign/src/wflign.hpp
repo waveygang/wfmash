@@ -81,7 +81,6 @@ namespace wflign {
             WFlign(
                     const uint16_t segment_length,
                     const float min_identity,
-                    const int _minhash_kmer_size,
                     const int wfa_mismatch_score,
                     const int wfa_gap_opening_score,
                     const int wfa_gap_extension_score,

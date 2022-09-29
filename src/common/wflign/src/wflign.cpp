@@ -41,7 +41,6 @@ void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
 WFlign::WFlign(
     const uint16_t segment_length,
     const float min_identity,
-    const int _minhash_kmer_size,
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
@@ -56,7 +55,6 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
-    this->_minhash_kmer_size = _minhash_kmer_size;
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
     this->wfa_gap_extension_score = wfa_gap_extension_score;
