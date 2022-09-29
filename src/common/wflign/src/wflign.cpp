@@ -311,8 +311,7 @@ void WFlign::wflign_affine_wavefront(
         return;
     }
 
-    //auto minhash_kmer_size = _minhash_kmer_size;
-    auto minhash_kmer_size = std::max(8, std::min(19, (int)std::round(1.0 / (1.0 - mashmap_estimated_identity))));
+    const int minhash_kmer_size = std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
 
     // Set penalties
     wflign_penalties_t wfa_affine_penalties;
