@@ -41,7 +41,6 @@ void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
 WFlign::WFlign(
     const uint16_t segment_length,
     const float min_identity,
-    const int _minhash_kmer_size,
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
@@ -56,7 +55,6 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
-    this->_minhash_kmer_size = _minhash_kmer_size;
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
     this->wfa_gap_extension_score = wfa_gap_extension_score;
@@ -313,8 +311,7 @@ void WFlign::wflign_affine_wavefront(
         return;
     }
 
-    //auto minhash_kmer_size = _minhash_kmer_size;
-    auto minhash_kmer_size = std::max(8, std::min(19, (int)std::round(1.0 / (1.0 - mashmap_estimated_identity))));
+    const int minhash_kmer_size = std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
 
     // Set penalties
     wflign_penalties_t wfa_affine_penalties;
@@ -352,7 +349,7 @@ void WFlign::wflign_affine_wavefront(
     // wflambda layer we then patch up the gaps between them
 
     float inception_score_max_ratio = 1.0 + 0.5 / mashmap_estimated_identity;
-    float max_mash_dist_to_evaluate = std::min(0.95, 0.05 / std::pow(mashmap_estimated_identity,5));
+    float max_mash_dist_to_evaluate = std::min(0.55, 0.05 / std::pow(mashmap_estimated_identity,13));
     float mash_sketch_rate = 1.0;
     int wf_max_dist_threshold = 256;
 
