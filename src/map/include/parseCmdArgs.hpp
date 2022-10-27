@@ -66,6 +66,9 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
     cmd.defineOption("kmer", "kmer size <= 16 [default : 16]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("kmer","k");
+    
+    cmd.defineOption("sketchSize", "size of sketch [default : 25]", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("sketchSize","S");
 
     cmd.defineOption("filter_mode", "filter modes in mashmap: 'map', 'one-to-one' or 'none' [default: map]\n\
 'map' computes best mappings for each query sequence\n\
@@ -191,7 +194,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     std::cerr << "[wfmash::map] Reference = " << parameters.refSequences << std::endl;
     std::cerr << "[wfmash::map] Query = " << parameters.querySequences << std::endl;
     std::cerr << "[wfmash::map] Kmer size = " << parameters.kmerSize << std::endl;
-    std::cerr << "[wfmash::map] Window size = " << parameters.windowSize << std::endl;
+    std::cerr << "[wfmash::map] Sketch size = " << parameters.sketchSize << std::endl;
     std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
     std::cerr << "[wfmash::map] Block length min = " << parameters.block_length << std::endl;
     std::cerr << "[wfmash::map] Chaining gap max = " << parameters.chain_gap << std::endl;
@@ -319,6 +322,12 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else
       parameters.split = true;
 
+    if(cmd.foundOption("sketchSize"))
+    {
+      str << cmd.optionValue("sketchSize");
+      str >> parameters.sketchSize;
+      str.clear();
+    }
 
     //Parse algorithm parameters
     if(cmd.foundOption("kmer"))

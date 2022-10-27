@@ -52,6 +52,7 @@ struct Parameters
     bool mergeMappings;                               //if we should merge consecutive segment mappings
     bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
 
+    int sketchSize;
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
