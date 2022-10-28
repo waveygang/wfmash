@@ -49,7 +49,7 @@ namespace skch
       if(j == 1)
         return 0.0; //jaccard estimate 1 -> 0.0 mash distance
 
-      float mash_dist = (-1.0 / k) * log(2.0 * j/(1+j) );
+      float mash_dist = 1 - std::pow(2*j / (1+j), 1.0/k);
       return mash_dist;
     }
 
@@ -61,7 +61,8 @@ namespace skch
      */
     inline float md2j(float d, int k)
     {
-      float jaccard = 1.0 / (2.0 * exp( k*d ) - 1.0);
+      float sim = 1 - d;
+      float jaccard = std::pow(sim, k) / (2 - std::pow(sim, k));
       return jaccard;
     }
 
