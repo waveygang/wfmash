@@ -11,6 +11,7 @@
 #include <cassert>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 //#include <zlib.h>
 
@@ -32,14 +33,16 @@
 
 #include "common/seqiter.hpp"
 
+#include "assert.hpp"
+
 namespace skch
 {
   /**
    * @class     skch::Sketch
    * @brief     sketches and indexes the reference (subject sequence)
    * @details  
-   *            1.  Minimizers are computed in streaming fashion
-   *                Computing minimizers is using double ended queue which gives
+   *            1.  Minmers are computed in streaming fashion
+   *                Computing minmers is using double ended queue which gives
    *                O(reference size) complexity
    *                Algorithm described here:
    *                https://people.cs.uct.ac.za/~ksmith/articles/sliding_window_minimum.html
@@ -53,15 +56,18 @@ namespace skch
       //algorithm parameters
       const skch::Parameters &param;
 
-      //Minimizers that occur this or more times will be ignored (computed based on percentageThreshold)
+      //Minmers that occur this or more times will be ignored (computed based on percentageThreshold)
       int freqThreshold = std::numeric_limits<int>::max();
+
+      //Set of frequent seeds to be ignored
+      std::unordered_set<hash_t> frequentSeeds;
 
       //Make the default constructor private, non-accessible
       Sketch();
 
       public:
 
-      typedef std::vector< MinimizerInfo > MI_Type;
+      typedef std::vector< MinmerInfo > MI_Type;
       using MIIter_t = MI_Type::const_iterator;
 
       //Keep sequence length, name that appear in the sequence (for printing the mappings later)
@@ -78,35 +84,35 @@ namespace skch
 
       //Index for fast seed lookup (unordered_map)
       /*
-       * [minimizer #1] -> [pos1, pos2, pos3 ...]
-       * [minimizer #2] -> [pos1, pos2...]
+       * [minmer #1] -> [pos1, pos2, pos3 ...]
+       * [minmer #2] -> [pos1, pos2...]
        * ...
        */
-      //using MI_Map_t = google::dense_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
-      //using MI_Map_t = phmap::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
-      //using MI_Map_t = absl::flat_hash_map< MinimizerMapKeyType, MinimizerMapValueType >;
-      //using MI_Map_t = tsl::sparse_map< MinimizerMapKeyType, MinimizerMapValueType >;
-      using MI_Map_t = robin_hood::unordered_flat_map< MinimizerMapKeyType, MinimizerMapValueType >;
-      MI_Map_t minimizerPosLookupIndex;
+      //using MI_Map_t = google::dense_hash_map< MinmerMapKeyType, MinmerMapValueType >;
+      //using MI_Map_t = phmap::flat_hash_map< MinmerMapKeyType, MinmerMapValueType >;
+      //using MI_Map_t = absl::flat_hash_map< MinmerMapKeyType, MinmerMapValueType >;
+      //using MI_Map_t = tsl::sparse_map< MinmerMapKeyType, MinmerMapValueType >;
+      using MI_Map_t = robin_hood::unordered_flat_map< MinmerMapKeyType, MinmerMapValueType >;
+      MI_Map_t minmerPosLookupIndex;
+      MI_Type minmerIndex;
 
       private:
 
       /**
-       * Keep list of minimizers, sequence# , their position within seq , here while parsing sequence 
+       * Keep list of minmers, sequence# , their position within seq , here while parsing sequence 
        * Note : position is local within each contig
        * Hashes saved here are non-unique, ordered as they appear in the reference
        */
-      MI_Type minimizerIndex;
 
-      //Frequency histogram of minimizers
-      //[... ,x -> y, ...] implies y number of minimizers occur x times
-      std::map<int, int> minimizerFreqHistogram;
+      //Frequency histogram of minmers
+      //[... ,x -> y, ...] implies y number of minmers occur x times
+      std::map<int, int> minmerFreqHistogram;
 
       public:
 
       /**
        * @brief   constructor
-       *          also builds, indexes the minimizer table
+       *          also builds, indexes the minmer table
        */
       Sketch(const skch::Parameters &p) 
         :
@@ -114,13 +120,15 @@ namespace skch
             this->build();
             this->index();
             this->computeFreqHist();
+            this->computeFreqSeedSet();
+            this->dropFreqSeedSet();
           }
 
       private:
 
       /**
        * @brief     build the sketch table
-       * @details   compute and save minimizers from the reference sequence(s)
+       * @details   compute and save minmers from the reference sequence(s)
        *            assuming a fixed window size
        */
       void build()
@@ -135,7 +143,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-        std::cerr << "[wfmash::skch::Sketch::build] building minimizer index for " << fileName << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::build] building minmer index for " << fileName << std::endl;
 #endif
 
         seqiter::for_each_seq_in_file(
@@ -173,12 +181,12 @@ namespace skch
         while ( threadPool.running() )
           this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
 
-        std::cerr << "[wfmash::skch::Sketch::build] minimizers picked from reference = " << minimizerIndex.size() << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::build] minmers picked from reference = " << minmerIndex.size() << std::endl;
 
       }
 
       /**
-       * @brief               function to compute minimizers given input sequence object
+       * @brief               function to compute minmers given input sequence object
        * @details             this function is run in parallel by multiple threads
        * @param[in]   input   input read details
        * @return              output object containing the mappings
@@ -187,80 +195,78 @@ namespace skch
       {
         MI_Type* thread_output = new MI_Type();
 
-        //Compute minimizers in reference sequence
-        if (param.spaced_seeds.empty()) {
-          if (param.world_minimizers) {
-            skch::CommonFunc::addWorldMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
-          } else {
-            skch::CommonFunc::addMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter);
-          }
-        } else {
-          skch::CommonFunc::addSpacedSeedMinimizers(*thread_output, &(input->seq[0u]), input->len, param.kmerSize, param.windowSize, param.alphabetSize, input->seqCounter, param.spaced_seeds);
-        }
+        //Compute minmers in reference sequence
+        skch::CommonFunc::addMinmers(
+                *thread_output, 
+                &(input->seq[0u]), 
+                input->len, 
+                param.kmerSize, 
+                param.segLength, 
+                param.alphabetSize, 
+                param.sketchSize,
+                input->seqCounter);
 
         return thread_output;
       }
 
       /**
-       * @brief                 routine to handle thread's local minimizer index
-       * @param[in] output      thread local minimizer output
+       * @brief                 routine to handle thread's local minmer index
+       * @param[in] output      thread local minmer output
        */
       void buildHandleThreadOutput(MI_Type* output)
       {
-        this->minimizerIndex.insert(this->minimizerIndex.end(), output->begin(), output->end());
+        this->minmerIndex.insert(this->minmerIndex.end(), output->begin(), output->end());
         delete output;
       }
 
       /**
-       * @brief   build the index for fast lookups using minimizer table
+       * @brief   build the index for fast lookups using minmer table
        */
       void index()
       {
-        //Parse all the minimizers and push into the map
-        //minimizerPosLookupIndex.set_empty_key(0);
+        //Parse all the minmers and push into the map
+        //minmerPosLookupIndex.set_empty_key(0);
 
-        for(auto &e : minimizerIndex)
+        for(auto &e : minmerIndex)
         {
-          // [hash value -> info about minimizer]
-          minimizerPosLookupIndex[e.hash].push_back(
-              MinimizerMetaData{e.seqId, e.wpos, e.strand});
+          // [hash value -> info about minmer]
+          minmerPosLookupIndex[e.hash].push_back(e);
 
-          //std::cout << "GREPME\t" << e.wpos << "\n";
         }
 
-        std::cerr << "[wfmash::skch::Sketch::index] unique minimizers = " << minimizerPosLookupIndex.size() << std::endl;
+        std::cerr << "[wfmash::skch::Sketch::index] unique minmers = " << minmerPosLookupIndex.size() << std::endl;
       }
 
       /**
-       * @brief   report the frequency histogram of minimizers using position lookup index
-       *          and compute which high frequency minimizers to ignore
+       * @brief   report the frequency histogram of minmers using position lookup index
+       *          and compute which high frequency minmers to ignore
        */
       void computeFreqHist()
       {
-          if (!minimizerPosLookupIndex.empty()) {
+          if (!minmerPosLookupIndex.empty()) {
               //1. Compute histogram
 
-              for (auto &e : this->minimizerPosLookupIndex)
-                  this->minimizerFreqHistogram[e.second.size()] += 1;
+              for (auto &e : this->minmerPosLookupIndex)
+                  this->minmerFreqHistogram[e.second.size()] += 1;
 
-              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] Frequency histogram of minimizers = "
-                        << *this->minimizerFreqHistogram.begin() << " ... " << *this->minimizerFreqHistogram.rbegin()
+              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] Frequency histogram of minmers = "
+                        << *this->minmerFreqHistogram.begin() << " ... " << *this->minmerFreqHistogram.rbegin()
                         << std::endl;
 
-              //2. Compute frequency threshold to ignore most frequent minimizers
+              //2. Compute frequency threshold to ignore most frequent minmers
 
-              int64_t totalUniqueMinimizers = this->minimizerPosLookupIndex.size();
-              int64_t minimizerToIgnore = totalUniqueMinimizers * param.kmer_pct_threshold / 100;
+              int64_t totalUniqueMinmers = this->minmerPosLookupIndex.size();
+              int64_t minmerToIgnore = totalUniqueMinmers * param.kmer_pct_threshold / 100;
 
               int64_t sum = 0;
 
-              //Iterate from highest frequent minimizers
-              for (auto it = this->minimizerFreqHistogram.rbegin(); it != this->minimizerFreqHistogram.rend(); it++) {
+              //Iterate from highest frequent minmers
+              for (auto it = this->minmerFreqHistogram.rbegin(); it != this->minmerFreqHistogram.rend(); it++) {
                   sum += it->second; //add frequency
-                  if (sum < minimizerToIgnore) {
+                  if (sum < minmerToIgnore) {
                       this->freqThreshold = it->first;
                       //continue
-                  } else if (sum == minimizerToIgnore) {
+                  } else if (sum == minmerToIgnore) {
                       this->freqThreshold = it->first;
                       break;
                   } else {
@@ -270,13 +276,13 @@ namespace skch
 
               if (this->freqThreshold != std::numeric_limits<int>::max())
                   std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, ignore minimizers occurring >= " << this->freqThreshold << " times during lookup."
+                            << "\%, ignore minmers occurring >= " << this->freqThreshold << " times during lookup."
                             << std::endl;
               else
                   std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, consider all minimizers during lookup." << std::endl;
+                            << "\%, consider all minmers during lookup." << std::endl;
           } else {
-              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] No minimizers." << std::endl;
+              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] No minmers." << std::endl;
           }
       }
 
@@ -287,37 +293,25 @@ namespace skch
        * @details             if MIIter_t iter is returned, than *iter's wpos >= winpos
        * @param[in]   seqId
        * @param[in]   winpos
-       * @return              iterator to the minimizer in the index
+       * @return              iterator to the minmer in the index
        */
-      MIIter_t searchIndex(seqno_t seqId, offset_t winpos) const
-      {
-        std::pair<seqno_t, offset_t> searchPosInfo(seqId, winpos);
-
-        /*
-         * std::lower_bound --  Returns an iterator pointing to the first element in the range
-         *                      that is not less than (i.e. greater or equal to) value.
-         */
-        MIIter_t iter = std::lower_bound(this->minimizerIndex.begin(), this->minimizerIndex.end(), searchPosInfo, cmp);
-
-        return iter;
-      }
 
       /**
        * @brief                 check if iterator points to index end
        * @param[in]   iterator
        * @return                boolean value
        */
-      bool isMinimizerIndexEnd(const MIIter_t &it) const
+      bool isMinmerIndexEnd(const MIIter_t &it) const
       {
-        return it == this->minimizerIndex.end();
+        return it == this->minmerIndex.end();
       }
 
       /**
-       * @brief     Return end iterator on minimizerIndex
+       * @brief     Return end iterator on minmerIndex
        */
-      MIIter_t getMinimizerIndexEnd() const
+      MIIter_t getMinmerIndexEnd() const
       {
-        return this->minimizerIndex.end();
+        return this->minmerIndex.end();
       }
 
       int getFreqThreshold() const
@@ -325,26 +319,28 @@ namespace skch
         return this->freqThreshold;
       }
 
-      private:
-
-      /**
-       * @brief     functor for comparing minimizers by their position in minimizerIndex
-       * @details   used for locating minimizers with the required positional information
-       */
-      struct compareMinimizersByPos
+      void computeFreqSeedSet()
       {
-        typedef std::pair<seqno_t, offset_t> P;
-
-        bool operator() (const MinimizerInfo &m, const P &val)
-        {
-          return ( P(m.seqId, m.wpos) < val);
+        for(auto &e : this->minmerPosLookupIndex) {
+          if (e.second.size() >= this->freqThreshold) {
+            this->frequentSeeds.insert(e.first);
+          }
         }
+      }
 
-        bool operator() (const P &val, const MinimizerInfo &m)
-        {
-          return (val < P(m.seqId, m.wpos) );
-        }
-      } cmp;
+      void dropFreqSeedSet()
+      {
+        this->minmerIndex.erase(
+          std::remove_if(minmerIndex.begin(), minmerIndex.end(), [&] 
+            (auto& mi) {return this->frequentSeeds.find(mi.hash) != this->frequentSeeds.end();}
+          ), minmerIndex.end()
+        );
+      }
+
+      bool isFreqSeed(hash_t h) const
+      {
+        return frequentSeeds.find(h) != frequentSeeds.end();
+      }
 
     }; //End of class Sketch
 } //End of namespace skch

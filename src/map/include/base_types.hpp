@@ -15,63 +15,49 @@ namespace skch
   typedef uint32_t hash_t;    //hash type
   typedef int offset_t;       //position within sequence
   typedef int seqno_t;        //sequence counter in file
-  typedef int32_t strand_t;   //sequence strand
+  typedef int8_t strand_t;   //sequence strand 
+  typedef int8_t side_t;   //sequence strand 
 
   //C++ timer
   typedef std::chrono::high_resolution_clock Time;
 
   //Information about each minimizer
-  struct MinimizerInfo
+  struct MinmerInfo
   {
     hash_t hash;                              //hash value
     seqno_t seqId;                            //sequence or contig id
     offset_t wpos;                            //First (left-most) window position when the minimizer is saved
+    offset_t wpos_end;
     strand_t strand;                          //strand information
-    //double order;
-
-    //Lexographical less than comparison
-    bool operator <(const MinimizerInfo& x) {
-      return std::tie(hash, seqId, wpos, strand)
-        < std::tie(x.hash, x.seqId, x.wpos, x.strand);
-    }
 
     //Lexographical equality comparison
-    bool operator ==(const MinimizerInfo& x) {
-      return std::tie(hash, seqId, wpos, strand)
+    bool operator ==(const MinmerInfo& x) const {
+      return std::tie(hash, seqId, wpos, strand) 
         == std::tie(x.hash, x.seqId, x.wpos, x.strand);
     }
 
-    bool operator !=(const MinimizerInfo& x) {
-      return std::tie(hash, seqId, wpos, strand)
+    bool operator !=(const MinmerInfo& x) const {
+      return std::tie(hash, seqId, wpos, strand) 
         != std::tie(x.hash, x.seqId, x.wpos, x.strand);
     }
 
-    static bool equalityByHash(const MinimizerInfo& x, const MinimizerInfo& y) {
+    static bool equalityByHash(const MinmerInfo& x, const MinmerInfo& y) {
       return x.hash == y.hash;
     }
 
-    static bool lessByHash(const MinimizerInfo& x, const MinimizerInfo& y) {
+    static bool lessByHash(const MinmerInfo& x, const MinmerInfo& y) {
       return x.hash < y.hash;
     }
 
-  };
-
-  //Type for map value type used for
-  //L1 stage lookup index
-  struct MinimizerMetaData
-  {
-    seqno_t seqId;          //sequence or contig id
-    offset_t wpos;          //window position (left-most window)
-    strand_t strand;        //strand information
-
-    bool operator <(const MinimizerMetaData& x) const {
-      return std::tie(seqId, wpos, strand)
-        < std::tie(x.seqId, x.wpos, x.strand);
+    // Sort based on start point
+    bool operator <(const MinmerInfo& x) const {
+      return std::tie(seqId, wpos) 
+        < std::tie(x.seqId, x.wpos);
     }
   };
 
-  typedef hash_t MinimizerMapKeyType;
-  typedef std::vector<MinimizerMetaData> MinimizerMapValueType;
+  typedef hash_t MinmerMapKeyType;
+  typedef std::vector<MinmerInfo> MinmerMapValueType;
 
   //Metadata recording for contigs in the reference DB
   struct ContigInfo
@@ -84,6 +70,7 @@ namespace skch
   enum strnd : strand_t
   {
     FWD = 1,
+    AMBIG = 0,
     REV = -1
   };
 
@@ -99,6 +86,30 @@ namespace skch
     MAP = 1,                              //filter by query axis
     ONETOONE = 2,                         //filter by query axis and reference axis
     NONE = 3                              //no filtering
+  };
+
+  // Enum for tracking which side of an interval a point represents
+  enum side : side_t
+  {
+    OPEN = 1,  
+    CLOSE = -1
+  };  
+
+  // Endpoints for minmer intervals
+  struct IntervalPoint
+  {
+    side_t side;
+    seqno_t seqId;
+    offset_t pos;
+    strand_t strand;
+    hash_t hash;
+
+    // Sort interval points. 
+    // For a pair of points at the same seqId/pos, the end point should be first
+    bool operator <(const IntervalPoint& x) const {
+      return std::tie(seqId, pos, side) 
+        < std::tie(x.seqId, x.pos, x.side);
+    }
   };
 
   template <class T>
@@ -201,7 +212,7 @@ namespace skch
   };
 
   //Information about fragment sequence during L1/L2 mapping
-  template <typename MinimizerVec>
+  template <typename MinmerVec>
     struct QueryMetaData
     {
       char *seq;                          //query sequence pointer
@@ -210,7 +221,8 @@ namespace skch
       offset_t fullLen;                   //length of the full sequence it derives from
       int sketchSize;                     //sketch size
       std::string seqName;                //sequence name
-      MinimizerVec minimizerTableQuery;   //Vector of minimizers in the query
+      MinmerVec minmerTableQuery;         //Vector of minmers in the query
+      MinmerVec seedHits;                 //Vector of minmers in the reference
     };
 }
 

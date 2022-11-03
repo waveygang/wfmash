@@ -87,6 +87,7 @@ void parse_args(int argc,
     args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings (NOT FULLY IMPLEMENTED)", {'M', "no-merge"});
     args::ValueFlag<int64_t> window_size(mapping_opts, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0, minimum -k]", {'w', "window-size"});
     args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
+    args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default 25]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
@@ -219,6 +220,17 @@ void parse_args(int argc,
     } else {
         map_parameters.sparsity_hash_threshold
             = std::numeric_limits<uint64_t>::max();
+    }
+
+    if (sketchSize) {
+        const int64_t ss = args::get(sketchSize);
+        if (ss < 1) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, sketch size must be at least 1" << std::endl;
+            exit(1);
+        }
+        map_parameters.sketchSize = ss;
+    } else {
+        map_parameters.sketchSize = 25;
     }
 
     if (!args::get(wfa_score_params).empty()) {

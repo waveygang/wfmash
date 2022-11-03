@@ -44,6 +44,15 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+add_compile_options(-Wfatal-errors)
+
+include(FetchContent)
+FetchContent_Declare(
+    assert
+    URL https://github.com/jeremy-rifkin/libassert/archive/refs/tags/v1.1.tar.gz
+)
+FetchContent_MakeAvailable(assert)
+
 #add_subdirectory(src/common/wflign/deps/WFA2-lib EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/wflign/deps/wflambda EXCLUDE_FROM_ALL)
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
@@ -72,6 +81,7 @@ target_link_libraries(wfmash
   wfacpp
   jemalloc
   z
+  assert
   #absl::flat_hash_map
 )
 
