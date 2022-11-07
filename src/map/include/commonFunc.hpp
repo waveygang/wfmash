@@ -412,10 +412,13 @@ namespace skch {
                 }
 
                 // Did we incorporate a previously hashed kmer into the sketch?
-                auto& sth_mi = std::prev(piv.p)->second.first;
-                if (sth_mi.wpos == -1) {
-                  //std::cout << "Adding bordered kmer = " << sth_mi.hash << " to the sketch\n";
-                  sth_mi.wpos = currentWindowId;
+                if (sortedWindow.size() != 0) 
+                {
+                  auto& sth_mi = std::prev(piv.p)->second.first;
+                  if (sth_mi.wpos == -1) {
+                    //std::cout << "Adding bordered kmer = " << sth_mi.hash << " to the sketch\n";
+                    sth_mi.wpos = currentWindowId;
+                  }
                 }
 
                 // Did we kick a minmer into non-sketch territory?
