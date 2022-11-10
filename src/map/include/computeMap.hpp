@@ -442,7 +442,6 @@ namespace skch
             //Prepare fragment sequence object
             QueryMetaData <MinVec_Type> Q;
             Q.seq = &(input->seq)[0u] + i * param.segLength;
-            Q.startPos = i * param.segLength;
             Q.len = param.segLength;
             Q.fullLen = input->len;
             Q.seqCounter = input->seqCounter;
