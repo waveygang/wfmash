@@ -4,7 +4,7 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef SLIDING_MAP_HPP 
+#ifndef SLIDING_MAP_HPP
 #define SLIDING_MAP_HPP
 
 #include <vector>
@@ -15,7 +15,7 @@
 #include "map/include/base_types.hpp"
 
 //External includes
-#include "assert.hpp"
+#include <cassert>
 
 namespace skch
 {
@@ -49,7 +49,7 @@ namespace skch
         //Define a Not available position marker
         static const offset_t NAPos = std::numeric_limits<offset_t>::max();
 
-        //Ordered map to save unique sketch elements, and associated value as 
+        //Ordered map to save unique sketch elements, and associated value as
         //a pair of its occurrence in the query and the reference
         typedef std::map< hash_t, slidingMapContainerValueType > MapType;
         MapType slidingWindowMinhashes;
@@ -63,14 +63,14 @@ namespace skch
           //reference minmer is inserted into map as a new map entry
           UNIQ = 1,
 
-          //reference minmer is coupled with a query minmer, 
+          //reference minmer is coupled with a query minmer,
           //previously, there was no ref. minmer at this entry
-          CPLD = 2, 
+          CPLD = 2,
 
-          //ref. minmer just revises the hash position of already 
+          //ref. minmer just revises the hash position of already
           //existing reference minmer
           REV = 3
-        };  
+        };
 
         //Label status while deleting reference minmer
         enum OUT : int
@@ -88,7 +88,7 @@ namespace skch
       public:
 
         //Count of shared sketch elements between query and the reference
-        //Updated after insert or delete operation on map 
+        //Updated after insert or delete operation on map
         int sharedSketchElements;
 
         // Count of strand votes
@@ -143,14 +143,14 @@ namespace skch
           {
             slidingWindowMinhashes[hashVal] = slidingMapContainerValueType {1, 0, 0, false};   //add the hash to window
             status = IN::UNIQ;
-            //std::cout << "Unique insert " << mi.hash << " @ " << mi.wpos << std::endl; 
+            //std::cout << "Unique insert " << mi.hash << " @ " << mi.wpos << std::endl;
           }
           else
           {
-            status = (slidingWindowMinhashes[hashVal].is_query_minmer && slidingWindowMinhashes[hashVal].freq == 0) ? IN::CPLD 
+            status = (slidingWindowMinhashes[hashVal].is_query_minmer && slidingWindowMinhashes[hashVal].freq == 0) ? IN::CPLD
               : IN::REV;
             if (status == IN::CPLD) {
-              //std::cout << "Pairing " << mi.hash << " @ " << mi.wpos << std::endl; 
+              //std::cout << "Pairing " << mi.hash << " @ " << mi.wpos << std::endl;
             }
 
             //if hash already exists in the map, just revise it
@@ -159,9 +159,9 @@ namespace skch
 
           updateCountersAfterInsert(status, mi);
 
-          DEBUG_ASSERT(std::distance(slidingWindowMinhashes.begin(), pivot) == Q.sketchSize - 1);
-          DEBUG_ASSERT(this->sharedSketchElements >= 0);
-          DEBUG_ASSERT(this->sharedSketchElements <= Q.sketchSize);
+          assert(std::distance(slidingWindowMinhashes.begin(), pivot) == Q.sketchSize - 1);
+          assert(this->sharedSketchElements >= 0);
+          assert(this->sharedSketchElements <= Q.sketchSize);
         }
 
         /**
@@ -173,7 +173,7 @@ namespace skch
           int status;
           const hash_t hashVal = mi.hash;
           bool pivotDeleteCase = false;
-          
+
           //DEBUG_ASSERT(this->slidingWindowMinhashes.find(hashVal) != this->slidingWindowMinhashes.end(), "Can't find hash to delete", hashVal);
           // End point may not have had an open point
           if (this->slidingWindowMinhashes.find(hashVal) == this->slidingWindowMinhashes.end()) {
@@ -204,22 +204,22 @@ namespace skch
               pivotDeleteCase = true;
             }
 
-            //std::cout << "Removing " << mi.hash <<  " @ " << mi.wpos << std::endl; 
+            //std::cout << "Removing " << mi.hash <<  " @ " << mi.wpos << std::endl;
             this->slidingWindowMinhashes.erase(hashVal);              //Remove the entry from the map
-            status = OUT::DEL; 
+            status = OUT::DEL;
           }
           else
           {
-            //std::cout << "Unpairing " << mi.hash << " @ " << mi.wpos << std::endl; 
-            status = OUT::UPD; 
+            //std::cout << "Unpairing " << mi.hash << " @ " << mi.wpos << std::endl;
+            status = OUT::UPD;
           }
 
-          if(!pivotDeleteCase) 
+          if(!pivotDeleteCase)
             updateCountersAfterDelete(status, mi);
 
-          DEBUG_ASSERT(std::distance(slidingWindowMinhashes.begin(), pivot) == Q.sketchSize - 1);
-          DEBUG_ASSERT(this->sharedSketchElements >= 0);
-          DEBUG_ASSERT(this->sharedSketchElements <= Q.sketchSize);
+          assert(std::distance(slidingWindowMinhashes.begin(), pivot) == Q.sketchSize - 1);
+          assert(this->sharedSketchElements >= 0);
+          assert(this->sharedSketchElements <= Q.sketchSize);
         }
 
 

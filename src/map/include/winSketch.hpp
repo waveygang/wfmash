@@ -1,10 +1,10 @@
 /**
  * @file    winSketch.hpp
- * @brief   routines to index the reference 
+ * @brief   routines to index the reference
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef WIN_SKETCH_HPP 
+#ifndef WIN_SKETCH_HPP
 #define WIN_SKETCH_HPP
 
 #include <algorithm>
@@ -33,14 +33,14 @@
 
 #include "common/seqiter.hpp"
 
-#include "assert.hpp"
+#include <cassert>
 
 namespace skch
 {
   /**
    * @class     skch::Sketch
    * @brief     sketches and indexes the reference (subject sequence)
-   * @details  
+   * @details
    *            1.  Minmers are computed in streaming fashion
    *                Computing minmers is using double ended queue which gives
    *                O(reference size) complexity
@@ -52,7 +52,7 @@ namespace skch
   class Sketch
     {
       //private members
-    
+
       //algorithm parameters
       const skch::Parameters &param;
 
@@ -75,9 +75,9 @@ namespace skch
 
       /*
        * Keep the information of what sequences come from what file#
-       * Example [a, b, c] implies 
+       * Example [a, b, c] implies
        *  file 0 contains 0 .. a-1 sequences
-       *  file 1 contains a .. b-1 
+       *  file 1 contains a .. b-1
        *  file 2 contains b .. c-1
        */
       std::vector< int > sequencesByFileInfo;
@@ -99,7 +99,7 @@ namespace skch
       private:
 
       /**
-       * Keep list of minmers, sequence# , their position within seq , here while parsing sequence 
+       * Keep list of minmers, sequence# , their position within seq , here while parsing sequence
        * Note : position is local within each contig
        * Hashes saved here are non-unique, ordered as they appear in the reference
        */
@@ -114,7 +114,7 @@ namespace skch
        * @brief   constructor
        *          also builds, indexes the minmer table
        */
-      Sketch(const skch::Parameters &p) 
+      Sketch(const skch::Parameters &p)
         :
           param(p) {
             this->build();
@@ -136,7 +136,7 @@ namespace skch
         //sequence counter while parsing file
         seqno_t seqCounter = 0;
 
-        //Create the thread pool 
+        //Create the thread pool
         ThreadPool<InputSeqContainer, MI_Type> threadPool( [this](InputSeqContainer* e) {return buildHelper(e);}, param.threads);
 
         for(const auto &fileName : param.refSequences)
@@ -166,7 +166,7 @@ namespace skch
                 else
                 {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
-                    
+
                     //Collect output if available
                     while ( threadPool.outputAvailable() )
                         this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
@@ -197,12 +197,12 @@ namespace skch
 
         //Compute minmers in reference sequence
         skch::CommonFunc::addMinmers(
-                *thread_output, 
-                &(input->seq[0u]), 
-                input->len, 
-                param.kmerSize, 
-                param.segLength, 
-                param.alphabetSize, 
+                *thread_output,
+                &(input->seq[0u]),
+                input->len,
+                param.kmerSize,
+                param.segLength,
+                param.alphabetSize,
                 param.sketchSize,
                 input->seqCounter);
 
@@ -331,7 +331,7 @@ namespace skch
       void dropFreqSeedSet()
       {
         this->minmerIndex.erase(
-          std::remove_if(minmerIndex.begin(), minmerIndex.end(), [&] 
+          std::remove_if(minmerIndex.begin(), minmerIndex.end(), [&]
             (auto& mi) {return this->frequentSeeds.find(mi.hash) != this->frequentSeeds.end();}
           ), minmerIndex.end()
         );

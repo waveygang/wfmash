@@ -22,7 +22,7 @@
 #include "common/prettyprint.hpp"
 
 #include "common/wflign/src/rkmh.hpp"
-#include "assert.hpp"
+#include <cassert>
 
 namespace skch {
     /**
@@ -152,19 +152,19 @@ namespace skch {
 
         /**
          * @brief       Compute the minimum s kmers for a string.
-         * @param[out]  minmerIndex     container storing sketched Kmers 
+         * @param[out]  minmerIndex     container storing sketched Kmers
          * @param[in]   seq                 pointer to input sequence
          * @param[in]   len                 length of input sequence
          * @param[in]   kmerSize
-         * @param[in]   s                   sketch size. 
+         * @param[in]   s                   sketch size.
          * @param[in]   seqCounter          current sequence number, used while saving the position of minimizer
          */
         template <typename T>
           inline void sketchSequence(
-              std::vector<T> &minmerIndex, 
-              char* seq, 
+              std::vector<T> &minmerIndex,
+              char* seq,
               offset_t len,
-              int kmerSize, 
+              int kmerSize,
               int alphabetSize,
               int sketchSize,
               seqno_t seqCounter)
@@ -185,7 +185,7 @@ namespace skch {
           for(offset_t i = 0; i < len - kmerSize + 1; i++)
           {
             //Hash kmers
-            hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
+            hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
             hash_t hashBwd;
 
             if(alphabetSize == 4)
@@ -203,11 +203,11 @@ namespace skch {
               auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
 
               ////std::cout << seqCounter << "\t" << std::string(seq + i, kmerSize) << "-->" <<  currentKmer << std::endl;
-              if (sketched_vals.empty() || sketched_vals.find(currentKmer) == sketched_vals.end()) 
+              if (sketched_vals.empty() || sketched_vals.find(currentKmer) == sketched_vals.end())
               {
 
                 // Add current hash to heap
-                if (sketched_vals.size() < sketchSize || currentKmer < sketched_heap[0])  
+                if (sketched_vals.size() < sketchSize || currentKmer < sketched_heap[0])
                 {
                     sketched_vals[currentKmer] = MinmerInfo{currentKmer, seqCounter, i, i, currentStrand};
                     sketched_heap.push_back(currentKmer);
@@ -215,14 +215,14 @@ namespace skch {
                 }
 
                 // Remove one if too large
-                if (sketched_vals.size() > sketchSize) 
+                if (sketched_vals.size() > sketchSize)
                 {
                     sketched_vals.erase(sketched_heap[0]);
                     std::pop_heap(sketched_heap.begin(), sketched_heap.end());
                     sketched_heap.pop_back();
                 }
-              } 
-              else 
+              }
+              else
               {
                 // TODO these sketched values might never be useful, might save memory by deleting
                 // extend the length of the window
@@ -241,7 +241,7 @@ namespace skch {
 
           return;
         }
-        
+
 
         /**
          * @brief       Compute winnowed minmers from a given sequence and add to the index
@@ -250,13 +250,13 @@ namespace skch {
          * @param[in]   len             length of input sequence
          * @param[in]   kmerSize
          * @param[in]   windowSize
-         * @param[in]   sketchSize      sketch size. 
+         * @param[in]   sketchSize      sketch size.
          * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
          */
         template <typename T>
-          inline void addMinmers(std::vector<T> &minmerIndex, 
+          inline void addMinmers(std::vector<T> &minmerIndex,
               char* seq, offset_t len,
-              int kmerSize, 
+              int kmerSize,
               int windowSize,
               int alphabetSize,
               int sketchSize,
@@ -286,23 +286,23 @@ namespace skch {
               //First valid window appears when i = windowSize - 1
               offset_t currentWindowId = i + kmerSize - windowSize;
 
-              if (currentWindowId == 0) 
+              if (currentWindowId == 0)
               {
                 uint64_t rank = 1;
                 auto iter = sortedWindow.begin();
-                while (iter != sortedWindow.end() && rank <= sketchSize) 
+                while (iter != sortedWindow.end() && rank <= sketchSize)
                 {
-                  iter->second.first.wpos = currentWindowId; 
+                  iter->second.first.wpos = currentWindowId;
                   std::advance(iter, 1);
                   rank += 1;
                 }
               }
 
               //Hash kmers
-              hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
+              hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
               hash_t hashBwd;
 
-              if(alphabetSize == 4) 
+              if(alphabetSize == 4)
               {
                 CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
                 hashBwd = CommonFunc::getHash(seqRev.get(), kmerSize);
@@ -317,44 +317,44 @@ namespace skch {
               auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
 
               //If front minimum is not in the current window, remove it
-              if (!Q.empty() && std::get<2>(Q.front()) <  currentWindowId) 
+              if (!Q.empty() && std::get<2>(Q.front()) <  currentWindowId)
               {
                 const auto [leaving_hash, leaving_strand, _] = Q.front();
 
                 // Check if we've deleted the hash already
-                if (sortedWindow.find(leaving_hash) != sortedWindow.end()) 
+                if (sortedWindow.find(leaving_hash) != sortedWindow.end())
                 {
-                  // If the hash that is getting popped off is still in the window and it is now leaving the window 
+                  // If the hash that is getting popped off is still in the window and it is now leaving the window
                   // wpos != -1 and wpos_end == -1 --> still in window
-                  if (sortedWindow[leaving_hash].first.wpos != -1 and sortedWindow[leaving_hash].first.wpos_end == -1 && sortedWindow[leaving_hash].second == 1) 
+                  if (sortedWindow[leaving_hash].first.wpos != -1 and sortedWindow[leaving_hash].first.wpos_end == -1 && sortedWindow[leaving_hash].second == 1)
                   {
                     sortedWindow[leaving_hash].first.wpos_end = currentWindowId;
                     minmerIndex.push_back(sortedWindow[leaving_hash].first);
-                  } 
+                  }
 
                   // Remove hash
                   sortedWindow[leaving_hash].second -= 1;
-                  if (sortedWindow[leaving_hash].second == 0) 
+                  if (sortedWindow[leaving_hash].second == 0)
                   {
-                    if (leaving_hash == piv.p->first) 
+                    if (leaving_hash == piv.p->first)
                     {
                       std::advance(piv.p, 1);
                     }
-                    else if (leaving_hash < piv.p->first) 
+                    else if (leaving_hash < piv.p->first)
                     {
                       // Kicking out a sketched element
-                      if (sortedWindow.size() >= sketchSize + 1) 
+                      if (sortedWindow.size() >= sketchSize + 1)
                       {
                           std::advance(piv.p, 1);
                       }
                     }
                     sortedWindow.erase(leaving_hash);
-                  } 
-                  else 
+                  }
+                  else
                   {
                     // Not removing hash, but need to adjust the strand
                     if ((sortedWindow[leaving_hash].first.strand == 0 || sortedWindow[leaving_hash].first.strand - leaving_strand == 0)
-                        && leaving_hash < piv.p->first) 
+                        && leaving_hash < piv.p->first)
                     {
                       sortedWindow[leaving_hash].first.wpos_end = currentWindowId;
                       minmerIndex.push_back(sortedWindow[leaving_hash].first);
@@ -371,7 +371,7 @@ namespace skch {
               if(hashBwd != hashFwd)
               {
                 // Add current hash to window
-                Q.push_back(std::make_tuple(currentKmer, currentStrand, i)); 
+                Q.push_back(std::make_tuple(currentKmer, currentStrand, i));
                 if (sortedWindow[currentKmer].second == 0) {
                   auto mi = MinmerInfo{currentKmer, seqCounter, -1, -1, currentStrand};
                   sortedWindow[currentKmer].first = mi;
@@ -385,7 +385,7 @@ namespace skch {
                       piv.p = std::prev(sortedWindow.end());
                   }
                 } else {
-                  if ((sortedWindow[currentKmer].first.strand + currentStrand == 0 || sortedWindow[currentKmer].first.strand == 0) 
+                  if ((sortedWindow[currentKmer].first.strand + currentStrand == 0 || sortedWindow[currentKmer].first.strand == 0)
                       && currentKmer < piv.p->first) {
                     sortedWindow[currentKmer].first.wpos_end = currentWindowId;
                     minmerIndex.push_back(sortedWindow[currentKmer].first);
@@ -402,28 +402,28 @@ namespace skch {
               {
 
                 // Does the new kmer belong in the sketch?
-                if (hashBwd != hashFwd                                                  // Non-symmetric 
+                if (hashBwd != hashFwd                                                  // Non-symmetric
                     && ((piv.p == sortedWindow.end()) || (currentKmer < piv.p->first))  // Belongs in sketch
                     && sortedWindow[currentKmer].first.wpos == -1)  // Haven't seen it in the window yet
-                {                                     
+                {
                   sortedWindow[currentKmer].first.wpos = currentWindowId;
                 }
 
                 // Did we incorporate a previously hashed kmer into the sketch?
-                if (sortedWindow.size() != 0) 
+                if (sortedWindow.size() != 0)
                 {
                   auto& sth_mi = std::prev(piv.p)->second.first;
-                  if (sth_mi.wpos == -1) 
+                  if (sth_mi.wpos == -1)
                   {
                     sth_mi.wpos = currentWindowId;
                   }
                 }
 
                 // Did we kick a minmer into non-sketch territory?
-                if (piv.p != sortedWindow.end()) 
+                if (piv.p != sortedWindow.end())
                 {
                   auto& splus1th_mi = piv.p->second.first;
-                  if (splus1th_mi.wpos != -1) 
+                  if (splus1th_mi.wpos != -1)
                   {
                     splus1th_mi.wpos_end = currentWindowId;
                     minmerIndex.push_back(MinmerInfo(splus1th_mi));
@@ -447,24 +447,24 @@ namespace skch {
                 //}
 #endif
               }
-              else 
+              else
               {
-                if (hashBwd != hashFwd && sortedWindow[currentKmer].second == 1) 
+                if (hashBwd != hashFwd && sortedWindow[currentKmer].second == 1)
                 {
                   // Seeing kmer for the first time
-                  if (sortedWindow.size() < sketchSize + 1) 
+                  if (sortedWindow.size() < sketchSize + 1)
                   {
                     piv.p = sortedWindow.end();
-                  } 
-                  else if (sortedWindow.size() == sketchSize + 1) 
+                  }
+                  else if (sortedWindow.size() == sketchSize + 1)
                   {
                     piv.p = std::prev(sortedWindow.end());
                   }
                 }
               }
 
-              //DEBUG_ASSERT(sortedWindow.size() == 0 
-                      //|| std::distance(sortedWindow.begin(), piv.p) == std::min<int>(sortedWindow.size(), sketchSize), 
+              //DEBUG_ASSERT(sortedWindow.size() == 0
+                      //|| std::distance(sortedWindow.begin(), piv.p) == std::min<int>(sortedWindow.size(), sketchSize),
                       //seqCounter, currentWindowId, i);
               //DEBUG_ASSERT(piv.p == sortedWindow.end() || (piv.p->second.first.wpos == -1 && piv.p->second.first.wpos_end == -1));
               //DEBUG_ASSERT(((sortedWindow.size() == 0 || currentWindowId < 0) || (std::prev(piv.p)->second.first.wpos != -1 && std::prev(piv.p)->second.first.wpos_end == -1)));
@@ -472,9 +472,9 @@ namespace skch {
 
             uint64_t rank = 1;
             auto iter = sortedWindow.begin();
-            while (iter != sortedWindow.end() && rank <= sketchSize) 
+            while (iter != sortedWindow.end() && rank <= sketchSize)
             {
-              if (iter->second.first.wpos != -1) 
+              if (iter->second.first.wpos != -1)
               {
                 iter->second.first.wpos_end = len - kmerSize + 1;
                 minmerIndex.push_back(iter->second.first);
@@ -486,8 +486,8 @@ namespace skch {
             // TODO Not sure why these are occuring but they are a bug
             minmerIndex.erase(
                 std::remove_if(
-                  minmerIndex.begin(), 
-                  minmerIndex.end(), 
+                  minmerIndex.begin(),
+                  minmerIndex.end(),
                   [](auto& mi) { return mi.wpos < 0 || mi.wpos_end < 0; }),
                 minmerIndex.end());
 
@@ -500,20 +500,20 @@ namespace skch {
                 for (int chunk = 0; chunk < std::ceil(float(mi.wpos_end - mi.wpos) / float(windowSize)); chunk++) {
                   chunkedMIs.push_back(
                     MinmerInfo{
-                      mi.hash, 
-                      mi.seqId, 
-                      mi.wpos + chunk*windowSize, 
+                      mi.hash,
+                      mi.seqId,
+                      mi.wpos + chunk*windowSize,
                       std::min(mi.wpos + chunk*windowSize + windowSize, mi.wpos_end),
                       mi.strand
-                    } 
+                    }
                   );
                 }
               }
             });
             minmerIndex.erase(
                 std::remove_if(
-                  minmerIndex.begin(), 
-                  minmerIndex.end(), 
+                  minmerIndex.begin(),
+                  minmerIndex.end(),
                   [windowSize](auto& mi) { return mi.wpos_end - mi.wpos > windowSize; }),
                 minmerIndex.end());
             minmerIndex.insert(minmerIndex.end(), chunkedMIs.begin(), chunkedMIs.end());
@@ -522,10 +522,10 @@ namespace skch {
             std::sort(minmerIndex.begin(), minmerIndex.end(), [](auto& l, auto& r) {return l.wpos < r.wpos;});
 
             // No duplicate windows
-            DEBUG_ASSERT(
+            assert(
                 std::unique(
-                  minmerIndex.begin(), 
-                  minmerIndex.end(), 
+                  minmerIndex.begin(),
+                  minmerIndex.end(),
                   [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }) == minmerIndex.end());
 
 #ifdef DEBUG
@@ -537,7 +537,7 @@ namespace skch {
             //auto heap_cmp = [](auto& l, auto& r) {return l.wpos_end >= r.wpos_end;};
             //for (auto& mi : minmerIndex) {
               //while (!endpos_heap.empty() && endpos_heap.front().wpos_end <= mi.wpos) {
-                //std::pop_heap(endpos_heap.begin(), endpos_heap.end(), heap_cmp); 
+                //std::pop_heap(endpos_heap.begin(), endpos_heap.end(), heap_cmp);
                 //endpos_heap.pop_back();
               //}
               //endpos_heap.push_back(mi);

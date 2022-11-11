@@ -48,7 +48,7 @@ add_compile_options(-Wfatal-errors)
 
 #add_subdirectory(src/common/wflign/deps/WFA2-lib EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/wflign/deps/wflambda EXCLUDE_FROM_ALL)
-add_subdirectory(src/common/libassert-1.1 EXCLUDE_FROM_ALL)
+#add_subdirectory(src/common/libassert-1.1 EXCLUDE_FROM_ALL)
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/abseil-cpp)
 
@@ -60,7 +60,7 @@ target_include_directories(wfmash PRIVATE
   src/common
   src/common/wflign/deps
   src/common/wflign/deps/WFA2-lib
-  src/common/libassert-1.1/include
+  #src/common/libassert-1.1/include
   #src/common/wflign/abseil-cpp
   )
 target_link_directories(wfmash PRIVATE
@@ -76,7 +76,6 @@ target_link_libraries(wfmash
   wfacpp
   jemalloc
   z
-  assert
   gmp
   #absl::flat_hash_map
 )
