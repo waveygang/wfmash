@@ -68,30 +68,32 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_sequence_file_list(io_opts, "queries", "alignment queries files list", {'Q', "query-file-list"});
 
     args::Group mapping_opts(parser, "[ Mapping Options ]");
+    args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 5k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
-    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
-    args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
-    args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
+    args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
+    args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
-    args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
-    args::Flag keep_low_align_pct_identity(mapping_opts, "A", "keep alignments with gap-compressed identity below --map-pct-id=% x 0.75", {'O', "keep-low-align-id"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
-    args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings (NOT FULLY IMPLEMENTED)", {'M', "no-merge"});
     args::ValueFlag<int64_t> window_size(mapping_opts, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0, minimum -k]", {'w', "window-size"});
     args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
+    args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings (NOT FULLY IMPLEMENTED)", {'M', "no-merge"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
+    args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, keep alignments with gap-compressed identity above --map-pct-id x 0.8, else keep all alignments "
+                                                   "[default: if an input PAF is specified, keep all alignments, else keep alignments with gap-compressed identity above --map-pct-id x 0.8",
+                                {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
@@ -429,11 +431,18 @@ void parse_args(int argc,
 //    }
 
 
-    if (keep_low_align_pct_identity || align_input_paf) {
-        // if align_input_paf, then min_identity is set to 0 to avoid filtering out sequences with gap_compressed_identity lower than the min_identity
-        align_parameters.min_identity = 0; // now unused
+    if (align_input_paf) {
+        if (invert_filtering) {
+            align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
+        } else {
+            align_parameters.min_identity = 0; // disabled
+        }
     } else {
-        align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
+        if (invert_filtering) {
+            align_parameters.min_identity = 0; // disable
+        } else {
+            align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
+        }
     }
 
     if (wflambda_segment_length) {
