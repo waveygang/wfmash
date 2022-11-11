@@ -1,0 +1,15 @@
+name: clang-tidy
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: dependencies
+      run: sudo apt install clang-tidy
+    - name: clang-tidy
+      run: chmod +x lint.sh && ./lint.sh

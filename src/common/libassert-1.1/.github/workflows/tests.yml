@@ -1,0 +1,83 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++-12]
+        target: [debug, release]
+    steps:
+    - uses: actions/checkout@v2
+    - name: dependencies
+      run: |
+           python3 -m pip install --upgrade pip
+           python3 -m pip install git+https://github.com/jeffkaufman/icdiff.git
+    - name: build library
+      run: make COMPILER=${{matrix.compiler}} TARGET=${{matrix.target}}
+    - name: build tests
+      working-directory: tests
+      run: make tests COMPILER=${{matrix.compiler}} TARGET=${{matrix.target}}
+    - name: dos2unix
+      working-directory: tests/integration/expected
+      run: |
+           sudo apt install dos2unix
+           dos2unix *.txt
+    - name: run tests
+      working-directory: tests
+      run: python3 run-tests.py --compiler=${{matrix.compiler}} --build_type=${{matrix.target}} --integration
+  test-windows:
+    runs-on: windows-2019
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        target: [debug] # currently running into issues with testing release TODO
+    steps:
+    - uses: actions/checkout@v2
+    - name: dependencies
+      run: |
+           python3 -m pip install --upgrade pip
+           python3 -m pip install git+https://github.com/jeffkaufman/icdiff.git
+    - name: build library
+      run: make COMPILER=${{matrix.compiler}} TARGET=${{matrix.target}}
+    - name: build tests
+      working-directory: tests
+      run: make tests COMPILER=${{matrix.compiler}} TARGET=${{matrix.target}}
+    - name: dos2unix
+      working-directory: tests/integration/expected
+      run: dos2unix *.txt
+    - name: run tests
+      working-directory: tests
+      run: python3 run-tests.py --compiler=${{matrix.compiler}} --build_type=${{matrix.target}} --windows --integration
+  test-msvc:
+    runs-on: windows-2019
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [debug, release]
+        cppflags: ["", "/permissive- /Zc:twoPhase-"]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Enable Developer Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1.10.0
+    - name: dependencies
+      run: |
+           python3 -m pip install --upgrade pip
+           python3 -m pip install git+https://github.com/jeffkaufman/icdiff.git
+    - name: build library
+      run: make COMPILER=msvc "CPPFLAGS=${{matrix.cppflags}}"
+    - name: build tests
+      working-directory: tests
+      run: make tests COMPILER=msvc "CPPFLAGS=${{matrix.cppflags}}"
+    - name: dos2unix
+      working-directory: tests/integration/expected
+      run: dos2unix *.txt
+    - name: run tests
+      working-directory: tests
+      run: python3 run-tests.py --compiler=msvc --build_type=${{matrix.target}} --integration

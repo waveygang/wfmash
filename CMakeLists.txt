@@ -46,15 +46,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_compile_options(-Wfatal-errors)
 
-include(FetchContent)
-FetchContent_Declare(
-    assert
-    URL https://github.com/jeremy-rifkin/libassert/archive/refs/tags/v1.1.tar.gz
-)
-FetchContent_MakeAvailable(assert)
-
 #add_subdirectory(src/common/wflign/deps/WFA2-lib EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/wflign/deps/wflambda EXCLUDE_FROM_ALL)
+add_subdirectory(src/common/libassert-1.1 EXCLUDE_FROM_ALL)
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 #add_subdirectory(src/common/abseil-cpp)
 
