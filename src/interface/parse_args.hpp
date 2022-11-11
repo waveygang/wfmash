@@ -91,8 +91,8 @@ void parse_args(int argc,
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, keep alignments with gap-compressed identity above --map-pct-id x 0.8, else keep all alignments "
-                                                   "[default: if an input PAF is specified, keep all alignments, else keep alignments with gap-compressed identity above --map-pct-id x 0.8",
+    args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, remove alignments with gap-compressed identity below --map-pct-id x 0.8, else keep all alignments "
+                                                   "[default: if an input PAF is specified, keep all alignments, else remove alignments with gap-compressed identity below --map-pct-id x 0.8]",
                                 {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
