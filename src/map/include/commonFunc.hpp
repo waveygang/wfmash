@@ -522,11 +522,14 @@ namespace skch {
             std::sort(minmerIndex.begin(), minmerIndex.end(), [](auto& l, auto& r) {return l.wpos < r.wpos;});
 
             // No duplicate windows
-            DEBUG_ASSERT(
+            // TODO These should not be occurring. They happen rarely, so just deleting them for now
+            // but need to fix eventually 
+            minmerIndex.erase(
                 std::unique(
                   minmerIndex.begin(), 
                   minmerIndex.end(), 
-                  [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }) == minmerIndex.end());
+                  [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }),
+                minmerIndex.end());
 
 #ifdef DEBUG
             ////std::cout << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";
