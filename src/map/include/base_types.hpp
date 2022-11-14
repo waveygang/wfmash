@@ -95,6 +95,12 @@ namespace skch
     CLOSE = -1
   };  
 
+  struct SeqCoord
+  {
+    seqno_t seqId;
+    offset_t pos;
+  };
+
   // Endpoints for minmer intervals
   struct IntervalPoint
   {
