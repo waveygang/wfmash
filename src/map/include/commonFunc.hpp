@@ -7,6 +7,7 @@
 #define COMMON_FUNC_HPP
 
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <deque>
 #include <cmath>
@@ -16,12 +17,12 @@
 
 //Own includes
 #include "map/include/map_parameters.hpp"
+#include "common/wflign/src/rkmh.hpp"
 
 //External includes
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
 
-#include "common/wflign/src/rkmh.hpp"
 #include "assert.hpp"
 
 namespace skch {

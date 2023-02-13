@@ -191,27 +191,19 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cerr << "[wfmash::map] Reference = " << parameters.refSequences << std::endl;
-    std::cerr << "[wfmash::map] Query = " << parameters.querySequences << std::endl;
-    std::cerr << "[wfmash::map] Kmer size = " << parameters.kmerSize << std::endl;
-    std::cerr << "[wfmash::map] Sketch size = " << parameters.sketchSize << std::endl;
-    std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cerr << "[wfmash::map] Block length min = " << parameters.block_length << std::endl;
-    std::cerr << "[wfmash::map] Chaining gap max = " << parameters.chain_gap << std::endl;
-    //std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
-    std::cerr << "[wfmash::map] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
-    std::cerr << "[wfmash::map] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
-    std::cerr << "[wfmash::map] Mapping output file = " << parameters.outFileName << std::endl;
-    std::cerr << "[wfmash::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
-    std::cerr << "[wfmash::map] Execution threads  = " << parameters.threads << std::endl;
-    if (parameters.use_spaced_seeds) {
-        std::cerr << "[wfmash::map] Spaced seed parameters  = "
-                  << "(weight = " << parameters.spaced_seed_params.weight
-                  << ", count = " << parameters.spaced_seed_params.seed_count
-                  << ", similarity = " << parameters.spaced_seed_params.similarity
-                  << ", region length = " << parameters.spaced_seed_params.region_length
-                  << " )"<< std::endl;
-    }
+    std::cerr << "[mashmap::map] Reference = " << parameters.refSequences << std::endl;
+    std::cerr << "[mashmap::map] Query = " << parameters.querySequences << std::endl;
+    std::cerr << "[mashmap::map] Kmer size = " << parameters.kmerSize << std::endl;
+    std::cerr << "[mashmap::map] Sketch size = " << parameters.sketchSize << std::endl;
+    std::cerr << "[mashmap::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
+    std::cerr << "[mashmap::map] Block length min = " << parameters.block_length << std::endl;
+    std::cerr << "[mashmap::map] Chaining gap max = " << parameters.chain_gap << std::endl;
+    //std::cerr << "[mashmap::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
+    std::cerr << "[mashmap::map] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
+    std::cerr << "[mashmap::map] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
+    std::cerr << "[mashmap::map] Mapping output file = " << parameters.outFileName << std::endl;
+    std::cerr << "[mashmap::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
+    std::cerr << "[mashmap::map] Execution threads  = " << parameters.threads << std::endl;
   }
 
   /**
@@ -384,16 +376,6 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else
       parameters.threads = 1;
 
-    /*
-     * Compute window size for sketching
-     */
-
-    //Compute optimal window size
-    parameters.windowSize = skch::Stat::recommendedWindowSize(
-            skch::fixed::pval_cutoff, skch::fixed::confidence_interval,
-            parameters.kmerSize, parameters.alphabetSize,
-            parameters.percentageIdentity,
-            parameters.segLength, parameters.referenceSize);
 
     if(cmd.foundOption("output"))
     {

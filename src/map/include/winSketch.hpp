@@ -16,6 +16,7 @@
 //#include <zlib.h>
 
 //Own includes
+#include "csv.h"
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
 #include "map/include/commonFunc.hpp"
@@ -118,6 +119,11 @@ namespace skch
         :
           param(p) {
             this->build();
+            if (param.loadIndexFilename == "") {
+              if (param.saveIndexFilename != "") {
+                this->saveIndex();
+              }
+            }
             this->index();
             this->computeFreqHist();
             this->computeFreqSeedSet();
@@ -138,12 +144,15 @@ namespace skch
 
         //Create the thread pool 
         ThreadPool<InputSeqContainer, MI_Type> threadPool( [this](InputSeqContainer* e) {return buildHelper(e);}, param.threads);
+        if (param.loadIndexFilename != "") {
+          this->loadIndex();
+        }
 
         for(const auto &fileName : param.refSequences)
         {
 
 #ifdef DEBUG
-        std::cerr << "[wfmash::skch::Sketch::build] building minmer index for " << fileName << std::endl;
+        std::cerr << "[mashmap::skch::Sketch::build] building minmer index for " << fileName << std::endl;
 #endif
 
         seqiter::for_each_seq_in_file(
@@ -157,19 +166,21 @@ namespace skch
                 metadata.push_back( ContigInfo{seq_name, len} );
 
                 //Is the sequence too short?
-                if(len < param.windowSize || len < param.kmerSize)
+                if(len < param.kmerSize)
                 {
 #ifdef DEBUG
-                    std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer and window size" << std::endl;
+                    std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer" << std::endl;
 #endif
                 }
                 else
                 {
+                  if (param.loadIndexFilename == "") {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
                     
                     //Collect output if available
                     while ( threadPool.outputAvailable() )
                         this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                  }
                 }
                 seqCounter++;
             });
@@ -177,11 +188,13 @@ namespace skch
           sequencesByFileInfo.push_back(seqCounter);
         }
 
-        //Collect remaining output objects
-        while ( threadPool.running() )
-          this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+        if (param.loadIndexFilename == "") {
+          //Collect remaining output objects
+          while ( threadPool.running() )
+            this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+        }
 
-        std::cerr << "[wfmash::skch::Sketch::build] minmers picked from reference = " << minmerIndex.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch::build] minmers picked from reference = " << minmerIndex.size() << std::endl;
 
       }
 
@@ -219,6 +232,38 @@ namespace skch
         delete output;
       }
 
+
+      /**
+       * @brief  Save index for quick loading
+       */
+      void saveIndex() 
+      {
+        std::ofstream outStream;
+        outStream.open(param.saveIndexFilename, std::fstream::out);
+        outStream << "seqId" << "\t" << "strand" << "\t" << "start" << "\t" << "end" << "\t" << "hash" << std::endl;
+        for (auto& mi : this->minmerIndex) {
+          outStream << mi.seqId << "\t" << std::to_string(mi.strand) << "\t" << mi.wpos << "\t" << mi.wpos_end << "\t" << mi.hash << std::endl;
+        }
+        outStream.close(); 
+      }
+
+      /**
+       * @brief Load index from file
+       */
+      void loadIndex() 
+      {
+        io::CSVReader<5, io::trim_chars<' '>, io::no_quote_escape<'\t'>> inReader(param.loadIndexFilename);
+        inReader.read_header(io::ignore_missing_column, "seqId", "strand", "start", "end", "hash");
+        hash_t hash;
+        offset_t start, end;
+        strand_t strand;
+        seqno_t seqId;
+        while (inReader.read_row(seqId, strand, start, end, hash))
+        {
+          this->minmerIndex.push_back(MinmerInfo {hash, seqId, start, end, strand});
+        }
+      }
+
       /**
        * @brief   build the index for fast lookups using minmer table
        */
@@ -234,7 +279,7 @@ namespace skch
 
         }
 
-        std::cerr << "[wfmash::skch::Sketch::index] unique minmers = " << minmerPosLookupIndex.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch::index] unique minmers = " << minmerPosLookupIndex.size() << std::endl;
       }
 
       /**
@@ -249,7 +294,7 @@ namespace skch
               for (auto &e : this->minmerPosLookupIndex)
                   this->minmerFreqHistogram[e.second.size()] += 1;
 
-              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] Frequency histogram of minmers = "
+              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmers = "
                         << *this->minmerFreqHistogram.begin() << " ... " << *this->minmerFreqHistogram.rbegin()
                         << std::endl;
 
@@ -275,14 +320,14 @@ namespace skch
               }
 
               if (this->freqThreshold != std::numeric_limits<int>::max())
-                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
+                  std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
                             << "\%, ignore minmers occurring >= " << this->freqThreshold << " times during lookup."
                             << std::endl;
               else
-                  std::cerr << "[wfmash::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
+                  std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
                             << "\%, consider all minmers during lookup." << std::endl;
           } else {
-              std::cerr << "[wfmash::skch::Sketch::computeFreqHist] No minmers." << std::endl;
+              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] No minmers." << std::endl;
           }
       }
 

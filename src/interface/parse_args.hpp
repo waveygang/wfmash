@@ -74,6 +74,8 @@ void parse_args(int argc,
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
+    args::ValueFlag<std::string> index_load_file(io_opts, "FILENAME", "Filename of index file to load", {'A', "index-load-file"});
+    args::ValueFlag<std::string> index_save_file(io_opts, "FILENAME", "Filename of index file to save", {'y', "index-save-file"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
@@ -89,6 +91,10 @@ void parse_args(int argc,
     args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default 25]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
+    args::Flag stage2_full_scan(mapping_opts, "stage2-full-scan", "scan full candidate regions for best minhash instead of just using the point with the highest intersection [default: disabled]", {'F',"s2-full-scan"});
+    args::Flag disable_topANI_filter(mapping_opts, "no-top-ANI-filter", "Do not use the threshold filtering for stage 1 of mapping", {'D', "no-topANI-filter"});
+    args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for stage 1 filtering [default: 0.0]", {'T', "s1-ani-thresh"});
+    args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for stage 1 filtering [default: 0.999]", {'C', "s1-ani-thresh-conf"});
     args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
@@ -187,6 +193,17 @@ void parse_args(int argc,
         skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
 
+    if (index_save_file) {
+        map_parameters.saveIndexFilename = args::get(index_save_file);
+    } else {
+        map_parameters.saveIndexFilename = "";
+    }
+    if (index_load_file) {
+        map_parameters.loadIndexFilename = args::get(index_load_file);
+    } else {
+        map_parameters.loadIndexFilename = "";      
+    }
+
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
         map_parameters.skip_self = true;
@@ -208,6 +225,21 @@ void parse_args(int argc,
             map_parameters.filterMode = skch::filter::MAP;
         }
     }
+
+    if (map_ani_threshold) {
+        map_parameters.ANIDiff = (float) (args::get(map_ani_threshold)/100.0); // scale to [0,1]
+    } else {
+        map_parameters.ANIDiff = skch::fixed::ANIDiff;
+    }
+  
+    if (map_ani_threshold_conf) {
+        map_parameters.ANIDiffConf = (float) (args::get(map_ani_threshold_conf)/100.0); // scale to [0,1]
+    } else {
+        map_parameters.ANIDiffConf = skch::fixed::ANIDiffConf;
+    }
+
+    map_parameters.stage1_topANI_filter = !args::get(disable_topANI_filter); 
+    map_parameters.stage2_full_scan = args::get(stage2_full_scan);
 
     if (map_sparsification) {
         if (args::get(map_sparsification) == 1) {
@@ -492,24 +524,6 @@ void parse_args(int argc,
     } else {
         map_parameters.threads = 1;
         align_parameters.threads = 1;
-    }
-
-    // Compute optimal window size for sketching
-    {
-        const int64_t ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
-        if (ws > 0) {
-            map_parameters.windowSize = ws;
-        } else {
-            // Compute the window size with a heuristic function
-            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 6)
-                * map_parameters.segLength / 5000;
-
-            // Avoid tiny windows to improve runtime
-            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
-
-            // Avoid too big values to improve the accuracy
-            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
-        }
     }
 
     if (window_minimizers) {
