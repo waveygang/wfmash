@@ -240,9 +240,9 @@ namespace skch
       {
         std::ofstream outStream;
         outStream.open(param.saveIndexFilename, std::fstream::out);
-        outStream << "seqId" << "\t" << "strand" << "\t" << "start" << "\t" << "end" << "\t" << "hash" << std::endl;
+        outStream << "seqId" << "\t" << "strand" << "\t" << "start" << "\t" << "end" << "\t" << "hash\n";
         for (auto& mi : this->minmerIndex) {
-          outStream << mi.seqId << "\t" << std::to_string(mi.strand) << "\t" << mi.wpos << "\t" << mi.wpos_end << "\t" << mi.hash << std::endl;
+          outStream << mi.seqId << "\t" << std::to_string(mi.strand) << "\t" << mi.wpos << "\t" << mi.wpos_end << "\t" << mi.hash << "\n";
         }
         outStream.close(); 
       }
