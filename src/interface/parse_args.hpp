@@ -87,15 +87,15 @@ void parse_args(int argc,
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
     args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings (NOT FULLY IMPLEMENTED)", {'M', "no-merge"});
-    args::ValueFlag<int64_t> window_size(mapping_opts, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0, minimum -k]", {'w', "window-size"});
-    args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
+    //args::ValueFlag<int64_t> window_size(mapping_opts, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0, minimum -k]", {'w', "window-size"});
+    //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default 25]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     args::Flag stage2_full_scan(mapping_opts, "stage2-full-scan", "scan full candidate regions for best minhash instead of just using the point with the highest intersection [default: disabled]", {'F',"s2-full-scan"});
     args::Flag disable_topANI_filter(mapping_opts, "no-top-ANI-filter", "Do not use the threshold filtering for stage 1 of mapping", {'D', "no-topANI-filter"});
     args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for stage 1 filtering [default: 0.0]", {'T', "s1-ani-thresh"});
     args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for stage 1 filtering [default: 0.999]", {'C', "s1-ani-thresh-conf"});
-    args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
+    //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -420,38 +420,39 @@ void parse_args(int argc,
         map_parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
     }
 
-    if (spaced_seed_params) {
-        const std::string foobar = args::get(spaced_seed_params);
+    map_parameters.use_spaced_seeds = false;
+    //if (spaced_seed_params) {
+        //const std::string foobar = args::get(spaced_seed_params);
 
-        // delimeters can be full colon (:) or a space
-        char delimeter;
-        if (foobar.find(' ') !=  std::string::npos) {
-            delimeter = ' ';
-        } else if (foobar.find(':') !=  std::string::npos) {
-            delimeter = ':';
-        } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params." << std::endl;
-            exit(1);
-        }
+        //// delimeters can be full colon (:) or a space
+        //char delimeter;
+        //if (foobar.find(' ') !=  std::string::npos) {
+            //delimeter = ' ';
+        //} else if (foobar.find(':') !=  std::string::npos) {
+            //delimeter = ':';
+        //} else {
+            //std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params." << std::endl;
+            //exit(1);
+        //}
 
-        const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
-        if (p.size() != 4) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds." << std::endl;
-            exit(1);
-        }
+        //const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
+        //if (p.size() != 4) {
+            //std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds." << std::endl;
+            //exit(1);
+        //}
 
-        const uint32_t seed_weight   = stoi(p[0]);
-        const uint32_t seed_count    = stoi(p[1]);
-        const float similarity       = stof(p[2]);
-        const uint32_t region_length = stoi(p[3]);
+        //const uint32_t seed_weight   = stoi(p[0]);
+        //const uint32_t seed_count    = stoi(p[1]);
+        //const float similarity       = stof(p[2]);
+        //const uint32_t region_length = stoi(p[3]);
 
-        // Generate an ALeS params struct
-        map_parameters.use_spaced_seeds = true;
-        map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
-        map_parameters.kmerSize = (int) seed_weight;
-    } else {
-        map_parameters.use_spaced_seeds = false;
-    }
+        //// Generate an ALeS params struct
+        //map_parameters.use_spaced_seeds = true;
+        //map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
+        //map_parameters.kmerSize = (int) seed_weight;
+    //} else {
+        //map_parameters.use_spaced_seeds = false;
+    //}
 
     align_parameters.kmerSize = map_parameters.kmerSize;
 
@@ -526,11 +527,11 @@ void parse_args(int argc,
         align_parameters.threads = 1;
     }
 
-    if (window_minimizers) {
-        map_parameters.world_minimizers = false;
-    } else {
-        map_parameters.world_minimizers = true;
-    }
+    //if (window_minimizers) {
+        //map_parameters.world_minimizers = false;
+    //} else {
+        //map_parameters.world_minimizers = true;
+    //}
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
