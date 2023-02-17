@@ -967,6 +967,14 @@ namespace skch
 
               float nucIdentity = (1 - mash_dist);
               float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
+              if (nucIdentity > 1.00) {
+                std::cerr << std::endl;
+                for (MinmerInfo& x : Q.minmerTableQuery) {
+                  std::cerr << x.hash << "\t" << x.wpos << " -- " << x.wpos_end << std::endl;
+                }
+                std::cerr << l2.sharedSketchSize << "/" << Q.sketchSize << std::endl;
+                exit(3);
+              }
 
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
@@ -1464,8 +1472,7 @@ namespace skch
         {
           assert(e.refSeqId < this->refSketch.metadata.size());
 
-          float fakeMapQ = std::round(-10.0 * std::log10(1-(e.nucIdentity)));
-          if (std::isinf(fakeMapQ)) fakeMapQ = 255;
+          float fakeMapQ = e.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(e.nucIdentity)));
 
           outstrm  << (param.filterMode == filter::ONETOONE ? qmetadata[e.querySeqId].name : queryName)
                    << "\t" << e.queryLen
