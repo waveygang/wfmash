@@ -29,6 +29,7 @@
  * DESCRIPTION: Edit cigar data-structure (match/mismatch/insertion/deletion)
  */
 
+#include "utils/commons.h"
 #include "cigar.h"
 
 /*
@@ -225,6 +226,10 @@ int cigar_score_gap_affine2p(
 /*
  * Utils
  */
+bool cigar_is_null(
+    cigar_t* const cigar) {
+  return (cigar->begin_offset >= cigar->end_offset);
+}
 int cigar_cmp(
     cigar_t* const cigar_a,
     cigar_t* const cigar_b) {

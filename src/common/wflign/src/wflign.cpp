@@ -604,10 +604,11 @@ void WFlign::wflign_affine_wavefront(
         extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
         extend_data.high_order_dp_matrix_mismatch = &high_order_dp_matrix_mismatch;
 #endif
-        wflambda_aligner->setMatchFunct(wflambda_extend_match,(void*)&extend_data);
 
         // Align
-        wflambda_aligner->alignEnd2EndLambda(pattern_length,text_length);
+        wflambda_aligner->alignEnd2EndLambda(
+            wflambda_extend_match,(void*)&extend_data,
+            pattern_length,text_length);
 
         // Extract the trace
         if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_SUCCESSFUL) {

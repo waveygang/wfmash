@@ -29,6 +29,7 @@
  * DESCRIPTION: WFA Sample-Code
  */
 
+#include "utils/commons.h"
 #include "wavefront/wavefront_align.h"
 
 int main(int argc,char* argv[]) {
@@ -48,7 +49,7 @@ int main(int argc,char* argv[]) {
   int i;
   for (i=0;i<100000;++i) {
     // Align
-    wavefront_align(wf_aligner,pattern,NULL,strlen(pattern),text,NULL,strlen(text));
+    wavefront_align(wf_aligner,pattern,strlen(pattern),text,strlen(text));
     // Report
     if ((i%1000) == 0) {
       fprintf(stderr,"... done %d alignments\n",i);

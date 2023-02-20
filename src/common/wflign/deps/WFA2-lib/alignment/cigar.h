@@ -32,7 +32,6 @@
 #ifndef CIGAR_H_
 #define CIGAR_H_
 
-#include "utils/commons.h"
 #include "system/mm_allocator.h"
 #include "alignment/linear_penalties.h"
 #include "alignment/affine_penalties.h"
@@ -97,6 +96,9 @@ int cigar_score_gap_affine2p(
 /*
  * Utils
  */
+bool cigar_is_null(
+    cigar_t* const cigar);
+
 int cigar_cmp(
     cigar_t* const cigar_a,
     cigar_t* const cigar_b);
