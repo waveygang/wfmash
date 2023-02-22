@@ -876,6 +876,7 @@ namespace skch
         if (in_candidate) {
           localOpts.push_back(l1_out);
         }
+        
 
         // Join together proximal local opts
         for (auto& l1_out : localOpts) 
@@ -967,14 +968,6 @@ namespace skch
 
               float nucIdentity = (1 - mash_dist);
               float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
-              if (nucIdentity > 1.00) {
-                std::cerr << std::endl;
-                for (MinmerInfo& x : Q.minmerTableQuery) {
-                  std::cerr << x.hash << "\t" << x.wpos << " -- " << x.wpos_end << std::endl;
-                }
-                std::cerr << l2.sharedSketchSize << "/" << Q.sketchSize << std::endl;
-                exit(3);
-              }
 
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
