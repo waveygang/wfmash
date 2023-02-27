@@ -61,7 +61,7 @@ namespace skch
       int freqThreshold = std::numeric_limits<int>::max();
 
       //Set of frequent seeds to be ignored
-      std::unordered_set<hash_t> frequentSeeds;
+      robin_hood::unordered_set<hash_t> frequentSeeds;
 
       //Make the default constructor private, non-accessible
       Sketch();
