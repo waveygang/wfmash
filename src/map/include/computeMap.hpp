@@ -624,7 +624,7 @@ namespace skch
           int orig_len = Q.minmerTableQuery.size();
 #endif
           // TODO remove them from the original sketch instead of removing for each read
-          auto new_end = std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(), [&](auto mi) {
+          auto new_end = std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(), [&](auto& mi) {
             return refSketch.isFreqSeed(mi.hash);
           });
           Q.minmerTableQuery.erase(new_end, Q.minmerTableQuery.end());
