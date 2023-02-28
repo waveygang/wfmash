@@ -115,7 +115,9 @@ namespace skch
         refSketch(refsketch),
         processMappingResults(f)
     {
-      this->setProbs();
+      if (p.stage1_topANI_filter) {
+        this->setProbs();
+      }
       this->mapQuery();
     }
 
