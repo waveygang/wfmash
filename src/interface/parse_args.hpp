@@ -91,10 +91,10 @@ void parse_args(int argc,
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default 25]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
-    args::Flag stage2_full_scan(mapping_opts, "stage2-full-scan", "scan full candidate regions for best minhash instead of just using the point with the highest intersection [default: disabled]", {'F',"s2-full-scan"});
-    args::Flag disable_topANI_filter(mapping_opts, "no-top-ANI-filter", "Do not use the threshold filtering for stage 1 of mapping", {'D', "no-topANI-filter"});
-    args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for stage 1 filtering [default: 0.0]", {'T', "s1-ani-thresh"});
-    args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for stage 1 filtering [default: 0.999]", {'C', "s1-ani-thresh-conf"});
+    //args::Flag stage2_full_scan(mapping_opts, "stage2-full-scan", "scan full candidate regions for best minhash instead of just using the point with the highest intersection [default: disabled]", {'F',"s2-full-scan"});
+    args::Flag use_topANI_filter(mapping_opts, "hgf-filter", "Use the hypergeometric threshold filtering for stage 1 of mapping", {'D', "hgf-filter"});
+    args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for hypergeometric filtering [default: 0.0]", {'T', "hgf-ani-thresh"});
+    args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for hypergeometric filtering [default: 0.999]", {'C', "hgf-ani-thresh-conf"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
@@ -238,8 +238,9 @@ void parse_args(int argc,
         map_parameters.ANIDiffConf = skch::fixed::ANIDiffConf;
     }
 
-    map_parameters.stage1_topANI_filter = !args::get(disable_topANI_filter); 
-    map_parameters.stage2_full_scan = args::get(stage2_full_scan);
+    map_parameters.stage1_topANI_filter = args::get(use_topANI_filter); 
+    //map_parameters.stage2_full_scan = args::get(stage2_full_scan);
+    map_parameters.stage2_full_scan = map_parameters.stage1_topANI_filter; // HGF filter only makes sense if scanning the whole region
 
     if (map_sparsification) {
         if (args::get(map_sparsification) == 1) {
