@@ -88,7 +88,7 @@ void parse_args(int argc,
     args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     //args::ValueFlag<int64_t> window_size(mapping_opts, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0, minimum -k]", {'w', "window-size"});
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
-    args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default 25]", {'J', "sketch-size"});
+    args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default: segmentLength / 50]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     args::Flag stage2_full_scan(mapping_opts, "stage2-full-scan", "scan full candidate regions for best minhash instead of just using the point with the highest intersection [default: disabled]", {'F',"s2-full-scan"});
     args::Flag use_topANI_filter(mapping_opts, "hgf-filter", "Use the hypergeometric threshold filtering for stage 1 of mapping", {'D', "hgf-filter"});
@@ -257,17 +257,6 @@ void parse_args(int argc,
             = std::numeric_limits<uint64_t>::max();
     }
 
-    if (sketchSize) {
-        const int64_t ss = args::get(sketchSize);
-        if (ss < 1) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, sketch size must be at least 1" << std::endl;
-            exit(1);
-        }
-        map_parameters.sketchSize = ss;
-    } else {
-        map_parameters.sketchSize = 25;
-    }
-
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
@@ -361,6 +350,18 @@ void parse_args(int argc,
     } else {
         map_parameters.segLength = 5000;
     }
+
+    if (sketchSize) {
+        const int64_t ss = args::get(sketchSize);
+        if (ss < 1) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, sketch size must be at least 1" << std::endl;
+            exit(1);
+        }
+        map_parameters.sketchSize = ss;
+    } else {
+        map_parameters.sketchSize = map_parameters.segLength / 50;
+    }
+
 
     if (map_pct_identity) {
         if (args::get(map_pct_identity) < 50) {
