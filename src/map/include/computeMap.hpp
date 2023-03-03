@@ -98,7 +98,7 @@ namespace skch
 
       //Vector for sketch cutoffs. Position [i] indicates the minimum intersection size required
       //for an L1 candidate if the best intersection size is i;
-      std::vector<std::vector<int>> sketchCutoffs; 
+      std::vector<int> sketchCutoffs; 
 
     public:
 
@@ -111,7 +111,7 @@ namespace skch
       Map(const skch::Parameters &p, const skch::Sketch &refsketch,
           PostProcessResultsFn_t f = nullptr) :
         param(p),
-        sketchCutoffs(p.sketchSize + 1, std::vector<int>(p.sketchSize + 1, 0)),
+        sketchCutoffs(p.sketchSize + 1, 1),
         refSketch(refsketch),
         processMappingResults(f)
     {
@@ -125,64 +125,83 @@ namespace skch
 
       void setProbs() 
       {
-        std::vector<std::vector<std::vector<double>>> sketchProbs(
+
+        float deltaANI = param.ANIDiff;
+        float min_p = 1 - param.ANIDiffConf;
+        int ss = param.sketchSize;
+
+        // Cache hgf pmf results
+        std::vector<std::vector<double>> sketchProbs(
             param.sketchSize + 1,
-            std::vector<std::vector<double>>(
-              param.sketchSize + 1, 
-              std::vector<double>( param.sketchSize + 1, 0))
+            std::vector<double>(param.sketchSize + 1.0)
         );
-        
-        for (int ss = 1; ss <= param.sketchSize; ss++) 
+        for (auto ci = 0; ci <= ss; ci++) 
         {
-          for (auto ci = 0; ci <= param.sketchSize; ci++) 
-          {
-            for (double y = 0; y <= ci; y++) {
-              sketchProbs[ss][ci][y] = gsl_ran_hypergeometric_pdf(y, ss, ss-ci, ci);
-            }
+          for (double y = 0; y <= ci; y++) {
+            sketchProbs[ci][y] = gsl_ran_hypergeometric_pdf(y, ss, ss-ci, ci);
           }
-          
+        }
+        
+        // Return true iff Pr(ANI_i >= ANI_max - deltaANI) >= min_p
+        const auto distDiff = [this, &sketchProbs, deltaANI, min_p, ss] (int cmax, int ci) {
+          double prAboveCutoff = 0;
+          for (double ymax = 0; ymax <= cmax; ymax++) {
+            // Pr (Ymax = ymax)
+            double pymax = sketchProbs[cmax][ymax];
 
-          float deltaANI = param.ANIDiff;
-          float min_p = 1 - param.ANIDiffConf;
+            // yi_cutoff is minimum jaccard numerator required to be within deltaANI of ymax
+            double yi_cutoff = deltaANI == 0 ? ymax : (std::floor(skch::Stat::md2j(
+                skch::Stat::j2md(ymax / param.sketchSize, param.kmerSize) + deltaANI, 
+                param.kmerSize
+            ) * param.sketchSize));
 
-          for (auto cmax = 1; cmax <= param.sketchSize; cmax++) 
-          {
-            for (auto ci = 1; ci <= cmax; ci++) 
+            // Pr Y_i < yi_cutoff
+            //std::cerr << "CMF " << yi_cutoff - 1 << " " << ss << " " << ss-ci << " " << ci << std::endl;
+            double pi_acc = (yi_cutoff - 1) >= 0 ? gsl_cdf_hypergeometric_P(yi_cutoff-1, ss, ss-ci, ci) : 0;
+
+            // Pr Y_i >= yi_cutoff
+            pi_acc = 1-pi_acc;
+
+            // Pr that mash score from cj leads to an ANI at least deltaJ less than the ANI from cmax
+            prAboveCutoff += pymax * pi_acc;
+            if (prAboveCutoff > min_p)
             {
-              double prAboveCutoff = 0;
-              for (double ymax = 0; ymax <= cmax; ymax++) {
-                // Pr (Ymax = ymax)
-                double pymax = sketchProbs[ss][cmax][ymax];
-
-                // yi_cutoff is minimum jaccard numerator required to be within deltaANI of ymax
-                double yi_cutoff = deltaANI == 0 ? ymax : (std::floor(skch::Stat::md2j(
-                    skch::Stat::j2md(ymax / param.sketchSize, param.kmerSize) + deltaANI, 
-                    param.kmerSize
-                ) * param.sketchSize));
-
-                // Pr Y_i < yi_cutoff
-                double pi_acc = (yi_cutoff - 1) >= 0 ? gsl_cdf_hypergeometric_P(yi_cutoff-1, ss, ss-ci, ci) : 0;
-                // Pr Y_i >= yi_cutoff
-                pi_acc = 1-pi_acc;
-
-                // Pr that mash score from cj leads to an ANI at least deltaJ less than the ANI from cmax
-                prAboveCutoff += pymax * pi_acc;
-              }
-              if (prAboveCutoff > min_p) 
-              {
-                sketchCutoffs[ss][cmax] = std::max(1, ci);
-                break;
-              }
-            }
-            // For really high min_p values and some values of cmax, there are no values of
-            // ci that satisfy the cutoff, so we just set to the max
-            if (sketchCutoffs[ss][cmax] == 0) {
-              sketchCutoffs[ss][cmax] = cmax;
+              return true;
             }
           }
-          for (auto overlap = 0; overlap <= ss; overlap++) {
-            DEBUG_ASSERT(sketchCutoffs[ss][overlap] <= overlap);
+          return prAboveCutoff > min_p; 
+        };
+
+        // Helper vector for binary search
+        std::vector<int> ss_range(param.sketchSize+1);
+        std::iota (ss_range.begin(), ss_range.end(), 0);
+
+        for (auto cmax = 1; cmax <= ss; cmax++) 
+        {
+          // Binary search to find the lowest acceptable ci
+          int ci = std::distance(
+              ss_range.begin(),
+              std::upper_bound(
+                ss_range.begin(),
+                ss_range.begin() + ss,
+                false,
+                [&distDiff, cmax] (bool val, int ci) {
+                  return distDiff(cmax, ci);
+                }
+              )
+          );
+          sketchCutoffs[cmax] = ci;
+
+          // For really high min_p values and some values of cmax, there are no values of
+          // ci that satisfy the cutoff, so we just set to the max
+          if (sketchCutoffs[cmax] == 0) {
+            sketchCutoffs[cmax] = 1;
           }
+        }
+        for (auto overlap = 0; overlap <= ss; overlap++) 
+        {
+          //std::cerr << overlap << ", " << sketchCutoffs[overlap] << std::endl;
+          DEBUG_ASSERT(sketchCutoffs[overlap] <= overlap);
         }
       }
 
@@ -838,7 +857,7 @@ namespace skch
             }
           if ((!param.stage1_topANI_filter && prevOverlap >= minimumHits)
               || prevOverlap >= bestIntersectionSize 
-              || (prevOverlap >= sketchCutoffs[Q.sketchSize][bestIntersectionSize] 
+              || (prevOverlap >= sketchCutoffs[bestIntersectionSize] 
               //&& prevOverlap > overlapCount && prevOverlap >= prevPrevOverlap)
              )
           ) {
