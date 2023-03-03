@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 # Usage
 # Run:
 #   python3 split_approx_mappings_in_chunks.py approximate_mappings.paf 4

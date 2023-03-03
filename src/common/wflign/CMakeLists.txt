@@ -75,7 +75,7 @@ target_include_directories(
 #
 # WFling library
 #
-target_link_libraries(wflign z)
+target_link_libraries(wflign rt z)
 add_library(
         libwflign_static STATIC
         deps/atomic_image.cpp

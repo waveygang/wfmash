@@ -35,3 +35,5 @@ src/common/WFA2-lib/bin/
 src/wfmash_git_version.hpp
 
 test/
+.idea/
+cmake-build-debug/
