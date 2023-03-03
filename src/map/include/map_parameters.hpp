@@ -8,6 +8,8 @@
 
 #include <vector>
 #include <unordered_set>
+#include <filesystem>
+namespace stdfs = std::filesystem;
 
 #include "common/ALeS.hpp"
 
@@ -48,8 +50,8 @@ struct Parameters
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
-    std::string saveIndexFilename;                    //output file name of index
-    std::string loadIndexFilename;                    //input file name of index
+    stdfs::path saveIndexFilename;                    //output file name of index
+    stdfs::path loadIndexFilename;                    //input file name of index
     bool split;                                       //Split read mapping (done if this is true)
     bool skip_self;                                   //skip self mappings
     bool skip_prefix;                                 //skip mappings to sequences with the same prefix
