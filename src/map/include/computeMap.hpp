@@ -198,9 +198,8 @@ namespace skch
             sketchCutoffs[cmax] = 1;
           }
         }
-        for (auto overlap = 0; overlap <= ss; overlap++) 
+        for (auto overlap = 1; overlap <= ss; overlap++) 
         {
-          //std::cerr << overlap << ", " << sketchCutoffs[overlap] << std::endl;
           DEBUG_ASSERT(sketchCutoffs[overlap] <= overlap);
         }
       }
@@ -635,6 +634,7 @@ namespace skch
       template <typename Q_Info>
         void getSeedHits(Q_Info &Q)
         {
+          Q.minmerTableQuery.reserve(param.sketchSize);
           CommonFunc::sketchSequence(Q.minmerTableQuery, Q.seq, Q.len, param.kmerSize, param.alphabetSize, param.sketchSize, Q.seqCounter);
           if(Q.minmerTableQuery.size() == 0) {
             Q.sketchSize = 0;

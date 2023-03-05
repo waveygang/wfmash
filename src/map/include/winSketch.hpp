@@ -200,7 +200,7 @@ namespace skch
             this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
         }
 
-        std::cerr << "[mashmap::skch::Sketch::build] minmers picked from reference = " << minmerIndex.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch::build] minmer windows picked from reference = " << minmerIndex.size() << std::endl;
 
       }
 
