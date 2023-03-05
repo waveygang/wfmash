@@ -680,6 +680,10 @@ namespace skch
           if(Q.minmerTableQuery.size() == 0)
             return;
 
+          // Reserve the "expected" number of interval points
+          // assumes each seed has 1 hit. 
+          intervalPoints.reserve(2 * Q.sketchSize * refSketch.minmerIndex.size() / Q.minmerTableQuery.size());
+
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
