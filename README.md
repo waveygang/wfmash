@@ -42,6 +42,7 @@ Seven parameters shape the length, number, identity, and alignment divergence of
 These parameters affect the structure of the mappings:
 
 * `-s[N], --segment-length=[N]` is the length of the mapping seed (default: `1k`). The best pairs of consecutive segment mappings are merged where separated by less than `-c[N], --chain-gap=[N]` bases.
+* `-J[N], --sketch-size=[N]` is the number of sketched seeds for each segment. The default is set to `segment_length / 25` where, however it can be increased for better mapping recall and ANI prediction at the cost of runtime. 
 * `-l[N], --block-length-min=[N]` requires seed mappings in a merged mapping to sum to more than the given length (default 5kb).
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
 * `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length-min` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
