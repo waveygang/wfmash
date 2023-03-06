@@ -51,6 +51,8 @@ By default, we obtain base-level alignments by applying a high-order version of 
 Various settings affect the behavior of the pairwise alignment, but in general the alignment parameters are adjusted based on expected divergence between the mapped subsequences.
 Specifying `-m, --approx-map` lets us stop before alignment and obtain the approximate mappings (akin to `minimap2` without `-c`).
 
+As a convenience, the reference index for MashMap can be saved via `--index-save-file=[FILENAME]` and then used again via `--index-load-file=[FILENAME]`. If `[FILENAME]` has the `.tsv` suffix, the file will be saved as raw text, and otherwise will be saved as a binary file. 
+
 ### all-to-all mapping
 
 Together, these settings allow us to precisely define an alignment space to consider.
