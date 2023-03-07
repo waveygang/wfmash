@@ -42,6 +42,7 @@ Seven parameters shape the length, number, identity, and alignment divergence of
 These parameters affect the structure of the mappings:
 
 * `-s[N], --segment-length=[N]` is the length of the mapping seed (default: `1k`). The best pairs of consecutive segment mappings are merged where separated by less than `-c[N], --chain-gap=[N]` bases.
+* `-J[N], --sketch-size=[N]` is the number of sketched seeds for each segment. The default is set to `segment_length / 25` where, however it can be increased for better mapping recall and ANI prediction at the cost of runtime. 
 * `-l[N], --block-length-min=[N]` requires seed mappings in a merged mapping to sum to more than the given length (default 5kb).
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
 * `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length-min` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
@@ -49,6 +50,8 @@ These parameters affect the structure of the mappings:
 By default, we obtain base-level alignments by applying a high-order version of WFA to the mappings.
 Various settings affect the behavior of the pairwise alignment, but in general the alignment parameters are adjusted based on expected divergence between the mapped subsequences.
 Specifying `-m, --approx-map` lets us stop before alignment and obtain the approximate mappings (akin to `minimap2` without `-c`).
+
+As a convenience, the reference index for MashMap can be saved via `--index-save-file=[FILENAME]` and then used again via `--index-load-file=[FILENAME]`. If `[FILENAME]` has the `.tsv` suffix, the file will be saved as raw text, and otherwise will be saved as a binary file. 
 
 ### all-to-all mapping
 
