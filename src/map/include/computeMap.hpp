@@ -795,7 +795,11 @@ namespace skch
             {
               return;
             }
+            else {
+              minimumHits = std::max(sketchCutoffs[bestIntersectionSize], minimumHits);
+            }
           } 
+
 
           // Clear freq dict, as there will be left open CLOSE points at the end of the last seq
           // that we never got to
@@ -859,11 +863,9 @@ namespace skch
               }
               leadingIt++;
             }
-          if ((!param.stage1_topANI_filter && prevOverlap >= minimumHits)
-              || prevOverlap >= bestIntersectionSize 
-              || (prevOverlap >= sketchCutoffs[bestIntersectionSize] 
+          if (
+              prevOverlap >= minimumHits
               //&& prevOverlap > overlapCount && prevOverlap >= prevPrevOverlap)
-             )
           ) {
             if (l1_out.seqId != prevPos.seqId && in_candidate) {
               localOpts.push_back(l1_out);
