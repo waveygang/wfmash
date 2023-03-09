@@ -705,8 +705,8 @@ namespace skch
                         || intervalPoints.back().hash != mi.hash 
                         || intervalPoints.back().pos != mi.wpos)
                     {
-                      intervalPoints.push_back(IntervalPoint {side::OPEN, mi.seqId, mi.wpos, strand_t(mi.strand * it->strand), mi.hash});
-                      intervalPoints.push_back(IntervalPoint {side::CLOSE, mi.seqId, mi.wpos_end, strand_t(mi.strand * it->strand), mi.hash});
+                      intervalPoints.push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN, strand_t(mi.strand * it->strand)});
+                      intervalPoints.push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE, strand_t(mi.strand * it->strand)});
                     } else {
                       intervalPoints.back().pos = mi.wpos_end;
                     }
@@ -971,18 +971,8 @@ namespace skch
           for(auto &candidateLocus: l1Mappings)
           {
             std::vector<L2_mapLocus_t> l2_vec;
-            if (true) {
-              computeL2MappedRegions(Q, candidateLocus, l2_vec);
-            } else {
-              l2_vec.push_back(
-                L2_mapLocus_t {
-                  candidateLocus.seqId,
-                  candidateLocus.rangeStartPos + ((int)(candidateLocus.rangeStartPos - candidateLocus.rangeEndPos) / 2),
-                  (int) (((float)(2*param.sketchSize - candidateLocus.intersectionSize)) / param.sketchSize) * candidateLocus.intersectionSize,
-                  candidateLocus.strand
-                }
-              );
-            }
+            computeL2MappedRegions(Q, candidateLocus, l2_vec);
+
             for (auto& l2 : l2_vec) 
             {
               //Compute mash distance using calculated jaccard
@@ -1505,7 +1495,7 @@ namespace skch
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
                    << "\t" << "id:f:" << e.nucIdentity * 100.0
-                   << "\t" << "jc:f:" << float(e.conservedSketches) / e.sketchSize;
+                   << "\t" << "jc:f:" << e.conservedSketches * 100.0 / e.sketchSize;
               //<< "\t" << "nu:f:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG
