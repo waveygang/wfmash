@@ -351,17 +351,6 @@ void parse_args(int argc,
         map_parameters.segLength = 5000;
     }
 
-    if (sketchSize) {
-        const int64_t ss = args::get(sketchSize);
-        if (ss < 1) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, sketch size must be at least 1" << std::endl;
-            exit(1);
-        }
-        map_parameters.sketchSize = ss;
-    } else {
-        map_parameters.sketchSize = map_parameters.segLength / 25;
-    }
-
 
     if (map_pct_identity) {
         if (args::get(map_pct_identity) < 50) {
@@ -372,6 +361,29 @@ void parse_args(int argc,
     } else {
         map_parameters.percentageIdentity = skch::fixed::percentage_identity;
     }
+
+    if (sketchSize) {
+        const int64_t ss = args::get(sketchSize);
+        if (ss < 1) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, sketch size must be at least 1" << std::endl;
+            exit(1);
+        }
+        map_parameters.sketchSize = ss;
+    } else {
+      if (map_parameters.percentageIdentity >= 0.949) {
+        map_parameters.sketchSize = map_parameters.segLength / 25;
+      }
+      else if (map_parameters.percentageIdentity >= 0.849) {
+        map_parameters.sketchSize = map_parameters.segLength / 16;
+      }
+      else if (map_parameters.percentageIdentity >= 0.749) {
+        map_parameters.sketchSize = map_parameters.segLength / 13;
+      } 
+      else {
+        map_parameters.sketchSize = map_parameters.segLength / 10;
+      }
+    }
+
 
     if (block_length) {
         const int64_t l = wfmash::handy_parameter(args::get(block_length));
