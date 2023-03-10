@@ -90,7 +90,7 @@ void parse_args(int argc,
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default: segmentLength / 25]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
-    args::Flag stage2_full_scan(mapping_opts, "stage2-full-scan", "scan full candidate regions for best minhash instead of just using the point with the highest intersection [default: disabled]", {'F',"s2-full-scan"});
+    args::Flag stage2_point_scan(mapping_opts, "stage2-point-scan", "Only scan the point with the highest intersection for the L2 stage [default: disabled]", {'F',"s2-point-scan"});
     args::Flag use_topANI_filter(mapping_opts, "hgf-filter", "Use the hypergeometric threshold filtering for stage 1 of mapping", {'D', "hgf-filter"});
     args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for hypergeometric filtering [default: 0.0]", {'T', "hgf-ani-thresh"});
     args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for hypergeometric filtering [default: 0.999]", {'C', "hgf-ani-thresh-conf"});
@@ -241,7 +241,7 @@ void parse_args(int argc,
     }
 
     map_parameters.stage1_topANI_filter = args::get(use_topANI_filter); 
-    map_parameters.stage2_full_scan = args::get(stage2_full_scan);
+    map_parameters.stage2_full_scan = !args::get(stage2_point_scan);
     //map_parameters.stage2_full_scan = false;
 
     if (map_sparsification) {
