@@ -137,7 +137,8 @@ namespace skch
         );
         for (auto ci = 0; ci <= ss; ci++) 
         {
-          for (double y = 0; y <= ci; y++) {
+          for (double y = 0; y <= ci; y++) 
+          {
             sketchProbs[ci][y] = gsl_ran_hypergeometric_pdf(y, ss, ss-ci, ci);
           }
         }
@@ -634,7 +635,7 @@ namespace skch
       template <typename Q_Info>
         void getSeedHits(Q_Info &Q)
         {
-          Q.minmerTableQuery.reserve(param.sketchSize);
+          Q.minmerTableQuery.reserve(param.sketchSize + 1);
           CommonFunc::sketchSequence(Q.minmerTableQuery, Q.seq, Q.len, param.kmerSize, param.alphabetSize, param.sketchSize, Q.seqCounter);
           if(Q.minmerTableQuery.size() == 0) {
             Q.sketchSize = 0;
@@ -794,12 +795,13 @@ namespace skch
             if (bestIntersectionSize < minimumHits) 
             {
               return;
-            }
-            else {
-              minimumHits = std::max(sketchCutoffs[bestIntersectionSize], minimumHits);
+            } else 
+            {
+              minimumHits = std::max(
+                  sketchCutoffs[std::min(bestIntersectionSize, Q.sketchSize)],
+                  minimumHits);
             }
           } 
-
 
           // Clear freq dict, as there will be left open CLOSE points at the end of the last seq
           // that we never got to
@@ -863,8 +865,7 @@ namespace skch
               }
               leadingIt++;
             }
-          if (
-              prevOverlap >= minimumHits
+          if ( prevOverlap >= minimumHits
               //&& prevOverlap > overlapCount && prevOverlap >= prevPrevOverlap)
           ) {
             if (l1_out.seqId != prevPos.seqId && in_candidate) {
