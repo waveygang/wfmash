@@ -875,7 +875,7 @@ namespace skch
             }
             if (!in_candidate) {
               l1_out.rangeStartPos = prevPos.pos - windowLen;
-              l1_out.rangeEndPos = currentPos.pos - windowLen;
+              l1_out.rangeEndPos = prevPos.pos - windowLen;
               l1_out.seqId = prevPos.seqId;
               l1_out.strand = (strandCount >= 0) ? strnd::FWD : strnd::REV;
               l1_out.intersectionSize = prevOverlap;
@@ -883,7 +883,7 @@ namespace skch
             } else {
               if (param.stage2_full_scan) {
                 l1_out.intersectionSize = std::max(l1_out.intersectionSize, prevOverlap);
-                l1_out.rangeEndPos = currentPos.pos - windowLen;
+                l1_out.rangeEndPos = prevPos.pos - windowLen;
               }
               else if (l1_out.intersectionSize < prevOverlap) {
                 l1_out.intersectionSize = prevOverlap;
