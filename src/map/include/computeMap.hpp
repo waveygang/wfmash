@@ -1188,6 +1188,19 @@ namespace skch
             l2_out.strand = slideMap.strand_votes >= 0 ? strnd::FWD : strnd::REV;
             l2_vec_out.push_back(l2_out);
           }
+
+          // Because each L2 mapping is a "best seen so far," they are naturally increasing in order
+          // We can just keep the best mappings per region, however this could fail in cases 
+          // where a single candidate region has multiple mappings (i.e. tandem repeats the same
+          // size as the segment length)
+          l2_vec_out.erase(
+              std::remove_if(
+                l2_vec_out.begin(), 
+                l2_vec_out.end(), 
+                [&bestSketchSize](L2_mapLocus_t &l2) {
+                  return l2.sharedSketchSize < bestSketchSize;}
+              ),
+              l2_vec_out.end());
         }
 
 
