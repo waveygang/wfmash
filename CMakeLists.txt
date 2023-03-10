@@ -82,7 +82,6 @@ target_link_libraries(wfmash
   jemalloc
   z
   assert
-  gmp
   #absl::flat_hash_map
 )
 
