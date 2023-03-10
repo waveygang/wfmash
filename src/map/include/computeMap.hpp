@@ -1142,7 +1142,10 @@ namespace skch
 
               //Save the position
               l2_out.optimalStart = windowIt->wpos - windowLen;
-              l2_out.optimalEnd = std::next(windowIt, windowIt != minmerIndex.end())->wpos - windowLen;
+              l2_out.optimalEnd = std::next(
+                  windowIt, 
+                  windowIt != minmerIndex.end() && std::next(windowIt)->seqId == windowIt->seqId
+                )->wpos - windowLen;
             }
             else if(slideMap.sharedSketchElements == bestSketchSize)
             {
@@ -1155,11 +1158,17 @@ namespace skch
 
               in_candidate = true;
               //Still save the position
-              l2_out.optimalEnd = windowIt->wpos - windowLen;
+              l2_out.optimalEnd = std::next(
+                  windowIt, 
+                  windowIt != minmerIndex.end() && std::next(windowIt)->seqId == windowIt->seqId
+                )->wpos - windowLen;
             } else {
               if (in_candidate) {
                 // Save and reset
-                l2_out.optimalEnd = windowIt->wpos - windowLen;
+                l2_out.optimalEnd = std::next(
+                    windowIt, 
+                    windowIt != minmerIndex.end() && std::next(windowIt)->seqId == windowIt->seqId
+                  )->wpos - windowLen;
                 l2_out.meanOptimalPos =  (l2_out.optimalStart + l2_out.optimalEnd) / 2;
                 l2_out.seqId = windowIt->seqId;
                 l2_out.strand = prev_strand_votes >= 0 ? strnd::FWD : strnd::REV;
