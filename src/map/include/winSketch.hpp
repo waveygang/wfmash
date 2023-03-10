@@ -304,10 +304,18 @@ namespace skch
         //Parse all the minmers and push into the map
         //minmerPosLookupIndex.set_empty_key(0);
 
-        for(auto &e : minmerIndex)
+        for(auto &mi : minmerIndex)
         {
           // [hash value -> info about minmer]
-          minmerPosLookupIndex[e.hash].push_back(e);
+          if (minmerPosLookupIndex[mi.hash].size() == 0 
+              || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+              || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+          {
+            minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN, mi.strand});
+            minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE, mi.strand});
+          } else {
+            minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+          }
 
         }
 
@@ -326,7 +334,7 @@ namespace skch
               for (auto &e : this->minmerPosLookupIndex)
                   this->minmerFreqHistogram[e.second.size()] += 1;
 
-              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmers = "
+              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmer interval points = "
                         << *this->minmerFreqHistogram.begin() << " ... " << *this->minmerFreqHistogram.rbegin()
                         << std::endl;
 

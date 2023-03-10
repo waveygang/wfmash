@@ -56,8 +56,25 @@ namespace skch
     }
   };
 
+  // Endpoints for minmer intervals
+  struct IntervalPoint
+  {
+    seqno_t seqId;
+    offset_t pos;
+    hash_t hash;
+    side_t side;
+    strand_t strand;
+
+    // Sort interval points. 
+    // For a pair of points at the same seqId/pos, the end point should be first
+    bool operator <(const IntervalPoint& x) const {
+      return std::tie(seqId, pos, side) 
+        < std::tie(x.seqId, x.pos, x.side);
+    }
+  };
+
   typedef hash_t MinmerMapKeyType;
-  typedef std::vector<MinmerInfo> MinmerMapValueType;
+  typedef std::vector<IntervalPoint> MinmerMapValueType;
 
   //Metadata recording for contigs in the reference DB
   struct ContigInfo
@@ -99,23 +116,6 @@ namespace skch
   {
     seqno_t seqId;
     offset_t pos;
-  };
-
-  // Endpoints for minmer intervals
-  struct IntervalPoint
-  {
-    seqno_t seqId;
-    offset_t pos;
-    hash_t hash;
-    side_t side;
-    strand_t strand;
-
-    // Sort interval points. 
-    // For a pair of points at the same seqId/pos, the end point should be first
-    bool operator <(const IntervalPoint& x) const {
-      return std::tie(seqId, pos, side) 
-        < std::tie(x.seqId, x.pos, x.side);
-    }
   };
 
   template <class T>

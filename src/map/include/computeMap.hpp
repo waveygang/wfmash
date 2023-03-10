@@ -696,21 +696,12 @@ namespace skch
 
               // Let the strand of the hits denote wrt the reference. 
               // i.e. if - query mashimizer hits a - ref mashimizer, we mark the strand as fwd. 
-              std::for_each(hitPositionList.begin(), hitPositionList.end(), [&](auto& mi) {
+              std::for_each(hitPositionList.begin(), hitPositionList.end(), [&](auto& ip) {
                   //mi.strand = mi.strand * it->strand;
                   // Only add hits w/ same name if !param.skip_self
-                  if (!param.skip_self || Q.seqName != this->refSketch.metadata[mi.seqId].name) {
-                    // Only add both points if not overlapping
-                    // Since we always add the close interval second, we know we can check the last intervalpoint
-                    if (intervalPoints.size() == 0 
-                        || intervalPoints.back().hash != mi.hash 
-                        || intervalPoints.back().pos != mi.wpos)
-                    {
-                      intervalPoints.push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN, strand_t(mi.strand * it->strand)});
-                      intervalPoints.push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE, strand_t(mi.strand * it->strand)});
-                    } else {
-                      intervalPoints.back().pos = mi.wpos_end;
-                    }
+                  if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip.seqId].name) {
+                    intervalPoints.push_back(ip);
+                    intervalPoints.back().strand = strand_t(intervalPoints.back().strand * it->strand);
                   }
               });
             }
