@@ -11,6 +11,8 @@
 #include <chrono>
 #include <functional>
 #include <cstdio>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 #include "map/include/map_parameters.hpp"
 #include "map/include/base_types.hpp"
@@ -91,7 +93,7 @@ int main(int argc, char** argv) {
         for(const auto &fileName : map_parameters.querySequences) {
             // check if there is a .fai
             std::string fai_name = fileName + ".fai";
-            if (fs::file_exists(fai_name)) {
+            if (fs::exists(fai_name)) {
                 // if so, process the .fai to determine our sequence length
                 std::string line;
                 std::ifstream in(fai_name.c_str());
@@ -164,7 +166,7 @@ int main(int argc, char** argv) {
         {
             // check if there is a .fai
             std::string fai_name = fileName + ".fai";
-            if (fs::file_exists(fai_name)) {
+            if (fs::exists(fai_name)) {
                 // if so, process the .fai to determine our sequence length
                 std::string line;
                 std::ifstream in(fai_name.c_str());

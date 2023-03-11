@@ -13,6 +13,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <filesystem>
+namespace fs = std::filesystem;
+
 //#include <zlib.h>
 
 //Own includes
@@ -119,14 +122,15 @@ namespace skch
         :
           param(p) {
             this->build();
+            this->index();
             if (!param.saveIndexFilename.empty()) {
               if (param.saveIndexFilename.extension() == ".tsv") {
                 this->saveIndexTSV();
               } else {
                 this->saveIndexBinary();
               }
+              this->savePosListBinary();
             }
-            this->index();
             this->computeFreqHist();
             this->computeFreqSeedSet();
             this->dropFreqSeedSet();
@@ -152,6 +156,7 @@ namespace skch
           } else {
             this->loadIndexBinary();
           }
+          this->loadPosListBinary();
         }
 
         for(const auto &fileName : param.refSequences)
@@ -265,6 +270,27 @@ namespace skch
         outStream.write((char*)&minmerIndex[0], minmerIndex.size() * sizeof(MinmerInfo));
       }
 
+      /**
+       * @brief  Save posList for quick loading
+       */
+      void savePosListBinary() 
+      {
+        fs::path posListFilename = fs::path(param.saveIndexFilename).replace_extension(".map");
+        std::ofstream outStream;
+        outStream.open(posListFilename, std::ios::binary);
+        typename MI_Map_t::size_type size = minmerPosLookupIndex.size();
+        outStream.write((char*)&size, sizeof(size));
+
+        for (auto& [hash, ipVec] : minmerPosLookupIndex) 
+        {
+          MinmerMapKeyType key = hash;
+          outStream.write((char*)&key, sizeof(key));
+          typename MI_Type::size_type size = ipVec.size();
+          outStream.write((char*)&size, sizeof(size));
+          outStream.write((char*)&ipVec[0], ipVec.size() * sizeof(MinmerMapValueType::value_type));
+        }
+      }
+
 
       /**
        * @brief Load index from TSV file
@@ -294,6 +320,30 @@ namespace skch
         inStream.read((char*)&size, sizeof(size));
         minmerIndex.resize(size);
         inStream.read((char*)&minmerIndex[0], minmerIndex.size() * sizeof(MinmerInfo));
+      }
+
+      /**
+       * @brief  Save posList for quick loading
+       */
+      void loadPosListBinary() 
+      {
+        fs::path posListFilename = fs::path(param.loadIndexFilename).replace_extension(".map");
+        std::ifstream inStream;
+        inStream.open(posListFilename, std::ios::binary);
+        typename MI_Map_t::size_type numKeys = 0;
+        inStream.read((char*)&numKeys, sizeof(numKeys));
+
+        for (auto idx = 0; idx < numKeys; idx++) 
+        {
+          MinmerMapKeyType key = 0;
+          inStream.read((char*)&key, sizeof(key));
+          typename MinmerMapValueType::size_type size = 0;
+          inStream.read((char*)&size, sizeof(size));
+
+          minmerPosLookupIndex[key].resize(size);
+          inStream.read((char*)&minmerPosLookupIndex[key][0], size * sizeof(MinmerMapValueType::value_type));
+
+        }
       }
 
       /**

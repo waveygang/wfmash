@@ -15,6 +15,8 @@
 #include <cassert>
 #include <numeric>
 #include <iostream>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -30,7 +32,6 @@
 //External includes
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
-#include "common/filesystem.hpp"
 #include "map_stats.hpp"
 #include "robin-hood-hashing/robin_hood.h"
 // if we ever want to do the union-find chaining in parallel
@@ -229,7 +230,7 @@ namespace skch
         for(const auto &fileName : param.querySequences) {
             // check if there is a .fai
             std::string fai_name = fileName + ".fai";
-            if (fs::file_exists(fai_name)) {
+            if (fs::exists(fai_name)) {
                 // if so, process the .fai to determine our sequence length
                 std::string line;
                 std::ifstream in(fai_name.c_str());
