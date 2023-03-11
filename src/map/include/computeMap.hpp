@@ -441,7 +441,7 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
 
-        if(! param.split || input->len <= param.segLength)
+        if(! param.split)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -523,23 +523,22 @@ namespace skch
                           param.numMappingsForShortSequence
                           : param.numMappingsForSegment) - 1;
 
+        // TODO why are we filtering these before merging?
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+            skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+        }
+
         if (split_mapping) {
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-            }
             if (param.mergeMappings) {
               // hardcore merge using the chain gap
               mergeMappingsInRange(output->readMappings, param.chain_gap);
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                   skch::Filter::query::filterMappings(output->readMappings, n_mappings);
               }
-              // remove short chains that didn't exceed block length
-              filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
-            }
-        } else {
-            // filter the non-split mappings using plane sweep
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+              if (input->len >= param.block_length) {
+                // remove short chains that didn't exceed block length
+                filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
+              }
             }
         }
 
