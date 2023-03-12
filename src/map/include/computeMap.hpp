@@ -440,6 +440,7 @@ namespace skch
         output->qseqName = input->seqName;
         output->qseqLen = input->len;
         bool split_mapping = true;
+        MappingResultsVector_t l2Mappings;
 
         if(! param.split)
         {
@@ -449,8 +450,6 @@ namespace skch
           Q.fullLen = input->len;
           Q.seqCounter = input->seqCounter;
           Q.seqName = input->seqName;
-
-          MappingResultsVector_t l2Mappings;
 
           //Map this sequence
           mapSingleQueryFrag(Q, l2Mappings);
@@ -476,7 +475,7 @@ namespace skch
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
 
-            MappingResultsVector_t l2Mappings;
+            l2Mappings.clear();
 
             //Map this fragment
             mapSingleQueryFrag(Q, l2Mappings);
@@ -502,7 +501,7 @@ namespace skch
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
 
-            MappingResultsVector_t l2Mappings;
+            l2Mappings.clear();
 
             //Map this fragment
             mapSingleQueryFrag(Q, l2Mappings);
@@ -682,7 +681,6 @@ namespace skch
             return;
 
           // Reserve the "expected" number of interval points
-          // assumes each seed has 1 hit. 
           intervalPoints.reserve(2 * Q.sketchSize * refSketch.minmerIndex.size() / Q.minmerTableQuery.size());
 
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
@@ -729,7 +727,7 @@ namespace skch
           std::vector<L1_candidateLocus_t> localOpts;
 
           // Keep track of all minmer windows that intersect with [i, i+windowLen]
-          int windowLen = Q.len - param.segLength;
+          int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
           auto trailingIt = intervalPoints.begin();
           auto leadingIt = intervalPoints.begin();
 
@@ -962,9 +960,11 @@ namespace skch
         void doL2Mapping(Q_Info &Q, VecIn &l1Mappings, VecOut &l2Mappings)
         {
           ///2. Walk the read over the candidate regions and compute the jaccard similarity with minimum s sketches
+          std::vector<L2_mapLocus_t> l2_vec;
+          l2Mappings.reserve(l1Mappings.size());
           for(auto &candidateLocus: l1Mappings)
           {
-            std::vector<L2_mapLocus_t> l2_vec;
+            l2_vec.clear();
             computeL2MappedRegions(Q, candidateLocus, l2_vec);
 
             for (auto& l2 : l2_vec) 
@@ -1069,6 +1069,7 @@ namespace skch
           offset_t beginOptimalPos = 0;
           offset_t lastOptimalPos = 0;
           int bestSketchSize = 1;
+          int bestIntersectionSize = 0;
           bool in_candidate = false;
           L2_mapLocus_t l2_out = {};
 
@@ -1123,6 +1124,7 @@ namespace skch
               continue;
             }
 
+            bestIntersectionSize = std::max(bestIntersectionSize, slideMap.intersectionSize);
 
             //Is this sliding window the best we have so far?
             if (slideMap.sharedSketchElements > bestSketchSize)
