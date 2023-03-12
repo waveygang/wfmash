@@ -156,7 +156,6 @@ namespace skch
           } else {
             this->loadIndexBinary();
           }
-          this->loadPosListBinary();
         }
 
         for(const auto &fileName : param.refSequences)
@@ -353,22 +352,26 @@ namespace skch
       {
         //Parse all the minmers and push into the map
         //minmerPosLookupIndex.set_empty_key(0);
-
-        for(auto &mi : minmerIndex)
+        if (param.loadIndexFilename.empty())
         {
-          // [hash value -> info about minmer]
-          if (minmerPosLookupIndex[mi.hash].size() == 0 
-              || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-              || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+          for(auto &mi : minmerIndex)
           {
-            minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN, mi.strand});
-            minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE, mi.strand});
-          } else {
-            minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+            // [hash value -> info about minmer]
+            if (minmerPosLookupIndex[mi.hash].size() == 0 
+                || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+            {
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN, mi.strand});
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE, mi.strand});
+            } else {
+              minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+            }
           }
-
         }
-
+        else
+        {
+          this->loadPosListBinary();
+        }
         std::cerr << "[mashmap::skch::Sketch::index] unique minmers = " << minmerPosLookupIndex.size() << std::endl;
       }
 
