@@ -65,6 +65,11 @@ namespace skch
         strand_t strand;
       };
 
+      static constexpr auto L1_locus_intersection_cmp = [](L1_candidateLocus_t& a, L1_candidateLocus_t& b)
+      {
+        return a.intersectionSize < b.intersectionSize;
+      };
+
       //Type for Stage L2's predicted mapping coordinate within each L1 candidate
       struct L2_mapLocus_t
       {
@@ -131,7 +136,7 @@ namespace skch
         float min_p = 1 - param.ANIDiffConf;
         int ss = param.sketchSize;
 
-        // Cache hgf pmf results
+        // Cache hg pmf results
         std::vector<std::vector<double>> sketchProbs(
             param.sketchSize + 1,
             std::vector<double>(param.sketchSize + 1.0)
@@ -941,6 +946,12 @@ namespace skch
           //3. Compute L1 windows
           int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
           computeL1CandidateRegions(Q, intervalPoints, minimumHits, l1Mappings);
+
+          //4. Sort L1 windows based on intersection size if using hg filter
+          if (param.stage1_topANI_filter)
+          {
+            std::make_heap(l1Mappings.begin(), l1Mappings.end(), L1_locus_intersection_cmp);
+          }
         }
 
 
@@ -962,21 +973,43 @@ namespace skch
           ///2. Walk the read over the candidate regions and compute the jaccard similarity with minimum s sketches
           std::vector<L2_mapLocus_t> l2_vec;
           l2Mappings.reserve(l1Mappings.size());
-          for(auto &candidateLocus: l1Mappings)
+
+          double bestJaccardNumerator = 0;
+          auto loc_iterator = l1Mappings.begin();
+          while (loc_iterator != l1Mappings.end())
           {
+            L1_candidateLocus_t& candidateLocus = *loc_iterator;
+
+            if (param.stage1_topANI_filter)
+            {
+              // If using HG filter, don't consider any mappings which have no chance of being 
+              // within param.ANIDiff of the best mapping seen so far
+              double cutoff_ani = (1 - Stat::j2md(bestJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff;
+              double cutoff_j = Q.sketchSize * Stat::md2j(1 - cutoff_ani, param.kmerSize);
+              if (float(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
+              {
+                //std::cerr << "Avoided computing " << std::distance(loc_iterator, l1Mappings.end())
+                  //<< " L1 candidates!\n";
+                break;
+              }
+            }
+
+
             l2_vec.clear();
             computeL2MappedRegions(Q, candidateLocus, l2_vec);
+            //std::cerr << "For an intersection of " << candidateLocus.intersectionSize
+              //<< " and a window length of " << candidateLocus.rangeEndPos - candidateLocus.rangeStartPos 
+              //<< " there were " << l2_vec.size() << " L2 mappings\n";
+
 
             for (auto& l2 : l2_vec) 
             {
               //Compute mash distance using calculated jaccard
               float mash_dist = Stat::j2md(1.0 * l2.sharedSketchSize/Q.sketchSize, param.kmerSize);
 
-              //Compute lower bound to mash distance within 95% confidence interval
-              float mash_dist_lower_bound = Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
-
               float nucIdentity = (1 - mash_dist);
-              float nucIdentityUpperBound = (1 - mash_dist_lower_bound);
+              //float nucIdentityUpperBound = getANIUBfromJaccardNum(Q.sketchSize, l2.sharedSketchSize);
+              float nucIdentityUpperBound = 1 - Stat::md_lower_bound(mash_dist, Q.sketchSize, param.kmerSize, skch::fixed::confidence_interval);
 
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
@@ -989,6 +1022,9 @@ namespace skch
                       && prefix(Q.seqName, param.prefix_delim)
                       == prefix(ref.name, param.prefix_delim)))
               {
+                //Track the best jaccard numerator
+                bestJaccardNumerator = std::max<double>(bestJaccardNumerator, l2.sharedSketchSize);
+
                 MappingResult res;
 
                 //Save the output
@@ -1010,11 +1046,24 @@ namespace skch
 
                   res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
-                  l2Mappings.push_back(res);
                 } 
+                l2Mappings.push_back(res);
               }
             }
+
+            if (param.stage1_topANI_filter) 
+            {
+              std::pop_heap(l1Mappings.begin(), l1Mappings.end(), L1_locus_intersection_cmp); 
+              l1Mappings.pop_back();
+            }
+            else 
+            {
+              loc_iterator++;
+            }
           }
+          //std::cerr << "For an segment with " << l1Mappings.size()
+            //<< " L1 mappings "
+            //<< " there were " << l2Mappings.size() << " L2 mappings\n";
 
 #ifdef DEBUG
           std::cerr << "[mashmap::skch::Map:doL2Mapping] read id " << Q.seqCounter << ", count of L1 candidates= " << l1Mappings.size() << ", count of L2 candidates= " << l2Mappings.size() << std::endl;
