@@ -1214,7 +1214,18 @@ namespace skch
                 l2_out.meanOptimalPos =  (l2_out.optimalStart + l2_out.optimalEnd) / 2;
                 l2_out.seqId = windowIt->seqId;
                 l2_out.strand = prev_strand_votes >= 0 ? strnd::FWD : strnd::REV;
-                l2_vec_out.push_back(l2_out);
+                if (l2_vec_out.empty() 
+                    || (l2_vec_out.back().sharedSketchSize != l2_out.sharedSketchSize 
+                      || l2_vec_out.back().seqId == l2_out.seqId
+                      || l2_vec_out.back().optimalEnd + param.segLength < l2_out.optimalStart))
+                {
+                  l2_vec_out.push_back(l2_out);
+                }
+                else 
+                {
+                  l2_vec_out.back().optimalEnd = l2_out.optimalEnd;
+                  l2_vec_out.back().meanOptimalPos = (l2_vec_out.back().optimalStart + l2_vec_out.back().optimalEnd) / 2;
+                }
                 l2_out = L2_mapLocus_t();
               }
               in_candidate = false;
