@@ -37,7 +37,7 @@ namespace fs = std::filesystem;
 
 #include "common/seqiter.hpp"
 
-#include "assert.hpp"
+//#include "assert.hpp"
 
 namespace skch
 {

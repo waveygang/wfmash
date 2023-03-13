@@ -16,7 +16,7 @@
 #include "map/include/base_types.hpp"
 
 //External includes
-#include "assert.hpp"
+//#include "assert.hpp"
 
 namespace skch
 {

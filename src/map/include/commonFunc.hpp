@@ -23,7 +23,7 @@
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
 
-#include "assert.hpp"
+//#include "assert.hpp"
 
 namespace skch {
     /**

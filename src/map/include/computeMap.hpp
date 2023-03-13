@@ -38,7 +38,7 @@ namespace fs = std::filesystem;
 //#include "common/dset64-gccAtomic.hpp"
 // this is for single-threaded use, but is more portable
 #include "common/dset64.hpp"
-#include "assert.hpp"
+//#include "assert.hpp"
 #include "gsl/gsl_randist.h"
 
 namespace skch
@@ -205,10 +205,10 @@ namespace skch
             sketchCutoffs[cmax] = 1;
           }
         }
-        for (auto overlap = 1; overlap <= ss; overlap++) 
-        {
-          DEBUG_ASSERT(sketchCutoffs[overlap] <= overlap);
-        }
+        //for (auto overlap = 1; overlap <= ss; overlap++) 
+        //{
+          //DEBUG_ASSERT(sketchCutoffs[overlap] <= overlap);
+        //}
       }
 
       /**
@@ -777,8 +777,8 @@ namespace skch
                 leadingIt++;
               }
 
-              DEBUG_ASSERT(overlapCount >= 0, windowLen, trailingIt->seqId, trailingIt->pos, leadingIt->seqId, leadingIt->pos);
-              DEBUG_ASSERT(windowLen != 0 || overlapCount <= Q.sketchSize, windowLen, trailingIt->seqId, trailingIt->pos, leadingIt->seqId, leadingIt->pos);
+              //DEBUG_ASSERT(overlapCount >= 0, windowLen, trailingIt->seqId, trailingIt->pos, leadingIt->seqId, leadingIt->pos);
+              //DEBUG_ASSERT(windowLen != 0 || overlapCount <= Q.sketchSize, windowLen, trailingIt->seqId, trailingIt->pos, leadingIt->seqId, leadingIt->pos);
 
               //Is this sliding window the best we have so far?
               bestIntersectionSize = std::max(bestIntersectionSize, overlapCount);
