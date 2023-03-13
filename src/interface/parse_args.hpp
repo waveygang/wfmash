@@ -91,9 +91,9 @@ void parse_args(int argc,
     args::ValueFlag<int64_t> sketchSize(mapping_opts, "N", "Number of sketch elements [default: segmentLength / 25]", {'J', "sketch-size"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     args::Flag stage2_point_scan(mapping_opts, "stage2-point-scan", "Only scan the point with the highest intersection for the L2 stage [default: disabled]", {'F',"s2-point-scan"});
-    args::Flag use_topANI_filter(mapping_opts, "hgf-filter", "Use the hypergeometric threshold filtering for stage 1 of mapping", {'D', "hgf-filter"});
-    args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for hypergeometric filtering [default: 0.0]", {'T', "hgf-ani-thresh"});
-    args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for hypergeometric filtering [default: 0.999]", {'C', "hgf-ani-thresh-conf"});
+    args::Flag use_topANI_filter(mapping_opts, "hg-filter", "Use the hypergeometric threshold filtering for stage 1 of mapping", {'D', "hg-filter"});
+    args::ValueFlag<float> map_ani_threshold(mapping_opts, "%", "ANI difference threshold for hypergeometric filtering [default: 0.0]", {'T', "hg-ani-thresh"});
+    args::ValueFlag<float> map_ani_threshold_conf(mapping_opts, "%", "Confidence for ANI difference threshold for hypergeometric filtering [default: 0.999]", {'C', "hg-ani-thresh-conf"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
