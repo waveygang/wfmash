@@ -361,8 +361,8 @@ namespace skch
                 || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                 || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
             {
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN, mi.strand});
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE, mi.strand});
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN});
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE});
             } else {
               minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
             }

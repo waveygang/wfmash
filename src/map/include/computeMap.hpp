@@ -62,7 +62,6 @@ namespace skch
         offset_t rangeStartPos;
         offset_t rangeEndPos;
         int intersectionSize;
-        strand_t strand;
       };
 
       static constexpr auto L1_locus_intersection_cmp = [](L1_candidateLocus_t& a, L1_candidateLocus_t& b)
@@ -704,7 +703,6 @@ namespace skch
                   // Only add hits w/ same name if !param.skip_self
                   if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip.seqId].name) {
                     intervalPoints.push_back(ip);
-                    intervalPoints.back().strand = strand_t(intervalPoints.back().strand * it->strand);
                   }
               });
             }
@@ -838,7 +836,6 @@ namespace skch
                   hash_to_freq[trailingIt->hash]--;
                 if (windowLen == 0 || hash_to_freq[trailingIt->hash] == 0) {
                   overlapCount--;
-                  strandCount -= trailingIt->strand;
                 }
               }
               trailingIt++;
@@ -852,7 +849,6 @@ namespace skch
               if (leadingIt->side == side::OPEN) {
                 if (windowLen == 0 || hash_to_freq[leadingIt->hash] == 0) {
                   overlapCount++;
-                  strandCount += trailingIt->strand;
                 }
                 if (windowLen != 0)
                   hash_to_freq[leadingIt->hash]++;
@@ -871,7 +867,6 @@ namespace skch
               l1_out.rangeStartPos = prevPos.pos - windowLen;
               l1_out.rangeEndPos = prevPos.pos - windowLen;
               l1_out.seqId = prevPos.seqId;
-              l1_out.strand = (strandCount >= 0) ? strnd::FWD : strnd::REV;
               l1_out.intersectionSize = prevOverlap;
               in_candidate = true;
             } else {
@@ -883,7 +878,6 @@ namespace skch
                 l1_out.intersectionSize = prevOverlap;
                 l1_out.rangeStartPos = prevPos.pos - windowLen;
                 l1_out.rangeEndPos = prevPos.pos - windowLen;
-                l1_out.strand = (strandCount >= 0) ? strnd::FWD : strnd::REV;
               }
             }
           } 
