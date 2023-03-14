@@ -1572,8 +1572,11 @@ namespace skch
                    << "\t" << e.conservedSketches
                    << "\t" << e.blockLength
                    << "\t" << fakeMapQ
-                   << "\t" << "id:f:" << e.nucIdentity * 100.0
-                   << "\t" << "jc:f:" << e.conservedSketches * 100.0 / e.sketchSize;
+                   << "\t" << "id:f:" << e.nucIdentity * 100.0;
+          if (!param.mergeMappings) 
+          {
+            outstrm << "\t" << "jc:f:" << e.conservedSketches * 100.0 / e.sketchSize;
+          }
               //<< "\t" << "nu:f:" << e.nucIdentityUpperBound;
 
 #ifdef DEBUG
