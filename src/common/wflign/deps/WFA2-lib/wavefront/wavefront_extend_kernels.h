@@ -26,61 +26,44 @@
  *
  * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
- * DESCRIPTION: Padded string module to avoid handling corner conditions
+ * DESCRIPTION: WFA module for the "extension" of exact matches
  */
 
-#ifndef STRING_PADDED_H_
-#define STRING_PADDED_H_
+#ifndef WAVEFRONT_EXTEND_KERNELS_H_
+#define WAVEFRONT_EXTEND_KERNELS_H_
 
-/*
- * Includes
- */
-#include "utils/commons.h"
-#include "system/mm_allocator.h"
+#include "wavefront_aligner.h"
 
 /*
- * Strings Padded
+ * Wavefront-Extend Inner Kernels
  */
-typedef struct {
-  // Dimensions
-  int pattern_length;
-  int text_length;
-  // Padded strings
-  char* pattern_padded;
-  int* pattern_lambda_padded;
-  char* text_padded;
-  int* text_lambda_padded;
-  // MM
-  char* pattern_padded_buffer;
-  int* pattern_lambda_padded_buffer;
-  char* text_padded_buffer;
-  int* text_lambda_padded_buffer;
-  mm_allocator_t* mm_allocator;
-} strings_padded_t;
+void wavefront_extend_matches_packed_end2end(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const mwavefront,
+    const int lo,
+    const int hi);
+wf_offset_t wavefront_extend_matches_packed_end2end_max(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const mwavefront,
+    const int lo,
+    const int hi);
+bool wavefront_extend_matches_packed_endsfree(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const mwavefront,
+    const int score,
+    const int lo,
+    const int hi);
 
 /*
- * Strings (text/pattern) padded
+ * Wavefront-Extend Inner Kernel (Custom match function)
  */
-strings_padded_t* strings_padded_new(
-    const char* const pattern,
-    const int pattern_length,
-    const char* const text,
-    const int text_length,
-    const int padding_length,
-    const bool reverse_sequences,
-    mm_allocator_t* const mm_allocator);
-strings_padded_t* strings_padded_new_rhomb(
-    const char* const pattern,
-    const int* const pattern_lambda,
-    const int pattern_length,
-    const char* const text,
-    const int* const text_lambda,
-    const int text_length,
-    const int padding_length,
-    const bool reverse_sequences,
-    mm_allocator_t* const mm_allocator);
-void strings_padded_delete(
-    strings_padded_t* const strings_padded);
-void strings_padded_delete_lambda(
-    strings_padded_t* const strings_padded);
-#endif /* STRING_PADDED_H_ */
+bool wavefront_extend_matches_custom(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const mwavefront,
+    const int score,
+    const int lo,
+    const int hi,
+    const bool endsfree,
+    wf_offset_t* const max_antidiag);
+
+#endif /* WAVEFRONT_EXTEND_KERNELS_H_ */
