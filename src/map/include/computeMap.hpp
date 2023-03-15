@@ -17,6 +17,7 @@
 #include <iostream>
 #include <filesystem>
 namespace fs = std::filesystem;
+#include <queue>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -687,29 +688,49 @@ namespace skch
           // Reserve the "expected" number of interval points
           intervalPoints.reserve(2 * Q.sketchSize * refSketch.minmerIndex.size() / Q.minmerTableQuery.size());
 
+          // Priority queue for sorting interval points
+          //constexpr auto i_cmp = [](IntervalPoint* a, IntervalPoint* b) 
+              //{return *a < *b;};
+          //std::priority_queue<
+              //IntervalPoint*, 
+              //std::vector<IntervalPoint*>, 
+              //decltype(intervalPoint_it_cmp)
+          //> pq(intervalPoint_it_cmp);
+
+          std::vector<boundPtr<std::vector<IntervalPoint>>> pq;
+          pq.reserve(Q.sketchSize);
+          constexpr auto heap_cmp = [](auto& a, auto& b) {return b < a;};
+
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
-            auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
+            auto const seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
 
             if(seedFind != refSketch.minmerPosLookupIndex.end())
             {
-              auto& hitPositionList = seedFind->second;
-
-              // Let the strand of the hits denote wrt the reference. 
-              // i.e. if - query mashimizer hits a - ref mashimizer, we mark the strand as fwd. 
-              std::for_each(hitPositionList.begin(), hitPositionList.end(), [&](auto& ip) {
-                  //mi.strand = mi.strand * it->strand;
-                  // Only add hits w/ same name if !param.skip_self
-                  if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip.seqId].name) {
-                    intervalPoints.push_back(ip);
-                  }
-              });
+              pq.push_back(boundPtr<std::vector<IntervalPoint>> {seedFind->second.cbegin(), seedFind->second.cend()});
             }
           }
+          std::make_heap(pq.begin(), pq.end(), heap_cmp);
 
-          //Sort all the hit positions
-          std::sort(intervalPoints.begin(), intervalPoints.end());
+          while(!pq.empty())
+          {
+            auto ip = pq.front().it;
+            if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip->seqId].name) 
+            {
+              intervalPoints.push_back(*ip);
+            }
+            std::pop_heap(pq.begin(), pq.end(), heap_cmp);
+            pq.back().it++;
+            if (pq.back().it >= pq.back().end) 
+            {
+              pq.pop_back();
+            }
+            else
+            {
+              std::push_heap(pq.begin(), pq.end(), heap_cmp);
+            }
+          }
 
 #ifdef DEBUG
           std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqCounter << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";

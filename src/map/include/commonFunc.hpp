@@ -489,7 +489,7 @@ namespace skch {
                 std::remove_if(
                   minmerIndex.begin(), 
                   minmerIndex.end(), 
-                  [](auto& mi) { return mi.wpos < 0 || mi.wpos_end < 0; }),
+                  [](auto& mi) { return mi.wpos < 0 || mi.wpos_end < 0 || mi.wpos == mi.wpos_end; }),
                 minmerIndex.end());
 
 
