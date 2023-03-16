@@ -362,6 +362,19 @@ void parse_args(int argc,
         map_parameters.percentageIdentity = skch::fixed::percentage_identity;
     }
 
+    if (kmer_size) {
+        map_parameters.kmerSize = args::get(kmer_size);
+    } else {
+        // Smaller values of k are more sensitive for divergent genomes, but lose specificity for large
+        // genomes due to chance k-mer collisions. However, too large of a k-mer will reduce sensitivity
+        // and so choosing the smallest k that avoids chance collisions is recommended.
+        /*
+        map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
+                                  (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
+        */
+        map_parameters.kmerSize = 19;
+    }
+
     if (sketchSize) {
         const int64_t ss = args::get(sketchSize);
         if (ss < 1) {
@@ -370,18 +383,26 @@ void parse_args(int argc,
         }
         map_parameters.sketchSize = ss;
     } else {
-      if (map_parameters.percentageIdentity >= 0.949) {
-        map_parameters.sketchSize = map_parameters.segLength / 25;
-      }
-      else if (map_parameters.percentageIdentity >= 0.849) {
-        map_parameters.sketchSize = map_parameters.segLength / 16;
-      }
-      else if (map_parameters.percentageIdentity >= 0.749) {
-        map_parameters.sketchSize = map_parameters.segLength / 13;
-      } 
-      else {
-        map_parameters.sketchSize = map_parameters.segLength / 10;
-      }
+        {
+            // Compute the window size with a heuristic function
+            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 6)
+                * map_parameters.segLength / 5000;
+
+            // Avoid tiny windows to improve runtime
+            windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
+
+            // Avoid too big values to improve the accuracy
+            windowSize = std::min((int64_t)256, windowSize);
+
+            double density = 2.0 / (windowSize + 1);
+            map_parameters.sketchSize = std::pow(
+                    density * std::pow(double(map_parameters.segLength), 0.99),
+                    1.0 / 0.99
+            );
+                        
+
+
+        }
     }
 
 
@@ -415,19 +436,6 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     } else {
         map_parameters.keep_low_pct_id = true;
-    }
-
-    if (kmer_size) {
-        map_parameters.kmerSize = args::get(kmer_size);
-    } else {
-        // Smaller values of k are more sensitive for divergent genomes, but lose specificity for large
-        // genomes due to chance k-mer collisions. However, too large of a k-mer will reduce sensitivity
-        // and so choosing the smallest k that avoids chance collisions is recommended.
-        /*
-        map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
-                                  (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
-        */
-        map_parameters.kmerSize = 19;
     }
 
     if (kmer_pct_threshold) {
