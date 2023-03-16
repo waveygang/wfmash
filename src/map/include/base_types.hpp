@@ -72,10 +72,10 @@ namespace skch
     }
   };
 
-  template <class Vec>
+  template <class It>
   struct boundPtr {
-    typename Vec::const_iterator it;
-    typename Vec::const_iterator end;
+    It it;
+    It end;
 
     bool operator<(const boundPtr& other) const {
       return *it < *(other.it);

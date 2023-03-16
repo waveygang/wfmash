@@ -445,9 +445,15 @@ namespace skch
         output->qseqName = input->seqName;
         output->qseqLen = input->len;
         bool split_mapping = true;
+        std::vector<IntervalPoint> intervalPoints;
+        // Reserve the "expected" number of interval points
+        intervalPoints.reserve(2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
+
+        std::vector<L1_candidateLocus_t> l1Mappings;
+
         MappingResultsVector_t l2Mappings;
 
-        if(! param.split)
+        if(! param.split || input->len <= param.segLength)
         {
           QueryMetaData <MinVec_Type> Q;
           Q.seq = &(input->seq)[0u];
@@ -457,7 +463,7 @@ namespace skch
           Q.seqName = input->seqName;
 
           //Map this sequence
-          mapSingleQueryFrag(Q, l2Mappings);
+          mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
           // save the output
           output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
@@ -480,10 +486,12 @@ namespace skch
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
 
+            intervalPoints.clear();
+            l1Mappings.clear();
             l2Mappings.clear();
 
             //Map this fragment
-            mapSingleQueryFrag(Q, l2Mappings);
+            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
             //Adjust query coordinates and length in the reported mapping
             std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
@@ -506,10 +514,12 @@ namespace skch
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
 
+            intervalPoints.clear();
+            l1Mappings.clear();
             l2Mappings.clear();
 
             //Map this fragment
-            mapSingleQueryFrag(Q, l2Mappings);
+            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
             //Adjust query coordinates and length in the reported mapping
             std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
@@ -600,15 +610,14 @@ namespace skch
        * @param[in]   outstrm     outstream stream where mappings will be reported
        * @param[out]  l2Mappings  Mapping results in the L2 stage
        */
-      template<typename Q_Info, typename VecOut>
-        void mapSingleQueryFrag(Q_Info &Q, VecOut &l2Mappings)
+      template<typename Q_Info, typename IPVec, typename L1Vec, typename VecOut>
+        void mapSingleQueryFrag(Q_Info &Q, IPVec& intervalPoints, L1Vec& l1Mappings, VecOut &l2Mappings)
         {
 #ifdef ENABLE_TIME_PROFILE_L1_L2
           auto t0 = skch::Time::now();
 #endif
           //L1 Mapping
-          std::vector<L1_candidateLocus_t> l1Mappings;
-          doL1Mapping(Q, l1Mappings);
+          doL1Mapping(Q, intervalPoints, l1Mappings);
           if (l1Mappings.size() == 0) {
             return;
           }
@@ -685,40 +694,30 @@ namespace skch
           if(Q.minmerTableQuery.size() == 0)
             return;
 
-          // Reserve the "expected" number of interval points
-          intervalPoints.reserve(2 * Q.sketchSize * refSketch.minmerIndex.size() / Q.minmerTableQuery.size());
-
           // Priority queue for sorting interval points
-          //constexpr auto i_cmp = [](IntervalPoint* a, IntervalPoint* b) 
-              //{return *a < *b;};
-          //std::priority_queue<
-              //IntervalPoint*, 
-              //std::vector<IntervalPoint*>, 
-              //decltype(intervalPoint_it_cmp)
-          //> pq(intervalPoint_it_cmp);
-
-          std::vector<boundPtr<std::vector<IntervalPoint>>> pq;
+          using IP_const_iterator = std::vector<IntervalPoint>::const_iterator;
+          std::vector<boundPtr<IP_const_iterator>> pq;
           pq.reserve(Q.sketchSize);
-          constexpr auto heap_cmp = [](auto& a, auto& b) {return b < a;};
+          constexpr auto heap_cmp = [](const auto& a, const auto& b) {return b < a;};
 
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
-            auto const seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
+            const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
 
             if(seedFind != refSketch.minmerPosLookupIndex.end())
             {
-              pq.push_back(boundPtr<std::vector<IntervalPoint>> {seedFind->second.cbegin(), seedFind->second.cend()});
+              pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
             }
           }
           std::make_heap(pq.begin(), pq.end(), heap_cmp);
 
           while(!pq.empty())
           {
-            auto ip = pq.front().it;
-            if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip->seqId].name) 
+            const IP_const_iterator ip_it = pq.front().it;
+            if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip_it->seqId].name) 
             {
-              intervalPoints.push_back(*ip);
+              intervalPoints.push_back(*ip_it);
             }
             std::pop_heap(pq.begin(), pq.end(), heap_cmp);
             pq.back().it++;
@@ -739,7 +738,7 @@ namespace skch
 
 
       template <typename Q_Info, typename Vec1, typename Vec2>
-        void computeL1CandidateRegions(Q_Info &Q, Vec1 intervalPoints, int minimumHits, Vec2 &l1Mappings)
+        void computeL1CandidateRegions(Q_Info &Q, Vec1& intervalPoints, int minimumHits, Vec2 &l1Mappings)
         {
 #ifdef DEBUG
           std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqCounter << std::endl;
@@ -943,8 +942,8 @@ namespace skch
        * @param[in]   Q                         query sequence details
        * @param[out]  l1Mappings                all the read mapping locations
        */
-      template <typename Q_Info, typename Vec>
-        void doL1Mapping(Q_Info &Q, Vec &l1Mappings)
+      template <typename Q_Info, typename IPVec, typename L1Vec>
+        void doL1Mapping(Q_Info &Q, IPVec& intervalPoints, L1Vec& l1Mappings)
         {
           //1. Compute the minmers
           getSeedHits(Q);
@@ -955,7 +954,6 @@ namespace skch
           }
 
           //2. Compute windows and sort
-          std::vector<skch::IntervalPoint> intervalPoints; 
           getSeedIntervalPoints(Q, intervalPoints);
 
           //3. Compute L1 windows
