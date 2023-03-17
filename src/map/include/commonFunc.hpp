@@ -520,7 +520,7 @@ namespace skch {
             minmerIndex.insert(minmerIndex.end(), chunkedMIs.begin(), chunkedMIs.end());
 
             // Sort the index based on start position
-            std::sort(minmerIndex.begin(), minmerIndex.end(), [](auto& l, auto& r) {return l.wpos < r.wpos;});
+            std::sort(minmerIndex.begin(), minmerIndex.end(), [](auto& l, auto& r) {return std::tie(l.wpos, l.wpos_end) < std::tie(r.wpos, r.wpos_end);});
 
             // No duplicate windows
             // TODO These should not be occurring. They happen rarely, so just deleting them for now
