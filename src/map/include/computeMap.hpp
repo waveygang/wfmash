@@ -543,18 +543,19 @@ namespace skch
         }
 
         if (split_mapping) {
-            if (param.mergeMappings) {
-              // hardcore merge using the chain gap
-              mergeMappingsInRange(output->readMappings, param.chain_gap);
-              if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                  skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-              }
-              if (input->len >= param.block_length) {
-                // remove short chains that didn't exceed block length
-                filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
-              }
+          if (param.mergeMappings) {
+            // hardcore merge using the chain gap
+            mergeMappingsInRange(output->readMappings, param.chain_gap);
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
             }
+            if (input->len >= param.block_length) {
+              // remove short chains that didn't exceed block length
+              filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
+            }
+          }
         }
+
 
         // remove self-mode don't-maps
         this->filterSelfingLongToShorts(output->readMappings);
