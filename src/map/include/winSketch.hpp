@@ -304,7 +304,7 @@ namespace skch
         seqno_t seqId;
         while (inReader.read_row(seqId, strand, start, end, hash))
         {
-          this->minmerIndex.push_back(MinmerInfo {hash, seqId, start, end, strand});
+          this->minmerIndex.push_back(MinmerInfo {hash, start, end, seqId, strand});
         }
       }
 
@@ -361,8 +361,8 @@ namespace skch
                 || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                 || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
             {
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos, mi.hash, side::OPEN});
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.seqId, mi.wpos_end, mi.hash, side::CLOSE});
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
             } else {
               minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
             }

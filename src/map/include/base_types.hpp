@@ -25,9 +25,9 @@ namespace skch
   struct MinmerInfo
   {
     hash_t hash;                              //hash value
-    seqno_t seqId;                            //sequence or contig id
     offset_t wpos;                            //First (left-most) window position when the minimizer is saved
     offset_t wpos_end;
+    seqno_t seqId;                            //sequence or contig id
     strand_t strand;                          //strand information
 
     //Lexographical equality comparison
@@ -59,9 +59,9 @@ namespace skch
   // Endpoints for minmer intervals
   struct IntervalPoint
   {
-    seqno_t seqId;
     offset_t pos;
     hash_t hash;
+    seqno_t seqId;
     side_t side;
 
     // Sort interval points. 

@@ -211,7 +211,7 @@ namespace skch {
                 // Add current hash to heap
                 if (sketched_vals.size() < sketchSize || currentKmer < sketched_heap[0])  
                 {
-                    sketched_vals[currentKmer] = MinmerInfo{currentKmer, seqCounter, i, i, currentStrand};
+                    sketched_vals[currentKmer] = MinmerInfo{currentKmer, i, i, seqCounter, currentStrand};
                     sketched_heap.push_back(currentKmer);
                     std::push_heap(sketched_heap.begin(), sketched_heap.end());
                 }
@@ -437,7 +437,7 @@ namespace skch {
                   }
                   // Add kmers of same value
                   const KmerInfo newKmer = heapWindow.front();
-                  sortedWindow[newKmer.hash].first = MinmerInfo{newKmer.hash, seqCounter, currentWindowId, -1, 0};
+                  sortedWindow[newKmer.hash].first = MinmerInfo{newKmer.hash, currentWindowId, -1, seqCounter, 0};
                   while (!heapWindow.empty() && heapWindow.front().hash == newKmer.hash)
                   {
                     sortedWindow[newKmer.hash].second.push_back(heapWindow.front());
@@ -481,9 +481,9 @@ namespace skch {
                   chunkedMIs.push_back(
                     MinmerInfo{
                       mi.hash, 
-                      mi.seqId, 
                       mi.wpos + chunk*windowSize, 
                       std::min(mi.wpos + chunk*windowSize + windowSize, mi.wpos_end),
+                      mi.seqId, 
                       mi.strand
                     } 
                   );
