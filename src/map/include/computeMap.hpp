@@ -446,11 +446,7 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
         std::vector<IntervalPoint> intervalPoints;
-        // Reserve the "expected" number of interval points
-        intervalPoints.reserve(2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
-
         std::vector<L1_candidateLocus_t> l1Mappings;
-
         MappingResultsVector_t l2Mappings;
 
         if(! param.split || input->len <= param.segLength)
@@ -701,6 +697,7 @@ namespace skch
           pq.reserve(Q.sketchSize);
           constexpr auto heap_cmp = [](const auto& a, const auto& b) {return b < a;};
 
+          int intervalCount = 0;
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
@@ -709,8 +706,10 @@ namespace skch
             if(seedFind != refSketch.minmerPosLookupIndex.end())
             {
               pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
+              intervalCount += seedFind->second.size();
             }
           }
+          intervalPoints.reserve(intervalCount);
           std::make_heap(pq.begin(), pq.end(), heap_cmp);
 
           while(!pq.empty())
@@ -1121,7 +1120,7 @@ namespace skch
           auto windowIt = firstOpenIt;
 
           // Keep track of all minmer windows that intersect with [i, i+windowLen]
-          int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
+          const int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
 
           // Used to keep track of how many minmer windows for a particular hash are currently "open"
           // Only necessary when windowLen != 0.
