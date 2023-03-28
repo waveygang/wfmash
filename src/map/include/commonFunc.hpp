@@ -18,7 +18,7 @@
 
 //Own includes
 #include "map/include/map_parameters.hpp"
-#include "common/rkmh.hpp"
+#include "common/wflign/src/rkmh.hpp"
 
 //External includes
 #include "common/murmur3.h"
