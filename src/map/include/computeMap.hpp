@@ -7,6 +7,7 @@
 #ifndef SKETCH_MAP_HPP
 #define SKETCH_MAP_HPP
 
+#include <iterator>
 #include <vector>
 #include <algorithm>
 #include <unordered_map>
@@ -65,7 +66,7 @@ namespace skch
         int intersectionSize;
       };
 
-      static constexpr auto L1_locus_intersection_cmp = [](L1_candidateLocus_t& a, L1_candidateLocus_t& b)
+      static constexpr auto L1_locus_intersection_cmp = [](const L1_candidateLocus_t& a, const L1_candidateLocus_t& b)
       {
         return a.intersectionSize < b.intersectionSize;
       };
@@ -205,7 +206,7 @@ namespace skch
             sketchCutoffs[cmax] = 1;
           }
         }
-        //for (auto overlap = 1; overlap <= ss; overlap++) 
+        //for (auto overlap = 0; overlap <= ss; overlap++)
         //{
           //DEBUG_ASSERT(sketchCutoffs[overlap] <= overlap);
         //}
@@ -533,25 +534,50 @@ namespace skch
                           param.numMappingsForShortSequence
                           : param.numMappingsForSegment) - 1;
 
-        // TODO why are we filtering these before merging?
-        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-            skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-        }
-
-        if (split_mapping) {
-          if (param.mergeMappings) {
+        if (split_mapping) 
+        {
+          if (param.mergeMappings) 
+          {
             // hardcore merge using the chain gap
             mergeMappingsInRange(output->readMappings, param.chain_gap);
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-            }
-            if (input->len >= param.block_length) {
+            if (input->len >= param.block_length) 
+            {
               // remove short chains that didn't exceed block length
               filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
             }
           }
         }
 
+        // Filter n mappings per prefix group
+        std::vector<skch::MappingResult> filteredMappings;
+        filteredMappings.reserve(output->readMappings.size());
+
+        auto outputMappings_begin = output->readMappings.begin();
+        auto outputMappings_end = output->readMappings.begin();
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) 
+        {
+          while (outputMappings_end != output->readMappings.end())
+          {
+            if (param.skip_prefix && param.stage1_topANI_filter)
+            {
+              const auto currPrefix = prefix(this->refSketch.metadata[outputMappings_begin->refSeqId].name, param.prefix_delim);
+              outputMappings_end = std::find_if_not(outputMappings_begin, output->readMappings.end(), [this, &currPrefix] (auto& outputMappings_candidate) {
+                  return currPrefix == prefix(this->refSketch.metadata[outputMappings_candidate.refSeqId].name, this->param.prefix_delim);
+              });
+            }
+            else
+            {
+              outputMappings_end = output->readMappings.end();
+            }
+            // TODO why are we filtering these before merging?
+            std::vector<skch::MappingResult> tmpMappings(std::distance(outputMappings_begin, outputMappings_end));
+            std::move(outputMappings_begin, outputMappings_end, tmpMappings.begin());
+            skch::Filter::query::filterMappings(tmpMappings, n_mappings);
+            std::move(tmpMappings.begin(), tmpMappings.end(), std::back_inserter(filteredMappings));
+            outputMappings_begin = outputMappings_end;
+          }
+          std::swap(output->readMappings, filteredMappings);
+        }
 
         // remove self-mode don't-maps
         this->filterSelfingLongToShorts(output->readMappings);
@@ -625,7 +651,43 @@ namespace skch
 #endif
 
           //L2 Mapping
-          doL2Mapping(Q, l1Mappings, l2Mappings);
+          if (!param.stage1_topANI_filter)
+          {
+            // Only reserve if we know that we'll be storing each of the l1 mappings
+            l2Mappings.reserve(l1Mappings.size());
+          }
+
+          const auto QPrefix = prefix(Q.seqName, param.prefix_delim);
+          auto l1_begin = l1Mappings.begin();
+          auto l1_end = l1Mappings.begin();
+          while (l1_end != l1Mappings.end())
+          {
+            if (param.skip_prefix && param.stage1_topANI_filter)
+            {
+              const auto currPrefix = prefix(this->refSketch.metadata[l1_begin->seqId].name, param.prefix_delim);
+              l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, &currPrefix] (const auto& l1_candidate) {
+                  return currPrefix == prefix(this->refSketch.metadata[l1_candidate.seqId].name, this->param.prefix_delim);
+              });
+            }
+            else
+            {
+              l1_end = l1Mappings.end();
+            }
+
+            //Sort L1 windows based on intersection size if using hg filter
+            if (param.stage1_topANI_filter)
+            {
+              std::make_heap(l1_begin, l1_end, L1_locus_intersection_cmp);
+            }
+            doL2Mapping(Q, l1_begin, l1_end, l2Mappings);
+
+            // Set beginning of next range
+            l1_begin = l1_end;
+          }
+
+          // Sort output mappings
+          std::sort(l2Mappings.begin(), l2Mappings.end(), [](const auto& a, const auto& b) 
+              { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
 
 
 #ifdef ENABLE_TIME_PROFILE_L1_L2
@@ -737,8 +799,13 @@ namespace skch
         }
 
 
-      template <typename Q_Info, typename Vec1, typename Vec2>
-        void computeL1CandidateRegions(Q_Info &Q, Vec1& intervalPoints, int minimumHits, Vec2 &l1Mappings)
+      template <typename Q_Info, typename IP_iter, typename Vec2>
+        void computeL1CandidateRegions(
+            Q_Info &Q, 
+            IP_iter ip_begin, 
+            IP_iter ip_end, 
+            int minimumHits, 
+            Vec2 &l1Mappings)
         {
 #ifdef DEBUG
           std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqCounter << std::endl;
@@ -751,8 +818,8 @@ namespace skch
 
           // Keep track of all minmer windows that intersect with [i, i+windowLen]
           int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
-          auto trailingIt = intervalPoints.begin();
-          auto leadingIt = intervalPoints.begin();
+          auto trailingIt = ip_begin;
+          auto leadingIt = ip_begin;
 
           // Group together local sketch intersection maximums that are within clusterLen of eachother
           //
@@ -766,11 +833,11 @@ namespace skch
           std::unordered_map<hash_t, int> hash_to_freq;
 
           if (param.stage1_topANI_filter) {
-            while (leadingIt != intervalPoints.end())
+            while (leadingIt != ip_end)
             {
               // Catch the trailing iterator up to the leading iterator - windowLen
               while (
-                  trailingIt != intervalPoints.end() 
+                  trailingIt != ip_end
                   && ((trailingIt->seqId == leadingIt->seqId && trailingIt->pos <= leadingIt->pos - windowLen)
                     || trailingIt->seqId < leadingIt->seqId))
               {
@@ -784,7 +851,7 @@ namespace skch
                 trailingIt++;
               }
               auto currentPos = leadingIt->pos;
-              while (leadingIt != intervalPoints.end() && leadingIt->pos == currentPos) {
+              while (leadingIt != ip_end && leadingIt->pos == currentPos) {
                 if (leadingIt->side == side::OPEN) {
                   if (windowLen == 0 || hash_to_freq[leadingIt->hash] == 0) {
                     overlapCount++;
@@ -825,8 +892,8 @@ namespace skch
 
           bool in_candidate = false;
           L1_candidateLocus_t l1_out = {};
-          trailingIt = intervalPoints.begin();
-          leadingIt = intervalPoints.begin();
+          trailingIt = ip_begin;
+          leadingIt = ip_begin;
 
           // Keep track of 3 consecutive points so that we can track local optimums
           overlapCount = 0;
@@ -837,7 +904,7 @@ namespace skch
           SeqCoord prevPos, currentPos;
 
 
-          while (leadingIt != intervalPoints.end())
+          while (leadingIt != ip_end)
           {
             prevPrevOverlap = prevOverlap;
             prevOverlap = overlapCount;
@@ -847,7 +914,7 @@ namespace skch
             // right now, this basically happens since every CLOSE should be an OPEN.
             // This doesn't invalidate the logic, just potentially wastes time
             while (
-                trailingIt != intervalPoints.end() 
+                trailingIt != ip_end
                 && ((trailingIt->seqId == leadingIt->seqId && trailingIt->pos <= leadingIt->pos - windowLen)
                   || trailingIt->seqId < leadingIt->seqId))
             {
@@ -864,7 +931,7 @@ namespace skch
               prevPos = currentPos;
               currentPos = SeqCoord{leadingIt->seqId, leadingIt->pos};
             }
-            while (leadingIt != intervalPoints.end() && leadingIt->pos == currentPos.pos) 
+            while (leadingIt != ip_end && leadingIt->pos == currentPos.pos) 
             {
               if (leadingIt->side == side::OPEN) {
                 if (windowLen == 0 || hash_to_freq[leadingIt->hash] == 0) {
@@ -955,15 +1022,34 @@ namespace skch
 
           //2. Compute windows and sort
           getSeedIntervalPoints(Q, intervalPoints);
+          if (intervalPoints.size() == 0)
+          {
+            return;
+          }
 
           //3. Compute L1 windows
           int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
-          computeL1CandidateRegions(Q, intervalPoints, minimumHits, l1Mappings);
 
-          //4. Sort L1 windows based on intersection size if using hg filter
-          if (param.stage1_topANI_filter)
+          // For each "group"
+          const auto QPrefix = prefix(Q.seqName, param.prefix_delim);
+          auto ip_begin = intervalPoints.begin();
+          auto ip_end = intervalPoints.begin();
+          while (ip_end != intervalPoints.end())
           {
-            std::make_heap(l1Mappings.begin(), l1Mappings.end(), L1_locus_intersection_cmp);
+            if (param.skip_prefix && param.stage1_topANI_filter)
+            {
+              const auto currPrefix = prefix(this->refSketch.metadata[ip_begin->seqId].name, param.prefix_delim);
+              ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, &currPrefix] (auto& ip) {
+                  return currPrefix == prefix(this->refSketch.metadata[ip.seqId].name, this->param.prefix_delim);
+              });
+            }
+            else
+            {
+              ip_end = intervalPoints.end();
+            }
+            computeL1CandidateRegions(Q, ip_begin, ip_end, minimumHits, l1Mappings);
+
+            ip_begin = ip_end;
           }
         }
 
@@ -980,20 +1066,14 @@ namespace skch
        * @param[in]   l1Mappings                candidate regions for query sequence found at L1
        * @param[out]  l2Mappings                Mapping results in the L2 stage
        */
-      template <typename Q_Info, typename VecIn, typename VecOut>
-        void doL2Mapping(Q_Info &Q, VecIn &l1Mappings, VecOut &l2Mappings)
+      template <typename Q_Info, typename L1_Iter, typename VecOut>
+        void doL2Mapping(Q_Info &Q, L1_Iter l1_begin, L1_Iter l1_end, VecOut &l2Mappings)
         {
           ///2. Walk the read over the candidate regions and compute the jaccard similarity with minimum s sketches
           std::vector<L2_mapLocus_t> l2_vec;
-          if (!param.stage1_topANI_filter)
-          {
-            // Only reserve if we know that we'll be storing each of the l1 mappings
-            l2Mappings.reserve(l1Mappings.size());
-          }
-
           double bestJaccardNumerator = 0;
-          auto loc_iterator = l1Mappings.begin();
-          while (loc_iterator != l1Mappings.end())
+          auto loc_iterator = l1_begin;
+          while (loc_iterator != l1_end)
           {
             L1_candidateLocus_t& candidateLocus = *loc_iterator;
 
@@ -1001,9 +1081,9 @@ namespace skch
             {
               // If using HG filter, don't consider any mappings which have no chance of being 
               // within param.ANIDiff of the best mapping seen so far
-              double cutoff_ani = (1 - Stat::j2md(bestJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff;
+              double cutoff_ani = std::max(0.0, double((1 - Stat::j2md(bestJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff));
               double cutoff_j = Stat::md2j(1 - cutoff_ani, param.kmerSize);
-              if (float(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
+              if (double(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
               {
                 break;
               }
@@ -1064,16 +1144,14 @@ namespace skch
 
             if (param.stage1_topANI_filter) 
             {
-              std::pop_heap(l1Mappings.begin(), l1Mappings.end(), L1_locus_intersection_cmp); 
-              l1Mappings.pop_back();
+              std::pop_heap(l1_begin, l1_end, L1_locus_intersection_cmp); 
+              l1_end--; //"Pop back" 
             }
             else 
             {
               loc_iterator++;
             }
           }
-          std::sort(l2Mappings.begin(), l2Mappings.end(), [](auto& a, auto& b) 
-              { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
           //std::cerr << "For an segment with " << l1Mappings.size()
             //<< " L1 mappings "
             //<< " there were " << l2Mappings.size() << " L2 mappings\n";
