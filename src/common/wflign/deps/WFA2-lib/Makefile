@@ -12,16 +12,16 @@ UNAME=$(shell uname)
 CC:=$(CC)
 CPP:=$(CXX)
 
-CC_FLAGS=-Wall -g
+CC_FLAGS=-Wall -g -lrt
 
 AR=ar
 AR_FLAGS=-rsc
 
 ifndef BUILD_EXAMPLES 
-BUILD_EXAMPLES=1
+BUILD_EXAMPLES=0
 endif
 ifndef BUILD_TOOLS 
-BUILD_TOOLS=1
+BUILD_TOOLS=0
 endif
 ifndef BUILD_WFA_PARALLEL
 BUILD_WFA_PARALLEL=0
