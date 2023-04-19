@@ -12,7 +12,7 @@ UNAME=$(shell uname)
 CC:=$(CC)
 CPP:=$(CXX)
 
-CC_FLAGS=-Wall -g -lrt
+CC_FLAGS=-Wall -g
 
 AR=ar
 AR_FLAGS=-rsc
