@@ -101,7 +101,7 @@ namespace skch
         /**
          * @brief       Fills map with minimum 's' minmers in the query
          */
-        inline void init()
+        void init()
         {
           //Range of sketch in query
           int idx = 0;
@@ -125,7 +125,7 @@ namespace skch
 
       public:
 
-        inline void insert_minmer(const skch::MinmerInfo& mi)
+        void insert_minmer(const skch::MinmerInfo& mi)
         {
           // Find where minmer goes in vector
           auto insert_loc = std::lower_bound(
