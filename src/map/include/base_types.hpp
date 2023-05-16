@@ -248,6 +248,7 @@ namespace skch
       std::string seqName;                //sequence name
       MinmerVec minmerTableQuery;         //Vector of minmers in the query
       MinmerVec seedHits;                 //Vector of minmers in the reference
+      int refGroup;                       //Prefix group wrt the reference
     };
 }
 

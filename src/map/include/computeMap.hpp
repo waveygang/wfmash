@@ -107,6 +107,10 @@ namespace skch
       //for an L1 candidate if the best intersection size is i;
       std::vector<int> sketchCutoffs; 
 
+      //Vector for obtaining group from refId
+      //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
+      std::vector<int> refIdGroup; 
+
     public:
 
       /**
@@ -120,15 +124,56 @@ namespace skch
         param(p),
         sketchCutoffs(p.sketchSize + 1, 1),
         refSketch(refsketch),
+        refIdGroup(refsketch.metadata.size()),
         processMappingResults(f)
     {
       if (p.stage1_topANI_filter) {
         this->setProbs();
       }
+      if (p.skip_prefix)
+      {
+        this->setRefGroups();
+      }
       this->mapQuery();
     }
 
     private:
+
+      // Sets the groups of reference contigs based on prefix
+      void setRefGroups()
+      {
+        int group = 0;
+        int start_idx = 0;
+        int idx = 0;
+        while (start_idx < this->refSketch.metadata.size())
+        {
+          const auto currPrefix = prefix(this->refSketch.metadata[start_idx].name, param.prefix_delim);
+          idx = start_idx;
+          while (idx < this->refSketch.metadata.size()
+              && currPrefix == prefix(this->refSketch.metadata[idx].name, param.prefix_delim))
+          {
+            this->refIdGroup[idx++] = group;
+          }
+          group++;
+          start_idx = idx;
+        }
+      }
+
+      // Gets the ref group of a query based on the prefix
+      int getRefGroup(const std::string& seqName)
+      {
+        const auto queryPrefix = prefix(seqName, param.prefix_delim);
+        for (int i = 0; i < this->refSketch.metadata.size(); i++)
+        {
+          const auto currPrefix = prefix(this->refSketch.metadata[i].name, param.prefix_delim);
+          if (queryPrefix == currPrefix)
+          {
+            return this->refIdGroup[i];
+          }
+        }
+        // Doesn't belong to any ref group
+        return -1;
+      }
 
       void setProbs() 
       {
@@ -432,6 +477,63 @@ namespace skch
           }
       }
 
+
+      /**
+       * @brief               helper to main filtering function
+       * @details             filters mappings by group
+       * @param[in]   input   unfiltered mappings
+       * @param[in]   output  filtered mappings
+       * @param[in]   input   num mappings per segment
+       * @return              void
+       */
+      void filterByGroup(
+          MappingResultsVector_t &unfilteredMappings,
+          MappingResultsVector_t &filteredMappings,
+          int n_mappings)
+      {
+        filteredMappings.reserve(unfilteredMappings.size());
+
+        std::sort(unfilteredMappings.begin(), unfilteredMappings.end(), [](const auto& a, const auto& b) 
+            { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
+        auto subrange_begin = unfilteredMappings.begin();
+        auto subrange_end = unfilteredMappings.begin();
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) 
+        {
+          while (subrange_end != unfilteredMappings.end())
+          {
+            if (param.skip_prefix)
+            {
+              int currGroup = this->refIdGroup[subrange_begin->refSeqId];
+              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup] (const auto& unfilteredMappings_candidate) {
+                  return currGroup == this->refIdGroup[unfilteredMappings_candidate.refSeqId];
+              });
+            }
+            else
+            {
+              subrange_end = unfilteredMappings.end();
+            }
+            // TODO why are we filtering these before merging?
+            std::vector<skch::MappingResult> tmpMappings(std::distance(subrange_begin, subrange_end));
+            std::move(subrange_begin, subrange_end, tmpMappings.begin());
+            std::sort(tmpMappings.begin(), tmpMappings.end(), [](const auto& a, const auto& b) 
+                { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
+            skch::Filter::query::filterMappings(tmpMappings, n_mappings);
+            std::move(tmpMappings.begin(), tmpMappings.end(), std::back_inserter(filteredMappings));
+            subrange_begin = subrange_end;
+          }
+        }
+        //Sort the mappings by query (then reference) position
+        std::sort(
+            filteredMappings.begin(), filteredMappings.end(),
+            [](const MappingResult &a, const MappingResult &b) {
+                return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) 
+                  < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
+                //return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
+                    //< std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
+            });
+      }
+      
+
       /**
        * @brief               main mapping function given an input read
        * @details             this function is run in parallel by multiple threads
@@ -449,6 +551,9 @@ namespace skch
         std::vector<IntervalPoint> intervalPoints;
         std::vector<L1_candidateLocus_t> l1Mappings;
         MappingResultsVector_t l2Mappings;
+        MappingResultsVector_t unfilteredMappings;
+        int refGroup = this->getRefGroup(input->seqName);
+
 
         if(! param.split || input->len <= param.segLength)
         {
@@ -458,12 +563,13 @@ namespace skch
           Q.fullLen = input->len;
           Q.seqCounter = input->seqCounter;
           Q.seqName = input->seqName;
+          Q.refGroup = refGroup;
 
           //Map this sequence
           mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
           // save the output
-          output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+          unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
 
           // indicate that we mapped full length
           split_mapping = false;
@@ -482,6 +588,7 @@ namespace skch
             Q.fullLen = input->len;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
+            Q.refGroup = refGroup;
 
             intervalPoints.clear();
             l1Mappings.clear();
@@ -498,7 +605,7 @@ namespace skch
                 });
 
             // save the output
-            output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+            unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
 
           //Map last overlapping fragment to cover the whole read
@@ -510,6 +617,7 @@ namespace skch
             Q.len = param.segLength;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
+            Q.refGroup = refGroup;
 
             intervalPoints.clear();
             l1Mappings.clear();
@@ -525,7 +633,7 @@ namespace skch
                 e.queryEndPos = input->len;
                 });
 
-            output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+            unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
           }
         }
 
@@ -534,50 +642,36 @@ namespace skch
                           param.numMappingsForShortSequence
                           : param.numMappingsForSegment) - 1;
 
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {                      
+          if (!param.stage1_topANI_filter) {
+            filterByGroup(unfilteredMappings, output->readMappings, n_mappings*100);
+            std::swap(unfilteredMappings, output->readMappings);
+            output->readMappings.clear();
+          }
+        }
+
         if (split_mapping) 
         {
           if (param.mergeMappings) 
           {
             // hardcore merge using the chain gap
-            mergeMappingsInRange(output->readMappings, param.chain_gap);
+            mergeMappingsInRange(unfilteredMappings, param.chain_gap);
+            //mergeMappings(unfilteredMappings);
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {                      
+              MappingResultsVector_t tempMappings;
+              tempMappings.reserve(output->readMappings.size());
+              filterByGroup(unfilteredMappings, tempMappings, n_mappings);
+              std::swap(tempMappings, unfilteredMappings);
+            }
             if (input->len >= param.block_length) 
             {
               // remove short chains that didn't exceed block length
-              filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
+              filterWeakMappings(unfilteredMappings, std::floor(param.block_length / param.segLength));
             }
           }
         }
 
-        // Filter n mappings per prefix group
-        std::vector<skch::MappingResult> filteredMappings;
-        filteredMappings.reserve(output->readMappings.size());
-
-        auto outputMappings_begin = output->readMappings.begin();
-        auto outputMappings_end = output->readMappings.begin();
-        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) 
-        {
-          while (outputMappings_end != output->readMappings.end())
-          {
-            if (param.skip_prefix && param.stage1_topANI_filter)
-            {
-              const auto currPrefix = prefix(this->refSketch.metadata[outputMappings_begin->refSeqId].name, param.prefix_delim);
-              outputMappings_end = std::find_if_not(outputMappings_begin, output->readMappings.end(), [this, &currPrefix] (auto& outputMappings_candidate) {
-                  return currPrefix == prefix(this->refSketch.metadata[outputMappings_candidate.refSeqId].name, this->param.prefix_delim);
-              });
-            }
-            else
-            {
-              outputMappings_end = output->readMappings.end();
-            }
-            // TODO why are we filtering these before merging?
-            std::vector<skch::MappingResult> tmpMappings(std::distance(outputMappings_begin, outputMappings_end));
-            std::move(outputMappings_begin, outputMappings_end, tmpMappings.begin());
-            skch::Filter::query::filterMappings(tmpMappings, n_mappings);
-            std::move(tmpMappings.begin(), tmpMappings.end(), std::back_inserter(filteredMappings));
-            outputMappings_begin = outputMappings_end;
-          }
-          std::swap(output->readMappings, filteredMappings);
-        }
+        std::swap(output->readMappings, unfilteredMappings);
 
         // remove self-mode don't-maps
         this->filterSelfingLongToShorts(output->readMappings);
@@ -657,16 +751,15 @@ namespace skch
             l2Mappings.reserve(l1Mappings.size());
           }
 
-          const auto QPrefix = prefix(Q.seqName, param.prefix_delim);
           auto l1_begin = l1Mappings.begin();
           auto l1_end = l1Mappings.begin();
           while (l1_end != l1Mappings.end())
           {
-            if (param.skip_prefix && param.stage1_topANI_filter)
+            if (param.skip_prefix)
             {
-              const auto currPrefix = prefix(this->refSketch.metadata[l1_begin->seqId].name, param.prefix_delim);
-              l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, &currPrefix] (const auto& l1_candidate) {
-                  return currPrefix == prefix(this->refSketch.metadata[l1_candidate.seqId].name, this->param.prefix_delim);
+              int currGroup = this->refIdGroup[l1_begin->seqId];
+              l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, currGroup] (const auto& candidate) {
+                  return currGroup == this->refIdGroup[candidate.seqId];
               });
             }
             else
@@ -777,7 +870,9 @@ namespace skch
           while(!pq.empty())
           {
             const IP_const_iterator ip_it = pq.front().it;
-            if (!param.skip_self || Q.seqName != this->refSketch.metadata[ip_it->seqId].name) 
+            if (!param.skip_self 
+                || (param.skip_prefix && this->refIdGroup[ip_it->seqId] != Q.refGroup)
+                || Q.seqName != this->refSketch.metadata[ip_it->seqId].name) 
             {
               intervalPoints.push_back(*ip_it);
             }
@@ -1031,16 +1126,15 @@ namespace skch
           int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
 
           // For each "group"
-          const auto QPrefix = prefix(Q.seqName, param.prefix_delim);
           auto ip_begin = intervalPoints.begin();
           auto ip_end = intervalPoints.begin();
           while (ip_end != intervalPoints.end())
           {
-            if (param.skip_prefix && param.stage1_topANI_filter)
+            if (param.skip_prefix)
             {
-              const auto currPrefix = prefix(this->refSketch.metadata[ip_begin->seqId].name, param.prefix_delim);
-              ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, &currPrefix] (auto& ip) {
-                  return currPrefix == prefix(this->refSketch.metadata[ip.seqId].name, this->param.prefix_delim);
+              int currGroup = this->refIdGroup[ip_begin->seqId];
+              ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, currGroup] (const auto& ip) {
+                  return currGroup == this->refIdGroup[ip.seqId];
               });
             }
             else
@@ -1092,6 +1186,19 @@ namespace skch
 
             l2_vec.clear();
             computeL2MappedRegions(Q, candidateLocus, l2_vec);
+            //if (l2_vec.size() > 1)
+            //{
+              //std::cerr <<  candidateLocus.seqId << ":"
+               //<< candidateLocus.rangeStartPos << "--" << candidateLocus.rangeEndPos  << " == " << candidateLocus.rangeEndPos - candidateLocus.rangeStartPos
+               //<< std::endl;
+              //std::cerr << candidateLocus.intersectionSize
+               //<< "-->" << sketchCutoffs[candidateLocus.intersectionSize] << std::endl;
+              //for (const auto& l2 : l2_vec)
+              //{
+                //std::cerr << l2.optimalStart << "--" << l2.optimalEnd << "\t" << l2.sharedSketchSize << std::endl;  
+              //}
+              //std::cerr << std::endl;
+            //}
 
             for (auto& l2 : l2_vec) 
             {
@@ -1176,7 +1283,7 @@ namespace skch
           //std::cerr << "INFO, skch::Map:computeL2MappedRegions, read id " << Q.seqName << "_" << Q.startPos << std::endl; 
 #endif
            
-          auto& minmerIndex = refSketch.minmerIndex;
+          const auto& minmerIndex = refSketch.minmerIndex;
 
           //candidateLocus.rangeStartPos -= param.segLength;
           //candidateLocus.rangeEndPos += param.segLength;
@@ -1396,12 +1503,17 @@ namespace skch
               auto thisMappingFragno = std::ceil(it2->queryStartPos * 1.0/ param.segLength);
 
               //If this mapping is too far from current mapping being evaluated, stop finding a merge
-              if(it2->refSeqId != it->refSeqId || it2->refStartPos - it->refEndPos > 2 * param.segLength)
+              if(
+                  it2->refSeqId != it->refSeqId 
+                  || std::abs(it2->refStartPos - it->refEndPos) > param.chain_gap
+                  )
                 break;
 
               //If the next mapping is within range, check if it is consecutive query fragment and strand matches
               if( it2->strand == it->strand
-                  && thisMappingFragno == currMappingFragno + (it->strand == strnd::FWD ? 1 : -1) )
+                  //&& std::abs(it2->queryStartPos - it->queryEndPos) <= param.chain_gap
+                  && thisMappingFragno == currMappingFragno + (it->strand == strnd::FWD ? 1 : -1)
+              )
               {
                 it2->splitMappingId = it->splitMappingId;   //merge
                 continue;
@@ -1569,9 +1681,10 @@ namespace skch
                   ) /// it->n_merged; // this would scale directly by the number of mappings in the chain
                   // this scales slightly by the amount of missing segments
                   / ( (double)it->n_merged
-                      + std::pow(
-                          std::log((double)it->blockLength / param.segLength),
-                          0.01));
+                      //+ std::pow(
+                          //std::log((double)it->blockLength / param.segLength),
+                          //0.01)
+                  );
 
 
               //Discard other mappings of this chain
