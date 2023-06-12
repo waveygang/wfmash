@@ -555,7 +555,7 @@ void WFlign::wflign_affine_wavefront(
                         wflambda_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-        wflambda_aligner->setHeuristicNone();
+        wflambda_aligner->setHeuristicWFmash(MIN_WF_LENGTH, 512);
 
         // Save computed alignments in a pair-indexed map
         robin_hood::unordered_flat_map<uint64_t,alignment_t*> alignments;
