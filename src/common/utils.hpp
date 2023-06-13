@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <string>
+#include <cstdint>
 
 namespace wfmash {
     bool is_a_number(const std::string& s);
