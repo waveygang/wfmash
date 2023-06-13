@@ -49,6 +49,8 @@ namespace wflign {
             int wflign_gap_opening_score;
             int wflign_gap_extension_score;
             float wflign_max_mash_dist;
+            int wflign_min_wavefront_length;
+            int wflign_max_distance_threshold;
             uint64_t wflign_max_len_major;
             uint64_t wflign_max_len_minor;
             int erode_k;
@@ -89,6 +91,8 @@ namespace wflign {
                     const int wflign_gap_opening_score,
                     const int wflign_gap_extension_score,
                     const float wflign_max_mash_dist,
+                    const int wflign_min_wavefront_length,
+                    const int wflign_max_distance_threshold,
                     const uint64_t wflign_max_len_major,
                     const uint64_t wflign_max_len_minor,
                     const int erode_k);

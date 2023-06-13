@@ -33,6 +33,8 @@ struct Parameters {
     int wflign_gap_opening_score;
     int wflign_gap_extension_score;
     float wflign_max_mash_dist;
+    int wflign_min_wavefront_length;
+    int wflign_max_distance_threshold;
     uint64_t wflign_max_len_major;
     uint64_t wflign_max_len_minor;
     int wflign_erode_k;
