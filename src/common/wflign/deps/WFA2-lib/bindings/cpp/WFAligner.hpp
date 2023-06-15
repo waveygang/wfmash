@@ -59,49 +59,86 @@ public:
     Alignment,
   };
   enum AlignmentStatus {
-    StatusSuccessful = WF_STATUS_SUCCESSFUL,
-    StatusUnfeasible = WF_STATUS_UNFEASIBLE,
-    StatusMaxScoreReached = WF_STATUS_MAX_SCORE_REACHED,
+    // OK Status (>=0)
+    StatusAlgCompleted = WF_STATUS_ALG_COMPLETED,
+    StatusAlgPartial = WF_STATUS_ALG_PARTIAL,
+    // FAILED Status (<0)
+    StatusMaxStepsReached = WF_STATUS_MAX_STEPS_REACHED,
     StatusOOM = WF_STATUS_OOM,
   };
   // Align End-to-end
-  AlignmentStatus alignEnd2EndLambda(
-      const int patternLength,
-      const int textLength);
-  AlignmentStatus alignEnd2End(
+  AlignmentStatus alignEnd2End( // Regular ASCII Sequences
       const char* const pattern,
       const int patternLength,
       const char* const text,
       const int textLength);
-  AlignmentStatus alignEnd2End(
+  AlignmentStatus alignEnd2End( // String ASCII Sequences
+      const std::string& pattern,
+      const std::string& text);
+  AlignmentStatus alignEnd2End( // 2bits-Packed Sequences
+      const uint8_t* const pattern,
+      const int patternLength,
+      const uint8_t* const text,
+      const int textLength);
+  AlignmentStatus alignEnd2End( // Lambda Sequence
+      int (*matchFunct)(int,int,void*),
+      void* matchFunctArguments,
+      const int patternLength,
+      const int textLength);
+  // Align Ends-free
+  AlignmentStatus alignEndsFree( // Regular ASCII Sequences
+      const char* const pattern,
+      const int patternLength,
+      const int patternBeginFree,
+      const int patternEndFree,
+      const char* const text,
+      const int textLength,
+      const int textBeginFree,
+      const int textEndFree);
+  AlignmentStatus alignEndsFree( // String ASCII Sequences
+      const std::string& pattern,
+      const int patternBeginFree,
+      const int patternEndFree,
+      const std::string& text,
+      const int textBeginFree,
+      const int textEndFree);
+  AlignmentStatus alignEndsFree( // 2bits-Packed Sequences
+      const uint8_t* const pattern,
+      const int patternLength,
+      const int patternBeginFree,
+      const int patternEndFree,
+      const uint8_t* const text,
+      const int textLength,
+      const int textBeginFree,
+      const int textEndFree);
+  AlignmentStatus alignEndsFree( // Lambda Sequence
+      int (*matchFunct)(int,int,void*),
+      void* matchFunctArguments,
+      const int patternLength,
+      const int patternBeginFree,
+      const int patternEndFree,
+      const int textLength,
+      const int textBeginFree,
+      const int textEndFree);
+  // Alignment Extension
+  AlignmentStatus alignExtension( // Regular ASCII Sequences
+      const char* const pattern,
+      const int patternLength,
+      const char* const text,
+      const int textLength);
+  AlignmentStatus alignExtension( // String ASCII Sequences
       std::string& pattern,
       std::string& text);
-  // Align Ends-free
-  AlignmentStatus alignEndsFreeLambda(
+  AlignmentStatus alignExtension( // 2bits-Packed Sequences
+      const uint8_t* const pattern,
       const int patternLength,
-      const int patternBeginFree,
-      const int patternEndFree,
-      const int textLength,
-      const int textBeginFree,
-      const int textEndFree);
-  AlignmentStatus alignEndsFree(
-      const char* const pattern,
+      const uint8_t* const text,
+      const int textLength);
+  AlignmentStatus alignExtension( // Lambda Sequence
+      int (*matchFunct)(int,int,void*),
+      void* matchFunctArguments,
       const int patternLength,
-      const int patternBeginFree,
-      const int patternEndFree,
-      const char* const text,
-      const int textLength,
-      const int textBeginFree,
-      const int textEndFree);
-  AlignmentStatus alignEndsFree(
-      std::string& pattern,
-      const int patternBeginFree,
-      const int patternEndFree,
-      std::string& text,
-      const int textBeginFree,
-      const int textEndFree);
-  // Alignment resume
-  AlignmentStatus alignResume();
+      const int textLength);
   // Heuristics
   void setHeuristicNone();
   void setHeuristicBandedStatic(
@@ -125,33 +162,40 @@ public:
   void setHeuristicZDrop(
       const int zdrop,
       const int steps_between_cutoffs = 1);
-  // Custom extend-match function (lambda)
-  void setMatchFunct(
-      int (*matchFunct)(int,int,void*),
-      void* matchFunctArguments);
   // Limits
-  void setMaxAlignmentScore(
-      const int maxAlignmentScore);
+  void setMaxAlignmentSteps(
+      const int maxAlignmentSteps);
   void setMaxMemory(
       const uint64_t maxMemoryResident,
       const uint64_t maxMemoryAbort);
   // Parallelization
   void setMaxNumThreads(
       const int maxNumThreads);
-  void setMinOffsetsPerThread(
-      const int minOffsetsPerThread);
   // Accessors
-  int getAlignmentScore();
   int getAlignmentStatus();
-  void getAlignmentCigar(
+  int getAlignmentScore();
+  void getAlignment(
       char** const cigarOperations,
       int* cigarLength);
-  std::string getAlignmentCigar();
+  std::string getAlignment();
+  void getCIGAR(
+      const bool showMismatches,
+      uint32_t** const cigarOperations,
+      int* const numCigarOperations);
+  std::string getCIGAR(
+      const bool showMismatches);
+  // Display
+  void printPretty(
+      FILE* const stream,
+      const char* const pattern,
+      const int patternLength,
+      const char* const text,
+      const int textLength);
   // Misc
-  char* strError(
-      const int wfErrorCode);
-  void setVerbose(
-      const int verbose);
+  char* strStatus(
+      const AlignmentStatus status);
+  void debugTag(
+      char* const debugTag);
 protected:
   wavefront_aligner_attr_t attributes;
   wavefront_aligner_t* wfAligner;
