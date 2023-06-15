@@ -606,9 +606,8 @@ void WFlign::wflign_affine_wavefront(
 #endif
 
         // Align
-        wflambda_aligner->alignEnd2EndLambda(
-            wflambda_extend_match,(void*)&extend_data,
-            pattern_length,text_length);
+        wflambda_aligner->setMatchFunct(wflambda_extend_match, (void*)&extend_data);
+        wflambda_aligner->alignEnd2EndLambda(pattern_length,text_length);
 
         // Extract the trace
         if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_SUCCESSFUL) {

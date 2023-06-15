@@ -3,7 +3,7 @@
 # LICENCE: MIT License 
 # AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
 # DESCRIPTION: Compares alignments (*.alg) from two folders
-# USAGE: ./wfa.utest.cmp.sh wfa_results_folder_1 wfa_results_folder_2
+# USAGE: ./wfa.utest.performance.cmp.sh wfa_results_folder_1 wfa_results_folder_2
 
 # Parameters
 FOLDER1=$1
@@ -30,10 +30,17 @@ do
     if [[ $(diff <(awk '{if ($1<0) print -$1; else print $1}' $FILE_ALG1) <(awk '{if ($1<0) print -$1; else print $1}' $FILE_ALG2)) ]]
     then
       echo "Error"
+      continue
     else
-      echo "ok" # Only score
+      echo -n "OK" # Only score
     fi
   else
-    echo "OK"
+    echo -n "OK"
   fi
+  # Stats
+  T1=$(grep -m1 "Time.Alignment" $FOLDER1/$PREFIX.log | awk '{print $3" "$4}')
+  T2=$(grep -m1 "Time.Alignment" $FOLDER2/$PREFIX.log | awk '{print $3" "$4}')  
+  M1=$(grep -m1 "Maximum resident set size" $FOLDER1/$PREFIX.log | tr -d "(:)" | awk '{print $6" "$5}')
+  M2=$(grep -m1 "Maximum resident set size" $FOLDER2/$PREFIX.log | tr -d "(:)" | awk '{print $6" "$5}')
+  echo -e "\tTIME($T1,$T2)\tMEM($M1,$M2)"
 done

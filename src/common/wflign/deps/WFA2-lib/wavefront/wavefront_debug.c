@@ -41,12 +41,13 @@ bool wavefront_check_alignment(
     FILE* const stream,
     wavefront_aligner_t* const wf_aligner) {
   // Parameters
-  wavefront_sequences_t* const sequences = (wf_aligner->bialigner==NULL) ?
-      &wf_aligner->sequences : &wf_aligner->bialigner->alg_forward->sequences;
-  const char* const pattern = sequences->pattern_buffer;
-  const int pattern_length = sequences->pattern_buffer_length;
-  const char* const text = sequences->text_buffer;
-  const int text_length = sequences->text_buffer_length;
+  const char* const pattern = wf_aligner->pattern;
+  const int pattern_length = wf_aligner->pattern_length;
+  const char* const text = wf_aligner->text;
+  const int text_length = wf_aligner->text_length;
+  // Custom function to compare sequences
+  alignment_match_funct_t match_funct = wf_aligner->match_funct;
+  void* match_funct_arguments = wf_aligner->match_funct_arguments;
   // CIGAR
   cigar_t* const cigar = wf_aligner->cigar;
   char* const operations = cigar->operations;
@@ -59,15 +60,14 @@ bool wavefront_check_alignment(
     switch (operations[i]) {
       case 'M': {
         // Check match
-        if (sequences->mode != wf_sequences_lambda) {
-          const bool is_match = (pattern[pattern_pos]==text[text_pos]);
-          if (!is_match) {
-            fprintf(stream,"[WFA::Check] Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
-                pattern_pos,pattern[pattern_pos],
-                text_pos,text[text_pos]);
-            alignment_correct = false;
-            break;
-          }
+        const bool is_match = (match_funct!=NULL) ?
+            match_funct(pattern_pos,text_pos,match_funct_arguments) :
+            pattern[pattern_pos] == text[text_pos];
+        if (!is_match) {
+          fprintf(stream,"[WFA::Check] Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
+              pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
+          alignment_correct = false;
+          break;
         }
         ++pattern_pos;
         ++text_pos;
@@ -75,15 +75,14 @@ bool wavefront_check_alignment(
       }
       case 'X': {
         // Check mismatch
-        if (sequences->mode != wf_sequences_lambda) {
-          const bool is_match = (pattern[pattern_pos]==text[text_pos]);
-          if (is_match) {
-            fprintf(stream,"[WFA::Check] Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
-                pattern_pos,pattern[pattern_pos],
-                text_pos,text[text_pos]);
-            alignment_correct = false;
-            break;
-          }
+        const bool is_match = (match_funct!=NULL) ?
+            match_funct(pattern_pos,text_pos,match_funct_arguments) :
+            pattern[pattern_pos] == text[text_pos];
+        if (is_match) {
+          fprintf(stream,"[WFA::Check] Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
+              pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
+          alignment_correct = false;
+          break;
         }
         ++pattern_pos;
         ++text_pos;
@@ -124,80 +123,121 @@ void wavefront_report_lite(
     FILE* const stream,
     wavefront_aligner_t* const wf_aligner) {
   // Parameters
-  wavefront_sequences_t* const sequences = (wf_aligner->bialigner==NULL) ?
-      &wf_aligner->sequences : &wf_aligner->bialigner->alg_subsidiary->sequences;
-  const char* const pattern = sequences->pattern;
-  const int pattern_length = sequences->pattern_length;
-  const char* const text = sequences->text;
-  const int text_length = sequences->text_length;
+  const char* const pattern = wf_aligner->pattern;
+  const int pattern_length = wf_aligner->pattern_length;
+  const char* const text = wf_aligner->text;
+  const int text_length = wf_aligner->text_length;
   const int status = wf_aligner->align_status.status;
   const uint64_t memory_used = wf_aligner->align_status.memory_used;
-  // BANNER (#0)
+  // Banner
   fprintf(stream,"[WFA::Debug]");
-  // SCORE (#1)
-  //  const int score = wavefront_compute_classic_score(
-  //      wf_aligner,pattern_length,text_length,wf_aligner->cigar->score);
-  const int score = wf_aligner->cigar->score;
-  fprintf(stream,"\t%d",(score==INT32_MIN) ? -1 : score);
-  // PATTERN_LENGTH (#2)
-  fprintf(stream,"\t%d",pattern_length);
-  // TEXT_LENGTH (#3)
-  fprintf(stream,"\t%d",text_length);
-  // STATUS (#4)
-  fprintf(stream,"\t%s",wavefront_align_strerror_short(status));
-  // TIME (#5)
+  // Sequences
+  const int score = wavefront_compute_classic_score(
+      wf_aligner,wf_aligner->pattern_length,
+      wf_aligner->text_length,wf_aligner->cigar->score);
+  fprintf(stream,"\t%d",score);
+  fprintf(stream,"\t%d\t%d",pattern_length,text_length);
+  fprintf(stream,"\t%s",(status==0) ? "OK" : "FAIL");
   fprintf(stream,"\t%2.3f",TIMER_GET_TOTAL_MS(&wf_aligner->system.timer));
-  // MEMORY (#6)
   fprintf(stream,"\t%luMB\t",CONVERT_B_TO_MB(memory_used));
-  // ATTRIBUTES (#7)
   fprintf(stream,"[");
-  fprintf(stream,"%d",wf_aligner->align_status.status);
-  fprintf(stream,";");
-  wavefront_aligner_print_mode(stream,wf_aligner);
-  fprintf(stream,";");
+  wavefront_aligner_print_type(stream,wf_aligner);
+  fprintf(stream,",");
   wavefront_aligner_print_scope(stream,wf_aligner);
-  fprintf(stream,";");
+  fprintf(stream,",");
   wavefront_penalties_print(stream,&wf_aligner->penalties);
-  fprintf(stream,";");
-  wavefront_aligner_print_conf(stream,wf_aligner);
-  fprintf(stream,";");
-  wavefront_heuristic_print(stream,&wf_aligner->heuristic);
-  fprintf(stream,";");
-  fprintf(stream,"(%d,%d,%d)",
-      wf_aligner->wf_components.num_wavefronts,
-      wf_aligner->wf_components.historic_min_lo,
-      wf_aligner->wf_components.historic_max_hi);
   fprintf(stream,"]\t");
-  // CIGAR (#8)
-  if (cigar_is_null(wf_aligner->cigar)) {
-    fprintf(stream,"-");
-  } else {
-    cigar_print(stream,wf_aligner->cigar,true);
-  }
-  // SEQUENCES (#9 #10)
-  if (sequences->mode == wf_sequences_lambda) {
+  cigar_print(stream,wf_aligner->cigar,true);
+  if (wf_aligner->match_funct != NULL) {
     fprintf(stream,"\t-\t-");
   } else {
     fprintf(stream,"\t%.*s\t%.*s",pattern_length,pattern,text_length,text);
   }
   fprintf(stream,"\n");
 }
+void wavefront_report_verbose_begin(
+    FILE* const stream,
+    wavefront_aligner_t* const wf_aligner,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length) {
+  // Input sequences
+  fprintf(stream,"[WFA::Report::Begin] [");
+  wavefront_aligner_print_type(stream,wf_aligner);
+  fprintf(stream,"]-Alignment (obj=%p)\n",wf_aligner);
+  if (wf_aligner->match_funct != NULL) {
+    fprintf(stream,"[WFA::Report]\tPattern\t%d\tcustom-funct()\n",pattern_length);
+    fprintf(stream,"[WFA::Report]\tText\t%d\tcustom-funct()\n",text_length);
+  } else {
+    fprintf(stream,"[WFA::Report]\tPattern\t%d\t%.*s\n",pattern_length,pattern_length,pattern);
+    fprintf(stream,"[WFA::Report]\tText\t%d\t%.*s\n",text_length,text_length,text);
+  }
+  // Alignment scope/form
+  fprintf(stream,"[WFA::Report]\tScope=");
+  wavefront_aligner_print_scope(stream,wf_aligner);
+  fprintf(stream," Max-score=%d",
+      wf_aligner->system.max_alignment_score);
+  // Penalties
+  fprintf(stream," Penalties=");
+  wavefront_penalties_print(stream,&wf_aligner->penalties);
+  // Heuristic
+  fprintf(stream," Heuristic=");
+  wavefront_heuristic_print(stream,&wf_aligner->heuristic);
+  // Memory mode
+  fprintf(stream," Memory.mode=(%d,%luMB,%luMB,%luMB)\n",
+      wf_aligner->memory_mode,
+      CONVERT_B_TO_MB(wf_aligner->system.max_memory_compact),
+      CONVERT_B_TO_MB(wf_aligner->system.max_memory_resident),
+      CONVERT_B_TO_MB(wf_aligner->system.max_memory_abort));
+}
+void wavefront_report_verbose_end(
+    FILE* const stream,
+    wavefront_aligner_t* const wf_aligner) {
+  // Finish report
+  fprintf(stream,"[WFA::Report::End]\tFinish.status=%d",wf_aligner->align_status.status);
+  fprintf(stream," Time.taken=");
+  timer_print_total(stream,&wf_aligner->system.timer);
+  fprintf(stream," Memory.used=%luMB",
+      CONVERT_B_TO_MB(wf_aligner->align_status.memory_used));
+  fprintf(stream," WFA.components=(wfs=%d,maxlo=%d,maxhi=%d)",
+      wf_aligner->wf_components.num_wavefronts,
+      wf_aligner->wf_components.historic_min_lo,
+      wf_aligner->wf_components.historic_max_hi);
+  const int score = wavefront_compute_classic_score(
+      wf_aligner,wf_aligner->pattern_length,
+      wf_aligner->text_length,wf_aligner->cigar->score);
+  fprintf(stream," WFA.score=%d",score);
+  fprintf(stream," WFA.cigar=");
+  cigar_print(stream,wf_aligner->cigar,true);
+  fprintf(stream,"\n");
+}
 /*
  * Debug
  */
-void wavefront_debug_begin(
-    wavefront_aligner_t* const wf_aligner) {
+void wavefront_debug_prologue(
+    wavefront_aligner_t* const wf_aligner,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length) {
   // Check verbose level
   if (wf_aligner->system.verbose >= 1) {
-    timer_reset(&wf_aligner->system.timer);
     timer_start(&wf_aligner->system.timer);
+    if (wf_aligner->system.verbose >= 4) {
+      wavefront_report_verbose_begin(stderr,wf_aligner,
+          pattern,pattern_length,text,text_length);
+    }
   }
 }
-void wavefront_debug_end(
+void wavefront_debug_epilogue(
     wavefront_aligner_t* const wf_aligner) {
   // Print Summary
   if (wf_aligner->system.verbose >= 1) {
     timer_stop(&wf_aligner->system.timer);
+    if (wf_aligner->system.verbose >= 4) {
+      wavefront_report_verbose_end(stderr,wf_aligner);
+    }
     wavefront_report_lite(stderr,wf_aligner);
   }
 }

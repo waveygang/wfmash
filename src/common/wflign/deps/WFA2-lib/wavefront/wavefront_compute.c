@@ -31,6 +31,7 @@
 
 #include "utils/commons.h"
 #include "system/mm_allocator.h"
+#include "utils/string_padded.h"
 #include "alignment/affine2p_penalties.h"
 #include "wavefront_compute.h"
 
@@ -570,9 +571,8 @@ void wavefront_compute_trim_ends(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t* const wavefront) {
   // Parameters
-  wavefront_sequences_t* const sequences = &wf_aligner->sequences;
-  const int pattern_length = sequences->pattern_length;
-  const int text_length = sequences->text_length;
+  const int pattern_length = wf_aligner->pattern_length;
+  const int text_length = wf_aligner->text_length;
   wf_offset_t* const offsets = wavefront->offsets;
   // Trim from hi
   int k;
@@ -651,4 +651,3 @@ void wavefront_compute_thread_limits(
   *thread_hi = t_hi;
 }
 #endif
-

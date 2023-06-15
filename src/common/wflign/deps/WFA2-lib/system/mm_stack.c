@@ -266,5 +266,3 @@ void mm_stack_print(
   fprintf(stream,"  => Segments.size      %" PRIu64 " MB\n",segment_size/(1024*1024));
   fprintf(stream,"  => Memory.available   %" PRIu64 " MB\n",num_segments*(segment_size/(1024*1024)));
 }
-
-

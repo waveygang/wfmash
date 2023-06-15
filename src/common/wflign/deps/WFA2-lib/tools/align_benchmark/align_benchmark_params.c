@@ -31,6 +31,10 @@
 #include "align_benchmark_params.h"
 
 /*
+ * Match function
+ */
+match_function_params_t match_function_params;
+/*
  * Default parameters
  */
 align_bench_params_t parameters = {
@@ -80,10 +84,11 @@ align_bench_params_t parameters = {
   .wfa_heuristic_p2 = -1,
   .wfa_heuristic_p3 = -1,
   .wfa_memory_mode = wavefront_memory_high,
+  .wfa_match_funct = NULL,
+  .wfa_match_funct_arguments = NULL,
   .wfa_max_memory = UINT64_MAX,
   .wfa_max_score = INT_MAX,
   .wfa_max_threads = 1,
-  .wfa_lambda = false,
   // Other algorithms parameters
   .bandwidth = -1,
   // Misc
@@ -100,6 +105,16 @@ align_bench_params_t parameters = {
   .progress = 100000,
   .verbose = 0,
 };
+/*
+ * Simplest Extend-matching function (for testing purposes)
+ */
+int match_function(int v,int h,void* arguments) {
+  // Extract parameters
+  match_function_params_t* match_arguments = (match_function_params_t*)arguments;
+  // Check match
+  if (v > match_arguments->pattern_length || h > match_arguments->text_length) return 0;
+  return (match_arguments->pattern[v] == match_arguments->text[h]);
+}
 /*
  * Menu
  */
@@ -197,10 +212,10 @@ void parse_arguments(
     { "wfa-memory-mode", required_argument, 0, 1001 },
     { "wfa-heuristic", required_argument, 0, 1002 },
     { "wfa-heuristic-parameters", required_argument, 0, 1003 },
+    { "wfa-custom-match-funct", no_argument, 0, 1004 },
     { "wfa-max-memory", required_argument, 0, 1005 },
     { "wfa-max-score", required_argument, 0, 1006 },
     { "wfa-max-threads", required_argument, 0, 1007 },
-    { "wfa-lambda", no_argument, 0, 1008 },
     /* Other alignment parameters */
     { "bandwidth", required_argument, 0, 2000 },
     /* Misc */
@@ -386,6 +401,10 @@ void parse_arguments(
       }
       break;
     }
+    case 1004: // --wfa-custom-match-funct
+      parameters.wfa_match_funct = match_function;
+      parameters.wfa_match_funct_arguments = &match_function_params;
+      break;
     case 1005: // --wfa-max-memory
       parameters.wfa_max_memory = atol(optarg);
       break;
@@ -394,9 +413,6 @@ void parse_arguments(
       break;
     case 1007: // --wfa-max-threads
       parameters.wfa_max_threads = atoi(optarg);
-      break;
-    case 1008: // --wfa-lambda
-      parameters.wfa_lambda = true;
       break;
     /*
      * Other alignment parameters

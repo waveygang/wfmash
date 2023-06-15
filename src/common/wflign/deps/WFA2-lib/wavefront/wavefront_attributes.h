@@ -32,7 +32,6 @@
 #ifndef WAVEFRONT_ATTRIBUTES_H_
 #define WAVEFRONT_ATTRIBUTES_H_
 
-#include "utils/commons.h"
 #include "alignment/cigar.h"
 #include "alignment/affine_penalties.h"
 #include "alignment/affine2p_penalties.h"
@@ -65,6 +64,26 @@ typedef struct {
   int text_begin_free;     // Allow free-gap at the beginning of the text
   int text_end_free;       // Allow free-gap at the end of the text
 } alignment_form_t;
+
+/*
+ * Custom extend-match function, e.g.:
+ *
+ *   typedef struct {
+ *     char* pattern;
+ *     int pattern_length;
+ *     char* text;
+ *     int text_length;
+ *   } match_function_params_t;
+ *
+ *   int match_function(int v,int h,void* arguments) {
+ *     // Extract parameters
+ *     match_function_params_t* match_arguments = (match_function_params_t*)arguments;
+ *     // Check match
+ *     if (v > match_arguments->pattern_length || h > match_arguments->text_length) return 0;
+ *     return (match_arguments->pattern[v] == match_arguments->text[h]);
+ *   }
+ */
+typedef int (*alignment_match_funct_t)(int,int,void*);
 
 /*
  * Alignment system configuration
@@ -122,6 +141,9 @@ typedef struct {
   wavefront_heuristic_t heuristic;         // Wavefront heuristic
   // Memory model
   wavefront_memory_t memory_mode;          // Wavefront memory strategy (modular wavefronts and piggyback)
+  // Custom function to compare sequences
+  alignment_match_funct_t match_funct;     // Custom matching function (match(v,h,args))
+  void* match_funct_arguments;             // Generic arguments passed to matching function (args)
   // External MM (instead of allocating one inside)
   mm_allocator_t* mm_allocator;            // MM-Allocator
   // Display

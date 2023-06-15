@@ -119,7 +119,12 @@ bt_block_t* wf_backtrace_buffer_traceback_pcigar(
     bt_block_t* bt_block);
 void wf_backtrace_buffer_unpack_cigar_linear(
     wf_backtrace_buffer_t* const bt_buffer,
-    wavefront_sequences_t* const sequences,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
     const int begin_v,
     const int begin_h,
     const int end_v,
@@ -127,7 +132,12 @@ void wf_backtrace_buffer_unpack_cigar_linear(
     cigar_t* const cigar);
 void wf_backtrace_buffer_unpack_cigar_affine(
     wf_backtrace_buffer_t* const bt_buffer,
-    wavefront_sequences_t* const sequences,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
     const int begin_v,
     const int begin_h,
     const int end_v,

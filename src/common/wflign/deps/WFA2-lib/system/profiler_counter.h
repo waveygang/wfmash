@@ -33,9 +33,6 @@
 #ifndef PROFILER_COUNTER_H_
 #define PROFILER_COUNTER_H_
 
-#include <stdint.h>
-#include <stdbool.h>
-
 /*
  * Counters
  */

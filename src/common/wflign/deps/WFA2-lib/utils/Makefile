@@ -12,6 +12,7 @@ MODULES=bitmap \
         dna_text \
         heatmap \
         sequence_buffer \
+        string_padded \
         vector
 
 SRCS=$(addsuffix .c, $(MODULES))

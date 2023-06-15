@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 # PROJECT: Wavefront Alignments Algorithms (Unitary Tests)
 # LICENCE: MIT License 
 # AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
@@ -12,7 +12,7 @@ OUTPUT="./tests"
 LOG="./tests/wfa.utest.log"
 
 # Clear
-rm $OUTPUT/*.alg $OUTPUT/*.log* &> /dev/null
+rm $OUTPUT/*.alg $OUTPUT/*.log*
 
 # Run tests
 for opt in "--check=correct","test" \
@@ -72,30 +72,16 @@ diff tests/wfa.utest.check/test.affine.wfapt1.alg tests/wfa.utest.check/test.pb.
 ./scripts/wfa.alg.cmp.score.sh tests/wfa.utest.check/test.affine.wfapt0.alg tests/wfa.utest.check/test.biwfa.affine.wfapt0.alg >> $LOG.correct 2>&1
 ./scripts/wfa.alg.cmp.score.sh tests/wfa.utest.check/test.affine.wfapt1.alg tests/wfa.utest.check/test.biwfa.affine.wfapt1.alg >> $LOG.correct 2>&1
 
-# Summary tests (*.correct,*.time,*.mem)
+# Summary tests
 grep "Alignments.Correct" $LOG >> $LOG.correct
 grep "Time.Alignment" $LOG | awk '{if ($4 != "ms") print $3" "$4}' | sort -n > $LOG.time
 grep "Maximum resident set size" $LOG | awk '{print $6}' | sort -n > $LOG.mem
 
-# Display performance
-echo ">>> Performance Time (s): "
-paste <(tail -n 4 $OUTPUT/wfa.utest.log.time) <(tail -n 4 $OUTPUT/wfa.utest.check/wfa.utest.log.time)
-echo ">>> Performance Mem (KB): "
-paste <(tail -n 4 $OUTPUT/wfa.utest.log.mem) <(tail -n 4 $OUTPUT/wfa.utest.check/wfa.utest.log.mem)
-
-# Display correct
+echo -n ">>> Correct: "
+tail -n 4 $OUTPUT/wfa.utest.log.time $OUTPUT/wfa.utest.check/wfa.utest.log.time
+tail -n 4 $OUTPUT/wfa.utest.log.mem $OUTPUT/wfa.utest.check/wfa.utest.log.mem
 ./tests/wfa.utest.cmp.sh $OUTPUT $OUTPUT/wfa.utest.check
-STATUS=$?
-STATUS_EXIT=$(grep "Exit status:" $LOG | grep -v "Exit status: 0" | sort | uniq -c | tr '\n' ' ')
-STATUS_SIGNAL=$(grep "Command terminated by signal" $LOG | sort | uniq -c | tr '\n' ' ')
-STATUS_CORRECT=$(cat $OUTPUT/wfa.utest.log.correct | awk '{print $5$6}' | sort | uniq -c | tr '\n' ' ')
-echo ">>> Correct: ExitStatus($STATUS_EXIT) Signal($STATUS_SIGNAL) Correct($STATUS_CORRECT)"
-if [[ $STATUS -eq 0 && "$STATUS_EXIT"=="" && "$STATUS_SIGNAL"=="" ]]
-then
-  echo -e ">>>\n>>> ALL GOOD!\n>>>"
-else
-  echo -e ">>>\n>>> ERROR\n>>>"
-fi
-
-exit $STATUS
+grep "Exit status:" $LOG | sort | uniq -c
+grep "Command terminated by signal" $LOG | sort | uniq -c
+cat $OUTPUT/wfa.utest.log.correct | awk '{print $5$6}' | sort | uniq -c
 

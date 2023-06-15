@@ -259,9 +259,8 @@ void wavefront_heuristic_wfadaptive(
     wavefront_t* const wavefront,
     const bool wfmash_mode) {
   // Parameters
-  wavefront_sequences_t* const sequences = &wf_aligner->sequences;
-  const int pattern_length = sequences->pattern_length;
-  const int text_length = sequences->text_length;
+  const int pattern_length = wf_aligner->pattern_length;
+  const int text_length = wf_aligner->text_length;
   const int min_wavefront_length = wf_aligner->heuristic.min_wavefront_length;
   const int max_distance_threshold = wf_aligner->heuristic.max_distance_threshold;
   wavefront_heuristic_t* const wf_heuristic = &wf_aligner->heuristic;
@@ -465,9 +464,8 @@ void wavefront_heuristic_banded_adaptive(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t* const wavefront) {
   // Parameters
-  wavefront_sequences_t* const sequences = &wf_aligner->sequences;
-  const int pattern_length = sequences->pattern_length;
-  const int text_length = sequences->text_length;
+  const int pattern_length = wf_aligner->pattern_length;
+  const int text_length = wf_aligner->text_length;
   wavefront_heuristic_t* const wf_heuristic = &wf_aligner->heuristic;
   // Check steps
   if (wf_heuristic->steps_wait > 0) return;
@@ -520,6 +518,9 @@ void wavefront_heuristic_cufoff(
   if (mwavefront == NULL || mwavefront->lo > mwavefront->hi) return;
   // Decrease wait steps
   --(wf_heuristic->steps_wait);
+  // Save lo/hi base
+  const int hi_base = mwavefront->hi;
+  const int lo_base = mwavefront->lo;
   // Select heuristic (WF-Adaptive)
   if (wf_heuristic->strategy & wf_heuristic_wfadaptive) {
     wavefront_heuristic_wfadaptive(wf_aligner,mwavefront,false);
@@ -539,6 +540,7 @@ void wavefront_heuristic_cufoff(
     wavefront_heuristic_banded_adaptive(wf_aligner,mwavefront);
   }
   // Check wavefront length
+  if (lo_base == mwavefront->lo && hi_base == mwavefront->hi) return; // No wavefronts pruned
   if (mwavefront->lo > mwavefront->hi) mwavefront->null = true;
   // DEBUG
   // const int wf_length_base = hi_base-lo_base+1;

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
+#include <cassert>
 #include <vector>
 
 /*

@@ -32,12 +32,13 @@
 #pragma once
 
 #include "system/mm_allocator.h"
-#include "wavefront_slab.h"
-#include "wavefront_penalties.h"
+#include "utils/string_padded.h"
 #include "wavefront_attributes.h"
 #include "wavefront_components.h"
-#include "wavefront_sequences.h"
+#include "wavefront_slab.h"
+#include "wavefront_penalties.h"
 #include "wavefront_bialigner.h"
+
 
 /*
  * Error codes & messages
@@ -53,7 +54,6 @@
 // Error messages
 extern char* wf_error_msg[5];
 char* wavefront_align_strerror(const int error_code);
-char* wavefront_align_strerror_short(const int error_code);
 
 /*
  * Alignment status
@@ -90,7 +90,14 @@ typedef struct _wavefront_aligner_t {
   char* align_mode_tag;                       // WFA mode tag
   wavefront_align_status_t align_status;      // Current alignment status
   // Sequences
-  wavefront_sequences_t sequences;            // Input sequences
+  strings_padded_t* sequences;                // Padded sequences
+  char* pattern;                              // Pattern sequence (padded)
+  int pattern_length;                         // Pattern length
+  char* text;                                 // Text sequence (padded)
+  int text_length;                            // Text length
+  // Custom function to compare sequences
+  alignment_match_funct_t match_funct;        // Custom matching function (match(v,h,args))
+  void* match_funct_arguments;                // Generic arguments passed to matching function (args)
   // Alignment Attributes
   alignment_scope_t alignment_scope;          // Alignment scope (score only or full-CIGAR)
   alignment_form_t alignment_form;            // Alignment form (end-to-end/ends-free)
@@ -124,12 +131,6 @@ wavefront_aligner_t* wavefront_aligner_new(
 void wavefront_aligner_reap(
     wavefront_aligner_t* const wf_aligner);
 void wavefront_aligner_delete(
-    wavefront_aligner_t* const wf_aligner);
-
-/*
- * Initialize wf-alignment conditions
- */
-void wavefront_aligner_init_wf(
     wavefront_aligner_t* const wf_aligner);
 
 /*
@@ -178,6 +179,14 @@ void wavefront_aligner_set_heuristic_banded_adaptive(
     const int score_steps);
 
 /*
+ * Match-funct configuration
+ */
+void wavefront_aligner_set_match_funct(
+    wavefront_aligner_t* const wf_aligner,
+    int (*match_funct)(int,int,void*),
+    void* const match_funct_arguments);
+
+/*
  * System configuration
  */
 void wavefront_aligner_set_max_alignment_score(
@@ -202,34 +211,25 @@ uint64_t wavefront_aligner_get_size(
 /*
  * Display
  */
-void wavefront_aligner_print_mode(
+void wavefront_aligner_print_type(
     FILE* const stream,
     wavefront_aligner_t* const wf_aligner);
 void wavefront_aligner_print_scope(
     FILE* const stream,
     wavefront_aligner_t* const wf_aligner);
-void wavefront_aligner_print_conf(
+void wavefront_aligner_print_mode(
     FILE* const stream,
     wavefront_aligner_t* const wf_aligner);
 
 /*
- * Wavefront Align
+ * Wavefront Alignment
  */
+
 int wavefront_align(
     wavefront_aligner_t* const wf_aligner,
     const char* const pattern,
     const int pattern_length,
     const char* const text,
     const int text_length);
-int wavefront_align_lambda(
-    wavefront_aligner_t* const wf_aligner,
-    alignment_match_funct_t const match_funct,
-    void* match_funct_arguments,
-    const int pattern_length,
-    const int text_length);
-int wavefront_align_packed2bits(
-    wavefront_aligner_t* const wf_aligner,
-    const uint8_t* const pattern,
-    const int pattern_length,
-    const uint8_t* const text,
-    const int text_length);
+int wavefront_align_resume(
+    wavefront_aligner_t* const wf_aligner);

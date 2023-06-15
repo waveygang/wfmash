@@ -33,7 +33,6 @@
 #define WAVEFRONT_PACKED_CIGAR_H_
 
 #include "wavefront_attributes.h"
-#include "wavefront_sequences.h"
 
 /*
  * Configuration
@@ -91,14 +90,24 @@ int pcigar_unpack(
  */
 void pcigar_unpack_linear(
     pcigar_t pcigar,
-    wavefront_sequences_t* const sequences,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
     int* const v_pos,
     int* const h_pos,
     char* cigar_buffer,
     int* const cigar_length);
 void pcigar_unpack_affine(
     pcigar_t pcigar,
-    wavefront_sequences_t* const sequences,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    alignment_match_funct_t const match_funct,
+    void* const match_funct_arguments,
     int* const v_pos,
     int* const h_pos,
     char* cigar_buffer,

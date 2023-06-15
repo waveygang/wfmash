@@ -226,10 +226,6 @@ int cigar_score_gap_affine2p(
 /*
  * Utils
  */
-bool cigar_is_null(
-    cigar_t* const cigar) {
-  return (cigar->begin_offset >= cigar->end_offset);
-}
 int cigar_cmp(
     cigar_t* const cigar_a,
     cigar_t* const cigar_b) {
@@ -511,5 +507,3 @@ void cigar_print_pretty(
   mm_allocator_free(mm_allocator,ops_alg);
   mm_allocator_free(mm_allocator,text_alg);
 }
-
-

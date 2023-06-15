@@ -64,6 +64,14 @@ WFAligner::~WFAligner() {
 /*
  * Align End-to-end
  */
+WFAligner::AlignmentStatus WFAligner::alignEnd2EndLambda(
+    const int patternLength,
+    const int textLength) {
+  // Configure
+  wavefront_aligner_set_alignment_end_to_end(wfAligner);
+  // Align (using custom matching function)
+  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,NULL,patternLength,NULL,textLength);
+}
 WFAligner::AlignmentStatus WFAligner::alignEnd2End(
     const char* const pattern,
     const int patternLength,
@@ -80,20 +88,23 @@ WFAligner::AlignmentStatus WFAligner::alignEnd2End(
   // Delegate
   return alignEnd2End(pattern.c_str(),pattern.length(),text.c_str(),text.length());
 }
-WFAligner::AlignmentStatus WFAligner::alignEnd2EndLambda(
-    int (*matchFunct)(int,int,void*),
-    void* matchFunctArguments,
-    const int patternLength,
-    const int textLength) {
-  // Configure
-  wavefront_aligner_set_alignment_end_to_end(wfAligner);
-  // Align (using custom matching function)
-  return (WFAligner::AlignmentStatus)
-      wavefront_align_lambda(wfAligner,matchFunct,matchFunctArguments,patternLength,textLength);
-}
 /*
  * Align Ends-free
  */
+WFAligner::AlignmentStatus WFAligner::alignEndsFreeLambda(
+    const int patternLength,
+    const int patternBeginFree,
+    const int patternEndFree,
+    const int textLength,
+    const int textBeginFree,
+    const int textEndFree) {
+  // Configure
+  wavefront_aligner_set_alignment_free_ends(wfAligner,
+      patternBeginFree,patternEndFree,
+      textBeginFree,textEndFree);
+  // Align (using custom matching function)
+  return (WFAligner::AlignmentStatus) wavefront_align(wfAligner,NULL,patternLength,NULL,textLength);
+}
 WFAligner::AlignmentStatus WFAligner::alignEndsFree(
     const char* const pattern,
     const int patternLength,
@@ -124,30 +135,13 @@ WFAligner::AlignmentStatus WFAligner::alignEndsFree(
       text.c_str(),text.length(),
       textBeginFree,textEndFree);
 }
-WFAligner::AlignmentStatus WFAligner::alignEndsFreeLambda(
-    int (*matchFunct)(int,int,void*),
-    void* matchFunctArguments,
-    const int patternLength,
-    const int patternBeginFree,
-    const int patternEndFree,
-    const int textLength,
-    const int textBeginFree,
-    const int textEndFree) {
-  // Configure
-  wavefront_aligner_set_alignment_free_ends(wfAligner,
-      patternBeginFree,patternEndFree,
-      textBeginFree,textEndFree);
-  // Align (using custom matching function)
-  return (WFAligner::AlignmentStatus)
-      wavefront_align_lambda(wfAligner,matchFunct,matchFunctArguments,patternLength,textLength);
+/*
+ * Alignment resume
+ */
+WFAligner::AlignmentStatus WFAligner::alignResume() {
+  // Resume alignment
+  return (WFAligner::AlignmentStatus) wavefront_align_resume(wfAligner);
 }
-///*
-// * Alignment resume
-// */
-//WFAligner::AlignmentStatus WFAligner::alignResume() {
-//  // Resume alignment
-//  return (WFAligner::AlignmentStatus) wavefront_align_resume(wfAligner);
-//}
 /*
  * Heuristics
  */
@@ -196,6 +190,14 @@ void WFAligner::setHeuristicZDrop(
       wfAligner,zdrop,steps_between_cutoffs);
 }
 /*
+ * Custom extend-match function (lambda)
+ */
+void WFAligner::setMatchFunct(
+    int (*matchFunct)(int,int,void*),
+    void* matchFunctArguments) {
+  wavefront_aligner_set_match_funct(wfAligner,matchFunct,matchFunctArguments);
+}
+/*
  * Limits
  */
 void WFAligner::setMaxAlignmentScore(
@@ -210,12 +212,12 @@ void WFAligner::setMaxMemory(
 }
 // Parallelization
 void WFAligner::setMaxNumThreads(
-    const int maxNumThreads) {
-  wavefront_aligner_set_max_num_threads(wfAligner, maxNumThreads);
+        const int maxNumThreads) {
+    wavefront_aligner_set_max_num_threads(wfAligner, maxNumThreads);
 }
 void WFAligner::setMinOffsetsPerThread(
-    const int minOffsetsPerThread) {
-  wavefront_aligner_set_min_offsets_per_thread(wfAligner, minOffsetsPerThread);
+        const int minOffsetsPerThread) {
+    wavefront_aligner_set_min_offsets_per_thread(wfAligner, minOffsetsPerThread);
 }
 /*
  * Accessors
@@ -247,14 +249,9 @@ char* WFAligner::strError(
     const int wfErrorCode) {
   return wavefront_align_strerror(wfErrorCode);
 }
-void WFAligner::debugAddTag(
-    char* const debugTag) {
-  wfAligner->align_mode_tag = debugTag;
-  if (wfAligner->bialigner != NULL) {
-    wfAligner->bialigner->alg_forward->align_mode_tag = debugTag;
-    wfAligner->bialigner->alg_reverse->align_mode_tag = debugTag;
-    wfAligner->bialigner->alg_subsidiary->align_mode_tag = debugTag;
-  }
+void WFAligner::setVerbose(
+    const int verbose) {
+  wfAligner->system.verbose = verbose;
 }
 /*
  * Indel Aligner (a.k.a Longest Common Subsequence - LCS)
