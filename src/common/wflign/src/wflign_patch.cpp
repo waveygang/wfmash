@@ -201,7 +201,7 @@ void do_wfa_patch_alignment(
                   * std::max((int)256, (int)std::min(target_length, query_length))));
     wf_aligner.setMaxAlignmentSteps(max_score);
     const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
-    aln.ok = (status == WF_STATUS_OK);
+    aln.ok = (status == WF_STATUS_ALG_COMPLETED);
     if (aln.ok) {
         // No more necessary: correct X/M errors in the cigar
         // hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);

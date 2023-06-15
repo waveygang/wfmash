@@ -612,7 +612,7 @@ void WFlign::wflign_affine_wavefront(
                 pattern_length,text_length);
 
         // Extract the trace
-        if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_OK) {
+        if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_ALG_COMPLETED) {
             extend_data.num_alignments += wflambda_trace_match(
                     alignments,*wflambda_aligner,trace,pattern_length,text_length);
         }
