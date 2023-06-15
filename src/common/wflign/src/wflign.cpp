@@ -5,6 +5,7 @@
 #include "wflign.hpp"
 #include "wflign_patch.hpp"
 
+
 // Namespaces
 namespace wflign {
 namespace wavefront {
@@ -251,7 +252,7 @@ int wflambda_trace_match(
     // Retrieve CIGAR
     char* cigar_ops;
     int cigar_length;
-    wflambda_aligner.getAlignmentCigar(&cigar_ops,&cigar_length);
+    wflambda_aligner.getAlignment(&cigar_ops,&cigar_length);
     // Traverse CIGAR tracing matches
     int v = pattern_length-1;
     int h = text_length-1;
@@ -606,12 +607,12 @@ void WFlign::wflign_affine_wavefront(
 #endif
 
         // Align
-        wflambda_aligner->alignEnd2EndLambda(
-            wflambda_extend_match,(void*)&extend_data,
-            pattern_length,text_length);
+        wflambda_aligner->alignEnd2End(
+                wflambda_extend_match, (void*)&extend_data,
+                pattern_length,text_length);
 
         // Extract the trace
-        if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_SUCCESSFUL) {
+        if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_ALG_COMPLETED) {
             extend_data.num_alignments += wflambda_trace_match(
                     alignments,*wflambda_aligner,trace,pattern_length,text_length);
         }

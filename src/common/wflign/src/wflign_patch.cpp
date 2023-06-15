@@ -70,7 +70,7 @@ bool do_wfa_segment_alignment(
         // if it is, we'll align
         const int max_score = (int)((float)std::max(segment_length_q, segment_length_t) * extend_data->inception_score_max_ratio);
 
-        extend_data->wf_aligner->setMaxAlignmentScore(max_score);
+        extend_data->wf_aligner->setMaxAlignmentSteps(max_score);
         const int status = extend_data->wf_aligner->alignEnd2End(
                 target + i,segment_length_t,
                 query + j,segment_length_q);
@@ -199,9 +199,9 @@ void do_wfa_patch_alignment(
             = (affine_penalties.gap_opening
                + (affine_penalties.gap_extension
                   * std::max((int)256, (int)std::min(target_length, query_length))));
-    wf_aligner.setMaxAlignmentScore(max_score);
+    wf_aligner.setMaxAlignmentSteps(max_score);
     const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
-    aln.ok = (status == WF_STATUS_SUCCESSFUL);
+    aln.ok = (status == WF_STATUS_ALG_COMPLETED);
     if (aln.ok) {
         // No more necessary: correct X/M errors in the cigar
         // hack_cigar(wf_aligner->cigar, query, target, query_length, target_length, j, i);
@@ -567,7 +567,7 @@ void write_merged_alignment(
 
                             char* cigar_ops;
                             int cigar_length;
-                            wf_aligner_heads->getAlignmentCigar(&cigar_ops,&cigar_length);
+                            wf_aligner_heads->getAlignment(&cigar_ops,&cigar_length);
                             for(int xxx = cigar_length - 1; xxx >= 0; --xxx) {
                                 //std::cerr << cigar_ops[xxx];
                                 patched.push_back(cigar_ops[xxx]);
@@ -1066,7 +1066,7 @@ void write_merged_alignment(
 
                             char* cigar_ops;
                             int cigar_length;
-                            wf_aligner_tails->getAlignmentCigar(&cigar_ops,&cigar_length);
+                            wf_aligner_tails->getAlignment(&cigar_ops,&cigar_length);
                             for(int xxx = 0; xxx < cigar_length; ++xxx) {
                                 //std::cerr << cigar_ops[xxx];
                                 patched.push_back(cigar_ops[xxx]);
