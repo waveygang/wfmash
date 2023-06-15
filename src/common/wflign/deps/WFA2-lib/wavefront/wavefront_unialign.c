@@ -49,55 +49,6 @@
 #include "wavefront_backtrace_buffer.h"
 
 /*
- * Setup
- */
-void wavefront_unialign_status_clear(
-    wavefront_align_status_t* const align_status) {
-  align_status->status = WF_STATUS_SUCCESSFUL;
-  align_status->score = 0;
-}
-void wavefront_unialigner_system_clear(
-    wavefront_aligner_t* const wf_aligner) {
-  // Reset effective limits
-  wf_aligner->system.max_memory_compact = BUFFER_SIZE_256M;
-  wf_aligner->system.max_memory_resident = BUFFER_SIZE_256M + BUFFER_SIZE_256M;
-  switch (wf_aligner->memory_mode) {
-    case wavefront_memory_med:
-      wf_aligner->system.max_partial_compacts = 4;
-      break;
-    case wavefront_memory_low:
-      wf_aligner->system.max_partial_compacts = 1;
-      break;
-    default:
-      break;
-  }
-}
-/*
- * Resize
- */
-void wavefront_unialign_resize(
-    wavefront_aligner_t* const wf_aligner) {
-  // Parameters
-  wavefront_sequences_t* const sequences = &wf_aligner->sequences;
-  const int pattern_length = sequences->pattern_length;
-  const int text_length = sequences->text_length;
-  // Configure status
-  wavefront_unialign_status_clear(&wf_aligner->align_status);
-  // Heuristics clear
-  wavefront_heuristic_clear(&wf_aligner->heuristic);
-  // Wavefront components
-  wavefront_components_resize(&wf_aligner->wf_components,
-      pattern_length,text_length,&wf_aligner->penalties);
-  // CIGAR
-  if (wf_aligner->alignment_scope == compute_alignment) {
-    cigar_resize(wf_aligner->cigar,2*(pattern_length+text_length));
-  }
-  // Slab
-  wavefront_slab_clear(wf_aligner->wavefront_slab);
-  // System
-  wavefront_unialigner_system_clear(wf_aligner);
-}
-/*
  * Initialize alignment
  */
 void wavefront_unialign_init(
@@ -106,8 +57,8 @@ void wavefront_unialign_init(
     const affine2p_matrix_type component_end) {
   // Parameters
   wavefront_align_status_t* const align_status = &wf_aligner->align_status;
-  // Resize wavefront aligner
-  wavefront_unialign_resize(wf_aligner);
+  alignment_form_t* const alignment_form = &wf_aligner->alignment_form;
+  const bool end2end = (alignment_form->span == alignment_end2end);
   // Configure WF-compute function
   switch (wf_aligner->penalties.distance_metric) {
     case indel:
@@ -129,21 +80,17 @@ void wavefront_unialign_init(
       break;
   }
   // Configure WF-extend function
-  const bool end2end = (wf_aligner->alignment_form.span == alignment_end2end);
   if (end2end) {
     align_status->wf_align_extend = &wavefront_extend_end2end;
   } else {
     align_status->wf_align_extend = &wavefront_extend_endsfree;
   }
-  // Initialize wavefront
-  align_status->num_null_steps = 0;
-  wf_aligner->alignment_end_pos.score = -1; // Not aligned
-  wf_aligner->alignment_end_pos.k = DPMATRIX_DIAGONAL_NULL;
+  // Initialize wavefront-aligner (to perform a new alignment)
   wf_aligner->component_begin = component_begin;
   wf_aligner->component_end = component_end;
-  wavefront_aligner_init_wf(wf_aligner);
-  // Plot (WF_0)
-  if (wf_aligner->plot != NULL) wavefront_plot(wf_aligner,0,0);
+  wavefront_aligner_init(wf_aligner,0);
+  // Clear cigar
+  cigar_clear(wf_aligner->cigar);
 }
 /*
  * Limits
@@ -152,9 +99,9 @@ bool wavefront_unialign_reached_limits(
     wavefront_aligner_t* const wf_aligner,
     const int score) {
   // Check alignment-score limit
-  if (score >= wf_aligner->system.max_alignment_score) {
-    wf_aligner->cigar->score = -wf_aligner->system.max_alignment_score;
-    wf_aligner->align_status.status = WF_STATUS_MAX_SCORE_REACHED;
+  if (score >= wf_aligner->system.max_alignment_steps) {
+    wf_aligner->cigar->score = -wf_aligner->system.max_alignment_steps;
+    wf_aligner->align_status.status = WF_STATUS_MAX_STEPS_REACHED;
     wf_aligner->align_status.score = score;
     return true; // Stop
   }
@@ -201,47 +148,92 @@ void wavefront_unialign_terminate(
     wavefront_aligner_t* const wf_aligner,
     const int score) {
   // Parameters
+  wavefront_align_status_t* const align_status = &wf_aligner->align_status;
   wavefront_sequences_t* const sequences = &wf_aligner->sequences;
   const int pattern_length = sequences->pattern_length;
   const int text_length = sequences->text_length;
-  // Retrieve alignment
+  cigar_t* const cigar = wf_aligner->cigar;
+  // Select alignment scope
+  align_status->score = score;
   if (wf_aligner->alignment_scope == compute_score) {
-    cigar_clear(wf_aligner->cigar);
-    wf_aligner->cigar->score =
-        wavefront_compute_classic_score(wf_aligner,pattern_length,text_length,score);
+    // Set end-alignment position & score
+    if (align_status->status == WF_STATUS_END_REACHED) {
+      cigar->end_v = pattern_length;
+      cigar->end_h = text_length;
+      cigar->score = wavefront_compute_classic_score(wf_aligner,pattern_length,text_length,score);
+      align_status->status = WF_STATUS_ALG_COMPLETED;
+    } else {
+      const int k = wf_aligner->alignment_end_pos.k;
+      const int offset = wf_aligner->alignment_end_pos.offset;
+      cigar->end_v = WAVEFRONT_V(k,offset);
+      cigar->end_h = WAVEFRONT_H(k,offset);
+      cigar->score = wavefront_compute_classic_score(wf_aligner,cigar->end_v,cigar->end_h,score);
+      align_status->dropped = true;
+      align_status->status = WF_STATUS_ALG_PARTIAL;
+    }
   } else {
     // Parameters
     wavefront_components_t* const wf_components = &wf_aligner->wf_components;
     const int alignment_end_k = wf_aligner->alignment_end_pos.k;
     const wf_offset_t alignment_end_offset = wf_aligner->alignment_end_pos.offset;
-    if (wf_components->bt_piggyback) {
-      // Fetch wavefront
-      const bool memory_modular = wf_aligner->wf_components.memory_modular;
-      const int max_score_scope = wf_aligner->wf_components.max_score_scope;
-      const int score_mod = (memory_modular) ? score % max_score_scope : score;
-      wavefront_t* const mwavefront = wf_components->mwavefronts[score_mod];
-      // Backtrace alignment from buffer (unpacking pcigar)
-      wavefront_backtrace_pcigar(
-          wf_aligner,alignment_end_k,alignment_end_offset,
-          mwavefront->bt_pcigar[alignment_end_k],
-          mwavefront->bt_prev[alignment_end_k]);
-    } else {
-      // Backtrace alignment
-      if (wf_aligner->penalties.distance_metric <= gap_linear) {
-        wavefront_backtrace_linear(wf_aligner,
-            score,alignment_end_k,alignment_end_offset);
+    if (alignment_end_offset != WAVEFRONT_OFFSET_NULL) {
+      if (wf_components->bt_piggyback) {
+        // Fetch wavefront
+        const bool memory_modular = wf_aligner->wf_components.memory_modular;
+        const int max_score_scope = wf_aligner->wf_components.max_score_scope;
+        const int score_mod = (memory_modular) ? score % max_score_scope : score;
+        wavefront_t* const mwavefront = wf_components->mwavefronts[score_mod];
+        // Backtrace alignment from buffer (unpacking pcigar)
+        wavefront_backtrace_pcigar(
+            wf_aligner,alignment_end_k,alignment_end_offset,
+            mwavefront->bt_pcigar[alignment_end_k],
+            mwavefront->bt_prev[alignment_end_k]);
       } else {
-        wavefront_backtrace_affine(wf_aligner,
-            wf_aligner->component_begin,wf_aligner->component_end,
-            score,alignment_end_k,alignment_end_offset);
+        // Backtrace alignment
+        if (wf_aligner->penalties.distance_metric <= gap_linear) {
+          wavefront_backtrace_linear(wf_aligner,
+              score,alignment_end_k,alignment_end_offset);
+        } else {
+          wavefront_backtrace_affine(wf_aligner,
+              wf_aligner->component_begin,wf_aligner->component_end,
+              score,alignment_end_k,alignment_end_offset);
+        }
       }
     }
-    // Set score & finish
-    wf_aligner->cigar->score =
-        wavefront_compute_classic_score(wf_aligner,pattern_length,text_length,score);
+    /*
+     * Post-processing (Extension-Trim, Score, and Ends)
+     *
+     *                   |     Alignment-Regular    |      Alignment-Extension         |
+     *  |------------------------------------------------------------------------------|
+     *  |  END_REACHABLE |  NoTrim + ALG_COMPLETED  | Trim + ALG_PARTIAL|ALG_COMPLETED |
+     *  |END_UNREACHABLE |  Trim + ALG_PARTIAL      | Trim + ALG_PARTIAL               |
+     */
+    const bool do_extension = wf_aligner->alignment_form.extension;
+    const bool unreachable = (align_status->status == WF_STATUS_END_UNREACHABLE);
+    align_status->dropped = unreachable;
+    if (do_extension || unreachable) {
+      // Alignment extension (maximal score)
+      const bool cigar_trimmed = wavefront_aligner_maxtrim_cigar(wf_aligner);
+      if (cigar_trimmed) {
+        align_status->status = WF_STATUS_ALG_PARTIAL;
+      } else {
+        align_status->status = (align_status->status == WF_STATUS_END_UNREACHABLE) ?
+            WF_STATUS_ALG_PARTIAL : WF_STATUS_ALG_COMPLETED;
+      }
+    } else {
+      const int k = wf_aligner->alignment_end_pos.k;
+      const int offset = wf_aligner->alignment_end_pos.offset;
+      cigar->end_v = WAVEFRONT_V(k,offset);
+      cigar->end_h = WAVEFRONT_H(k,offset);
+      cigar->score = wavefront_compute_classic_score(wf_aligner,cigar->end_v,cigar->end_h,score);
+      // Set status
+      if (unreachable) {
+        align_status->status = WF_STATUS_ALG_PARTIAL;
+      } else {
+        align_status->status = WF_STATUS_ALG_COMPLETED;
+      }
+    }
   }
-  // Set successful
-  wf_aligner->align_status.status = WF_STATUS_SUCCESSFUL;
 }
 /*
  * Classic WF-Alignment (Unidirectional)
@@ -260,7 +252,8 @@ int wavefront_unialign(
     if (finished) {
       // DEBUG
       // wavefront_aligner_print(stderr,wf_aligner,0,score,7,0);
-      if (align_status->status == WF_STATUS_END_REACHED) {
+      if (align_status->status == WF_STATUS_END_REACHED ||
+          align_status->status == WF_STATUS_END_UNREACHABLE) {
         wavefront_unialign_terminate(wf_aligner,score);
       }
       return align_status->status;
@@ -275,10 +268,8 @@ int wavefront_unialign(
     // DEBUG
     //wavefront_aligner_print(stderr,wf_aligner,score,score,7,0);
   }
-  // Return OK
-  align_status->score = score;
-  align_status->status = WF_STATUS_SUCCESSFUL;
-  return WF_STATUS_SUCCESSFUL;
+  // Unreachable code
+  return WF_STATUS_OK;
 }
 /*
  * Display

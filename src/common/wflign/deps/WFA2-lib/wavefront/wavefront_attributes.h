@@ -59,6 +59,8 @@ typedef enum {
 typedef struct {
   // Mode
   alignment_span_t span;   // Alignment form (End-to-end/Ends-free)
+  // Extension
+  bool extension;          // Activate extension-like alignment
   // Ends-free
   int pattern_begin_free;  // Allow free-gap at the beginning of the pattern
   int pattern_end_free;    // Allow free-gap at the end of the pattern
@@ -71,7 +73,7 @@ typedef struct {
  */
 typedef struct {
   // Limits
-  int max_alignment_score;       // Maximum score allowed before quit
+  int max_alignment_steps;       // Maximum WFA-steps allowed before quit
   // Probing intervals
   int probe_interval_global;     // Score-ticks interval to check any limits
   int probe_interval_compact;    // Score-ticks interval to check BT-buffer compacting

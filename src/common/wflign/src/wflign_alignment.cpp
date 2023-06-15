@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
+#include <cassert>
 #include <vector>
 
 /*
@@ -572,7 +573,7 @@ void wflign_edit_cigar_copy(
     // Retrieve CIGAR
     char* cigar_ops;
     int cigar_length;
-    wf_aligner.getAlignmentCigar(&cigar_ops,&cigar_length);
+    wf_aligner.getAlignment(&cigar_ops,&cigar_length);
     // Allocate
     cigar_dst->cigar_ops = (char*)malloc(cigar_length);
     // Copy

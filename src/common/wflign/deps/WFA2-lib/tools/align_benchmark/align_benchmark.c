@@ -134,9 +134,7 @@ void align_pairwise_test() {
       pattern,strlen(pattern),text,strlen(text));
   // CIGAR
   fprintf(stderr,">> WFA2");
-  cigar_print_pretty(stderr,
-      pattern,strlen(pattern),text,strlen(text),
-      wf_aligner->cigar,wf_aligner->mm_allocator);
+  cigar_print_pretty(stderr,wf_aligner->cigar,pattern,strlen(pattern),text,strlen(text));
   fprintf(stderr,"SCORE: %d \n",cigar_score_gap_affine(
       wf_aligner->cigar,&affine_penalties));
   // Plot
@@ -225,7 +223,7 @@ wavefront_aligner_t* align_input_configure_wavefront(
   attributes.plot.align_level = (parameters.plot < 0) ? -1 : parameters.plot - 1;
   attributes.system.verbose = parameters.verbose;
   attributes.system.max_memory_abort = parameters.wfa_max_memory;
-  attributes.system.max_alignment_score = parameters.wfa_max_score;
+  attributes.system.max_alignment_steps = parameters.wfa_max_steps;
   attributes.system.max_num_threads = parameters.wfa_max_threads;
   // Allocate
   return wavefront_aligner_new(&attributes);
@@ -478,7 +476,8 @@ void align_benchmark_sequential() {
     // mm_allocator_print(stderr,align_input.wf_aligner->mm_allocator,false);
     // mm_allocator_print(stderr,align_input.wf_aligner->bialigner->alg_forward->mm_allocator,false);
     // mm_allocator_print(stderr,align_input.wf_aligner->bialigner->alg_reverse->mm_allocator,false);
-    // mm_allocator_print(stderr,align_input.wf_aligner->bialigner->alg_subsidiary->mm_allocator,false);
+    // mm_allocator_print(stderr,align_input.wf_aligner->bialigner->wf_forward_base->mm_allocator,false);
+    // mm_allocator_print(stderr,align_input.wf_aligner->bialigner->wf_reverse_base->mm_allocator,false);
     // Plot
     if (parameters.plot != 0) align_benchmark_plot_wf(&align_input,seqs_processed);
   }

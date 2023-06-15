@@ -57,11 +57,11 @@ int main(int argc,char* argv[]) {
   // Create a WFAligner
   WFAlignerGapAffine aligner(1,0,1,WFAligner::Alignment,WFAligner::MemoryHigh);
   // Align
-  aligner.alignEnd2EndLambda(match_function,NULL,patternLength,textLength);
+  aligner.alignEnd2End(match_function,NULL,patternLength,textLength);
   cout << "WFA-Alignment returns score " << aligner.getAlignmentScore() << endl;
 
   // Print CIGAR
-  string cigar = aligner.getAlignmentCigar();
+  string cigar = aligner.getAlignment();
   cout << "PATTERN: " << pattern  << endl;
   cout << "TEXT: " << text  << endl;
   cout << "CIGAR: " << cigar  << endl;
