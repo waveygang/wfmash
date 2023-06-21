@@ -104,7 +104,7 @@ void parse_args(int argc,
                                                        {'G', "wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
     args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 256]", {'j', "wflign-min-wf-len"});
-    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 512]", {'q', "wflign-max-disttance"});
+    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 512/(estimated_identity^2)]", {'q', "wflign-max-disttance"});
 
     // patching parameter
     args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
@@ -311,7 +311,7 @@ void parse_args(int argc,
         }
         align_parameters.wflign_max_distance_threshold = args::get(wflign_max_distance_threshold);
     } else {
-        align_parameters.wflign_max_distance_threshold = 512;
+        align_parameters.wflign_max_distance_threshold = -1;
     }
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
