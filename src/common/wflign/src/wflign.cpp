@@ -562,11 +562,9 @@ void WFlign::wflign_affine_wavefront(
                         wfa::WFAligner::MemoryUltralow);
         wflambda_aligner->setHeuristicNone(); // It should help
         if (wflign_max_distance_threshold < -1) {
-            wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, (int) (512.0 / (mashmap_estimated_identity*mashmap_estimated_identity)));
+            wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, (int) (2048.0 / (mashmap_estimated_identity*mashmap_estimated_identity)));
         } else {
-            // TODO: to restore
-            //wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, wflign_max_distance_threshold);
-            wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, (int) ((float) wflign_max_distance_threshold / (mashmap_estimated_identity*mashmap_estimated_identity)));
+            wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, wflign_max_distance_threshold);
         }
 
         // Save computed alignments in a pair-indexed map
