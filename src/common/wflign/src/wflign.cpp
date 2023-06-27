@@ -50,6 +50,8 @@ WFlign::WFlign(
     const int wflign_gap_opening_score,
     const int wflign_gap_extension_score,
     const float wflign_max_mash_dist,
+    const int wflign_min_wavefront_length,
+    const int wflign_max_distance_threshold,
     const uint64_t wflign_max_len_major,
     const uint64_t wflign_max_len_minor,
     const int erode_k) {
@@ -64,6 +66,8 @@ WFlign::WFlign(
     this->wflign_gap_opening_score = wflign_gap_opening_score;
     this->wflign_gap_extension_score = wflign_gap_extension_score;
     this->wflign_max_mash_dist = wflign_max_mash_dist;
+    this->wflign_min_wavefront_length = wflign_min_wavefront_length;
+    this->wflign_max_distance_threshold = wflign_max_distance_threshold;
     this->wflign_max_len_major = wflign_max_len_major;
     this->wflign_max_len_minor = wflign_max_len_minor;
     this->erode_k = erode_k;
@@ -556,7 +560,12 @@ void WFlign::wflign_affine_wavefront(
                         wflambda_affine_penalties.gap_extension,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
-        wflambda_aligner->setHeuristicNone();
+        wflambda_aligner->setHeuristicNone(); // It should help
+        if (wflign_max_distance_threshold <= 0) {
+            wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, (int) (2048.0 / (mashmap_estimated_identity*mashmap_estimated_identity)));
+        } else {
+            wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, wflign_max_distance_threshold);
+        }
 
         // Save computed alignments in a pair-indexed map
         robin_hood::unordered_flat_map<uint64_t,alignment_t*> alignments;

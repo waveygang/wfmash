@@ -79,7 +79,7 @@ void parse_args(int argc,
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
-    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 100k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 50k]", {'c', "chain-gap"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
@@ -103,6 +103,9 @@ void parse_args(int argc,
                                                        "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                                        {'G', "wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
+    args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
+    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 2048/(estimated_identity^2)]", {'q', "wflign-max-disttance"});
+
     // patching parameter
     args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
     args::ValueFlag<std::string> wflign_max_len_minor(alignment_opts, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
@@ -291,6 +294,26 @@ void parse_args(int argc,
         align_parameters.wflign_max_mash_dist = -1;
     }
 
+    if (wflign_min_wavefront_length) {
+        if (args::get(wflign_min_wavefront_length) <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, min wavefront length for heuristic WFlign must be greater than 0." << std::endl;
+            exit(1);
+        }
+        align_parameters.wflign_min_wavefront_length = args::get(wflign_min_wavefront_length);
+    } else {
+        align_parameters.wflign_min_wavefront_length = 1024;
+    }
+
+    if (wflign_max_distance_threshold) {
+        if (args::get(wflign_max_distance_threshold) <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, max distance threshold for heuristic WFlign must be greater than 0." << std::endl;
+            exit(1);
+        }
+        align_parameters.wflign_max_distance_threshold = args::get(wflign_max_distance_threshold);
+    } else {
+        align_parameters.wflign_max_distance_threshold = -1;
+    }
+
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
@@ -350,7 +373,7 @@ void parse_args(int argc,
         }
         map_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 100000;
+        map_parameters.chain_gap = 50000;
     }
 
     if (drop_low_map_pct_identity) {

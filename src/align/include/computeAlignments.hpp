@@ -496,6 +496,8 @@ namespace align
                 param.wflign_gap_opening_score,
                 param.wflign_gap_extension_score,
                 param.wflign_max_mash_dist,
+                param.wflign_min_wavefront_length,
+                param.wflign_max_distance_threshold,
                 param.wflign_max_len_major,
                 param.wflign_max_len_minor,
                 param.wflign_erode_k);
