@@ -46,12 +46,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 #
 # WFA2-lib Build
-#
-add_custom_target(
-        wfa_lib
-        COMMAND make clean all
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA2-lib
-)
+# use CMakelists to build rather than Makefile
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA2-lib)
 
 #
 # WFling
@@ -94,4 +90,3 @@ target_include_directories(
         deps/PicoSHA2
         deps/robin-hood-hashing
         deps/WFA2-lib)
-add_dependencies(libwflign_static wfa_lib)

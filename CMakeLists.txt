@@ -44,10 +44,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-#add_subdirectory(src/common/wflign/deps/WFA2-lib EXCLUDE_FROM_ALL)
-#add_subdirectory(src/common/wflign/deps/wflambda EXCLUDE_FROM_ALL)
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
-#add_subdirectory(src/common/abseil-cpp)
 
 add_executable(wfmash
   src/common/utils.cpp
@@ -57,7 +54,6 @@ target_include_directories(wfmash PRIVATE
   src/common
   src/common/wflign/deps
   src/common/wflign/deps/WFA2-lib
-  #src/common/wflign/abseil-cpp
   )
 target_link_directories(wfmash PRIVATE
   src/common/wflign/deps/WFA2-lib/lib)
@@ -72,7 +68,6 @@ target_link_libraries(wfmash
   wfacpp
   jemalloc
   z
-  #absl::flat_hash_map
 )
 
 install(TARGETS wfmash DESTINATION bin)
