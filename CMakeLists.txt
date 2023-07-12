@@ -73,6 +73,15 @@ target_link_libraries(wfmash
 
 install(TARGETS wfmash DESTINATION bin)
 
+install(TARGETS wfa2cpp
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+install(TARGETS wfa2
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+
 # version stuff
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/include)
 execute_process(COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src)
