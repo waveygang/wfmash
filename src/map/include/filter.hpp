@@ -12,6 +12,8 @@
 #include <set>
 #include <fstream>
 #include <zlib.h>
+#include <functional>
+#include <tuple>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -89,6 +91,37 @@ namespace skch
 
                 vec[*it].discard = 0;
                 ++kept;
+            }
+
+            // check for the case where there are multiple best mappings > secondaryToKeep
+            // which have the same score
+            // we will hash the mapping struct and keep the one with the secondaryToKeep with the lowest hash value
+            if (kept > secondaryToKeep) {
+                // we will use hashes of the mapping structs to break ties
+                // first we'll make a vector of the mappings including the hashes
+                std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
+                for(auto it = L.begin(); it != L.end(); it++)
+                {
+                    if(vec[*it].discard == 0)
+                    {
+                        score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
+                    }
+                }
+                // now we'll sort the vector by score and hash
+                std::sort(score_and_hash.begin(), score_and_hash.end());
+                // reset kept counter
+                kept = 0;
+                for (auto& x : score_and_hash) {
+                    std::get<2>(x)->discard = 1;
+                }
+                // now we mark the best to keep
+                for (auto& x : score_and_hash) {
+                    if (kept > secondaryToKeep) {
+                        break;
+                    }
+                    std::get<2>(x)->discard = 0;
+                    ++kept;
+                }
             }
           }
       };
