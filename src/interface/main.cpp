@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
                 for(const auto &fileName : map_parameters.querySequences)
                 {
                     seqiter::for_each_seq_in_file(
-                            fileName,
+						    fileName, {}, "", 
                             [&](const std::string& seq_name,
                                     const std::string& seq) {
                                 seqName_to_seqCounterAndLen[seq_name] = std::make_pair(seqCounter++,  seq.length());
@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
                 // if not, warn that this is expensive
                 std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
                 seqiter::for_each_seq_in_file(
-                        fileName,
+					    fileName, {}, "",
                         [&](const std::string& seq_name,
                                 const std::string& seq) {
                             outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";

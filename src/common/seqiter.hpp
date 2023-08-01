@@ -2,12 +2,15 @@
 
 #include <string>
 #include <functional>
+#include <unordered_set>
 #include "gzstream.h"
 
 namespace seqiter {
 
 void for_each_seq_in_file(
     const std::string& filename,
+	const std::unordered_set<std::string>& keep_seq,
+	const std::string& keep_prefix,
     const std::function<void(const std::string&, const std::string&)>& func) {
     // detect file type
     bool input_is_fasta = false;
@@ -28,25 +31,35 @@ void for_each_seq_in_file(
         while (in.good()) {
             std::string name = line.substr(1, line.find(" ")-1);
             std::string seq;
+			bool keep = (keep_prefix.empty() || name.substr(0, keep_prefix.length()) == keep_prefix)
+				&& (keep_seq.empty() || keep_seq.find(name) != keep_seq.end());
             while (std::getline(in, line)) {
                 if (line[0] == '>') {
                     // this is the header of the next sequence
                     break;
                 } else {
-                    seq.append(line);
+                    if (keep) {
+						seq.append(line);
+					}
                 }
             }
-            func(name, seq);
+			if (keep) {
+				func(name, seq);
+			}
         }
     } else if (input_is_fastq) {
         while (in.good()) {
             std::string name = line.substr(1, line.find(" ")-1);
             std::string seq;
+			bool keep = (keep_prefix.empty() || name.substr(0, keep_prefix.length()) == keep_prefix)
+				&& (keep_seq.empty() || keep_seq.find(name) != keep_seq.end());
             std::getline(in, seq); // sequence
             std::getline(in, line); // delimiter
             std::getline(in, line); // quality
             std::getline(in, line); // next header
-            func(name, seq);
+			if (keep) {
+				func(name, seq);
+			}
         }
     }
 }
