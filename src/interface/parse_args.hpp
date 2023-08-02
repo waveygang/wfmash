@@ -77,8 +77,8 @@ void parse_args(int argc,
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
-	args::ValueFlag<std::string> target_prefix(mandatory_opts, "PREFIX", "prefix to filter target sequences by", {'P', "target-prefix"});
-	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to allow", {'A', "target-list"});
+	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose name starts with this prefix", {'P', "target-prefix"});
+	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'A', "target-list"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: 50k]", {'c', "chain-gap"});
