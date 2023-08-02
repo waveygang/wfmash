@@ -214,7 +214,7 @@ namespace align
                       MappingBoundaryRow currentRecord;
 
                       seqiter::for_each_seq_in_file(
-                          fileName,
+                          fileName, {}, "", 
                           [&](const std::string& qSeqId,
                               const std::string& _seq) {
                               ++total_seqs;
