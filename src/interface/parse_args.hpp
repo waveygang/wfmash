@@ -75,7 +75,7 @@ void parse_args(int argc,
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
-	args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer in all-vs-all mode", {'L', "lower-triangular"});
+	args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
 	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose name starts with this prefix", {'P', "target-prefix"});
@@ -208,9 +208,19 @@ void parse_args(int argc,
         skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
 
+	if (target_sequence_file && map_parameters.querySequences.empty()
+		&& map_parameters.refSequences.size() == 1
+		&& !map_parameters.lower_triangular
+		&& map_parameters.target_list.empty()
+		&& map_parameters.target_prefix.empty()) {
+		std::cerr << "[wfmash] Warning: Detected single file all-vs-all mapping with no other options. "
+				  << "Consider adding -L, --lower-triangular for efficiency." << std::endl;
+	}
+
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
         map_parameters.skip_self = true;
+		std::cerr << "[wfmash] Skipping self mappings for single file all-vs-all mapping." << std::endl;
         map_parameters.querySequences.push_back(map_parameters.refSequences.back());
         align_parameters.querySequences.push_back(align_parameters.refSequences.back());
     }

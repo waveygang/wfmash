@@ -257,13 +257,13 @@ namespace skch
        * @param[in]   input   mappings
        * @return              void
        */
-      void filterSelfingLongToShorts(MappingResultsVector_t &readMappings)
+      void filterLongToShorts(MappingResultsVector_t &readMappings)
       {
-          if (param.skip_self || param.skip_prefix) {
+          if (param.lower_triangular) {
               readMappings.erase(
                   std::remove_if(readMappings.begin(),
                                  readMappings.end(),
-                                 [&](MappingResult &e){ return e.selfMapFilter == true; }),
+                                 [&](MappingResult &e){ return e.lowerTriFilter == true; }),
                   readMappings.end());
           }
       }
@@ -443,8 +443,9 @@ namespace skch
             }
         }
 
-        // remove self-mode don't-maps
-        this->filterSelfingLongToShorts(output->readMappings);
+        // if we're in lower triangular mode
+        // remove mappings where the query is longer than the target
+        this->filterLongToShorts(output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
         this->filterFalseHighIdentity(output->readMappings);
@@ -721,9 +722,7 @@ namespace skch
                 res.conservedSketches = l2.sharedSketchSize;
                 res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
                 res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
-
-                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
-
+                res.lowerTriFilter = (param.lower_triangular && Q.fullLen > ref.len);
                 //Compute additional statistics -> strand, reference complexity
                 {
                   SlideMapper<Q_Info> slidemap(Q);
