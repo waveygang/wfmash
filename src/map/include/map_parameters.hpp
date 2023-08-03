@@ -46,6 +46,7 @@ struct Parameters
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
     bool split;                                       //Split read mapping (done if this is true)
+	bool lower_triangular;                            //only output lower triangle of the mapping matrix
     bool skip_self;                                   //skip self mappings
     bool skip_prefix;                                 //skip mappings to sequences with the same prefix
     char prefix_delim;                                //the prefix delimiter

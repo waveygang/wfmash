@@ -75,6 +75,7 @@ void parse_args(int argc,
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
+	args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer in all-vs-all mode", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
 	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose name starts with this prefix", {'P', "target-prefix"});
@@ -167,6 +168,12 @@ void parse_args(int argc,
     } else {
         map_parameters.skip_self = false;
     }
+
+	if (lower_triangular) {
+		map_parameters.lower_triangular = true;
+	} else {
+		map_parameters.lower_triangular = false;
+	}
 
     if (skip_prefix) {
         map_parameters.skip_prefix = true;
