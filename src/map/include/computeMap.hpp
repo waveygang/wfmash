@@ -89,6 +89,11 @@ namespace skch
       //used only if one-to-one filtering is ON
       std::vector<ContigInfo> qmetadata;
 
+      //Vector for obtaining group from refId
+      //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
+      std::vector<int> refIdGroup;
+
+
     public:
 
       /**
@@ -101,12 +106,58 @@ namespace skch
           PostProcessResultsFn_t f = nullptr) :
         param(p),
         refSketch(refsketch),
-        processMappingResults(f)
+        processMappingResults(f),
+        refIdGroup(refsketch.metadata.size())
     {
+      if (p.skip_prefix)
+      {
+        this->setRefGroups();
+      }
       this->mapQuery();
     }
 
     private:
+
+      /**
+       * @brief   Sets the groups of reference contigs based on prefix
+       * Assumes that prefixes are grouped together in the input order
+       */
+      void setRefGroups()
+      {
+        int group = 0;
+        int start_idx = 0;
+        int idx = 0;
+        while (start_idx < this->refSketch.metadata.size())
+        {
+          const auto currPrefix = prefix(this->refSketch.metadata[start_idx].name, param.prefix_delim);
+          idx = start_idx;
+          while (idx < this->refSketch.metadata.size()
+              && currPrefix == prefix(this->refSketch.metadata[idx].name, param.prefix_delim))
+          {
+            this->refIdGroup[idx++] = group;
+          }
+          group++;
+          start_idx = idx;
+        }
+      }
+
+      /**
+       * @brief   Gets the ref group of a sequence based on the prefix
+       */
+      int getRefGroup(const std::string& seqName)
+      {
+        const auto queryPrefix = prefix(seqName, param.prefix_delim);
+        for (int i = 0; i < this->refSketch.metadata.size(); i++)
+        {
+          const auto currPrefix = prefix(this->refSketch.metadata[i].name, param.prefix_delim);
+          if (queryPrefix == currPrefix)
+          {
+            return this->refIdGroup[i];
+          }
+        }
+        // Doesn't belong to any ref group
+        return -1;
+      }
 
       /**
        * @brief   parse over sequences in query file and map each on the reference
@@ -328,6 +379,8 @@ namespace skch
           }
       }
 
+
+
       /**
        * @brief               main mapping function given an input read
        * @details             this function is run in parallel by multiple threads
@@ -342,6 +395,7 @@ namespace skch
         output->qseqName = input->seqName;
         output->qseqLen = input->len;
         bool split_mapping = true;
+        const int refGroup = this->getRefGroup(input->seqName);
 
         if(! param.split || input->len < param.segLength || input->len <= param.block_length)
         {
@@ -351,6 +405,7 @@ namespace skch
           Q.fullLen = input->len;
           Q.seqCounter = input->seqCounter;
           Q.seqName = input->seqName;
+          Q.refGroup = refGroup;
 
           MappingResultsVector_t l2Mappings;
 
@@ -377,6 +432,7 @@ namespace skch
             Q.fullLen = input->len;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
+            Q.refGroup = refGroup;
 
             MappingResultsVector_t l2Mappings;
 
@@ -403,6 +459,7 @@ namespace skch
             Q.len = param.segLength;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
+            Q.refGroup = refGroup;
 
             MappingResultsVector_t l2Mappings;
 
@@ -425,22 +482,18 @@ namespace skch
                           param.numMappingsForShortSequence
                           : param.numMappingsForSegment) - 1;
 
+        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {                      
+          filterByGroup(output->readMappings, n_mappings);
+        }
+
         if (split_mapping) {
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-            }
             // hardcore merge using the chain gap
             mergeMappingsInRange(output->readMappings, param.chain_gap);
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
+            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {                      
+              filterByGroup(output->readMappings, n_mappings);
             }
             // remove short chains that didn't exceed block length
             filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
-        } else {
-            // filter the non-split mappings using plane sweep
-            if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-                skch::Filter::query::filterMappings(output->readMappings, n_mappings);
-            }
         }
 
         // remove self-mode don't-maps
@@ -456,6 +509,61 @@ namespace skch
         this->sparsifyMappings(output->readMappings);
 
         return output;
+      }
+
+      /**
+       * @brief               helper to main filtering function
+       * @details             filters mappings by group
+       * @param[in]   input   unfiltered mappings
+       * @param[in]   output  filtered mappings
+       * @param[in]   input   num mappings per segment
+       * @return              void
+       */
+      void filterByGroup(
+          MappingResultsVector_t &outputMappings,
+          int n_mappings)
+      {
+        MappingResultsVector_t filteredMappings;
+        filteredMappings.reserve(outputMappings.size());
+
+        // Sort mappings by their ref position instead of query position so that we can group
+        std::sort(outputMappings.begin(), outputMappings.end(), [](const auto& a, const auto& b) 
+            { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
+        auto subrange_begin = outputMappings.begin();
+        auto subrange_end = outputMappings.begin();
+        while (subrange_end != outputMappings.end())
+        {
+          if (param.skip_prefix)
+          {
+            int currGroup = this->refIdGroup[subrange_begin->refSeqId];
+            subrange_end = std::find_if_not(subrange_begin, outputMappings.end(), [this, currGroup] (const auto& outputMappings_candidate) {
+                return currGroup == this->refIdGroup[outputMappings_candidate.refSeqId];
+            });
+          }
+          else
+          {
+            subrange_end = outputMappings.end();
+          }
+          // Use a temporary vector so that we don't need to change the filterMappings interface
+          // Would be nice to use std::span here ): 
+          std::vector<skch::MappingResult> tmpMappings(std::distance(subrange_begin, subrange_end));
+          std::move(subrange_begin, subrange_end, tmpMappings.begin());
+          std::sort(tmpMappings.begin(), tmpMappings.end(), [](const auto& a, const auto& b) 
+              { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
+          skch::Filter::query::filterMappings(tmpMappings, n_mappings);
+          std::move(tmpMappings.begin(), tmpMappings.end(), std::back_inserter(filteredMappings));
+          subrange_begin = subrange_end;
+        }
+        // Restore the original sorted order
+        //Sort the mappings by query (then reference) position
+        std::sort(
+            filteredMappings.begin(), filteredMappings.end(),
+            [](const MappingResult &a, const MappingResult &b) {
+                return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) 
+                  < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
+            });
+
+        std::swap(filteredMappings, outputMappings);
       }
 
       /**
@@ -595,7 +703,24 @@ namespace skch
               //Save the positions (Ignore high frequency hits)
               if(hitPositionList.size() < refSketch.getFreqThreshold())
               {
-                seedHitsL1.insert(seedHitsL1.end(), hitPositionList.begin(), hitPositionList.end());
+                if (!param.skip_prefix && !param.skip_self)
+                {
+                  seedHitsL1.insert(seedHitsL1.end(), hitPositionList.begin(), hitPositionList.end());
+                }
+                // Ignore seeds that we plan to skip
+                else 
+                {
+                  for (const auto& seedHit : hitPositionList)
+                  {
+                    const auto& ref = this->refSketch.metadata[seedHit.seqId];
+                    if (Q.fullLen <= ref.len                                                        // Skip when query is larger than ref
+                        && ((param.skip_self && Q.seqName != ref.name)                              // Skip when skip-self and names are equal
+                          || (param.skip_prefix && this->refIdGroup[seedHit.seqId] != Q.refGroup))) // Skip when skip-prefix and have same prefix
+                    {
+                      seedHitsL1.push_back(seedHit);
+                    }
+                  }
+                }
               }
 
             }

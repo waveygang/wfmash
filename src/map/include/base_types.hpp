@@ -211,6 +211,7 @@ namespace skch
       int sketchSize;                     //sketch size
       std::string seqName;                //sequence name
       MinimizerVec minimizerTableQuery;   //Vector of minimizers in the query
+      int refGroup;                       //Prefix group of sequence
     };
 }
 
