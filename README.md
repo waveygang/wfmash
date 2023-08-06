@@ -171,6 +171,13 @@ cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Release -DWFA_PNG_AND_TSV=ON && cmake --bu
 
 Note that this may make the tool a little bit slower.
 
+### nix
+
+If you have `nix`, build and installation in your profile are as simple as:
+
+```
+nix-build && nix-env -i ./result
+```
 
 ### Bioconda
 
