@@ -304,6 +304,23 @@ namespace skch
 
       /**
        * @brief               helper to main mapping function
+       * @details             filters long-to-short mappings if we're in an all-vs-all mode
+       * @param[in]   input   mappings
+       * @return              void
+       */
+      void filterLongToShorts(MappingResultsVector_t &readMappings)
+      {
+          if (param.lower_triangular) {
+              readMappings.erase(
+                  std::remove_if(readMappings.begin(),
+                                 readMappings.end(),
+                                 [&](MappingResult &e){ return e.lowerTriFilter == true; }),
+                  readMappings.end());
+          }
+      }
+
+      /**
+       * @brief               helper to main mapping function
        * @details             filters mappings whose identity and query/ref length don't agree
        * @param[in]   input   mappings
        * @return              void
@@ -478,6 +495,10 @@ namespace skch
             // remove short chains that didn't exceed block length
             filterWeakMappings(output->readMappings, std::floor(param.block_length / param.segLength));
         }
+
+        // if we're in lower triangular mode
+        // remove mappings where the query is longer than the target
+        this->filterLongToShorts(output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
         this->filterFalseHighIdentity(output->readMappings);
@@ -694,8 +715,8 @@ namespace skch
                   {
                     const auto& ref = this->refSketch.metadata[seedHit.seqId];
                     if (
-                        (!param.lower_triangular || Q.fullLen <= ref.len)                          // Skip when query is larger than ref
-                        && (!param.skip_self || Q.seqName != ref.name)                             // Skip when skip-self and names are equal
+                        //(!param.lower_triangular || Q.fullLen <= ref.len)                          // Skip when query is larger than ref
+                        (!param.skip_self || Q.seqName != ref.name)                             // Skip when skip-self and names are equal
                         && (!param.skip_prefix || this->refIdGroup[seedHit.seqId] != Q.refGroup))  // Skip when skip-prefix and have same prefix
                     {
                       seedHitsL1.push_back(seedHit);
@@ -823,6 +844,7 @@ namespace skch
                 res.conservedSketches = l2.sharedSketchSize;
                 res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
                 res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
+                res.lowerTriFilter = (param.lower_triangular && Q.fullLen > ref.len);
                 //Compute additional statistics -> strand, reference complexity
                 {
                   SlideMapper<Q_Info> slidemap(Q);
