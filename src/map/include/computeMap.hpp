@@ -123,7 +123,7 @@ namespace skch
         MappingResultsVector_t allReadMappings;  //Aggregate mapping results for the complete run
 
         //Create the thread pool
-        ThreadPool<InputSeqContainer, MapModuleOutput> threadPool( [this](InputSeqContainer* e){return mapModule(e);}, param.threads);
+        ThreadPool<InputSeqProgContainer, MapModuleOutput> threadPool( [this](InputSeqProgContainer* e){return mapModule(e);}, param.threads);
 
         // kind've expensive if the fasta index is not available for the query sequences,
         // but it can help people know how long we're going to take
@@ -188,14 +188,13 @@ namespace skch
                     {
                         totalReadsPickedForMapping++;
                         //Dispatch input to thread
-                        threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
+                        threadPool.runWhenThreadAvailable(new InputSeqProgContainer(seq, seq_name, seqCounter, progress));
 
                         //Collect output if available
                         while ( threadPool.outputAvailable() ) {
                             mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
                         }
                     }
-                    progress.increment(seq.size()/2);
                     seqCounter++;
                 }); //Finish reading query input file
 
@@ -362,6 +361,8 @@ namespace skch
 
           // indicate that we mapped full length
           split_mapping = false;
+
+          input->progress.increment(input->len);
         }
         else  //Split read mapping
         {
@@ -392,6 +393,8 @@ namespace skch
 
             // save the output
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+
+            input->progress.increment(param.segLength);
           }
 
           //Map last overlapping fragment to cover the whole read
@@ -417,6 +420,8 @@ namespace skch
                 });
 
             output->readMappings.insert(output->readMappings.end(), l2Mappings.begin(), l2Mappings.end());
+
+            input->progress.increment(input->len % param.segLength);
           }
         }
 
@@ -486,8 +491,6 @@ namespace skch
             //Report mapping
             reportReadMappings(output->readMappings, output->qseqName, outstrm);
           }
-
-          progress.increment(output->qseqLen/2 + (output->qseqLen % 2 != 0));
 
           delete output;
         }
