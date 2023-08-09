@@ -9,6 +9,7 @@
 
 #include <tuple>
 #include <vector>
+#include "common/progress.hpp"
 
 namespace skch
 {
@@ -186,6 +187,27 @@ namespace skch
           , seqCounter(seqcount) { }
   };
 
+
+  // Same as InputSeqContainer but with shared progress meter
+  struct InputSeqProgContainer : InputSeqContainer
+  {
+    using InputSeqContainer::InputSeqContainer;
+    progress_meter::ProgressMeter& progress;    //progress meter (shared)
+                                                
+
+    /*
+     * @brief               constructor
+     * @param[in] kseq_seq  complete read or reference sequence
+     * @param[in] kseq_id   sequence id name
+     * @param[in] len       length of sequence
+     * @param[in] progress  progress meter
+     */
+      InputSeqProgContainer(const std::string& s, const std::string& id, seqno_t seqcount, progress_meter::ProgressMeter& pm)
+          : InputSeqContainer(s, id, seqcount)
+          , progress(pm) { }
+  };
+
+
   //Output type of map function
   struct MapModuleOutput
   {
@@ -199,6 +221,7 @@ namespace skch
       this->readMappings.clear();
     }
   };
+
 
   //Information about fragment sequence during L1/L2 mapping
   template <typename MinimizerVec>
