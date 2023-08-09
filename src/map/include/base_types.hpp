@@ -222,6 +222,7 @@ namespace skch
     }
   };
 
+
   //Information about fragment sequence during L1/L2 mapping
   template <typename MinimizerVec>
     struct QueryMetaData
