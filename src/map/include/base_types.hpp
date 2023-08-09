@@ -222,20 +222,6 @@ namespace skch
     }
   };
 
-  //Output type of map function
-  struct MapModuleOutput
-  {
-    MappingResultsVector_t readMappings;  //read mapping coordinates
-    std::string qseqName;                 //query sequence id
-    offset_t qseqLen;                     //query sequence length
-
-    //Function to erase all output mappings
-    void reset()
-    {
-      this->readMappings.clear();
-    }
-  };
-
   //Information about fragment sequence during L1/L2 mapping
   template <typename MinimizerVec>
     struct QueryMetaData

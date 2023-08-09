@@ -386,7 +386,7 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      MapModuleOutput* mapModule (InputSeqContainer* input)
+      MapModuleOutput* mapModule (InputSeqProgContainer* input)
       {
         MapModuleOutput* output = new MapModuleOutput();
 
