@@ -108,7 +108,7 @@ namespace skch
                     }
                 }
                 // now we'll sort the vector by score and hash
-                std::sort(score_and_hash.begin(), score_and_hash.end());
+                std::sort(score_and_hash.begin(), score_and_hash.end(), std::greater{});
                 // reset kept counter
                 kept = 0;
                 for (auto& x : score_and_hash) {
