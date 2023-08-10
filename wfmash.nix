@@ -2,12 +2,12 @@
 
 stdenv.mkDerivation rec {
   pname = "wfmash";
-  version = "0.10.6";
+  version = "0.10.7";
 
   src = fetchFromGitHub {
     owner = "waveygang"; 
     repo = "wfmash";
-    rev = "41aebc031d795e477c09620943dad8453cd58c34";
+    rev = "afb6dc4d4b7e8def038544e25e68021e0aeaabfe";
     sha256 = "0n7j1x3jd9zy25pqsal8qwnpgnqbdq7xnppsbiw8m4zbhgn1gc9g";
   };
 
