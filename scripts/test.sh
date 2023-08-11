@@ -24,7 +24,9 @@ awk 'BEGIN{FS=OFS="\t"}{
     }
 }' $PAF.sequences.bed $PAF.overlap.bed >> $PAF.coverage.txt
 
-cat $PAF.coverage.txt | column -t
+cat \
+    <(head -n 1 $PAF.coverage.txt) \
+    <(sed '1d' $PAF.coverage.txt | sort -k 2,2nr -k 1,1) | column -t
 
 awk -v threshold=$COVERAGE 'NR > 1 && $2 < threshold {
     print "Low coverage for sequence " $1 " with coverage " $2;
