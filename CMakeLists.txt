@@ -1,5 +1,10 @@
-cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
-project(wfmash VERSION 0.0.1)
+cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+project(wfmash)
+
+enable_testing()
+
+include(CheckIPOSupported) # adds lto
+check_ipo_supported(RESULT ipo_supported OUTPUT output)
 
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
@@ -8,6 +13,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard it not allowed.
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+option(BUILD_STATIC "Build static binary" OFF)
+
+if (BUILD_STATIC)
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  set(BUILD_SHARED_LIBS OFF)
+  set(CMAKE_EXE_LINKER_FLAGS "-static")
+endif ()
+
+find_package(PkgConfig REQUIRED)
+include(FindCURL) # for htslib?
+find_package(ZLIB REQUIRED)
+
 
 #set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) # does not work
 
@@ -20,9 +38,16 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-    #set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
-    set(EXTRA_FLAGS "-Ofast -march=native")
     set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
+    set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
+    # set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
+    if (NOT EXTRA_FLAGS)
+      set(EXTRA_FLAGS "-Ofast -march=native")
+    endif()
+    # set(EXTRA_FLAGS "-fprofile-dir=/home/wrk/tmp/pgo -fprofile-generate=/home/wrk/tmp/pgo")
+    # set(EXTRA_FLAGS "-Ofast -march=native -fprofile-dir=/home/wrk/tmp/pgo -fprofile-generate=/home/wrk/tmp/pgo")
+    # set(EXTRA_FLAGS "-Ofast -march=native -fprofile-use=/home/wrk/tmp/pgo -fprofile-correction")
+    # set(EXTRA_FLAGS "-fprofile-use=/home/wrk/tmp/pgo -fprofile-correction")
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
@@ -66,10 +91,19 @@ target_link_libraries(wfmash
   libwflign_static
   hts
   rt
-  wfa2cpp
+  wfa2cpp_static
   jemalloc
+  lzma
+  bz2
   z
-)
+  )
+
+configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
+
+add_test(
+  NAME wfmash-test
+  COMMAND ./build/bin/wfmash data/LPA.subset.fa.gz -p 80 -n 5 -t 8
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
 
