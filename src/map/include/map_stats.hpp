@@ -35,6 +35,7 @@ namespace skch
    */
   namespace Stat
   {
+
     /**
      * @brief         jaccard estimate to mash distance
      * @param[in] j   jaccard estimate
@@ -49,7 +50,7 @@ namespace skch
       if(j == 1)
         return 0.0; //jaccard estimate 1 -> 0.0 mash distance
 
-      float mash_dist = (-1.0 / k) * log(2.0 * j/(1+j) );
+      float mash_dist = 1 - std::pow(2*j / (1+j), 1.0/k);
       return mash_dist;
     }
 
@@ -61,7 +62,8 @@ namespace skch
      */
     inline float md2j(float d, int k)
     {
-      float jaccard = 1.0 / (2.0 * exp( k*d ) - 1.0);
+      float sim = 1 - d;
+      float jaccard = std::pow(sim, k) / (2 - std::pow(sim, k));
       return jaccard;
     }
 
@@ -176,9 +178,14 @@ namespace skch
      * @param[in] lengthReference reference length
      * @return                    p-value
      */
-    inline double estimate_pvalue (int s, int k, int alphabetSize, 
+    inline double estimate_pvalue (
+        int s, 
+        int k, 
+        int alphabetSize, 
         float identity,
-        int64_t lengthQuery, uint64_t lengthReference, float confidence_interval)
+        int64_t lengthQuery, 
+        uint64_t lengthReference, 
+        float confidence_interval)
     {
       //total space size of k-mers
       double kmerSpace = pow(alphabetSize, k);
@@ -224,15 +231,19 @@ namespace skch
      * @param[in] lengthReference   reference length
      * @return                      optimal window size for sketching
      */
-    inline int64_t recommendedWindowSize(double pValue_cutoff, float confidence_interval,
-        int k, int alphabetSize,
+    inline int64_t recommendedSketchSize(
+        double pValue_cutoff, 
+        float confidence_interval,
+        int k, 
+        int alphabetSize,
         float identity,
-        int64_t segmentLength, uint64_t lengthReference)
+        int64_t segmentLength, 
+        uint64_t lengthReference)
     {
-        int64_t lengthQuery = segmentLength;
+      int64_t lengthQuery = segmentLength - k;
 
       int optimalSketchSize;
-      for (optimalSketchSize = 10; optimalSketchSize < lengthQuery; optimalSketchSize += 50) {
+      for (optimalSketchSize = 10; optimalSketchSize < lengthQuery; optimalSketchSize += 10) {
         //Compute pvalue
         double pVal = estimate_pvalue(optimalSketchSize, k, alphabetSize, identity, lengthQuery, lengthReference, confidence_interval);
 
@@ -243,10 +254,7 @@ namespace skch
         }
       }
 
-      int64_t w =  (2.0 * lengthQuery)/optimalSketchSize;
-
-      // 1 <= w <= lengthQuery
-      return std::min(std::max(w,(int64_t)1), lengthQuery);
+      return optimalSketchSize;
     }
   }
 }

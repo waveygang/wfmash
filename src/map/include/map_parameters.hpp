@@ -8,8 +8,11 @@
 
 #include <vector>
 #include <unordered_set>
+#include <filesystem>
+namespace stdfs = std::filesystem;
 
 #include "common/ALeS.hpp"
+#include "base_types.hpp"
 
 namespace skch
 {
@@ -30,14 +33,17 @@ struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
     float kmer_pct_threshold;                         //use only kmers not in the top kmer_pct_threshold %-ile
-    int64_t windowSize;                               //window size used for sketching
-    int64_t segLength;                                //For split mapping case, this represents the fragment length
+    offset_t segLength;                                //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
-    int64_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
-    int64_t chain_gap;                                // max distance for 2d range union-find mapping chaining
+    offset_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
+    offset_t chain_gap;                                // max distance for 2d range union-find mapping chaining
     int alphabetSize;                                 //alphabet size
-    uint64_t referenceSize;                           //Approximate reference size
+    offset_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
+    bool stage2_full_scan;                            //Instead of using the best intersection for a given candidate region, compute the minhash for every position in the window
+    bool stage1_topANI_filter;                        //Use the ANI filter in stage 1
+    float ANIDiff;                                    //ANI distance threshold below best mapping to retain in stage 1 filtering
+    float ANIDiffConf;                                //Confidence of stage 1 ANI filtering threshold
     int filterMode;                                   //filtering mode in mashmap
     uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment
     uint32_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
@@ -45,16 +51,23 @@ struct Parameters
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
+    stdfs::path saveIndexFilename;                    //output file name of index
+    stdfs::path loadIndexFilename;                    //input file name of index
     bool split;                                       //Split read mapping (done if this is true)
-	bool lower_triangular;                            //only output lower triangle of the mapping matrix
+    bool lower_triangular;                            // set to true if we should filter out half of the mappings
     bool skip_self;                                   //skip self mappings
     bool skip_prefix;                                 //skip mappings to sequences with the same prefix
     char prefix_delim;                                //the prefix delimiter
-	std::string target_list;  					      //file containing list of target sequences
-	std::string target_prefix; 					      //prefix for target sequences to use
+    std::string target_list;                          //file containing list of target sequences
+    std::string target_prefix;                        //prefix for target sequences to use
     bool mergeMappings;                               //if we should merge consecutive segment mappings
     bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
+    bool report_ANI_percentage;                       //true if ANI should be in [0,100] as opposed to [0,1] (this is necessary for wfmash
+    bool filterLengthMismatches;                      //true if filtering out length mismatches
+    float kmerComplexityThreshold;                    //minimum kmer complexity to consider (default 0)
 
+
+    int sketchSize;
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
@@ -62,6 +75,7 @@ struct Parameters
     bool world_minimizers;
     uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
 
+    bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //
 };
 
@@ -80,7 +94,10 @@ namespace fixed
 
 double pval_cutoff = 1e-3;                          // p-value cutoff for determining window size
 float confidence_interval = 0.95;                   // Confidence interval to relax jaccard cutoff for mapping (0-1)
-float percentage_identity = 0.90;                   // Percent identity in the mapping step
+float percentage_identity = 0.85;                   // Percent identity in the mapping step
+float ANIDiff = 0.0;                                // Stage 1 ANI diff threshold
+float ANIDiffConf = 0.999;                          // ANI diff confidence
+std::string VERSION = "3.1.0";                      // Version of MashMap
 }
 }
 
