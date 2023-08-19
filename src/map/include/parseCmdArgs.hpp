@@ -10,6 +10,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <sstream>
 
 //Own includes
 #include "map/include/map_parameters.hpp"
@@ -29,13 +30,16 @@ namespace skch
   void initCmdParser(CommandLineProcessing::ArgvParser &cmd)
   {
     cmd.setIntroductoryDescription("-----------------\n\
-Mashmap is an approximate long read or contig mapper based on Jaccard similarity\n\
+Mashmap is an pproximate long read or contig mapper based on Jaccard similarity\n\
 -----------------\n\
 Example usage: \n\
 $ mashmap -r ref.fa -q seq.fq [OPTIONS]\n\
 $ mashmap --rl reference_files_list.txt -q seq.fq [OPTIONS]");
 
     cmd.setHelpOption("h", "help", "Print this help page");
+
+    cmd.defineOption("version", "Print MashMap version");
+    cmd.defineOptionAlternative("version","v");
 
     cmd.defineOption("ref", "an input reference file (fasta/fastq)[.gz]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("ref","r");
@@ -53,19 +57,71 @@ $ mashmap --rl reference_files_list.txt -q seq.fq [OPTIONS]");
 sequences shorter than segment length will be ignored", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("segLength","s");
 
+    cmd.defineOption("sketchSize", "Number of sketch elements", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("sketchSize","J");
+
+    cmd.defineOption("dense", "Use dense sketching to yield higher ANI estimation accuracy. [disabled by default]");
+
+    cmd.defineOption("blockLength", "keep merged mappings supported by homologies of at least this length [default: segmentLength]", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("blockLength", "l");
+
+    cmd.defineOption("chainGap", "chain mappings closer than this distance in query and target, retaining mappings in best chain [default: segmentLength]", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("chainGap", "c");
+
+    cmd.defineOption("numMappingsForSegment", "number of mappings to retain for each segment [default: 1]", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("numMappingsForSegment", "n");
+
+    cmd.defineOption("numMappingsForShortSeq", "number of mappings to retain for each sequence shorter than segment length [default: 1]", ArgvParser::OptionRequiresValue);
+    
+    cmd.defineOption("saveIndex", "Prefix of index files to save. PREFIX.map and PREFIX.index files will be created", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("loadIndex", "Prefix of index files to load, where PREFIX.map and PREFIX.index are the files to be loaded", ArgvParser::OptionRequiresValue);
+
+
     cmd.defineOption("noSplit", "disable splitting of input sequences during mapping [enabled by default]");
 
     cmd.defineOption("perc_identity", "threshold for identity [default : 85]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("perc_identity","pi");
 
+    cmd.defineOption("dropLowMapId", "drop mappings with estimated identity below --perc_identity=\%");
+    cmd.defineOptionAlternative("dropLowMapId", "K");
+
     cmd.defineOption("threads", "count of threads for parallel execution [default : 1]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("threads","t");
 
-    cmd.defineOption("output", "output file name [default : mashmap.out]", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("output", "output file name [default : mashmap.out ]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("output","o");
 
-    cmd.defineOption("kmer", "kmer size <= 16 [default : 16]", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("kmer", "kmer size [default : 19]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("kmer","k");
+
+    cmd.defineOption("kmerThreshold", "ignore the top \% most-frequent kmer window [default: 0.001]", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("kmerComplexity", "threshold for kmer complexity [0, 1] [default : 0.0]", ArgvParser::OptionRequiresValue);
+
+
+    //cmd.defineOption("shortenCandidateRegions", "Only compute rolling minhash score for small regions around positions where the intersection of reference and query minmers is locally maximal. Results in slighty faster runtimes at the cost of mapping placement and ANI prediction.");
+
+    cmd.defineOption("noHgFilter", "Don't use the hypergeometric filtering and instead use the MashMap2 first pass filtering.");
+    cmd.defineOption("hgFilterAniDiff", "Filter out mappings unlikely to be this ANI less than the best mapping [default: 0.0]", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("hgFilterConf", "Confidence value for the hypergeometric filtering [default: 0.999]", ArgvParser::OptionRequiresValue);
+
+    cmd.defineOption("filterLengthMismatches", "Filter mappings where the ratio of reference/query mapped lengths disagrees with the ANI threshold");
+
+    cmd.defineOption("lowerTriangular", "Only map sequence i to sequence j if i > j.");
+
+    cmd.defineOption("skipSelf", "skip self mappings when the query and target name is the same (for all-vs-all mode)");
+    cmd.defineOptionAlternative("skipSelf", "X");
+
+    cmd.defineOption("skipPrefix", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("skipPrefix", "Y");
+
+    cmd.defineOption("targetPrefix", "Only index reference sequences beginning with this prefix", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("targetList", "file containing list of target sequence names", ArgvParser::OptionRequiresValue);
+
+    cmd.defineOption("sparsifyMappings", "keep this fraction of mappings", ArgvParser::OptionRequiresValue);
+    cmd.defineOptionAlternative("sparsifyMappings", "x");
+
+    cmd.defineOption("noMerge", "don't merge consecutive segment-level mappings");
+    cmd.defineOptionAlternative("noMerge", "M");
 
     cmd.defineOption("filter_mode", "filter modes in mashmap: 'map', 'one-to-one' or 'none' [default: map]\n\
 'map' computes best mappings for each query sequence\n\
@@ -74,8 +130,8 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
                     ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("filter_mode", "f");
 
-    cmd.defineOption("secondaries", "number of secondary mappings in 'map' filter_mode [default : 0]", ArgvParser::OptionRequiresValue);
-    cmd.defineOptionAlternative("secondaries", "n");
+    cmd.defineOption("legacy", "MashMap2 output format");
+    cmd.defineOption("reportPercentage", "Report predicted ANI values in [0, 100] instead of [0,1] (necessary for use with wfmash)");
   }
 
   /**
@@ -119,49 +175,15 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
   }
 
   bool ends_with_string(std::string const& str, std::string const& what) {
-      return what.size() <= str.size()
-      && str.find(what, str.size() - what.size()) != str.npos;
+    return what.size() <= str.size()
+    && str.find(what, str.size() - what.size()) != str.npos;
   }
 
   bool checkIndexFileExists(std::string fastaName, const char* suffix){
-      std::string indexFileName(fastaName);
-      indexFileName = indexFileName + suffix;
-      std::ifstream in(indexFileName);
-      return !in.fail();
-  }
-
-  /**
- * @brief                     check if the indexes for the input file exist (.fai for fasta, .fai + .gzi for bgzipped fasta)
- * @param[in] fileName        file name
- */
-  void validateInputFileIndexes(std::string &fileName)
-  {
-      bool indexesExist = true;
-
-      if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
-          indexesExist &= checkIndexFileExists(fileName, ".fai");
-      }else if (ends_with_string(fileName, ".fa.gz") || ends_with_string(fileName, ".fasta.gz") || ends_with_string(fileName, ".fna.gz")) {
-          indexesExist &= checkIndexFileExists(fileName, ".fai");
-          indexesExist &= checkIndexFileExists(fileName, ".gzi");
-      } else {
-          std::cerr << "\tUnknown type for file: "<< fileName << std::endl;
-          exit(1);
-      }
-
-      if (!indexesExist)
-      {
-          std::cerr << "ERROR, skch::validateInputFileIndexes, missing index(es) for the file "<< fileName << std::endl;
-          if (ends_with_string(fileName, ".fa") || ends_with_string(fileName, ".fasta") || ends_with_string(fileName, ".fna")) {
-              std::cerr << "\tWe recommend to build the indexes on BGZIP files by executing:" << std::endl;
-              std::cerr << "\tbgzip -@ number_of_threads "<< fileName << std::endl;
-              std::cerr << "\tsamtools faidx "<< fileName << ".gz" << std::endl;
-          } else {
-              std::cerr << "\tIf the compressed file is in BGZIP, execute:" << std::endl;
-              std::cerr << "\tsamtools faidx "<< fileName << std::endl;
-          }
-
-          exit(1);
-      }
+    std::string indexFileName(fastaName);
+    indexFileName = indexFileName + suffix;
+    std::ifstream in(indexFileName);
+    return !in.fail();
   }
 
   /**
@@ -176,10 +198,8 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       for(auto &e : querySequences)
         validateInputFile(e);
 
-      for(auto &e : refSequences) {
-          validateInputFile(e);
-          validateInputFileIndexes(e);
-      }
+      for(auto &e : refSequences)
+        validateInputFile(e);
     }
 
   /**
@@ -188,27 +208,45 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cerr << "[wfmash::map] Reference = " << parameters.refSequences << std::endl;
-    std::cerr << "[wfmash::map] Query = " << parameters.querySequences << std::endl;
-    std::cerr << "[wfmash::map] Kmer size = " << parameters.kmerSize << std::endl;
-    std::cerr << "[wfmash::map] Window size = " << parameters.windowSize << std::endl;
-    std::cerr << "[wfmash::map] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    std::cerr << "[wfmash::map] Block length min = " << parameters.block_length << std::endl;
-    std::cerr << "[wfmash::map] Chaining gap max = " << parameters.chain_gap << std::endl;
-    //std::cerr << "[wfmash::map] Alphabet = " << (parameters.alphabetSize == 4 ? "DNA" : "AA") << std::endl;
-    std::cerr << "[wfmash::map] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
-    std::cerr << "[wfmash::map] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
-    std::cerr << "[wfmash::map] Mapping output file = " << parameters.outFileName << std::endl;
-    std::cerr << "[wfmash::map] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
-    std::cerr << "[wfmash::map] Execution threads  = " << parameters.threads << std::endl;
-    if (parameters.use_spaced_seeds) {
-        std::cerr << "[wfmash::map] Spaced seed parameters  = "
-                  << "(weight = " << parameters.spaced_seed_params.weight
-                  << ", count = " << parameters.spaced_seed_params.seed_count
-                  << ", similarity = " << parameters.spaced_seed_params.similarity
-                  << ", region length = " << parameters.spaced_seed_params.region_length
-                  << " )"<< std::endl;
+    std::cerr << "[mashmap] MashMap v" << fixed::VERSION << std::endl;
+    std::cerr << "[mashmap] Reference = " << parameters.refSequences << std::endl;
+    std::cerr << "[mashmap] Query = " << parameters.querySequences << std::endl;
+    std::cerr << "[mashmap] Kmer size = " << parameters.kmerSize << std::endl;
+    std::cerr << "[mashmap] Sketch size = " << parameters.sketchSize << std::endl;
+    std::cerr << "[mashmap] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
+    if (parameters.block_length <= parameters.segLength)
+    {
+      std::cerr << "[mashmap] No block length filtering" << std::endl;
+    } else
+    {
+      std::cerr << "[mashmap] Block length min = " << parameters.block_length << std::endl;
+
     }
+    std::cerr << "[mashmap] Chaining gap max = " << parameters.chain_gap << std::endl;
+    std::cerr << "[mashmap] Mappings per segment = " << parameters.numMappingsForSegment << std::endl;
+    std::cerr << "[mashmap] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
+
+    if (parameters.kmerComplexityThreshold > 0)
+    {
+      std::cerr << "[mashmap] Kmer complexity threshold = " << 100 * parameters.kmerComplexityThreshold << "\%" << std::endl;
+    }
+
+    std::cerr << "[mashmap] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
+
+    if (parameters.skip_prefix) 
+    {
+      std::cerr << "[mashmap] " << "Skipping sequences containing the same prefix based on the delimiter \""
+        << parameters.prefix_delim << "\"" << std::endl;
+    }
+
+    if (parameters.stage1_topANI_filter) 
+      std::cerr << "[mashmap] " << "Hypergeometric filter w/ delta = " << parameters.ANIDiff << " and confidence " << parameters.ANIDiffConf << std::endl;
+    else
+      std::cerr << "[mashmap] " <<  "No hypergeometric filter" << std::endl;
+
+    std::cerr << "[mashmap] Mapping output file = " << parameters.outFileName << std::endl;
+    std::cerr << "[mashmap] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
+    std::cerr << "[mashmap] Execution threads  = " << parameters.threads << std::endl;
   }
 
   /**
@@ -222,6 +260,12 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
   {
     int result = cmd.parse(argc, argv);
 
+    if(cmd.foundOption("version"))
+    {
+      std::cerr << fixed::VERSION << std::endl;
+      exit(0);
+    }
+
     //Make sure we get the right command line args
     if (result != ArgvParser::NoParserError)
     {
@@ -231,11 +275,6 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else if (!cmd.foundOption("ref") && !cmd.foundOption("refList"))
     {
       std::cerr << "ERROR, skch::parseandSave, Provide reference file(s)" << std::endl;
-      exit(1);
-    }
-    else if (!cmd.foundOption("query") && !cmd.foundOption("queryList"))
-    {
-      std::cerr << "ERROR, skch::parseandSave, Provide query file(s)" << std::endl;
       exit(1);
     }
 
@@ -275,7 +314,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
       parameters.querySequences.push_back(query);
     }
-    else //list of files
+    else if (cmd.foundOption("queryList"))
     {
       std::string listFile;
 
@@ -283,13 +322,74 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       str >> listFile;
 
       parseFileList(listFile, parameters.querySequences);
+    } 
+    else
+    {
+      parameters.skip_self = true;
+      parameters.querySequences = parameters.refSequences;
+    }
+    str.clear();
+
+    if (cmd.foundOption("lowerTriangular"))
+    {
+        parameters.lower_triangular = true;
+    } else {
+        parameters.lower_triangular = false;
     }
 
+    if (cmd.foundOption("skipSelf"))
+    {
+        parameters.skip_self = true;
+    } else {
+        parameters.skip_self = false;
+    }
+
+
+    if (cmd.foundOption("skipPrefix"))
+    {
+      str << cmd.optionValue("skipPrefix");
+      str >> parameters.prefix_delim;
+      parameters.skip_prefix = true;
+    } else {
+      parameters.skip_prefix = false;
+      parameters.prefix_delim = '\0';
+    }
+    str.clear();
+
+    if (cmd.foundOption("targetList"))
+    {
+      str << cmd.optionValue("targetList");
+      str >> parameters.target_list;
+    }
+    str.clear();
+
+    if (cmd.foundOption("targetPrefix"))
+    {
+      str << cmd.optionValue("targetPrefix");
+      str >> parameters.target_prefix;
+    }
+
+
+    if (cmd.foundOption("saveIndex")) {
+        str << cmd.optionValue("saveIndex");
+        str >> parameters.saveIndexFilename;
+    } else {
+        parameters.saveIndexFilename = "";
+    }
+    if (cmd.foundOption("loadIndex")) {
+        str << cmd.optionValue("loadIndex");
+        str >> parameters.loadIndexFilename;
+    } else {
+        parameters.loadIndexFilename = "";
+    }
     str.clear();
 
     parameters.alphabetSize = 4;
     //Do not expose the option to set protein alphabet in mashmap
     //parameters.alphabetSize = 20;
+    
+    parameters.filterLengthMismatches = cmd.foundOption("filterLengthMismatches"); 
+    parameters.stage1_topANI_filter = !cmd.foundOption("noHgFilter"); 
 
     if(cmd.foundOption("filter_mode"))
     {
@@ -300,7 +400,11 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
       if (filter_input == "map") parameters.filterMode = filter::MAP;
       else if (filter_input == "one-to-one") parameters.filterMode = filter::ONETOONE;
-      else if (filter_input == "none") parameters.filterMode = filter::NONE;
+      else if (filter_input == "none") 
+      {
+        parameters.stage1_topANI_filter = false;
+        parameters.filterMode = filter::NONE;
+      }
       else 
       {
         std::cerr << "ERROR, skch::parseandSave, Invalid option given for filter_mode" << std::endl;
@@ -319,6 +423,13 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else
       parameters.split = true;
 
+    if(cmd.foundOption("noMerge"))
+    {
+      parameters.mergeMappings = false;
+    }
+    else
+      parameters.mergeMappings = true;
+
 
     //Parse algorithm parameters
     if(cmd.foundOption("kmer"))
@@ -329,11 +440,9 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     }
     else
     {
-      if(parameters.alphabetSize == 4)
-        parameters.kmerSize = 16;
-      else
-        parameters.kmerSize = 5;
+      parameters.kmerSize = 19;
     }
+    str.clear();
 
     if(cmd.foundOption("segLength"))
     {
@@ -341,9 +450,9 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       str >> parameters.segLength;
       str.clear();
 
-      if(parameters.segLength < 500)
+      if(parameters.segLength < 100)
       {
-        std::cerr << "ERROR, skch::parseandSave, minimum segment length is required to be >= 500 bp.\n\
+        std::cerr << "ERROR, skch::parseandSave, minimum segment length is required to be >= 100 bp.\n\
           This is because Mashmap is not designed for computing short local alignments.\n" << std::endl;
         exit(1);
       }
@@ -351,20 +460,151 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else
       parameters.segLength = 5000;
 
+    if(cmd.foundOption("blockLength"))
+    {
+      str << cmd.optionValue("blockLength");
+      str >> parameters.block_length;
+      if (parameters.block_length < 0) {
+          std::cerr << "[mashmap] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
+          exit(1);
+      }
+    } else {
+        // n.b. we map-merge across gaps up to 3x segment length
+        // and then filter for things that are at least block_length long
+        parameters.block_length = parameters.segLength;
+    }
+    str.clear();
+
+    if (cmd.foundOption("chainGap")) {
+      int64_t l;
+      str << cmd.optionValue("chainGap");
+      str >> l;
+      if (l < 0) {
+          std::cerr << "[mashmap] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
+          exit(1);
+      }
+      parameters.chain_gap = l;
+    } else {
+      parameters.chain_gap = parameters.segLength;
+    }
+    str.clear();
+
+    if (cmd.foundOption("dropLowMapId")) {
+        parameters.keep_low_pct_id = false;
+    } else {
+        parameters.keep_low_pct_id = true;
+    }
+
+    if (cmd.foundOption("kmerThreshold")) {
+        str << cmd.optionValue("kmerThreshold");
+        str >> parameters.kmer_pct_threshold;
+    } else {
+        parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
+    }
+    str.clear();
+
+    if (cmd.foundOption("numMappingsForSegment")) {
+      uint32_t n;
+      str << cmd.optionValue("numMappingsForSegment");
+      str >> n;
+      if (n > 0) {
+          parameters.numMappingsForSegment = n;
+      } else {
+          std::cerr << "[mashmap] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be greater than 0." << std::endl;
+          exit(1);
+      }
+    } else {
+      parameters.numMappingsForSegment = 1;
+    }
+    str.clear();
+
+    if (cmd.foundOption("numMappingsForShortSeq")) {
+      uint32_t n;
+      str << cmd.optionValue("numMappingsForShortSeq");
+      str >> n;
+      if (n > 0) {
+          parameters.numMappingsForShortSequence = n;
+      } else {
+          std::cerr << "[mashmap] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
+          exit(1);
+      }
+    } else {
+        parameters.numMappingsForShortSequence = 1;
+    }
+    str.clear();
+
     if(cmd.foundOption("perc_identity"))
     {
       str << cmd.optionValue("perc_identity");
       str >> parameters.percentageIdentity;
       str.clear();
 
-      if(parameters.percentageIdentity < 70)
+      if(parameters.percentageIdentity < 50)
       {
-        std::cerr << "ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 70\%\n" << std::endl;
+        std::cerr << "ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%\n" << std::endl;
         exit(1);
       }
+      parameters.percentageIdentity /= 100.0;
     }
     else
-      parameters.percentageIdentity = 85;
+      parameters.percentageIdentity = 0.85;
+    str.clear();
+
+    if(cmd.foundOption("kmerComplexity"))
+    {
+      str << cmd.optionValue("kmerComplexity");
+      str >> parameters.kmerComplexityThreshold;
+      str.clear();
+    }
+    else
+      parameters.kmerComplexityThreshold = 0.0;
+    str.clear();
+
+
+    if (cmd.foundOption("hgFilterAniDiff")) {
+      str << cmd.optionValue("hgFilterAniDiff");
+      str >> parameters.ANIDiff;
+      parameters.ANIDiff /= 100;
+      if (parameters.ANIDiff < 0 ||  parameters.ANIDiff > 100) {
+        std::cerr << "ERROR, skch::parseandSave, ANI difference must be between 0 and 100" << std::endl;
+        exit(1);
+      }
+    } else {
+      parameters.ANIDiff = skch::fixed::ANIDiff;
+    }
+    str.clear();
+
+    if (cmd.foundOption("hgFilterConf")) {
+      str << cmd.optionValue("hgFilterConf");
+      str >> parameters.ANIDiffConf;
+      parameters.ANIDiffConf /= 100;
+      if (parameters.ANIDiffConf < 0 ||  parameters.ANIDiffConf > 1) {
+        std::cerr << "ERROR, skch::parseandSave, hypergeometric confidence must be between 0 and 1" << std::endl;
+        exit(1);
+      }
+    } else {
+      parameters.ANIDiffConf = skch::fixed::ANIDiffConf;
+    }
+    str.clear();
+
+    parameters.stage2_full_scan = !cmd.foundOption("shortenCandidateRegions");
+
+    if (cmd.foundOption("sparsifyMappings")) {
+      double frac;
+      str << cmd.optionValue("sparsifyMappings");
+      str >> frac;
+      if (frac == 1) {
+          // overflows
+          parameters.sparsity_hash_threshold = std::numeric_limits<uint64_t>::max();
+      } else {
+          parameters.sparsity_hash_threshold
+              = frac * std::numeric_limits<uint64_t>::max();
+      }
+    } else {
+        parameters.sparsity_hash_threshold
+            = std::numeric_limits<uint64_t>::max();
+    }
+    str.clear();
 
     if(cmd.foundOption("threads"))
     {
@@ -375,16 +615,30 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else
       parameters.threads = 1;
 
-    /*
-     * Compute window size for sketching
-     */
 
-    //Compute optimal window size
-    parameters.windowSize = skch::Stat::recommendedWindowSize(
+    //Compute the best sketch size
+    if(cmd.foundOption("sketchSize")) 
+    {
+      str << cmd.optionValue("sketchSize");
+      str >> parameters.sketchSize;
+      str.clear();
+    } else {
+      if(cmd.foundOption("dense")) 
+      {
+        const double md = 1 - parameters.percentageIdentity;
+        double dens = 0.02 * (1 + (md / 0.05));
+        parameters.sketchSize = dens * (parameters.segLength - parameters.kmerSize);
+      }
+      else 
+      {
+      //Compute optimal window size
+      parameters.sketchSize = skch::Stat::recommendedSketchSize(
             skch::fixed::pval_cutoff, skch::fixed::confidence_interval,
             parameters.kmerSize, parameters.alphabetSize,
             parameters.percentageIdentity,
             parameters.segLength, parameters.referenceSize);
+      }
+    }
 
     if(cmd.foundOption("output"))
     {
@@ -395,22 +649,16 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     else
       parameters.outFileName = "mashmap.out";
 
-    if(cmd.foundOption("secondaries"))
-    {
-      str << cmd.optionValue("secondaries");
-      str >> parameters.numMappingsForSegment;
-      str.clear();
-    }
-    else
-    {
-      parameters.numMappingsForSegment = 1;
-    }
+    parameters.legacy_output = cmd.foundOption("legacy");
+    parameters.report_ANI_percentage = cmd.foundOption("reportPercentage");
 
     printCmdOptions(parameters);
 
     //Check if files are valid
     validateInputFiles(parameters.querySequences, parameters.refSequences);
   }
+  
+
 }
 
 
