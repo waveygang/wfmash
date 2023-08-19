@@ -224,7 +224,7 @@ void parse_args(int argc,
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
         map_parameters.skip_self = true;
-		std::cerr << "[wfmash] Skipping self mappings for single file all-vs-all mapping." << std::endl;
+        std::cerr << "[mashmap] Skipping self mappings for single file all-vs-all mapping." << std::endl;
         map_parameters.querySequences.push_back(map_parameters.refSequences.back());
         align_parameters.querySequences.push_back(align_parameters.refSequences.back());
     }
