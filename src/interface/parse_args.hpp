@@ -654,6 +654,8 @@ void parse_args(int argc,
         map_parameters.numMappingsForShortSequence = 1;
     }
 
+	map_parameters.legacy_output = false;
+
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
 
