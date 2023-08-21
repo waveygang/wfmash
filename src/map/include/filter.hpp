@@ -12,8 +12,6 @@
 #include <set>
 #include <fstream>
 #include <zlib.h>
-#include <functional>
-#include <tuple>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -33,6 +31,7 @@ namespace skch
      * @namespace skch::filter::query
      * @brief     filter routines (best for query sequence)
      */
+
     namespace query
     {
       //helper functions for executing plane sweep over query sequence
@@ -42,29 +41,29 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int& x) { return vec[x].qlen() * vec[x].nucIdentity; }
+        double get_score(const int x) const {return vec[x].nucIdentity; }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
-        bool operator ()(const int &x, const int &y) const {
+        bool operator ()(const int x, const int y) const {
 
           assert(x < vec.size());
           assert(y < vec.size());
 
-          auto x_score = vec[x].qlen() * vec[x].nucIdentity;
-          auto y_score = vec[y].qlen() * vec[y].nucIdentity;
+          auto x_score = get_score(x);
+          auto y_score = get_score(y);
 
           return std::tie(x_score, vec[x].queryStartPos, vec[x].refSeqId) > std::tie(y_score, vec[y].queryStartPos, vec[y].refSeqId);
         }
 
         //Greater than comparison by score
-        bool greater_score(const int &x, const int &y) {
+        bool greater_score(const int x, const int y) const {
 
           assert(x < vec.size());
           assert(y < vec.size());
 
-          auto x_score = vec[x].qlen() * vec[x].nucIdentity;
-          auto y_score = vec[y].qlen() * vec[y].nucIdentity;
+          auto x_score = get_score(x);
+          auto y_score = get_score(y);
 
           return x_score > y_score;
         }
@@ -91,37 +90,6 @@ namespace skch
 
                 vec[*it].discard = 0;
                 ++kept;
-            }
-
-            // check for the case where there are multiple best mappings > secondaryToKeep
-            // which have the same score
-            // we will hash the mapping struct and keep the one with the secondaryToKeep with the lowest hash value
-            if (kept > secondaryToKeep) {
-                // we will use hashes of the mapping structs to break ties
-                // first we'll make a vector of the mappings including the hashes
-                std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
-                for(auto it = L.begin(); it != L.end(); it++)
-                {
-                    if(vec[*it].discard == 0)
-                    {
-                        score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
-                    }
-                }
-                // now we'll sort the vector by score and hash
-                std::sort(score_and_hash.begin(), score_and_hash.end(), std::greater{});
-                // reset kept counter
-                kept = 0;
-                for (auto& x : score_and_hash) {
-                    std::get<2>(x)->discard = 1;
-                }
-                // now we mark the best to keep
-                for (auto& x : score_and_hash) {
-                    if (kept > secondaryToKeep) {
-                        break;
-                    }
-                    std::get<2>(x)->discard = 0;
-                    ++kept;
-                }
             }
           }
       };
@@ -156,7 +124,7 @@ namespace skch
           for(int i = 0; i < readMappings.size(); i++)
           {
             eventSchedule.emplace_back (readMappings[i].queryStartPos, event::BEGIN, i);
-            eventSchedule.emplace_back (readMappings[i].queryEndPos + 1, event::END, i);
+            eventSchedule.emplace_back (readMappings[i].queryEndPos, event::END, i);
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
@@ -216,7 +184,7 @@ namespace skch
 
           for(int i = 0; i < readMappings.size(); i++) {
               eventSchedule.emplace_back (readMappings[i].queryStartPos, obj.get_score(i), event::BEGIN, i);
-              eventSchedule.emplace_back (readMappings[i].queryEndPos + 1, 0, event::END, i); // end should not be preferred
+              eventSchedule.emplace_back (readMappings[i].queryEndPos, 0, event::END, i); // end should not be preferred
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
@@ -286,27 +254,29 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
+        double get_score(const int x) const {return vec[x].nucIdentity; }
+
         //Greater than comparison by score and begin position
         //used to define order in BST
-        bool operator ()(const int &x, const int &y) const {
+        bool operator ()(const int x, const int y) const {
 
           assert(x < vec.size());
           assert(y < vec.size());
 
-          auto x_score = vec[x].rlen() * vec[x].nucIdentity;
-          auto y_score = vec[y].rlen() * vec[y].nucIdentity;
+          auto x_score = get_score(x);
+          auto y_score = get_score(y);
 
           return std::tie(x_score, vec[x].refStartPos) > std::tie(y_score, vec[y].refStartPos);
         }
 
         //Greater than comparison by score
-        bool greater_score(const int &x, const int &y) {
+        bool greater_score(const int x, const int y) const {
 
           assert(x < vec.size());
           assert(y < vec.size());
 
-          auto x_score = vec[x].rlen() * vec[x].nucIdentity;
-          auto y_score = vec[y].rlen() * vec[y].nucIdentity;
+          auto x_score = get_score(x);
+          auto y_score = get_score(y);
 
           return x_score > y_score;
         }

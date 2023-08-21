@@ -86,11 +86,15 @@ void parse_args(int argc,
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
-    args::ValueFlag<int64_t> window_size(mapping_opts, "N", "window size for sketching. If 0, it computes the best window size automatically [default: 0, minimum -k]", {'w', "window-size"});
-    args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
+    args::ValueFlag<int64_t> sketch_size(mapping_opts, "N", "sketch size for sketching.", {'w', "sketch-size"});
+    args::ValueFlag<double> kmer_complexity(mapping_opts, "F", "Drop segments w/ predicted kmer complexity below this cutoff. Kmer complexity defined as #kmers / (s - k + 1)", {'J', "kmer-complexity"});
+    args::Flag no_hg_filter(mapping_opts, "", "Don't use the hypergeometric filtering and instead use the MashMap2 first pass filtering.", {'1', "no-hg-filter"});
+    args::ValueFlag<double> hg_filter_ani_diff(mapping_opts, "%", "Filter out mappings unlikely to be this ANI less than the best mapping [default: 0.0]", {'2', "hg-filter-ani-diff"});
+    args::ValueFlag<double> hg_filter_conf(mapping_opts, "%", "Confidence value for the hypergeometric filtering [default: 99.9%]", {'3', "hg-filter-conf"});
+    //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
-    args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
-    args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings (NOT FULLY IMPLEMENTED)", {'M', "no-merge"});
+    //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
+    args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -220,7 +224,7 @@ void parse_args(int argc,
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
         map_parameters.skip_self = true;
-		std::cerr << "[wfmash] Skipping self mappings for single file all-vs-all mapping." << std::endl;
+        std::cerr << "[mashmap] Skipping self mappings for single file all-vs-all mapping." << std::endl;
         map_parameters.querySequences.push_back(map_parameters.refSequences.back());
         align_parameters.querySequences.push_back(align_parameters.refSequences.back());
     }
@@ -428,38 +432,39 @@ void parse_args(int argc,
         map_parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
     }
 
-    if (spaced_seed_params) {
-        const std::string foobar = args::get(spaced_seed_params);
+    //if (spaced_seed_params) {
+        //const std::string foobar = args::get(spaced_seed_params);
 
-        // delimeters can be full colon (:) or a space
-        char delimeter;
-        if (foobar.find(' ') !=  std::string::npos) {
-            delimeter = ' ';
-        } else if (foobar.find(':') !=  std::string::npos) {
-            delimeter = ':';
-        } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params." << std::endl;
-            exit(1);
-        }
+        //// delimeters can be full colon (:) or a space
+        //char delimeter;
+        //if (foobar.find(' ') !=  std::string::npos) {
+            //delimeter = ' ';
+        //} else if (foobar.find(':') !=  std::string::npos) {
+            //delimeter = ':';
+        //} else {
+            //std::cerr << "[wfmash] ERROR, skch::parseandSave, wfmash expects either space or : for to seperate spaced seed params." << std::endl;
+            //exit(1);
+        //}
 
-        const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
-        if (p.size() != 4) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds." << std::endl;
-            exit(1);
-        }
+        //const std::vector<std::string> p = skch::CommonFunc::split(foobar, delimeter);
+        //if (p.size() != 4) {
+            //std::cerr << "[wfmash] ERROR, skch::parseandSave, there should be four arguments for spaced seeds." << std::endl;
+            //exit(1);
+        //}
 
-        const uint32_t seed_weight   = stoi(p[0]);
-        const uint32_t seed_count    = stoi(p[1]);
-        const float similarity       = stof(p[2]);
-        const uint32_t region_length = stoi(p[3]);
+        //const uint32_t seed_weight   = stoi(p[0]);
+        //const uint32_t seed_count    = stoi(p[1]);
+        //const float similarity       = stof(p[2]);
+        //const uint32_t region_length = stoi(p[3]);
 
-        // Generate an ALeS params struct
-        map_parameters.use_spaced_seeds = true;
-        map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
-        map_parameters.kmerSize = (int) seed_weight;
-    } else {
-        map_parameters.use_spaced_seeds = false;
-    }
+        //// Generate an ALeS params struct
+        //map_parameters.use_spaced_seeds = true;
+        //map_parameters.spaced_seed_params = skch::ales_params{seed_weight, seed_count, similarity, region_length};
+        //map_parameters.kmerSize = (int) seed_weight;
+    //} else {
+        //map_parameters.use_spaced_seeds = false;
+    //}
+    map_parameters.use_spaced_seeds = false;
 
     align_parameters.kmerSize = map_parameters.kmerSize;
 
@@ -543,27 +548,48 @@ void parse_args(int argc,
 
     // Compute optimal window size for sketching
     {
-        const int64_t ws = window_size && args::get(window_size) >= 0 ? args::get(window_size) : -1;
-        if (ws > 0) {
-            map_parameters.windowSize = ws;
+        const int64_t ss = sketch_size && args::get(sketch_size) >= 0 ? args::get(sketch_size) : -1;
+        if (ss > 0) {
+            map_parameters.sketchSize = ss;
         } else {
-            // Compute the window size with a heuristic function
-            int64_t windowSize = 256 * std::pow(map_parameters.percentageIdentity, 6)
-                * map_parameters.segLength / 5000;
-
-            // Avoid tiny windows to improve runtime
-            map_parameters.windowSize = std::max((int64_t)map_parameters.kmerSize, windowSize);
-
-            // Avoid too big values to improve the accuracy
-            map_parameters.windowSize = std::min((int64_t)256, map_parameters.windowSize);
+            const double md = 1 - map_parameters.percentageIdentity;
+            double dens = 0.02 * (1 + (md / 0.05));
+            map_parameters.sketchSize = dens * (map_parameters.segLength - map_parameters.kmerSize);
         }
     }
 
-    if (window_minimizers) {
-        map_parameters.world_minimizers = false;
+    if (kmer_complexity)
+    {
+        map_parameters.kmerComplexityThreshold = args::get(kmer_complexity);
     } else {
-        map_parameters.world_minimizers = true;
+        map_parameters.kmerComplexityThreshold = 0;
     }
+
+    map_parameters.filterLengthMismatches = true;
+
+    map_parameters.stage1_topANI_filter = !bool(no_hg_filter); 
+
+    if (hg_filter_ani_diff)
+    {
+        map_parameters.ANIDiff = args::get(hg_filter_ani_diff);
+        map_parameters.ANIDiff /= 100;
+    } else {
+        map_parameters.ANIDiff = skch::fixed::ANIDiff;
+    }
+
+    if (hg_filter_conf)
+    {
+        map_parameters.ANIDiffConf = args::get(hg_filter_conf);
+        map_parameters.ANIDiffConf /= 100;
+    } else {
+        map_parameters.ANIDiffConf = skch::fixed::ANIDiffConf;
+    }
+
+    //if (window_minimizers) {
+        //map_parameters.world_minimizers = false;
+    //} else {
+        //map_parameters.world_minimizers = true;
+    //}
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
@@ -627,6 +653,8 @@ void parse_args(int argc,
     } else {
         map_parameters.numMappingsForShortSequence = 1;
     }
+
+	map_parameters.legacy_output = false;
 
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);

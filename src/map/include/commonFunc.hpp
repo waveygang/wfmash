@@ -7,12 +7,15 @@
 #define COMMON_FUNC_HPP
 
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <deque>
 #include <cmath>
 #include <fstream>
 #include <limits>
 #include <numeric>
+#include <queue>
+#include <sstream>
 
 //Own includes
 #include "map/include/map_parameters.hpp"
@@ -20,8 +23,9 @@
 //External includes
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
+#include "common/ankerl/unordered_dense.hpp"
 
-#include "common/wflign/src/rkmh.hpp"
+//#include "assert.hpp"
 
 namespace skch {
     /**
@@ -31,6 +35,13 @@ namespace skch {
     namespace CommonFunc {
         //seed for murmerhash
         const int seed = 42;
+
+        // Pivot to keep track of sketch border
+        template <typename I>
+        struct Pivot {
+            I p;
+            int64_t rank;
+        };
 
         /**
          * @brief   reverse complement of kmer (borrowed from mash)
@@ -60,8 +71,25 @@ namespace skch {
                 dest[length - i - 1] = base;
             }
         }
+        // Crazy hack char table to test for canonical bases
+    constexpr int valid_dna[127] = {
+        1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 0, 1, 0, 1, 1, 1,
+        0, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 0, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 0, 1, 0, 1,
+        1, 1, 0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 0, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1
+    };
 
-        /**
+    /**
      * @brief               convert DNA or AA alphabets to upper case, converting non-canonical DNA bases to N
      * @param[in]   seq     pointer to input sequence
      * @param[in]   len     length of input sequence
@@ -72,7 +100,7 @@ namespace skch {
                     seq[i] -= 32;
                 }
 
-                if (rkmh::valid_dna[seq[i]]) {
+                if (valid_dna[seq[i]]) {
                     seq[i] = 'N';
                 }
             }
@@ -141,464 +169,405 @@ namespace skch {
 //            //we avoid adding one for better double precision
 //        }
 
-        /**
-         * @brief       compute winnowed minimizers from a given sequence and add to the index
-         * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
-         * @param[in]   seq             pointer to input sequence
-         * @param[in]   len             length of input sequence
-         * @param[in]   kmerSize
-         * @param[in]   windowSize
-         * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
-         */
-        template<typename T>
-        inline void addMinimizers(std::vector<T> &minimizerIndex,
-                                  char *seq, offset_t len,
-                                  int kmerSize,
-                                  int windowSize,
-                                  int alphabetSize,
-                                  seqno_t seqCounter
-                                  //const std::unordered_set<std::string>& high_freq_kmers
-                                  ) {
-            /**
-             * Double-ended queue (saves minimum at front end)
-             * Saves pair of the minimizer and the position of hashed kmer in the sequence
-             * Position of kmer is required to discard kmers that fall out of current window
-             */
-            std::deque<std::pair<MinimizerInfo, offset_t> > Q;
-
-            makeUpperCaseAndValidDNA(seq, len);
-
-            //Compute reverse complement of seq
-            char *seqRev = new char[len];
-
-            if (alphabetSize == 4) //not protein
-                CommonFunc::reverseComplement(seq, seqRev, len);
-
-            for (offset_t i = 0; i < len - kmerSize + 1; i++) {
-                //The serial number of current sliding window
-                //First valid window appears when i = windowSize - 1
-                offset_t currentWindowId = i - windowSize + 1;
-
-                //Hash kmers
-                hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
-                hash_t hashBwd;
-
-                if (alphabetSize == 4)
-                    hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
-                else  //proteins
-                    hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
-
-//#define DEBUG_WINNOWING
-#ifdef DEBUG_WINNOWING
-                std::cout << "pos: " << i << std::endl;
-                std::cout << "kmers: ";
-                for (uint64_t j = 0; j < kmerSize; ++j) {
-                    std::cout << seq[i + j];
-                }
-                std::cout << " --> " << hashFwd << " - " << hashBwd << std::endl;
-
-                std::cout << "Q1" << std::endl;
-                for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
-                    std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
-                }
-                std::cout << std::endl;
-#endif
-
-                //Consider non-symmetric kmers only
-                if (hashBwd != hashFwd) {
-                    //Take minimum value of kmer and its reverse complement
-                    hash_t currentKmer = std::min(hashFwd, hashBwd);
-
-                    /*double order = (hashFwd < hashBwd) ?
-                                   applyWeight(seq + i, kmerSize, hashFwd, high_freq_kmers) :
-                                   applyWeight(seqRev + len - i - kmerSize, kmerSize, hashBwd, high_freq_kmers);*/
-
-                    //Hashes less than equal to currentKmer are not required
-                    //Remove them from Q (back)
-                    //while (!Q.empty() && Q.back().first.order > order)
-                    while (!Q.empty() && Q.back().first.hash > currentKmer)
-                        Q.pop_back();
-
-#ifdef DEBUG_WINNOWING
-                    std::cout << "Q2" << std::endl;
-                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
-                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
-                    }
-                    std::cout << std::endl;
-#endif
-
-                    //Check the strand of this minimizer hash value
-                    auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
-
-                    //Push currentKmer and position to back of the queue
-                    //-1 indicates the dummy window # (will be updated later)
-                    Q.push_back(std::make_pair(
-                            //MinimizerInfo{currentKmer, seqCounter, -1, currentStrand, order},
-                            MinimizerInfo{currentKmer, seqCounter, -1, currentStrand},
-                            i));
-
-#ifdef DEBUG_WINNOWING
-                    std::cout << "Q3" << std::endl;
-                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
-                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
-                    }
-                    std::cout << std::endl;
-#endif
-
-                    //If front minimum is not in the current window, remove it
-                    if (!Q.empty() && Q.front().second <= i - windowSize) {
-                        while (!Q.empty() && Q.front().second <= i - windowSize)
-                            Q.pop_front();
-#ifdef DEBUG_WINNOWING
-                        std::cout << "Q4" << std::endl;
-                        for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
-                            std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
-                        }
-                        std::cout << std::endl;
-#endif
-
-                        // Robust-winnowing
-                        //while (Q.size() > 1 && Q.begin()->first.order == (++Q.begin())->first.order)
-                        while (Q.size() > 1 && Q.begin()->first.hash == (++Q.begin())->first.hash)
-                            Q.pop_front();
-                    }
-
-#ifdef DEBUG_WINNOWING
-                    std::cout << "Q5" << std::endl;
-                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
-                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
-                    }
-                    std::cout << std::endl;
-#endif
-
-                    //Select the minimizer from Q and put into index
-                    if (currentWindowId >= 0) {
-                        //We save the minimizer if we are seeing it for first time
-                        if (minimizerIndex.empty() || minimizerIndex.back() != Q.front().first) {
-                            //Update the window position in this minimizer
-                            //This step also ensures we don't re-insert the same minimizer again
-                            Q.front().first.wpos = currentWindowId;
-                            minimizerIndex.push_back(Q.front().first);
-
-#ifdef DEBUG_WINNOWING
-                            std::cout << "PUSHED: " << Q.front().first.wpos << " " << Q.front().first.hash << std::endl;
-#endif
-                        }
-                    }
-
-#ifdef DEBUG_WINNOWING
-                    std::cout << "Q - FINAL" << std::endl;
-                    for(auto iter = Q.begin(); iter != Q.end(); ++iter) {
-                        std::cout << iter->second << " " << " " << iter->first.hash <<  " " << iter->first.wpos << std::endl;
-                    }
-                    std::cout << std::endl;
-
-                    std::cout << "minimizerIndex" << std::endl;
-                    for(auto iter = minimizerIndex.begin(); iter != minimizerIndex.end(); ++iter) {
-                        std::cout << iter->wpos << " " << iter->hash << std::endl;
-                    }
-                    std::cout << std::endl;
-#endif
-                }
-#ifdef DEBUG_WINNOWING
-                std::cout << "--------------------------------------------------------" << std::endl;
-#endif
-            }
-
-#ifdef DEBUG
-            std::cerr << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";
-#endif
-
-            delete[] seqRev;
-        }
 
         /**
-         * @brief       compute winnowed minimizers from a given sequence and add to the index
-         * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
-         * @param[in]   seq             pointer to input sequence
-         * @param[in]   len             length of input sequence
+         * @brief       Compute the minimum s kmers for a string.
+         * @param[out]  minmerIndex     container storing sketched Kmers 
+         * @param[in]   seq                 pointer to input sequence
+         * @param[in]   len                 length of input sequence
          * @param[in]   kmerSize
-         * @param[in]   samplingFactor
-         * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
-         */
-        template<typename T>
-        inline void addWorldMinimizers(std::vector<T> &minimizerIndex,
-                                       char *seq, offset_t len,
-                                       int kmerSize,
-                                       int samplingFactor,
-                                       int alphabetSize,
-                                       seqno_t seqCounter) {
-
-            makeUpperCaseAndValidDNA(seq, len);
-
-            //Compute reverse complement of seq
-            char *seqRev = new char[len];
-
-            // get our sampling fraction
-            hash_t samplingBound = std::numeric_limits<hash_t>::max() / samplingFactor;
-
-            if (alphabetSize == 4) //not protein
-                CommonFunc::reverseComplement(seq, seqRev, len);
-
-            for (offset_t i = 0; i < len - kmerSize + 1; i++) {
-                //Hash kmers
-                hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
-                hash_t hashBwd;
-
-                if (alphabetSize == 4)
-                    hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
-                else  //proteins
-                    hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
-                if (hashBwd != hashFwd) { // consider non-symmetric kmers only
-                    if (hashFwd < samplingBound) {
-                        minimizerIndex.push_back(MinimizerInfo{hashFwd, seqCounter, i, strnd::FWD});
-                    }
-                    if (hashBwd < samplingBound) {
-                        minimizerIndex.push_back(MinimizerInfo{hashBwd, seqCounter, i, strnd::REV});
-                    }
-                }
-            }
-            delete[] seqRev;
-        }
-
-
-        /**
-         * @brief       compute winnowed minimizers from a given sequence and add to the index
-         * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
-         * @param[in]   seq             pointer to input sequence
-         * @param[in]   len             length of input sequence
-         * @param[in]   kmerSize
-         * @param[in]   samplingFactor
-         * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
-         * @param[in]   spaced_seeds    A vector of spaced seeds from ALeS
-         */
-        template<typename T>
-        inline void addSpacedSeedWorldMinimizers(std::vector<T> &minimizerIndex,
-                                                 char *seq,
-                                                 offset_t len,
-                                                 int kmerSize,
-                                                 int samplingFactor,
-                                                 int alphabetSize,
-                                                 seqno_t seqCounter,
-                                                 const std::vector<ales::spaced_seed> &spaced_seeds) {
-
-            makeUpperCaseAndValidDNA(seq, len);
-            size_t minimizer_range_start = minimizerIndex.size();
-
-            //Compute reverse complement of seq
-            char* seqRev = new char[len];
-
-            // get our sampling fraction
-            hash_t samplingBound = std::numeric_limits<hash_t>::max() / samplingFactor;
-
-            // not protein
-            if (alphabetSize == 4) {
-                CommonFunc::reverseComplement(seq, seqRev, len);
-            }
-
-            // a lookup for whether k-mers can still be computed for a given spaced seed
-            // initialize with 0s
-            size_t number_of_spaced_seeds = spaced_seeds.size();
-            int handled[number_of_spaced_seeds] = {0};
-
-            // we increment this value once a spaced seed would go out of bounds of the sequence
-            int handled_seed_count = 0;
-
-            // start position on the sequence
-            offset_t i = 0;
-
-            // do while we still have spaced seeds which are within bounds
-            while (std::accumulate(handled, handled + number_of_spaced_seeds, 0) < number_of_spaced_seeds) {
-
-                for (uint32_t spaced_seed_number = 0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
-                    const auto &s = spaced_seeds[spaced_seed_number];
-                    size_t seed_length = s.length;
-                    char *ss = s.seed;
-
-                    // if the (spaced) seed would go out of bounds, skip it
-                    if (i + seed_length >= len) {
-                      handled[spaced_seed_number] = 1;
-                      continue;
-                    }
-
-                    char *forward_start_char = seq + i;
-                    char *reverse_start_char = seqRev + len - i - seed_length;
-                    char new_forward_kmer[seed_length];
-                    char new_reverse_kmer[seed_length];
-
-                    for (size_t j = 0; j < seed_length; ++j, ++ss, ++forward_start_char) {
-                        new_forward_kmer[j] = *ss == '1' ? *forward_start_char : '*';
-                    }
-                    ss = s.seed;
-                    for (size_t j = 0; j < seed_length; ++j, ++ss, ++reverse_start_char) {
-                        new_reverse_kmer[j] = *ss == '1' ? *reverse_start_char : '*';
-                    }
-                    ss = s.seed;// reset the seed for the next iteration of the loop
-
-                    /* debug print
-                       std::cerr << seed_length << " " << s.seed
-                       << " forward " << new_forward_kmer
-                       << " reverse " << new_reverse_kmer << std::endl;
-                    */
-
-
-                    //Hash kmers
-                    hash_t hashFwd = CommonFunc::getHash(&new_forward_kmer[0], seed_length);
-                    hash_t hashBwd;
-
-                    if (alphabetSize == 4)
-                        hashBwd = CommonFunc::getHash(&new_reverse_kmer[0], seed_length);
-                    else                                             //proteins
-                        hashBwd = std::numeric_limits<hash_t>::max();//Pick a dummy high value so that it is ignored later
-
-                    // Consider non-symmetric kmers only
-                    if (hashBwd != hashFwd) {
-                        if (hashFwd < samplingBound) {
-                            minimizerIndex.push_back(MinimizerInfo{hashFwd, seqCounter, i, strnd::FWD});
-                        }
-                        if (hashBwd < samplingBound) {
-                            minimizerIndex.push_back(MinimizerInfo{hashBwd, seqCounter, i, strnd::REV});
-                        }
-                    }
-                }
-
-                i = i + 1;
-            }
-
-            delete[] seqRev;
-        }
-
-        /**
-         * @brief       compute winnowed minimizers from a given sequence and add to the index using spaced seeds
-         * @param[out]  minimizerIndex  minimizer table storing minimizers and their position as we compute them
-         * @param[in]   seq             pointer to input sequence
-         * @param[in]   len             length of input sequence
-         * @param[in]   kmerSize
-         * @param[in]   windowSize
-         * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
-         * @param[in]   spaced_seeds    A vector of spaced seeds from ALeS
+         * @param[in]   s                   sketch size. 
+         * @param[in]   seqCounter          current sequence number, used while saving the position of minimizer
          */
         template <typename T>
-        void addSpacedSeedMinimizers(std::vector<T> &minimizerIndex,
-                                     char* seq,
-                                     offset_t len,
-                                     int kmerSize,
-                                     int windowSize,
-                                     int alphabetSize,
-                                     seqno_t seqCounter,
-                                     const std::vector<ales::spaced_seed>& spaced_seeds
-                                     )
+          inline void sketchSequence(
+              std::vector<T> &minmerIndex, 
+              char* seq, 
+              offset_t len,
+              int kmerSize, 
+              int alphabetSize,
+              int sketchSize,
+              seqno_t seqCounter)
         {
-
           makeUpperCaseAndValidDNA(seq, len);
-          size_t minimizer_range_start = minimizerIndex.size();
 
           //Compute reverse complement of seq
-          char* seqRev = new char[len];
-
-          auto extract_kmer = [](char* thing, size_t len) {
-            std::string the_string;
-            for (size_t i=0; i<len; i++, thing++)
-              the_string.push_back(*thing);
-
-            return the_string;
-          };
+          std::unique_ptr<char[]> seqRev(new char[len]);
+          //char* seqRev = new char[len];
 
           if(alphabetSize == 4) //not protein
-            CommonFunc::reverseComplement(seq, seqRev, len);
+            CommonFunc::reverseComplement(seq, seqRev.get(), len);
 
-          for (uint32_t spaced_seed_number=0; spaced_seed_number < spaced_seeds.size(); spaced_seed_number++) {
-            /**
-             * Double-ended queue (saves minimum at front end)
-             * Saves pair of the minimizer and the position of hashed kmer in the sequence
-             * Position of kmer is required to discard kmers that fall out of current window
-             */
-            std::deque< std::pair<MinimizerInfo, offset_t> > Q;
-            const auto& s = spaced_seeds[spaced_seed_number];
-            size_t seed_length =  s.length;
-            char* ss = s.seed;
+          // TODO cleanup
+          ankerl::unordered_dense::map<hash_t, MinmerInfo> sketched_vals;
+          std::vector<hash_t> sketched_heap;
+          sketched_heap.reserve(sketchSize+1);
+            
+          // Get distance until last "N"
+          int ambig_kmer_count = 0;
+          for (int i = kmerSize - 1; i >= 0; i--)
+          {
+            if (seq[i] == 'N')
+            {
+                ambig_kmer_count = i+1;
+                break;
+            }    
+          } 
 
-            for (offset_t i = 0; i < len - seed_length + 1; i++) {
-              char* forward_start_char = seq+i;
-              char* reverse_start_char = seqRev + len - i - seed_length;
-              char new_forward_kmer[seed_length];
-              char new_reverse_kmer[seed_length];
+          for(offset_t i = 0; i < len - kmerSize + 1; i++)
+          {
 
-              for (size_t j=0; j<seed_length; ++j, ++ss, ++forward_start_char) {
-                  new_forward_kmer[j] = *ss == '1' ? *forward_start_char : '*';
-              }
-              ss = s.seed;
-              for (size_t j=0; j<seed_length; ++j, ++ss, ++reverse_start_char) {
-                  new_reverse_kmer[j] = *ss == '1' ? *reverse_start_char : '*';
-              }
-              ss = s.seed; // reset the seed for the next iteration of the loop
+            if (seq[i+kmerSize-1] == 'N')
+            {
+              ambig_kmer_count = kmerSize;
+            }
+            //Hash kmers
+            hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
+            hash_t hashBwd;
 
-              /* debug print
-                 std::cerr << seed_length << " " << s.seed
-                 << " forward " << extract_kmer(seq+i, seed_length) << " " << new_forward_kmer
-                 << " reverse " << extract_kmer(seqRev + len - i - seed_length, seed_length) << " " << new_reverse_kmer << std::endl;
-              */
+            if(alphabetSize == 4)
+              hashBwd = CommonFunc::getHash(seqRev.get() + len - i - kmerSize, kmerSize);
+            else  //proteins
+              hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
 
-              offset_t currentWindowId = i - windowSize + 1;
+            //Consider non-symmetric kmers only
+            if(hashBwd != hashFwd && ambig_kmer_count == 0)
+            {
+              //Take minimum value of kmer and its reverse complement
+              hash_t currentKmer = std::min(hashFwd, hashBwd);
 
-              //Hash kmers
-              hash_t hashFwd = CommonFunc::getHash(&new_forward_kmer[0], seed_length);
-              hash_t hashBwd;
+              //Check the strand of this minimizer hash value
+              auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
 
-              if(alphabetSize == 4)
-                hashBwd = CommonFunc::getHash(&new_reverse_kmer[0], seed_length);
-              else  //proteins
-                hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
+              if (sketched_heap.size() < sketchSize || currentKmer <= sketched_heap.front())
+              {
+                if (sketched_heap.empty() || sketched_vals.find(currentKmer) == sketched_vals.end()) 
+                {
 
-              // Consider non-symmetric kmers only
-              if(hashBwd != hashFwd) {
-                //Take minimum value of kmer and its reverse complement
-                hash_t currentKmer = std::min(hashFwd, hashBwd);
-
-                //Check the strand of this minimizer hash value
-                auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
-
-                //If front minimum is not in the current window, remove it
-                while(!Q.empty() && Q.front().second <=  i - windowSize)
-                  Q.pop_front();
-
-                // Hashes less than equal to currentKmer are not required
-                // Remove them from Q (back)
-                while(!Q.empty() && Q.back().first.hash >= currentKmer)
-                  Q.pop_back();
-
-                // Push currentKmer and position to back of the queue
-                // -1 indicates the dummy window # (will be updated later)
-                Q.push_back(std::make_pair(MinimizerInfo {currentKmer,seqCounter, -1, currentStrand}, i));
-
-                // Select the minimizer from Q and put into index
-                if(currentWindowId >= 0) {
-                    //We save the minimizer if we are seeing it for first time
-                    if(minimizerIndex.empty() || minimizerIndex.back() != Q.front().first)
-                      {
-                        //Update the window position in this minimizer
-                        //This step also ensures we don't re-insert the same minimizer again
-                        Q.front().first.wpos = currentWindowId;
-                        minimizerIndex.push_back(Q.front().first);
-                      }
+                  // Add current hash to heap
+                  if (sketched_vals.size() < sketchSize || currentKmer < sketched_heap.front())  
+                  {
+                      sketched_vals[currentKmer] = MinmerInfo{currentKmer, i, i, seqCounter, currentStrand};
+                      sketched_heap.push_back(currentKmer);
+                      std::push_heap(sketched_heap.begin(), sketched_heap.end());
                   }
+
+                  // Remove one if too large
+                  if (sketched_vals.size() > sketchSize) 
+                  {
+                      sketched_vals.erase(sketched_heap[0]);
+                      std::pop_heap(sketched_heap.begin(), sketched_heap.end());
+                      sketched_heap.pop_back();
+                  }
+                } 
+                else 
+                {
+                  // TODO these sketched values might never be useful, might save memory by deleting
+                  // extend the length of the window
+                  sketched_vals[currentKmer].wpos_end = i;
+                  sketched_vals[currentKmer].strand += currentStrand == strnd::FWD ? 1 : -1;
+                }
               }
+            }
+            if (ambig_kmer_count > 0)
+            {
+              ambig_kmer_count--;
             }
           }
 
-          // sort our minimizerIndex by window position
-          std::sort(minimizerIndex.begin() + minimizer_range_start,
-                    minimizerIndex.end(),
-                    [](const MinimizerInfo& a, const MinimizerInfo& b) {
-                        return a.wpos < b.wpos;
-                    });
+          minmerIndex.resize(sketched_heap.size());
+          for (auto rev_it = minmerIndex.rbegin(); rev_it != minmerIndex.rend(); rev_it++)
+          {
+            *rev_it = (std::move(sketched_vals[sketched_heap.front()]));
+            (*rev_it).strand = (*rev_it).strand > 0 ? strnd::FWD : ((*rev_it).strand == 0 ? strnd::AMBIG : strnd::REV);
 
-#ifdef DEBUG
-          std::cout << "INFO, skch::CommonFunc::addMinimizers, inserted minimizers for sequence id = " << seqCounter << "\n";
-#endif
+            std::pop_heap(sketched_heap.begin(), sketched_heap.end());
+            sketched_heap.pop_back();
+          }
+          return;
+        }
+        
 
-          delete [] seqRev;
-         }
+        /**
+         * @brief       Compute winnowed minmers from a given sequence and add to the index
+         * @param[out]  minmerIndex  table storing minmers and their position as we compute them
+         * @param[in]   seq             pointer to input sequence
+         * @param[in]   len             length of input sequence
+         * @param[in]   kmerSize
+         * @param[in]   windowSize
+         * @param[in]   sketchSize      sketch size. 
+         * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
+         */
+        template <typename T>
+          inline void addMinmers(std::vector<T> &minmerIndex, 
+              char* seq, offset_t len,
+              int kmerSize, 
+              int windowSize,
+              int alphabetSize,
+              int sketchSize,
+              seqno_t seqCounter)
+          {
+            /**
+             * Double-ended queue (saves minimum at front end)
+             * Saves pair of the minimizer and the position of hashed kmer in the sequence
+             * Position of kmer is required to discard kmers that fall out of current window
+             */
+            std::deque< std::tuple<hash_t, strand_t, offset_t> > Q;
+            using MinmerKmerPair_t = std::pair<MinmerInfo, std::deque<KmerInfo>>;
+
+            // Sort by hash, then by position
+            constexpr auto KIHeap_cmp = [](KmerInfo& a, KmerInfo& b) 
+              {return std::tie(a.hash, a.pos) > std::tie(b.hash, b.pos);};
+            using windowMap_t = std::map<hash_t, MinmerKmerPair_t>;
+            windowMap_t sortedWindow;
+            std::vector<KmerInfo> heapWindow;
+
+            makeUpperCaseAndValidDNA(seq, len);
+
+            //Compute reverse complement of seq
+            std::unique_ptr<char[]> seqRev(new char[kmerSize]);
+
+            //if(alphabetSize == 4) //not protein
+              //CommonFunc::reverseComplement(seq, seqRev.get(), len);
+            
+            // Get distance until last "N"
+            int ambig_kmer_count = 0;
+
+
+            for(offset_t i = 0; i < len - kmerSize + 1; i++)
+            {
+              //The serial number of current sliding window
+              //First valid window appears when i = windowSize - 1
+              offset_t currentWindowId = i + kmerSize - windowSize;
+
+              // Remove expired kmers from heap
+              if (heapWindow.size() > 2*windowSize)
+              {
+                heapWindow.erase(
+                    std::remove_if(
+                      heapWindow.begin(), 
+                      heapWindow.end(),
+                      [currentWindowId](KmerInfo& ki) { return ki.pos < currentWindowId; }
+                    ),
+                    heapWindow.end());
+                std::make_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
+              }
+
+              //Hash kmers
+              hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
+              hash_t hashBwd;
+
+              if(alphabetSize == 4) 
+              {
+                CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
+                hashBwd = CommonFunc::getHash(seqRev.get(), kmerSize);
+              }
+              else  //proteins
+                hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
+
+              //Take minimum value of kmer and its reverse complement
+              hash_t currentKmer = std::min(hashFwd, hashBwd);
+              
+
+              //Check the strand of this minimizer hash value
+              auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
+
+              //If front minimum is not in the current window, remove it
+              if (!Q.empty() && std::get<2>(Q.front()) <  currentWindowId) 
+              {
+                const auto [leaving_hash, leaving_strand, _] = Q.front();
+
+                if (sortedWindow.size() > 0 && leaving_hash <= std::prev(sortedWindow.end())->first) 
+                {
+
+                  auto& leaving_pair = sortedWindow.find(leaving_hash)->second;
+
+                  // Check if this is the only occurence of this hash in the window
+                  if (leaving_pair.second.size() == 1) 
+                  {
+                    leaving_pair.first.wpos_end = currentWindowId;
+                    minmerIndex.push_back(leaving_pair.first);
+                    sortedWindow.erase(leaving_hash);
+                  } 
+                  else 
+                  {
+                    // Not removing hash, but need to adjust the strand
+                    if (leaving_pair.first.strand - leaving_strand == 0
+                            || leaving_pair.first.strand == 0)
+                    {
+                      leaving_pair.first.wpos_end = currentWindowId;
+                      minmerIndex.push_back(leaving_pair.first);
+                      leaving_pair.first.wpos = currentWindowId;
+                      leaving_pair.first.wpos_end = -1;
+                    }
+                    leaving_pair.first.strand -= leaving_strand;
+
+                    // Remove position from poslist
+                    leaving_pair.second.pop_front();
+                  }
+                }
+                Q.pop_front();
+              }
+
+              if (seq[i+kmerSize-1] == 'N')
+              {
+                ambig_kmer_count = kmerSize;
+              }
+              //Consider non-symmetric kmers only
+              if(hashBwd != hashFwd && ambig_kmer_count == 0)
+              {
+                // Add current hash to window
+                Q.push_back(std::make_tuple(currentKmer, currentStrand, i)); 
+
+                // Check if current kmer is already in the map
+                auto kmer_it = sortedWindow.find(currentKmer);
+                if (kmer_it != sortedWindow.end())
+                {
+                  auto& current_pair = kmer_it->second;
+                  current_pair.second.emplace_back(KmerInfo {currentKmer, seqCounter, i, currentStrand});
+                  // Not removing hash, but need to adjust the strand
+                  if (current_pair.first.strand + currentStrand == 0
+                          || current_pair.first.strand == 0)
+                  {
+                    current_pair.first.wpos_end = currentWindowId;
+                    minmerIndex.push_back(current_pair.first);
+                    current_pair.first.wpos = currentWindowId;
+                    current_pair.first.wpos_end = -1;
+                  }
+                  current_pair.first.strand += currentStrand;
+                }
+                // Going in the heap
+                else 
+                {
+                  heapWindow.emplace_back(KmerInfo {currentKmer, seqCounter, i, currentStrand});
+                  std::push_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
+                }
+              }
+              if (ambig_kmer_count > 0)
+              {
+                ambig_kmer_count--;
+              }
+              
+
+
+
+              // Add kmers from heap to window until full
+              if(currentWindowId >= 0)
+              {
+                // Ignore expired kmers
+                while (!heapWindow.empty() && heapWindow.front().pos < currentWindowId)
+                {
+                  std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
+                  heapWindow.pop_back(); 
+                }
+
+                //TODO leq?
+                if (sortedWindow.size() > 0 && heapWindow.size() > 0
+                    && sortedWindow.size() == sketchSize
+                    && (heapWindow.front().hash < std::prev(sortedWindow.end())->first))
+                {
+                  auto& largest = std::prev(sortedWindow.end())->second;
+                  // Add largest to index
+                  largest.first.wpos_end = currentWindowId;
+                  minmerIndex.push_back(largest.first);
+
+                  // Add kmers back to heap
+                  for (KmerInfo& kmer : largest.second) 
+                  {
+                    if (kmer.pos > currentWindowId) {
+                        heapWindow.push_back(kmer);
+                        std::push_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
+                    }
+                  }
+
+                  // Remove from window
+                  sortedWindow.erase(largest.first.hash);
+                }
+
+                while (!heapWindow.empty() && sortedWindow.size() < sketchSize) 
+                {
+                  if (heapWindow.front().pos < currentWindowId)
+                  {
+                    std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
+                    heapWindow.pop_back(); 
+                  }
+                  // Add kmers of same value
+                  const KmerInfo newKmer = heapWindow.front();
+                  sortedWindow[newKmer.hash].first = MinmerInfo{newKmer.hash, currentWindowId, -1, seqCounter, 0};
+                  while (!heapWindow.empty() && heapWindow.front().hash == newKmer.hash)
+                  {
+                    sortedWindow[newKmer.hash].second.push_back(heapWindow.front());
+                    sortedWindow[newKmer.hash].first.strand += heapWindow.front().strand;
+                    std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
+                    heapWindow.pop_back(); 
+                  }
+                }
+              }
+            }
+
+            // Add remaining open minmer windows
+            uint64_t rank = 1;
+            auto iter = sortedWindow.begin();
+            while (iter != sortedWindow.end() && rank <= sketchSize) 
+            {
+              if (iter->second.first.wpos != -1) 
+              {
+                iter->second.first.wpos_end = len - kmerSize + 1;
+                minmerIndex.push_back(iter->second.first);
+              }
+              std::advance(iter, 1);
+              rank += 1;
+            }
+
+            //// TODO Not sure why these are occuring but they are a bug
+            minmerIndex.erase(
+                std::remove_if(
+                  minmerIndex.begin(), 
+                  minmerIndex.end(), 
+                  [](auto& mi) { return mi.wpos < 0 || mi.wpos_end < 0 || mi.wpos == mi.wpos_end; }),
+                minmerIndex.end());
+
+
+            //// Split up windows longer than windowSize into chunks of windowSize or less
+            std::vector<MinmerInfo> chunkedMIs;
+            std::for_each(minmerIndex.begin(), minmerIndex.end(), [&chunkedMIs, windowSize, kmerSize] (auto& mi) {
+              mi.strand = mi.strand < 0 ? (mi.strand == 0 ? strnd::AMBIG : strnd::REV) : strnd::FWD;
+              if (mi.wpos_end > mi.wpos + windowSize) {
+                for (int chunk = 0; chunk < std::ceil(float(mi.wpos_end - mi.wpos) / float(windowSize)); chunk++) {
+                  chunkedMIs.push_back(
+                    MinmerInfo{
+                      mi.hash, 
+                      mi.wpos + chunk*windowSize, 
+                      std::min(mi.wpos + chunk*windowSize + windowSize, mi.wpos_end),
+                      mi.seqId, 
+                      mi.strand
+                    } 
+                  );
+                }
+              }
+            });
+            minmerIndex.erase(
+                std::remove_if(
+                  minmerIndex.begin(), 
+                  minmerIndex.end(), 
+                  [windowSize](auto& mi) { return mi.wpos_end - mi.wpos > windowSize; }),
+                minmerIndex.end());
+            minmerIndex.insert(minmerIndex.end(), chunkedMIs.begin(), chunkedMIs.end());
+
+            // Sort the index based on start position
+            std::sort(minmerIndex.begin(), minmerIndex.end(), [](auto& l, auto& r) {return std::tie(l.wpos, l.wpos_end) < std::tie(r.wpos, r.wpos_end);});
+
+            //// No duplicate windows
+            //// TODO These should not be occurring. They happen rarely, so just deleting them for now
+            //// but need to fix eventually 
+            minmerIndex.erase(
+                std::unique(
+                  minmerIndex.begin(), 
+                  minmerIndex.end(), 
+                  [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }),
+                minmerIndex.end());
+
+          }
 
         /**
           * @brief           Functor for comparing tuples by single index layer
