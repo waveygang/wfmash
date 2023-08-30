@@ -266,6 +266,8 @@ void write_merged_alignment(
 #ifdef WFA_PNG_AND_TSV
         const std::string* prefix_wavefront_plot_in_png,
         const uint64_t& wfplot_max_size,
+        const bool& emit_patching_tsv,
+        std::ostream* out_patching_tsv,
 #endif
         const bool& with_endline) {
 
@@ -380,7 +382,13 @@ void write_merged_alignment(
                 &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
                 &affine_penalties,
-                &chain_gap, &max_patching_score](std::vector<char> &unpatched,
+                &chain_gap, &max_patching_score
+#ifdef WFA_PNG_AND_TSV
+                ,
+                &emit_patching_tsv,
+                &out_patching_tsv
+#endif
+        ](std::vector<char> &unpatched,
                                    std::vector<char> &patched) {
             auto q = unpatched.begin();
 
@@ -922,6 +930,14 @@ void write_merged_alignment(
                                         size_region_to_repatch = 0;
                                     }
                                 }
+#ifdef WFA_PNG_AND_TSV
+                                if (emit_patching_tsv) {
+                                    *out_patching_tsv
+                                            << query_name << ":" << query_pos << "-" << query_pos + query_delta << "\t"
+                                            << target_name << ":" << target_pos - target_pointer_shift << "-" << target_pos - target_pointer_shift + target_delta << "\t"
+                                            << patch_aln.ok << std::endl;
+                                }
+#endif
                             }
                         }
                     }

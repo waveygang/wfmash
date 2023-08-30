@@ -56,6 +56,8 @@ struct Parameters {
     std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
     uint64_t wfplot_max_size;                     // Max size (width/height) of the wfplot
     std::string prefix_wavefront_plot_in_png;     // Prefix of PNG files with wavefront plot for each alignment
+
+    std::string path_patching_info_in_tsv;        // TSV file with patching statistics
 #endif
 };
 
