@@ -54,7 +54,9 @@ WFlign::WFlign(
     const int wflign_max_distance_threshold,
     const uint64_t wflign_max_len_major,
     const uint64_t wflign_max_len_minor,
-    const int erode_k) {
+    const int erode_k,
+    const int64_t chain_gap,
+    const int max_patching_score) {
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
@@ -71,6 +73,8 @@ WFlign::WFlign(
     this->wflign_max_len_major = wflign_max_len_major;
     this->wflign_max_len_minor = wflign_max_len_minor;
     this->erode_k = erode_k;
+    this->chain_gap = chain_gap;
+    this->max_patching_score = max_patching_score;
     // Query
     this->query_name = nullptr;
     this->query = nullptr;
@@ -492,6 +496,8 @@ void WFlign::wflign_affine_wavefront(
                 wflign_max_len_major,
                 wflign_max_len_minor,
                 erode_k,
+                chain_gap,
+                max_patching_score,
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
 #ifdef WFA_PNG_AND_TSV
@@ -945,6 +951,8 @@ void WFlign::wflign_affine_wavefront(
                         wflign_max_len_major,
                         wflign_max_len_minor,
                         erode_k,
+                        chain_gap,
+                        max_patching_score,
                         MIN_WF_LENGTH,
                         wf_max_dist_threshold
 #ifdef WFA_PNG_AND_TSV

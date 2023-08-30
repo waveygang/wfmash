@@ -500,7 +500,9 @@ namespace align
                 param.wflign_max_distance_threshold,
                 param.wflign_max_len_major,
                 param.wflign_max_len_minor,
-                param.wflign_erode_k);
+                param.wflign_erode_k,
+                param.chain_gap,
+                param.wflign_max_patching_score);
         wflign->set_output(
                 &output,
 #ifdef WFA_PNG_AND_TSV
