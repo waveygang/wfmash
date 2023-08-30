@@ -183,7 +183,7 @@ namespace align
           // input atomic queue
           seq_atomic_queue_t seq_queue;
           // output atomic queues
-          paf_atomic_queue_t paf_queue, tsv_queue;
+          paf_atomic_queue_t paf_queue, tsv_queue, patching_tsv_queue;
           // flag when we're done reading
           std::atomic<bool> reader_done;
           reader_done.store(false);
@@ -328,6 +328,26 @@ namespace align
                   }
               }
           };
+
+          std::ofstream ofstream_patching_tsv(param.path_patching_info_in_tsv);
+          auto writer_thread_patching_tsv =
+                  [&]() {
+                      if (!param.path_patching_info_in_tsv.empty()) {
+                          while (true) {
+                              std::string* tsv_lines = nullptr;
+                              if (!patching_tsv_queue.try_pop(tsv_lines)
+                                  && !still_working(working)) {
+                                  break;
+                              } else if (tsv_lines != nullptr) {
+                                  ofstream_patching_tsv << *tsv_lines;
+
+                                  delete tsv_lines;
+                              } else {
+                                  std::this_thread::sleep_for(100ns);
+                              }
+                          }
+                      }
+                  };
 #endif
 
           // worker, takes candidate alignments and runs wfa alignment on them
@@ -344,11 +364,13 @@ namespace align
                           std::stringstream output;
 #ifdef WFA_PNG_AND_TSV
                           std::stringstream output_tsv;
+                          std::stringstream patching_output_tsv;
 #endif
                           doAlignment(
                                   output,
 #ifdef WFA_PNG_AND_TSV
                                   output_tsv,
+                                  patching_output_tsv,
 #endif
                                   rec->currentRecord,
                                   rec->mappingRecordLine,
@@ -369,6 +391,13 @@ namespace align
                           } else {
                               delete tsv_rec;
                           }
+
+                          auto* patching_tsv_rec = new std::string(patching_output_tsv.str());
+                          if (!patching_tsv_rec->empty()) {
+                              patching_tsv_queue.push(patching_tsv_rec);
+                          } else {
+                              delete patching_tsv_rec;
+                          }
 #endif
 
                           delete rec;
@@ -386,6 +415,7 @@ namespace align
 #ifdef WFA_PNG_AND_TSV
           // launch TSV writer
           std::thread writer_tsv(writer_thread_tsv);
+          std::thread writer_patching_tsv(writer_thread_patching_tsv);
 #endif
           // launch workers
           std::vector<std::thread> workers; workers.reserve(nthreads);
@@ -404,6 +434,8 @@ namespace align
           writer.join();
 #ifdef WFA_PNG_AND_TSV
           writer_tsv.join();
+          writer_patching_tsv.join();
+          ofstream_patching_tsv.close();
 #endif
           progress.finish();
           std::cerr << "[wfmash::align::computeAlignments] "
@@ -422,6 +454,7 @@ namespace align
               std::stringstream& output,
 #ifdef WFA_PNG_AND_TSV
               std::stringstream& output_tsv,
+              std::stringstream& patching_output_tsv,
 #endif
               MappingBoundaryRow &currentRecord,
               const std::string &mappingRecordLine,
@@ -510,6 +543,8 @@ namespace align
                 &output_tsv,
                 param.prefix_wavefront_plot_in_png,
                 param.wfplot_max_size,
+                !param.path_patching_info_in_tsv.empty(),
+                &patching_output_tsv,
 #endif
                 true, // merge alignments
                 param.emit_md_tag,

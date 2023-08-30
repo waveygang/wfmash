@@ -95,6 +95,8 @@ WFlign::WFlign(
     this->out_tsv = nullptr;
     this->prefix_wavefront_plot_in_png = nullptr;
     this->wfplot_max_size = 0;
+    this->emit_patching_tsv = false;
+    this->out_patching_tsv = nullptr;
 #endif
     this->merge_alignments = false;
     this->emit_md_tag = false;
@@ -111,6 +113,8 @@ void WFlign::set_output(
     std::ostream* const out_tsv,
     const std::string &wfplot_filepath,
     const uint64_t wfplot_max_size,
+    const bool emit_patching_tsv,
+    std::ostream* const out_patching_tsv,
 #endif
     const bool merge_alignments,
     const bool emit_md_tag,
@@ -122,6 +126,8 @@ void WFlign::set_output(
     this->out_tsv = out_tsv;
     this->prefix_wavefront_plot_in_png = &wfplot_filepath;
     this->wfplot_max_size = wfplot_max_size;
+    this->emit_patching_tsv = emit_patching_tsv;
+    this->out_patching_tsv = out_patching_tsv;
 #endif
     this->merge_alignments = merge_alignments;
     this->emit_md_tag = emit_md_tag;
@@ -503,7 +509,9 @@ void WFlign::wflign_affine_wavefront(
 #ifdef WFA_PNG_AND_TSV
                 ,
                 prefix_wavefront_plot_in_png,
-                wfplot_max_size
+                wfplot_max_size,
+                emit_patching_tsv,
+                out_patching_tsv
 #endif
                 );
 
@@ -958,7 +966,9 @@ void WFlign::wflign_affine_wavefront(
 #ifdef WFA_PNG_AND_TSV
                         ,
                         prefix_wavefront_plot_in_png,
-                        wfplot_max_size
+                        wfplot_max_size,
+                        emit_patching_tsv,
+                        out_patching_tsv
 #endif
                         );
             } else {

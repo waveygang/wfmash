@@ -91,6 +91,8 @@ namespace wflign {
 #ifdef WFA_PNG_AND_TSV
                 const std::string* prefix_wavefront_plot_in_png,
                 const uint64_t& wfplot_max_size,
+                const bool& emit_patching_tsv,
+                std::ostream* out_patching_tsv,
 #endif
                 const bool& with_endline = true);
         void write_alignment(

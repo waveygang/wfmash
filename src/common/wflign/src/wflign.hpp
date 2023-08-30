@@ -76,6 +76,8 @@ namespace wflign {
             std::ostream* out_tsv;
             const std::string* prefix_wavefront_plot_in_png;
             uint64_t wfplot_max_size;
+            bool emit_patching_tsv;
+            std::ostream* out_patching_tsv;
 #endif
             bool merge_alignments;
             bool emit_md_tag;
@@ -108,6 +110,8 @@ namespace wflign {
                     std::ostream* const out_tsv,
                     const std::string &wfplot_filepath,
                     const uint64_t wfplot_max_size,
+                    const bool emit_patching_tsv,
+                    std::ostream* const out_patching_tsv,
 #endif
                     const bool merge_alignments,
                     const bool emit_md_tag,
