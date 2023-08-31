@@ -262,7 +262,7 @@ void parse_args(int argc,
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params."//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wfa-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
                       << std::endl;
             exit(1);
         }
