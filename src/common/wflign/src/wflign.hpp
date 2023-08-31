@@ -54,6 +54,8 @@ namespace wflign {
             uint64_t wflign_max_len_major;
             uint64_t wflign_max_len_minor;
             int erode_k;
+            int64_t chain_gap;
+            int max_patching_score;
             // Query
             const std::string* query_name;
             char* query;
@@ -74,6 +76,8 @@ namespace wflign {
             std::ostream* out_tsv;
             const std::string* prefix_wavefront_plot_in_png;
             uint64_t wfplot_max_size;
+            bool emit_patching_tsv;
+            std::ostream* out_patching_tsv;
 #endif
             bool merge_alignments;
             bool emit_md_tag;
@@ -95,7 +99,9 @@ namespace wflign {
                     const int wflign_max_distance_threshold,
                     const uint64_t wflign_max_len_major,
                     const uint64_t wflign_max_len_minor,
-                    const int erode_k);
+                    const int erode_k,
+                    const int64_t chain_gap,
+                    const int max_patching_score);
             // Set output configuration
             void set_output(
                     std::ostream* const out,
@@ -104,6 +110,8 @@ namespace wflign {
                     std::ostream* const out_tsv,
                     const std::string &wfplot_filepath,
                     const uint64_t wfplot_max_size,
+                    const bool emit_patching_tsv,
+                    std::ostream* const out_patching_tsv,
 #endif
                     const bool merge_alignments,
                     const bool emit_md_tag,

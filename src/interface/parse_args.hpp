@@ -103,11 +103,11 @@ void parse_args(int argc,
                                 {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
+                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 4,6,1]",//, if 4 values then gaps are affine, if 6 values then gaps are convex",
                                             {'g', "wfa-params"});
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                                       "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: adaptive with respect to the estimated identity]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
+                                                       "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 4,6,1]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                                        {'G', "wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
     args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
@@ -117,6 +117,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
     args::ValueFlag<std::string> wflign_max_len_minor(alignment_opts, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
     args::ValueFlag<int> wflign_erode_k(alignment_opts, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
+    args::ValueFlag<int> wflign_max_patching_score(alignment_opts, "N", "maximum score allowed when patching [default: adaptive with respect to gap penalties and sequence length]", {"max-patching-score"});
 
     args::Group output_opts(parser, "[ Output Format Options ]");
     // format parameters
@@ -135,6 +136,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
     args::ValueFlag<std::string> prefix_wavefront_plot_in_png(parser, "PREFIX", " write wavefronts' plot for each alignment in PNG format files with this PREFIX", {'u', "prefix-png"});
     args::ValueFlag<uint64_t> wfplot_max_size(parser, "N", "max size of the wfplot [default: 1500]", {'z', "wfplot-max-size"});
+    args::ValueFlag<std::string> path_patching_info_in_tsv(parser, "FILE", " write patching information for each alignment in TSV format in FILE", {"path-patching-tsv"});
 #endif
 
     args::Group threading_opts(parser, "[ Threading ]");
@@ -260,7 +262,7 @@ void parse_args(int argc,
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wflamda-params."//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
+            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wfa-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
                       << std::endl;
             exit(1);
         }
@@ -403,8 +405,10 @@ void parse_args(int argc,
             exit(1);
         }
         map_parameters.chain_gap = l;
+        align_parameters.chain_gap = l;
     } else {
         map_parameters.chain_gap = 20000;
+        align_parameters.chain_gap = 20000;
     }
 
     if (drop_low_map_pct_identity) {
@@ -538,6 +542,12 @@ void parse_args(int argc,
         align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
     }
 
+    if (wflign_max_patching_score) {
+        align_parameters.wflign_max_patching_score = args::get(wflign_max_patching_score);
+    } else {
+        align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
+    }
+
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
         align_parameters.threads = args::get(thread_count);
@@ -620,6 +630,10 @@ void parse_args(int argc,
     align_parameters.tsvOutputPrefix = (prefix_wavefront_info_in_tsv && !args::get(prefix_wavefront_info_in_tsv).empty())
             ? args::get(prefix_wavefront_info_in_tsv)
             : "";
+
+    align_parameters.path_patching_info_in_tsv = (path_patching_info_in_tsv && !args::get(path_patching_info_in_tsv).empty())
+                                               ? args::get(path_patching_info_in_tsv)
+                                               : "";
 
     // wfplotting
     if (prefix_wavefront_plot_in_png) {

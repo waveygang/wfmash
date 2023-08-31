@@ -54,7 +54,9 @@ namespace wflign {
                 const uint64_t& target_length,
                 wfa::WFAlignerGapAffine& _wf_aligner,
                 const wflign_penalties_t& affine_penalties,
-                alignment_t& aln);
+                alignment_t& aln,
+                const int64_t& chain_gap,
+                const int& max_patching_score);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
@@ -82,11 +84,15 @@ namespace wflign {
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
                 const int& erode_k,
+                const int64_t& chain_gap,
+                const int& max_patching_score,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
 #ifdef WFA_PNG_AND_TSV
                 const std::string* prefix_wavefront_plot_in_png,
                 const uint64_t& wfplot_max_size,
+                const bool& emit_patching_tsv,
+                std::ostream* out_patching_tsv,
 #endif
                 const bool& with_endline = true);
         void write_alignment(

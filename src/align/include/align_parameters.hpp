@@ -39,6 +39,8 @@ struct Parameters {
     uint64_t wflign_max_len_minor;
     int wflign_erode_k;
     int kmerSize;                                 //kmer size for pre-checking before aligning a fragment
+    int64_t chain_gap;                            //max distance for 2d range union-find mapping chaining;
+    int wflign_max_patching_score;                //maximum score allowed for patching
 
     std::vector<std::string> refSequences;        //reference sequence(s)
     std::vector<std::string> querySequences;      //query sequence(s)
@@ -54,6 +56,8 @@ struct Parameters {
     std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
     uint64_t wfplot_max_size;                     // Max size (width/height) of the wfplot
     std::string prefix_wavefront_plot_in_png;     // Prefix of PNG files with wavefront plot for each alignment
+
+    std::string path_patching_info_in_tsv;        // TSV file with patching statistics
 #endif
 };
 

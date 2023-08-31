@@ -193,12 +193,17 @@ void do_wfa_patch_alignment(
         const uint64_t& target_length,
         wfa::WFAlignerGapAffine& wf_aligner,
         const wflign_penalties_t& affine_penalties,
-        alignment_t& aln) {
+        alignment_t& aln,
+        const int64_t& chain_gap,
+        const int& max_patching_score) {
 
     const int max_score
-            = (affine_penalties.gap_opening
-               + (affine_penalties.gap_extension
-                  * std::max((int)256, (int)std::min(target_length, query_length))));
+            = max_patching_score ? max_patching_score :
+                    affine_penalties.gap_opening +
+                     (affine_penalties.gap_extension * std::min(
+                       (int)chain_gap,
+                       (int)std::max(target_length, query_length)
+                     ));
     wf_aligner.setMaxAlignmentSteps(max_score);
     const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
     aln.ok = (status == WF_STATUS_ALG_COMPLETED);
@@ -254,11 +259,15 @@ void write_merged_alignment(
         const uint64_t& wflign_max_len_major,
         const uint64_t& wflign_max_len_minor,
         const int& erode_k,
+        const int64_t& chain_gap,
+        const int& max_patching_score,
         const int& min_wf_length,
         const int& max_dist_threshold,
 #ifdef WFA_PNG_AND_TSV
         const std::string* prefix_wavefront_plot_in_png,
         const uint64_t& wfplot_max_size,
+        const bool& emit_patching_tsv,
+        std::ostream* out_patching_tsv,
 #endif
         const bool& with_endline) {
 
@@ -372,7 +381,14 @@ void write_merged_alignment(
                 &wflign_max_len_minor,
                 &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
-                &affine_penalties](std::vector<char> &unpatched,
+                &affine_penalties,
+                &chain_gap, &max_patching_score
+#ifdef WFA_PNG_AND_TSV
+                ,
+                &emit_patching_tsv,
+                &out_patching_tsv
+#endif
+        ](std::vector<char> &unpatched,
                                    std::vector<char> &patched) {
             auto q = unpatched.begin();
 
@@ -859,7 +875,7 @@ void write_merged_alignment(
                                 do_wfa_patch_alignment(
                                         query, query_pos, query_delta,
                                         target - target_pointer_shift, target_pos, target_delta,
-                                        wf_aligner, affine_penalties, patch_aln);
+                                        wf_aligner, affine_penalties, patch_aln, chain_gap, max_patching_score);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;
@@ -870,7 +886,7 @@ void write_merged_alignment(
                                             patch_aln.edit_cigar.end_offset;
                                     for (int i = start_idx; i < end_idx; i++) {
                                         // std::cerr <<
-                                        // patch_aln.edit_cigar.operations[i];
+                                        // patch_aln.edit_cigar.cigar_ops[i];
                                         patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
                                     }
                                     // std::cerr << "\n";
@@ -914,6 +930,14 @@ void write_merged_alignment(
                                         size_region_to_repatch = 0;
                                     }
                                 }
+#ifdef WFA_PNG_AND_TSV
+                                if (emit_patching_tsv) {
+                                    *out_patching_tsv
+                                            << query_name << ":" << query_pos << "-" << query_pos + query_delta << "\t"
+                                            << target_name << ":" << target_pos - target_pointer_shift << "-" << target_pos - target_pointer_shift + target_delta << "\t"
+                                            << patch_aln.ok << std::endl;
+                                }
+#endif
                             }
                         }
                     }
