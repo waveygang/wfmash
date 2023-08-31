@@ -52,7 +52,7 @@ namespace wflign {
                 const char* target,
                 const uint64_t& i,
                 const uint64_t& target_length,
-                wfa::WFAlignerGapAffine& _wf_aligner,
+                wfa::WFAlignerGapAffine2Pieces& _wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 alignment_t& aln,
                 const int64_t& chain_gap,
@@ -60,7 +60,7 @@ namespace wflign {
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
-                wfa::WFAlignerGapAffine& wf_aligner,
+                wfa::WFAlignerGapAffine2Pieces& wf_aligner,
                 const wflign_penalties_t& affine_penalties,
                 const bool& emit_md_tag,
                 const bool& paf_format_else_sam,

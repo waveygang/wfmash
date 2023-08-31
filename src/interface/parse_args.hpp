@@ -103,7 +103,7 @@ void parse_args(int argc,
                                 {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 4,6,1]",//, if 4 values then gaps are affine, if 6 values then gaps are convex",
+                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 4,6,2,26,1]",//, if 4 values then gaps are affine, if 6 values then gaps are convex",
                                             {'g', "wfa-params"});
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
@@ -261,8 +261,8 @@ void parse_args(int argc,
 
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
-        if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to -g/--wfa-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
+        if (params_str.size() != 5) {
+            std::cerr << "[wfmash] ERROR error: 35scoring parameters must be given to -g/--wfa-params"//either 3 or 5 scoring parameters must be given to -g/--wflamda-params
                       << std::endl;
             exit(1);
         }
@@ -272,20 +272,16 @@ void parse_args(int argc,
                        [](const std::string &s) { return std::stoi(s); });
 
         align_parameters.wfa_mismatch_score = params[0];
-        align_parameters.wfa_gap_opening_score = params[1];
-        align_parameters.wfa_gap_extension_score = params[2];
-
-        /*if (params.size() == 6) {
-            align_parameters.wflambda_mismatch_score = params[0];
-            align_parameters.wflambda_gap_opening_score = params[1];
-            align_parameters.wflambda_gap_extension_score = params[2];
-            xx = params[4];
-            xx = params[5];
-        }*/
+        align_parameters.wfa_gap_opening_score1 = params[1];
+        align_parameters.wfa_gap_extension_score1 = params[2];
+        align_parameters.wfa_gap_extension_score2 = params[3];
+        align_parameters.wfa_gap_extension_score2 = params[4];
     } else {
         align_parameters.wfa_mismatch_score = -1;
-        align_parameters.wfa_gap_opening_score = -1;
-        align_parameters.wfa_gap_extension_score = -1;
+        align_parameters.wfa_gap_opening_score1 = -1;
+        align_parameters.wfa_gap_extension_score1 = -1;
+        align_parameters.wfa_gap_opening_score2 = -1;
+        align_parameters.wfa_gap_extension_score2 = -1;
     }
 
     if (!args::get(wflign_score_params).empty()) {
@@ -303,14 +299,6 @@ void parse_args(int argc,
         align_parameters.wflign_mismatch_score = params[0];
         align_parameters.wflign_gap_opening_score = params[1];
         align_parameters.wflign_gap_extension_score = params[2];
-
-        /*if (params.size() == 6) {
-            align_parameters.wflign_gap_opening_score = params[0];
-            align_parameters.wflign_gap_extension_score = params[1];
-            align_parameters.wflign_gap_extension_score = params[2];
-            xx = params[4];
-            xx = params[5];
-        }*/
     } else {
         align_parameters.wflign_mismatch_score = -1;
         align_parameters.wflign_gap_opening_score = -1;

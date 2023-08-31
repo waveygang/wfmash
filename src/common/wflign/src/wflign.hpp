@@ -41,8 +41,10 @@ namespace wflign {
             float min_identity;
             int _minhash_kmer_size;
             int wfa_mismatch_score;
-            int wfa_gap_opening_score;
-            int wfa_gap_extension_score;
+            int wfa_gap_opening_score1;
+            int wfa_gap_extension_score1;
+            int wfa_gap_opening_score2;
+            int wfa_gap_extension_score2;
             float mashmap_estimated_identity;
             // WFlign parameters
             int wflign_mismatch_score;
@@ -88,8 +90,10 @@ namespace wflign {
                     const uint16_t segment_length,
                     const float min_identity,
                     const int wfa_mismatch_score,
-                    const int wfa_gap_opening_score,
-                    const int wfa_gap_extension_score,
+                    const int wfa_gap_opening_score1,
+                    const int wfa_gap_extension_score1,
+                    const int wfa_gap_opening_score2,
+                    const int wfa_gap_extension_score2,
                     const float mashmap_estimated_identity,
                     const int wflign_mismatch_score,
                     const int wflign_gap_opening_score,

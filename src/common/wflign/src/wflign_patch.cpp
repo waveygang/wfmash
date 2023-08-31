@@ -191,7 +191,7 @@ void do_wfa_patch_alignment(
         const char* target,
         const uint64_t& i,
         const uint64_t& target_length,
-        wfa::WFAlignerGapAffine& wf_aligner,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         alignment_t& aln,
         const int64_t& chain_gap,
@@ -199,8 +199,8 @@ void do_wfa_patch_alignment(
 
     const int max_score
             = max_patching_score ? max_patching_score :
-                    affine_penalties.gap_opening +
-                     (affine_penalties.gap_extension * std::min(
+                    std::max(affine_penalties.gap_opening1, affine_penalties.gap_opening2) +
+                     (std::max(affine_penalties.gap_extension1, affine_penalties.gap_extension2) * std::min(
                        (int)chain_gap,
                        (int)std::max(target_length, query_length)
                      ));
@@ -235,7 +235,7 @@ void do_wfa_patch_alignment(
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
-        wfa::WFAlignerGapAffine& wf_aligner,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
         const wflign_penalties_t& affine_penalties,
         const bool& emit_md_tag,
         const bool& paf_format_else_sam,
