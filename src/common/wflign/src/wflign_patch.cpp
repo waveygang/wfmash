@@ -543,14 +543,17 @@ void write_merged_alignment(
 //                        }
 //                        std::cerr << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_heads =
-                                new wfa::WFAlignerGapAffine(
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_heads =
+                                new wfa::WFAlignerGapAffine2Pieces(
+                                        0,
                                         affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                                        affine_penalties.gap_opening1,
+                                        affine_penalties.gap_extension1,
+                                        affine_penalties.gap_opening2,
+                                        affine_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
-                                        wfa::WFAligner::MemoryMed);
-                        wf_aligner_heads->setHeuristicWFmash(min_wf_length,max_dist_threshold);
+                                        wfa::WFAligner::MemoryUltralow);
+                        //wf_aligner_heads->setHeuristicWFmash(min_wf_length,max_dist_threshold);
                         const int status = wf_aligner_heads->alignEndsFree(
                                 target_rev.c_str(),target_rev.size(),0,0,
                                 query_rev.c_str(),query_rev.size(),0,query_rev.size());
@@ -1041,13 +1044,16 @@ void write_merged_alignment(
 //                                  << target_delta_x
 //                                  << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_tails =
-                                new wfa::WFAlignerGapAffine(
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails =
+                                new wfa::WFAlignerGapAffine2Pieces(
+                                        0,
                                         affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                                        affine_penalties.gap_opening1,
+                                        affine_penalties.gap_extension1,
+                                        affine_penalties.gap_opening2,
+                                        affine_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
-                                        wfa::WFAligner::MemoryMed);
+                                        wfa::WFAligner::MemoryUltralow);
                         wf_aligner_tails->setHeuristicWFmash(min_wf_length,max_dist_threshold);
                         const int status = wf_aligner_tails->alignEndsFree(
                                 target - target_pointer_shift + target_pos, target_delta_x,0,0,
