@@ -200,7 +200,7 @@ void do_wfa_patch_alignment(
     const int max_score
             = max_patching_score ? max_patching_score :
                     std::max(affine_penalties.gap_opening1, affine_penalties.gap_opening2) +
-                     (std::max(affine_penalties.gap_extension1, affine_penalties.gap_extension2) * std::min(
+                     (affine_penalties.gap_extension2 * std::min(
                        (int)chain_gap,
                        (int)std::max(target_length, query_length)
                      ));

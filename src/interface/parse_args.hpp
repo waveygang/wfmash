@@ -274,7 +274,7 @@ void parse_args(int argc,
         align_parameters.wfa_mismatch_score = params[0];
         align_parameters.wfa_gap_opening_score1 = params[1];
         align_parameters.wfa_gap_extension_score1 = params[2];
-        align_parameters.wfa_gap_extension_score2 = params[3];
+        align_parameters.wfa_gap_opening_score2 = params[3];
         align_parameters.wfa_gap_extension_score2 = params[4];
     } else {
         align_parameters.wfa_mismatch_score = -1;
