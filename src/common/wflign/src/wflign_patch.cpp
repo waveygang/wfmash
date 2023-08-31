@@ -552,7 +552,7 @@ void write_merged_alignment(
                                         affine_penalties.gap_opening2,
                                         affine_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
-                                        wfa::WFAligner::MemoryUltralow);
+                                        wfa::WFAligner::MemoryMed);
                         //wf_aligner_heads->setHeuristicWFmash(min_wf_length,max_dist_threshold);
                         const int status = wf_aligner_heads->alignEndsFree(
                                 target_rev.c_str(),target_rev.size(),0,0,
@@ -1053,7 +1053,7 @@ void write_merged_alignment(
                                         affine_penalties.gap_opening2,
                                         affine_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
-                                        wfa::WFAligner::MemoryUltralow);
+                                        wfa::WFAligner::MemoryMed);
                         wf_aligner_tails->setHeuristicWFmash(min_wf_length,max_dist_threshold);
                         const int status = wf_aligner_tails->alignEndsFree(
                                 target - target_pointer_shift + target_pos, target_delta_x,0,0,
