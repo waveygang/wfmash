@@ -92,12 +92,13 @@ namespace fixed
 //int max_best_mappings_per_position = 25;          // At a particular position, if algorithm finds more than a certain best
 //mappings, it doesn't mark them as best anymore
 
+double ss_table_max = 1000.0;                       // Maximum size of dp table for filtering
 double pval_cutoff = 1e-3;                          // p-value cutoff for determining window size
 float confidence_interval = 0.95;                   // Confidence interval to relax jaccard cutoff for mapping (0-1)
 float percentage_identity = 0.85;                   // Percent identity in the mapping step
 float ANIDiff = 0.0;                                // Stage 1 ANI diff threshold
 float ANIDiffConf = 0.999;                          // ANI diff confidence
-std::string VERSION = "3.1.0";                      // Version of MashMap
+std::string VERSION = "3.1.1";                      // Version of MashMap
 }
 }
 
