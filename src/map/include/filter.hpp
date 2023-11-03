@@ -41,7 +41,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity; }
+        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength) ; }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
@@ -254,7 +254,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity; }
+        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength) ; }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
