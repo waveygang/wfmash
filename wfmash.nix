@@ -7,8 +7,8 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "waveygang"; 
     repo = "wfmash";
-    rev = "bcfbc14eff4874cda59c66a678fb7d69a31671c5";
-    sha256 = "sha256-1PNd58O1IjGf+PJPEZttK4S215AEXsI/hKG6kc1inLs=";
+    rev = "805e196254fab749287d7b21175bdf8d6d260244";
+    sha256 = "sha256-a2xzSQ7mf2ipGVE/IPZicipqyITg2tY+X0V7uLOFFsQ=";
   };
 
   nativeBuildInputs = [ cmake makeWrapper ];
