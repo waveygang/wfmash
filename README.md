@@ -179,6 +179,25 @@ If you have `nix`, build and installation in your profile are as simple as:
 nix-build && nix-env -i ./result
 ```
 
+#### Docker and Singularity images with nix
+
+Nix is also able to build an Docker image, which can then be loaded by Docker and converted to a Singularity image.
+
+```
+nix-build docker.nix
+docker load < result
+singularity build wfmash.sif docker-daemon://wfmash-docker:latest
+```
+
+This can be run with Singularity like this:
+
+```
+singularity run wfmash.sif $ARGS
+```
+
+Where `$ARGS` are your typical command line arguments to `wfmash`.
+
+
 ### Bioconda
 
 `wfmash` recipes for Bioconda are available at https://anaconda.org/bioconda/wfmash.
