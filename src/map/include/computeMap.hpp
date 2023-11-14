@@ -285,8 +285,14 @@ namespace skch
                 std::string line;
                 std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
-                    ++total_seqs;
                     auto line_split = CommonFunc::split(line, '\t');
+					// if we have a param.target_prefix and the sequence name matches, skip it
+					if (param.skip_self
+						&& param.target_prefix != ""
+						&& line_split[0].substr(0, param.target_prefix.size()) == param.target_prefix) {
+						continue;
+					}
+					++total_seqs;
                     total_seq_length += std::stoul(line_split[1]);
                 }
             } else {
@@ -296,8 +302,15 @@ namespace skch
                     fileName, {}, "",
                     [&](const std::string& seq_name,
                         const std::string& seq) {
-                        ++total_seqs;
-                        total_seq_length += seq.size();
+						// if we have a param.target_prefix and the sequence name matches, skip it
+						if (param.skip_self
+							&& param.target_prefix != ""
+							&& seq_name.substr(0, param.target_prefix.size()) == param.target_prefix) {
+							// skip
+						} else {
+							++total_seqs;
+							total_seq_length += seq.size();
+						}
                     });
             }
         }
@@ -317,34 +330,39 @@ namespace skch
                     const std::string& seq) {
                     // todo: offset_t is an 32-bit integer, which could cause problems
                     offset_t len = seq.length();
-
-                    if (param.filterMode == filter::ONETOONE)
-                        qmetadata.push_back( ContigInfo{seq_name, len} );
-                    //Is the read too short?
-                    if(len < param.kmerSize)
-                    {
+					if (param.skip_self
+						&& param.target_prefix != ""
+						&& seq_name.substr(0, param.target_prefix.size()) == param.target_prefix) {
+						// skip
+					} else {
+						if (param.filterMode == filter::ONETOONE)
+							qmetadata.push_back( ContigInfo{seq_name, len} );
+						//Is the read too short?
+						if(len < param.kmerSize)
+						{
 //#ifdef DEBUG
-                        // TODO Should we somehow revert to < windowSize?
-                        std::cerr << std::endl
-                                  << "WARNING, skch::Map::mapQuery, read "
-                                  << seq_name << " of " << len << "bp "
-                                  << " is not long enough for mapping at segment length "
-                                  << param.segLength << std::endl;
+							// TODO Should we somehow revert to < windowSize?
+							std::cerr << std::endl
+									  << "WARNING, skch::Map::mapQuery, read "
+									  << seq_name << " of " << len << "bp "
+									  << " is not long enough for mapping at segment length "
+									  << param.segLength << std::endl;
 //#endif
-                    }
-                    else
-                    {
-                        totalReadsPickedForMapping++;
-                        //Dispatch input to thread
-                        threadPool.runWhenThreadAvailable(new InputSeqProgContainer(seq, seq_name, seqCounter, progress));
+						}
+						else
+						{
+							totalReadsPickedForMapping++;
+							//Dispatch input to thread
+							threadPool.runWhenThreadAvailable(new InputSeqProgContainer(seq, seq_name, seqCounter, progress));
 
-                        //Collect output if available
-                        while ( threadPool.outputAvailable() ) {
-                            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
-                        }
-                    }
-                    //progress.increment(seq.size()/2);
-                    seqCounter++;
+							//Collect output if available
+							while ( threadPool.outputAvailable() ) {
+								mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
+							}
+						}
+						//progress.increment(seq.size()/2);
+						seqCounter++;
+					}
                 }); //Finish reading query input file
 
         }
