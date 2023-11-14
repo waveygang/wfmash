@@ -49,6 +49,12 @@ else()
   message(FATAL_ERROR "Could not find HTSLib")
 endif()
 
+find_path(HTSLIB_INCLUDE_DIR NAMES htslib/faidx.h)
+if(NOT HTSLIB_INCLUDE_DIR)
+    message(FATAL_ERROR "HTSLib include directory not found")
+endif()
+include_directories(${HTSLIB_INCLUDE_DIR})
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
