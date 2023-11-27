@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   pname = "wfmash";
-  version = "0.12.2";
+  version = "0.12.3";
 
   src = fetchFromGitHub {
     owner = "waveygang"; 
     repo = "wfmash";
-    rev = "180455df2aaa298fbe2dafb1ddfc2796c78b3fcd";
-    sha256 = "sha256-LxmVZcdOYWr1taMuzoW9/7bXJNo5NVgqOCz08gG7CuE=";
+    rev = "2b42cba6a6623d7838605679dbce73b6fc2bde33";
+    sha256 = "sha256-2EIHPNXV9Rkvgui0zpsKanE888sd9kWHzqRkRl9wkoY=";
   };
 
   nativeBuildInputs = [ cmake makeWrapper ];
