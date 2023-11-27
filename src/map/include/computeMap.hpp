@@ -1747,7 +1747,7 @@ namespace skch
             outstrm  << sep << e.conservedSketches
                      << sep << e.blockLength
                      << sep << fakeMapQ
-                     << sep << "id:f:" << (param.report_ANI_percentage ? 100.0 : 1.0) * e.nucIdentity
+                     << sep << "id:f:" << (param.legacy_output ? 100.0 : 1.0) * e.nucIdentity
                      << sep << "kc:f:" << e.kmerComplexity;
             if (!param.mergeMappings) 
             {
