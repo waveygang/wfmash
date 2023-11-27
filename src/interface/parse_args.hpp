@@ -580,6 +580,7 @@ void parse_args(int argc,
     map_parameters.filterLengthMismatches = true;
 
     map_parameters.stage1_topANI_filter = !bool(no_hg_filter); 
+    map_parameters.stage2_full_scan = true;
 
     if (hg_filter_ani_diff)
     {
