@@ -124,7 +124,7 @@ namespace align
         // Extract the mashmap identity from the string
         const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
         // if the estimated identity is missing, avoid assuming too low values
-        const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back())/(float) 100.0 : skch::fixed::percentage_identity; // divide by 100 for consistency with block alignment
+        const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
         //Save words into currentRecord
         {
