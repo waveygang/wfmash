@@ -758,7 +758,7 @@ namespace skch
             }
 
             //Sort L1 windows based on intersection size if using hg filter
-            if (param.stage1_topANI_filter)
+            if (param.stage1_topANI_filter && Q.kmerComplexity >= skch::fixed::stage1_kmer_complexity_thresh)
             {
               std::make_heap(l1_begin, l1_end, L1_locus_intersection_cmp);
             }
@@ -917,7 +917,7 @@ namespace skch
           // Only necessary when windowLen != 0.
           std::unordered_map<hash_t, int> hash_to_freq;
 
-          if (param.stage1_topANI_filter) {
+          if (param.stage1_topANI_filter && Q.kmerComplexity >= skch::fixed::stage1_kmer_complexity_thresh) {
             while (leadingIt != ip_end)
             {
               // Catch the trailing iterator up to the leading iterator - windowLen
@@ -1161,7 +1161,7 @@ namespace skch
           {
             L1_candidateLocus_t& candidateLocus = *loc_iterator;
 
-            if (param.stage1_topANI_filter)
+            if (param.stage1_topANI_filter && Q.kmerComplexity >= skch::fixed::stage1_kmer_complexity_thresh)
             {
               // If using HG filter, don't consider any mappings which have no chance of being 
               // within param.ANIDiff of the best mapping seen so far
@@ -1223,7 +1223,7 @@ namespace skch
               }
             }
 
-            if (param.stage1_topANI_filter) 
+            if (param.stage1_topANI_filter && Q.kmerComplexity >= skch::fixed::stage1_kmer_complexity_thresh)
             {
               std::pop_heap(l1_begin, l1_end, L1_locus_intersection_cmp); 
               l1_end--; //"Pop back" 

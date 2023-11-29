@@ -99,6 +99,7 @@ float confidence_interval = 0.95;                   // Confidence interval to re
 float percentage_identity = 0.90;                   // Percent identity in the mapping step
 float ANIDiff = 0.0;                                // Stage 1 ANI diff threshold
 float ANIDiffConf = 0.999;                          // ANI diff confidence
+float stage1_kmer_complexity_thresh = 0.75;          // Minimum kmer complexity required to allow HG filter
 std::string VERSION = "3.1.1";                      // Version of MashMap
 }
 }
