@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
             << "\t" << 0
             << "\t" << std::max(e.rEndPos - e.rStartPos, e.qEndPos - e.qStartPos)
             << "\t" << 255
-            << "\t" << "id:f:" << e.mashmap_estimated_identity * 100.0
+            << "\t" << "id:f:" << e.mashmap_estimated_identity
             << "\n";
         }
     }
