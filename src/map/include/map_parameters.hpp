@@ -33,10 +33,10 @@ struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
     float kmer_pct_threshold;                         //use only kmers not in the top kmer_pct_threshold %-ile
-    offset_t segLength;                                //For split mapping case, this represents the fragment length
+    offset_t segLength;                               //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
-    offset_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
-    offset_t chain_gap;                                // max distance for 2d range union-find mapping chaining
+    offset_t block_length;                            // minimum (potentially merged) block to keep if we aren't split
+    offset_t chain_gap;                               // max distance for 2d range union-find mapping chaining
     int alphabetSize;                                 //alphabet size
     offset_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
@@ -99,7 +99,7 @@ float confidence_interval = 0.95;                   // Confidence interval to re
 float percentage_identity = 0.90;                   // Percent identity in the mapping step
 float ANIDiff = 0.0;                                // Stage 1 ANI diff threshold
 float ANIDiffConf = 0.999;                          // ANI diff confidence
-float stage1_kmer_complexity_thresh = 0.75;          // Minimum kmer complexity required to allow HG filter
+float stage1_kmer_complexity_thresh = 0.75;         // Minimum kmer complexity required to allow HG filter
 std::string VERSION = "3.1.1";                      // Version of MashMap
 }
 }
