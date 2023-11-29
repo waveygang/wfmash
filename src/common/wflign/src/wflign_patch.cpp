@@ -1625,9 +1625,9 @@ query_start : query_end)
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
                 << "\t"
-                << "gi:f:" << gap_compressed_identity * 100.0 << "\t"
+                << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:"
-                << block_identity * 100.0
+                << block_identity
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
@@ -1636,7 +1636,7 @@ query_start : query_end)
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
                 << "\t"
-                << "md:f:" << mashmap_estimated_identity * 100.0;
+                << "md:f:" << mashmap_estimated_identity;
 
             if (emit_md_tag) {
                 out << "\t";
