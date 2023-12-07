@@ -175,8 +175,16 @@ Note that this may make the tool a little bit slower.
 
 If you have `nix`, build and installation in your profile are as simple as:
 
-```
+```shell
 nix-build && nix-env -i ./result
+```
+
+### guix
+
+If you have `guix`:
+
+```shell
+guix build -f guix.scm
 ```
 
 #### Docker and Singularity images with nix
