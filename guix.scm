@@ -17,7 +17,7 @@
 ;;
 ;;   mkdir -p /usr/bin ; ln -s $GUIX_ENVIRONMENT/bin/env /usr/bin/env
 ;;
-;; by Pjotr Prins (c) 2023
+;; by Pjotr Prins & Andrea Guarracino (c) 2023
 
 (use-modules
  ((guix licenses) #:prefix license:)
@@ -25,14 +25,14 @@
   (guix packages)
   (guix git-download)
   (guix build-system cmake)
-  ; (guix gexp)
+; (guix gexp)
   (guix utils)
   (gnu packages algebra)
   (gnu packages base)
   (gnu packages bioinformatics)
   (gnu packages build-tools)
   (gnu packages compression)
-  ; (gnu packages curl)
+; (gnu packages curl)
   (gnu packages gcc)
   (gnu packages jemalloc)
   (gnu packages llvm)
@@ -45,19 +45,6 @@
   (ice-9 popen)
   (ice-9 rdelim))
 
-;; A minimal version of htslib that does not depend on curl and openssl. This
-;; reduces the number of higher order dependencies in static linking.
-(define-public htslib-static
-  (package
-    (inherit htslib)
-    (name "htslib-static")
-    (arguments
-     (substitute-keyword-arguments (package-arguments htslib)
-       ((#:configure-flags flags ''())
-        ''())))
-    (inputs
-     (list bzip2 xz))))
-
 (define %source-dir (dirname (current-filename)))
 
 (define %git-commit
@@ -69,6 +56,8 @@
     (version (git-version "0.10.7" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
+    (arguments
+     `(#:tests? #f)) ;; Disable the test phase
     (inputs
      `(
        ;; ("clang" ,clang)      ; add this to test clang builds
@@ -88,10 +77,10 @@
        ("bzip2" ,bzip2)    ; libz2 part of htslib
        ("xz" ,xz)     ;
        ("zlib" ,zlib)))
-     (synopsis "wfmash")
-     (description
-      "wfmash.")
-     (home-page "https://github.com/waveygang/wfmash")
-     (license license:expat)))
+    (synopsis "wfmash")
+    (description
+     "wfmash.")
+    (home-page "https://github.com/waveygang/wfmash")
+    (license license:expat)))
 
 wfmash-git
