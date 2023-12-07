@@ -91,7 +91,7 @@ target_link_libraries(wfmash
   libwflign_static
   hts
   rt
-  wfa2cpp_static
+  wfa2cpp
   jemalloc
   lzma
   bz2
