@@ -381,7 +381,7 @@ namespace skch
           // Group sequences by query prefix, then pass to ref filter
           auto subrange_begin = allReadMappings.begin();
           auto subrange_end = allReadMappings.begin();
-          MappingResultsVector_t tempMappings;
+          MappingResultsVector_t tmpMappings;
           MappingResultsVector_t filteredMappings;
 
           std::cerr << "\n[mashmap::skch::Map::mapQuery] Number of mappings before ref filter = " << allReadMappings.size() << "\n";
@@ -399,15 +399,15 @@ namespace skch
             {
               subrange_end = allReadMappings.end();
             }
-            tempMappings.insert(
-                tempMappings.end(), 
+            tmpMappings.insert(
+                tmpMappings.end(), 
                 std::make_move_iterator(subrange_begin), 
                 std::make_move_iterator(subrange_end));
 
             // tmpMappings now contains mappings from one group of query sequences to all reference groups
             // we now run filterByGroup, which filters based on the reference group.
-            filterByGroup(tempMappings, filteredMappings, n_mappings, true);
-            tempMappings.clear();
+            filterByGroup(tmpMappings, filteredMappings, n_mappings, true);
+            tmpMappings.clear();
             subrange_begin = subrange_end;
           }
           allReadMappings = std::move(filteredMappings);
@@ -713,10 +713,10 @@ namespace skch
         }
 
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {                      
-          MappingResultsVector_t tempMappings;
-          tempMappings.reserve(output->readMappings.size());
-          filterByGroup(unfilteredMappings, tempMappings, n_mappings, false);
-          unfilteredMappings = std::move(tempMappings);
+          MappingResultsVector_t tmpMappings;
+          tmpMappings.reserve(output->readMappings.size());
+          filterByGroup(unfilteredMappings, tmpMappings, n_mappings, false);
+          unfilteredMappings = std::move(tmpMappings);
         }
 
         output->readMappings = std::move(unfilteredMappings);
