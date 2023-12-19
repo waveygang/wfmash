@@ -77,6 +77,7 @@ void parse_args(int argc,
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
 	args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
+    args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
 	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose name starts with this prefix", {'P', "target-prefix"});
 	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'A', "target-list"});
@@ -237,11 +238,8 @@ void parse_args(int argc,
     if (no_filter) {
         map_parameters.filterMode = skch::filter::NONE;
     } else {
-        if (map_parameters.skip_self || map_parameters.skip_prefix) {
-            // before we set skch::filter::ONETOONE here
-            // but this does not provide a clear benefit in all-to-all
-            // as it sometimes introduces cases of over-filtering
-            map_parameters.filterMode = skch::filter::MAP;
+        if (one_to_one) {
+            map_parameters.filterMode = skch::filter::ONETOONE;
         } else {
             map_parameters.filterMode = skch::filter::MAP;
         }
