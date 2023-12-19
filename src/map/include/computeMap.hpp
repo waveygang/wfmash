@@ -410,7 +410,7 @@ namespace skch
             tempMappings.clear();
             subrange_begin = subrange_end;
           }
-          std::swap(allReadMappings, filteredMappings);
+          allReadMappings = std::move(filteredMappings);
 
           //Re-sort mappings by input order of query sequences
           //This order may be needed for any post analysis of output
@@ -716,10 +716,10 @@ namespace skch
           MappingResultsVector_t tempMappings;
           tempMappings.reserve(output->readMappings.size());
           filterByGroup(unfilteredMappings, tempMappings, n_mappings, false);
-          std::swap(tempMappings, unfilteredMappings);
+          unfilteredMappings = std::move(tempMappings);
         }
 
-        std::swap(output->readMappings, unfilteredMappings);
+        output->readMappings = std::move(unfilteredMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
         if (param.filterLengthMismatches)
