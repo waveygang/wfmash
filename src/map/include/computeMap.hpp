@@ -384,8 +384,6 @@ namespace skch
           MappingResultsVector_t tmpMappings;
           MappingResultsVector_t filteredMappings;
 
-          std::cerr << "\n[mashmap::skch::Map::mapQuery] Number of mappings before ref filter = " << allReadMappings.size() << "\n";
-
           while (subrange_end != allReadMappings.end())
           {
             if (param.skip_prefix)
@@ -422,7 +420,6 @@ namespace skch
               });
 
           reportReadMappings(allReadMappings, "", outstrm);
-          std::cerr << "[mashmap::skch::Map::mapQuery] Number of mappings after ref filter = " << allReadMappings.size() << "\n";
         }
 
         progress.finish();
