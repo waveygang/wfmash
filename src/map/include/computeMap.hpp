@@ -718,14 +718,14 @@ namespace skch
 
         output->readMappings = std::move(unfilteredMappings);
 
+        //Make sure mapping boundary don't exceed sequence lengths
+        this->mappingBoundarySanityCheck(input, output->readMappings);
+
         // remove alignments where the ratio between query and target length is < our identity threshold
         if (param.filterLengthMismatches)
         {
           this->filterFalseHighIdentity(output->readMappings);
         }
-
-        //Make sure mapping boundary don't exceed sequence lengths
-        this->mappingBoundarySanityCheck(input, output->readMappings);
 
         // sparsify the mappings, if requested
         this->sparsifyMappings(output->readMappings);
