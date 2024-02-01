@@ -37,7 +37,7 @@ if __name__ == '__main__':
             # We could avoid keeping everything in memory by reading the file again later
             rank_to_mapping_dict[rank] = line
 
-            _, _, query_start, query_end, _, _, _, target_start, target_end, _, _, _, estimated_identity = line.strip().split('\t')
+            _, _, query_start, query_end, _, _, _, target_start, target_end, _, _, _, estimated_identity = line.strip().split('\t')[:13]
 
             num_mapped_bases = max(int(query_end) - int(query_start), int(target_end) - int(target_start))
             estimated_identity = float(estimated_identity.split('id:f:')[1]) / 100.0
