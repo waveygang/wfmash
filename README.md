@@ -175,9 +175,36 @@ Note that this may make the tool a little bit slower.
 
 If you have `nix`, build and installation in your profile are as simple as:
 
-```
+```shell
 nix-build && nix-env -i ./result
 ```
+
+### guix
+
+If you have `guix`:
+
+```shell
+guix build -f guix.scm
+```
+
+#### Docker and Singularity images with nix
+
+Nix is also able to build an Docker image, which can then be loaded by Docker and converted to a Singularity image.
+
+```
+nix-build docker.nix
+docker load < result
+singularity build wfmash.sif docker-daemon://wfmash-docker:latest
+```
+
+This can be run with Singularity like this:
+
+```
+singularity run wfmash.sif $ARGS
+```
+
+Where `$ARGS` are your typical command line arguments to `wfmash`.
+
 
 ### Bioconda
 

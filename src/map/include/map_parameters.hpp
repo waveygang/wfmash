@@ -47,6 +47,7 @@ struct Parameters
     int filterMode;                                   //filtering mode in mashmap
     uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment
     uint32_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
+    bool dropRand;                                    //drop mappings w/ same score until only numMappingsForSegment remain
     int threads;                                      //execution thread count
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
@@ -95,7 +96,7 @@ namespace fixed
 double ss_table_max = 1000.0;                       // Maximum size of dp table for filtering
 double pval_cutoff = 1e-3;                          // p-value cutoff for determining window size
 float confidence_interval = 0.95;                   // Confidence interval to relax jaccard cutoff for mapping (0-1)
-float percentage_identity = 0.85;                   // Percent identity in the mapping step
+float percentage_identity = 0.90;                   // Percent identity in the mapping step
 float ANIDiff = 0.0;                                // Stage 1 ANI diff threshold
 float ANIDiffConf = 0.999;                          // ANI diff confidence
 std::string VERSION = "3.1.1";                      // Version of MashMap

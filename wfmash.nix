@@ -1,14 +1,14 @@
-{ lib, stdenv, fetchFromGitHub, cmake, gsl, gmp, makeWrapper, jemalloc, htslib, git, zlib, pkgconfig }:
+{ lib, stdenv, fetchFromGitHub, cmake, gsl, gmp, makeWrapper, jemalloc, htslib, git, zlib, pkg-config }:
 
 stdenv.mkDerivation rec {
   pname = "wfmash";
-  version = "0.11.0";
+  version = "0.12.3";
 
   src = fetchFromGitHub {
     owner = "waveygang"; 
     repo = "wfmash";
-    rev = "f3f66d87642ae8cebf237b0a26616d3006099f31";
-    sha256 = "0n7j1x3jd9zy25pqsal8qwnpgnqbdq7xnppsbiw8m4zbhgn1gc9g";
+    rev = "353fdd9ce34f9d3b6f7104aca0a216dc8ca4c422";
+    sha256 = "sha256-pjaFbcSA7cNx1ONg7JiBO4g22++EOYXQfdieyy1kAuI=";
   };
 
   nativeBuildInputs = [ cmake makeWrapper ];
@@ -20,7 +20,7 @@ stdenv.mkDerivation rec {
     htslib
     git
     zlib
-    pkgconfig
+    pkg-config
   ];
 
   postPatch = ''

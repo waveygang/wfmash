@@ -71,12 +71,13 @@ void parse_args(int argc,
     args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 5k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
-    args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each segment [default: 1]", {'n', "num-mappings-for-segment"});
-    args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each sequence shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
+    args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each query/reference pair [default: 1]", {'n', "num-mappings-for-segment"});
+    args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
 	args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
+    args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
 	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose name starts with this prefix", {'P', "target-prefix"});
 	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'A', "target-list"});
@@ -86,6 +87,7 @@ void parse_args(int argc,
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
+    //ToFix: args::Flag keep_ties(mapping_opts, "", "keep all mappings with equal score even if it results in more than n mappings", {'D', "keep-ties"});
     args::ValueFlag<int64_t> sketch_size(mapping_opts, "N", "sketch size for sketching.", {'w', "sketch-size"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "F", "Drop segments w/ predicted kmer complexity below this cutoff. Kmer complexity defined as #kmers / (s - k + 1)", {'J', "kmer-complexity"});
     args::Flag no_hg_filter(mapping_opts, "", "Don't use the hypergeometric filtering and instead use the MashMap2 first pass filtering.", {'1', "no-hg-filter"});
@@ -111,7 +113,7 @@ void parse_args(int argc,
                                                        {'G', "wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
     args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
-    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 2048/(estimated_identity^2)]", {'q', "wflign-max-disttance"});
+    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 2048/(estimated_identity^2)]", {'q', "wflign-max-distance"});
 
     // patching parameter
     args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
@@ -236,11 +238,8 @@ void parse_args(int argc,
     if (no_filter) {
         map_parameters.filterMode = skch::filter::NONE;
     } else {
-        if (map_parameters.skip_self || map_parameters.skip_prefix) {
-            // before we set skch::filter::ONETOONE here
-            // but this does not provide a clear benefit in all-to-all
-            // as it sometimes introduces cases of over-filtering
-            map_parameters.filterMode = skch::filter::MAP;
+        if (one_to_one) {
+            map_parameters.filterMode = skch::filter::ONETOONE;
         } else {
             map_parameters.filterMode = skch::filter::MAP;
         }
@@ -339,6 +338,7 @@ void parse_args(int argc,
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
     map_parameters.split = !args::get(no_split);
+    map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
     align_parameters.split = !args::get(no_split);
 
     map_parameters.mergeMappings = !args::get(no_merge);
@@ -566,6 +566,7 @@ void parse_args(int argc,
     map_parameters.filterLengthMismatches = true;
 
     map_parameters.stage1_topANI_filter = !bool(no_hg_filter); 
+    map_parameters.stage2_full_scan = true;
 
     if (hg_filter_ani_diff)
     {
