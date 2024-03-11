@@ -203,7 +203,10 @@ void do_wfa_patch_alignment(
                      (affine_penalties.gap_extension * std::min(
                        (int)chain_gap,
                        (int)std::max(target_length, query_length)
-                     ));
+                     )) + 32;
+    // + 32 because we are not really setting the MaxScore, but the MaxAlignmentSteps.
+    // AlignmentStep is usually > Score (they are the same with edit-distance)
+    
     wf_aligner.setMaxAlignmentSteps(max_score);
     const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
     aln.ok = (status == WF_STATUS_ALG_COMPLETED);
@@ -933,8 +936,8 @@ void write_merged_alignment(
 #ifdef WFA_PNG_AND_TSV
                                 if (emit_patching_tsv) {
                                     *out_patching_tsv
-                                            << query_name << ":" << query_pos << "-" << query_pos + query_delta << "\t"
-                                            << target_name << ":" << target_pos - target_pointer_shift << "-" << target_pos - target_pointer_shift + target_delta << "\t"
+                                            << query_name << "\t" << query_pos << "\t" << query_pos + query_delta << "\t"
+                                            << target_name << "\t" << (target_pos - target_pointer_shift) << "\t" << (target_pos - target_pointer_shift + target_delta) << "\t"
                                             << patch_aln.ok << std::endl;
                                 }
 #endif
