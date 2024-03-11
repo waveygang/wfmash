@@ -105,11 +105,11 @@ void parse_args(int argc,
                                 {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 4,6,1]",//, if 4 values then gaps are affine, if 6 values then gaps are convex",
+                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 4,8,1]",//, if 4 values then gaps are affine, if 6 values then gaps are convex",
                                             {'g', "wfa-params"});
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                                       "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 4,6,1]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
+                                                       "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 4,8,1]",//, if 4 then gaps are affine, if 6 then gaps are convex [default: 1,4,6,2,26,1]",
                                                        {'G', "wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
     args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});

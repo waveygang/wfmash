@@ -338,7 +338,7 @@ void WFlign::wflign_affine_wavefront(
     } else {
         wfa_affine_penalties.match = 0;
         wfa_affine_penalties.mismatch = 4;
-        wfa_affine_penalties.gap_opening = 6;
+        wfa_affine_penalties.gap_opening = 8;
         wfa_affine_penalties.gap_extension = 1;
         /*
         if (mashmap_estimated_identity >= 0.80) {
@@ -554,7 +554,7 @@ void WFlign::wflign_affine_wavefront(
         } else {
             wflambda_affine_penalties.match = 0;
             wflambda_affine_penalties.mismatch = 4;
-            wflambda_affine_penalties.gap_opening = 6;
+            wflambda_affine_penalties.gap_opening = 8;
             wflambda_affine_penalties.gap_extension = 1;
         }
 
