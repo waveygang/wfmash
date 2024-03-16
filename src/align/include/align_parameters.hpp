@@ -24,9 +24,16 @@ struct Parameters {
 
     //wflambda
     uint16_t wflambda_segment_length;             //segment length for wflambda
+
     int wfa_mismatch_score;
     int wfa_gap_opening_score;
     int wfa_gap_extension_score;
+
+    int wfa_patching_mismatch_score;
+    int wfa_patching_gap_opening_score1;
+    int wfa_patching_gap_extension_score1;
+    int wfa_patching_gap_opening_score2;
+    int wfa_patching_gap_extension_score2;
 
     // wflign
     int wflign_mismatch_score;

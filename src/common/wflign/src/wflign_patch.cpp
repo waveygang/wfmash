@@ -191,20 +191,21 @@ void do_wfa_patch_alignment(
         const char* target,
         const uint64_t& i,
         const uint64_t& target_length,
-        wfa::WFAlignerGapAffine& wf_aligner,
-        const wflign_penalties_t& affine_penalties,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+        const wflign_penalties_t& convex_penalties,
         alignment_t& aln,
         const int64_t& chain_gap,
         const int& max_patching_score) {
 
     const int max_score
             = max_patching_score ? max_patching_score :
-                    affine_penalties.gap_opening +
-                     (affine_penalties.gap_extension * std::min(
+                    // gap_opening2/gap_extension1 is usually > gap_opening1/gap_extension2
+                    convex_penalties.gap_opening2 +
+                     (convex_penalties.gap_extension1 * std::min(
                        (int)chain_gap,
                        (int)std::max(target_length, query_length)
-                     )) + 32;
-    // + 32 because we are not really setting the MaxScore, but the MaxAlignmentSteps.
+                     )) + 64;
+    // + 64 because we are not really setting the MaxScore, but the MaxAlignmentSteps.
     // AlignmentStep is usually > Score (they are the same with edit-distance)
     
     wf_aligner.setMaxAlignmentSteps(max_score);
@@ -238,8 +239,8 @@ void do_wfa_patch_alignment(
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
-        wfa::WFAlignerGapAffine& wf_aligner,
-        const wflign_penalties_t& affine_penalties,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+        const wflign_penalties_t& convex_penalties,
         const bool& emit_md_tag,
         const bool& paf_format_else_sam,
         const bool& no_seq_in_sam,
@@ -384,7 +385,7 @@ void write_merged_alignment(
                 &wflign_max_len_minor,
                 &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
-                &affine_penalties,
+                &convex_penalties,
                 &chain_gap, &max_patching_score
 #ifdef WFA_PNG_AND_TSV
                 ,
@@ -546,11 +547,14 @@ void write_merged_alignment(
 //                        }
 //                        std::cerr << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_heads =
-                                new wfa::WFAlignerGapAffine(
-                                        affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_heads =
+                                new wfa::WFAlignerGapAffine2Pieces(
+                                        0,
+                                        convex_penalties.mismatch,
+                                        convex_penalties.gap_opening1,
+                                        convex_penalties.gap_extension1,
+                                        convex_penalties.gap_opening2,
+                                        convex_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
                                         wfa::WFAligner::MemoryMed);
                         wf_aligner_heads->setHeuristicWFmash(min_wf_length,max_dist_threshold);
@@ -878,7 +882,7 @@ void write_merged_alignment(
                                 do_wfa_patch_alignment(
                                         query, query_pos, query_delta,
                                         target - target_pointer_shift, target_pos, target_delta,
-                                        wf_aligner, affine_penalties, patch_aln, chain_gap, max_patching_score);
+                                        wf_aligner, convex_penalties, patch_aln, chain_gap, max_patching_score);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;
@@ -1044,11 +1048,14 @@ void write_merged_alignment(
 //                                  << target_delta_x
 //                                  << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_tails =
-                                new wfa::WFAlignerGapAffine(
-                                        affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails =
+                                new wfa::WFAlignerGapAffine2Pieces(
+                                        0,
+                                        convex_penalties.mismatch,
+                                        convex_penalties.gap_opening1,
+                                        convex_penalties.gap_extension1,
+                                        convex_penalties.gap_opening2,
+                                        convex_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
                                         wfa::WFAligner::MemoryMed);
                         wf_aligner_tails->setHeuristicWFmash(min_wf_length,max_dist_threshold);
