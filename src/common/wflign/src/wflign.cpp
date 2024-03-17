@@ -49,7 +49,7 @@ WFlign::WFlign(
     const int wfa_patching_gap_opening_score1,
     const int wfa_patching_gap_extension_score1,
     const int wfa_patching_gap_opening_score2,
-    const int wfa_gap_extension_score2,
+    const int wfa_patching_gap_extension_score2,
     const float mashmap_estimated_identity,
     const int wflign_mismatch_score,
     const int wflign_gap_opening_score,
@@ -383,7 +383,7 @@ void WFlign::wflign_affine_wavefront(
         wfa_convex_penalties.gap_extension2 = wfa_patching_gap_extension_score2;
     } else {
         wfa_convex_penalties.match = 0;
-        wfa_convex_penalties.mismatch = 6;
+        wfa_convex_penalties.mismatch = 5;
         wfa_convex_penalties.gap_opening1 = 8;
         wfa_convex_penalties.gap_extension1 = 2;
         wfa_convex_penalties.gap_opening2 = 26;

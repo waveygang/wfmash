@@ -108,7 +108,7 @@ void parse_args(int argc,
                                             "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 6,8,1]",
                                             {"wfa-params"});
     args::ValueFlag<std::string> wfa_patching_score_params(alignment_opts, "mismatch,gap1,ext1,gap2,ext2",
-                                            "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 6,8,2,26,1]",
+                                            "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 5,8,2,26,1]",
                                             {"wfa-patching-params"});
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
