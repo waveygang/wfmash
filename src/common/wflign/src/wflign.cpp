@@ -386,7 +386,7 @@ void WFlign::wflign_affine_wavefront(
         wfa_convex_penalties.mismatch = 5;
         wfa_convex_penalties.gap_opening1 = 8;
         wfa_convex_penalties.gap_extension1 = 2;
-        wfa_convex_penalties.gap_opening2 = 26;
+        wfa_convex_penalties.gap_opening2 = 49;
         wfa_convex_penalties.gap_extension2 = 1;
     }
 
