@@ -78,7 +78,7 @@ bool do_wfa_segment_alignment(
         aln.j = j;
         aln.i = i;
 
-        aln.ok = (status == 0);
+        aln.ok = (status == WF_STATUS_ALG_COMPLETED);
 
         // fill the alignment info if we aligned
         if (aln.ok) {
@@ -504,7 +504,8 @@ void write_merged_alignment(
                         const int status = wf_aligner_heads->alignEndsFree(
                                 target_rev.c_str(),target_rev.size(),0,0,
                                 query_rev.c_str(),query_rev.size(),0,query_rev.size());
-                        if (status == 0) { // WF_ALIGN_SUCCESSFUL
+                        //std::cerr << "Head patching status " << status << "\n";
+                        if (status == WF_STATUS_ALG_COMPLETED || status == WF_STATUS_ALG_PARTIAL) {
                             //hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(), target_rev.size(), 0, 0);
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -521,7 +522,6 @@ void write_merged_alignment(
                             }
 #endif
 
-                            //std::cerr << "Head patching\n";
                             got_alignment = true;
 
                             target_pos = target_pos_x;
@@ -534,6 +534,28 @@ void write_merged_alignment(
                             char* cigar_ops;
                             int cigar_length;
                             wf_aligner_heads->getAlignment(&cigar_ops,&cigar_length);
+
+                            // Put the missing part of the CIGAR string first and then its aligned part
+                            uint64_t missing_query_len = query_rev.size();
+                            uint64_t missing_target_len = target_rev.size();
+                            for(int xxx = cigar_length - 1; xxx >= 0; --xxx) {
+                                // The CIGAR string can be incomplete
+                                switch (cigar_ops[xxx]) {
+                                    case 'M': case 'X':
+                                        --missing_query_len; --missing_target_len; break;
+                                    case 'I': --missing_query_len; break;
+                                    case 'D': --missing_target_len; break;
+                                    default: break;
+                                }
+                            }
+                            // Put the missing part of the CIGAR string
+                            for (uint64_t i = 0; i < missing_query_len; ++i) {
+                                patched.push_back('I');
+                            }
+                            for (uint64_t i = 0; i < missing_target_len; ++i) {
+                                patched.push_back('D');
+                            }
+
                             for(int xxx = cigar_length - 1; xxx >= 0; --xxx) {
                                 //std::cerr << cigar_ops[xxx];
                                 patched.push_back(cigar_ops[xxx]);
@@ -982,7 +1004,6 @@ void write_merged_alignment(
                             }
 #endif
 
-                            //std::cerr << "Tail patching\n";
                             got_alignment = true;
 
                             {
@@ -1003,11 +1024,29 @@ void write_merged_alignment(
                             char* cigar_ops;
                             int cigar_length;
                             wf_aligner_tails->getAlignment(&cigar_ops,&cigar_length);
+                            uint64_t missing_query_len = query_delta;
+                            uint64_t missing_target_len = target_delta;
                             for(int xxx = 0; xxx < cigar_length; ++xxx) {
                                 //std::cerr << cigar_ops[xxx];
                                 patched.push_back(cigar_ops[xxx]);
+
+                                // The CIGAR string can be incomplete
+                                switch (cigar_ops[xxx]) {
+                                    case 'M': case 'X':
+                                        --missing_query_len; --missing_target_len; break;
+                                    case 'I': --missing_query_len; break;
+                                    case 'D': --missing_target_len; break;
+                                    default: break;
+                                }
                             }
                             //std::cerr << "\n";
+                            // Put the missing part of the CIGAR string
+                            for (uint64_t i = 0; i < missing_query_len; ++i) {
+                                patched.push_back('I');
+                            }
+                            for (uint64_t i = 0; i < missing_target_len; ++i) {
+                                patched.push_back('D');
+                            }
                         }
                         delete wf_aligner_tails;
                     }
@@ -1222,7 +1261,7 @@ void write_merged_alignment(
             sort_indels(tracev);
         }
 
-        // std::cerr << "SECOND PATCH ROUND
+        //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
         patching(pre_tracev, tracev);
     }
