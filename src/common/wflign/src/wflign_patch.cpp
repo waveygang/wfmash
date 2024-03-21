@@ -234,8 +234,6 @@ void do_wfa_patch_alignment(
     }
 }
 
-#define MIN_WFA_HEAD_TAIL_PATCH_LENGTH 256
-
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
@@ -278,10 +276,6 @@ void write_merged_alignment(
     int64_t target_pointer_shift = 0;
 
     uint64_t target_length_mut = target_length;
-
-    // patching parameters
-    // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 8;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -336,7 +330,7 @@ void write_merged_alignment(
                 &out_patching_tsv
 #endif
         ](std::vector<char> &unpatched,
-                                   std::vector<char> &patched) {
+                                   std::vector<char> &patched, const uint16_t &min_wfa_head_tail_patch_length, const uint16_t &min_wfa_patch_length) {
             auto q = unpatched.begin();
 
             uint64_t query_pos = query_start;
@@ -365,7 +359,7 @@ void write_merged_alignment(
                     // nibble forward if we're below the correct length
                     // this gives a bit of context for the alignment
                     while (q != unpatched.end() &&
-                           (query_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH || target_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH)) {
+                           (query_delta < min_wfa_head_tail_patch_length || target_delta < min_wfa_head_tail_patch_length)) {
                         const auto &c = *q++;
                         switch (c) {
                             case 'M': case 'X':
@@ -461,16 +455,15 @@ void write_merged_alignment(
                             target_delta + target_delta_to_shift;
 
                     if (target_delta_x > 0) {
-//                        std::cerr << "B HEAD patching in "
-//                                  << query_name << " "
-//                                  << query_offset << "@ " << query_pos <<
-//                                  " - " << query_delta
-//                                << " --- "
-//                                << target_name << " " << target_offset
-//                                << " @ " <<
-//                                target_pos << " - "
-//                                << target_delta_x
-//                                << std::endl;
+                    //    std::cerr << "B HEAD patching in "
+                    //              << query_name << " "
+                    //              << query_offset + query_pos <<
+                    //              " - " << query_delta
+                    //            << " --- "
+                    //            << target_name << " " 
+                    //            << target_offset + target_pos << " - "
+                    //            << target_delta_x
+                    //            << std::endl;
 
                         std::string query_rev(query + query_pos, query_delta);
                         std::reverse(query_rev.begin(), query_rev.end());
@@ -661,7 +654,8 @@ void write_merged_alignment(
                         // (consecutive Is and Ds) or if there is a close and
                         // big enough indel forward
                         if (size_region_to_repatch > 0 ||
-                            (query_delta > 0 && target_delta > 0)) {
+                            (query_delta > 0 && target_delta > 0) ||
+                            (query_delta > 2 || target_delta > 2)) {
 #ifdef WFLIGN_DEBUG
                             // std::cerr << "query_delta " << query_delta <<
                             // "\n"; std::cerr << "target_delta " << target_delta
@@ -922,7 +916,7 @@ void write_merged_alignment(
                     // nibble backward if we're below the correct length
                     // this gives a bit of context for the alignment
                     while (!patched.empty() &&
-                           (query_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH || target_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH)) {
+                           (query_delta < min_wfa_head_tail_patch_length || target_delta < min_wfa_head_tail_patch_length)) {
                         const auto& c = patched.back();
                         switch (c) {
                             case 'M': case 'X':
@@ -961,16 +955,14 @@ void write_merged_alignment(
                                 target_pos + target_delta));
 
                     if (target_delta_x > 0) {
-//                        std::cerr << "B TAIL patching in "
-//                                  << query_name << " " <<
-//                                  query_offset << " @ " <<
-//                                  query_pos << " - " <<
-//                                  query_delta << " "
-//                                  << target_name << " " <<
-//                                  target_offset << " @ "
-//                                  << target_pos - target_pointer_shift << " - "
-//                                  << target_delta_x
-//                                  << std::endl;
+                    //    std::cerr << "B TAIL patching in "
+                    //              << query_name << " " <<
+                    //              query_offset + query_pos << " - " <<
+                    //              query_delta << " "
+                    //              << target_name << " " <<
+                    //              target_offset + target_pos - target_pointer_shift << " - "
+                    //              << target_delta_x
+                    //              << std::endl;
 
                         wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails =
                                 new wfa::WFAlignerGapAffine2Pieces(
@@ -986,8 +978,8 @@ void write_merged_alignment(
                         const int status = wf_aligner_tails->alignEndsFree(
                                 target - target_pointer_shift + target_pos, target_delta_x,0,0,
                                 query + query_pos, query_delta,0,query_delta);
-
-                        if (status == 0) { // WF_ALIGN_SUCCESSFUL
+                        //std::cerr << "Tail patching status " << status << "\n";
+                        if (status == WF_STATUS_ALG_COMPLETED || status == WF_STATUS_ALG_PARTIAL) {
                             //hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta, target_delta_x, 0, 0);
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -1233,7 +1225,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev);
+            patching(erodev, pre_tracev, 512, 8); // In the 1st round, we nibble more aggressively
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -1263,7 +1255,7 @@ void write_merged_alignment(
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev);
+        patching(pre_tracev, tracev, 256, 8); // In the 2nd round, we nibble less aggressively
     }
 
     // normalize the indels
