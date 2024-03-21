@@ -313,6 +313,62 @@ void write_merged_alignment(
         // gaps in query and ref and adding our results to the final trace as we
         // go
 
+#define MAX_NUM_INDELS_TO_LOOK_AT 2
+        auto distance_close_big_enough_indels =	
+                [](const uint32_t indel_len, auto iterator,	
+                   const std::vector<char> &trace,
+                   const uint16_t&max_dist_to_look_at) {	
+                    const uint32_t min_indel_len_to_find = indel_len / 3;	
+
+                    // std::cerr << "min_indel_len_to_find " <<	
+                    // min_indel_len_to_find << std::endl; std::cerr <<	
+                    // "max_dist_to_look_at " << max_dist_to_look_at << std::endl;	
+
+                    auto q = iterator;	
+
+                    uint8_t num_indels_to_find = MAX_NUM_INDELS_TO_LOOK_AT;	
+                    uint32_t curr_size_close_indel = 0;	
+                    int32_t dist_close_indels = 0;	
+
+                    // std::cerr << "indel_len " << indel_len << std::endl;	
+                    // std::cerr << "min_indel_len_to_find " << min_indel_len_to_find << std::endl;	
+                    // std::cerr << "max_dist_to_look_at " << max_dist_to_look_at << std::endl;	
+
+                    while (q != trace.end() &&	
+                           dist_close_indels < max_dist_to_look_at) {	
+                        curr_size_close_indel = 0;	
+                        while (q != trace.end() && (*q == 'I' || *q == 'D')) {	
+                            ++curr_size_close_indel;	
+
+                            ++dist_close_indels;	
+                            ++q;	
+                        }	
+                        // std::cerr << "\t\tcurr_size_close_indel " <<	
+                        // curr_size_close_indel << std::endl;	
+                        if (curr_size_close_indel >= min_indel_len_to_find) {	
+                            // std::cerr << "\t\tnum_indels_to_find " <<	
+                            // (uint16_t)num_indels_to_find << std::endl;	
+                            if (--num_indels_to_find == 0) {	
+                                break;	
+                            }	
+                        }	
+
+                        while (q != trace.end() &&	
+                               (dist_close_indels < max_dist_to_look_at) &&	
+                               *q != 'I' && *q != 'D') {	
+                            ++dist_close_indels;	
+                            ++q;	
+                        }	
+                    }	
+
+                    // std::cerr << "dist_close_indels " << dist_close_indels << std::endl;	
+                    // std::cerr << "num_indels_found " << MAX_NUM_INDELS_TO_LOOK_AT - num_indels_to_find << std::endl;	
+
+                    return num_indels_to_find < MAX_NUM_INDELS_TO_LOOK_AT	
+                           ? std::min(dist_close_indels, 512)	
+                           : -1;	
+                };
+
         auto patching = [&query, &query_name, &query_length, &query_start,
                 &query_offset, &target, &target_name,
                 &target_length_mut, &target_start, &target_offset,
@@ -320,7 +376,7 @@ void write_merged_alignment(
                 &target_pointer_shift,
                 &wflign_max_len_major,
                 &wflign_max_len_minor,
-                &min_wf_length,
+                &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
                 &convex_penalties,
                 &chain_gap, &max_patching_score
@@ -650,12 +706,18 @@ void write_merged_alignment(
                                  (query_delta < wflign_max_len_minor ||
                                   target_delta < wflign_max_len_minor))) {
 
+                        int32_t distance_close_indels = 
+                            (query_delta > 10 || target_delta > 10) ?	
+                            distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched, 192) :	
+                            -1;
+
                         // Trigger the patching if there is a dropout
                         // (consecutive Is and Ds) or if there is a close and
                         // big enough indel forward
                         if (size_region_to_repatch > 0 ||
                             (query_delta > 0 && target_delta > 0) ||
-                            (query_delta > 2 || target_delta > 2)) {
+                            (query_delta > 2 || target_delta > 2) ||
+                            distance_close_indels > 0) {
 #ifdef WFLIGN_DEBUG
                             // std::cerr << "query_delta " << query_delta <<
                             // "\n"; std::cerr << "target_delta " << target_delta
@@ -754,6 +816,34 @@ void write_merged_alignment(
                                     default:
                                         break;
                                 }
+
+                                --distance_close_indels;
+                            }
+
+                            // Nibble until the close, big enough indel is	
+                            // reached Important when the patching can't be	
+                            // computed correctly without including the next	
+                            // indel	
+                            while (q != unpatched.end() &&	
+                                   distance_close_indels > 0) {	
+                                const auto &c = *q++;	
+                                switch (c) {	
+                                    case 'M':	
+                                    case 'X':	
+                                        ++query_delta;	
+                                        ++target_delta;	
+                                        break;	
+                                    case 'I':	
+                                        ++query_delta;	
+                                        break;	
+                                    case 'D':	
+                                        ++target_delta;	
+                                        break;	
+                                    default:	
+                                        break;	
+                                }	
+
+                                --distance_close_indels;	
                             }
 
                             // check forward if there are other Is/Ds to merge
