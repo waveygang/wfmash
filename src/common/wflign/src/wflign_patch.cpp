@@ -365,7 +365,7 @@ void write_merged_alignment(
                     // std::cerr << "num_indels_found " << MAX_NUM_INDELS_TO_LOOK_AT - num_indels_to_find << std::endl;	
 
                     return num_indels_to_find < MAX_NUM_INDELS_TO_LOOK_AT	
-                           ? std::min(dist_close_indels, 512)	
+                           ? dist_close_indels	
                            : -1;	
                 };
 
@@ -386,7 +386,10 @@ void write_merged_alignment(
                 &out_patching_tsv
 #endif
         ](std::vector<char> &unpatched,
-                                   std::vector<char> &patched, const uint16_t &min_wfa_head_tail_patch_length, const uint16_t &min_wfa_patch_length) {
+                                   std::vector<char> &patched,
+                                   const uint16_t &min_wfa_head_tail_patch_length,
+                                   const uint16_t &min_wfa_patch_length,
+                                   const uint16_t &max_dist_to_look_at) {
             auto q = unpatched.begin();
 
             uint64_t query_pos = query_start;
@@ -708,7 +711,7 @@ void write_merged_alignment(
 
                         int32_t distance_close_indels = 
                             (query_delta > 10 || target_delta > 10) ?	
-                            distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched, 192) :	
+                            distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched, max_dist_to_look_at) :	
                             -1;
 
                         // Trigger the patching if there is a dropout
@@ -1315,7 +1318,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev, 512, 8); // In the 1st round, we nibble more aggressively
+            patching(erodev, pre_tracev, 4096, 32, 512); // In the 1st round, we patch more aggressively
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -1345,7 +1348,7 @@ void write_merged_alignment(
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev, 256, 8); // In the 2nd round, we nibble less aggressively
+        patching(pre_tracev, tracev, 256, 8, 128); // In the 2nd round, we patch less aggressively
     }
 
     // normalize the indels
