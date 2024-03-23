@@ -45,6 +45,11 @@ WFlign::WFlign(
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
+    const int wfa_patching_mismatch_score,
+    const int wfa_patching_gap_opening_score1,
+    const int wfa_patching_gap_extension_score1,
+    const int wfa_patching_gap_opening_score2,
+    const int wfa_patching_gap_extension_score2,
     const float mashmap_estimated_identity,
     const int wflign_mismatch_score,
     const int wflign_gap_opening_score,
@@ -60,9 +65,17 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
+
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
     this->wfa_gap_extension_score = wfa_gap_extension_score;
+
+    this->wfa_patching_mismatch_score = wfa_patching_mismatch_score;
+    this->wfa_patching_gap_opening_score1 = wfa_patching_gap_opening_score1;
+    this->wfa_patching_gap_extension_score1 = wfa_patching_gap_extension_score1;
+    this->wfa_patching_gap_opening_score2 = wfa_patching_gap_opening_score2;
+    this->wfa_patching_gap_extension_score2 = wfa_patching_gap_extension_score2;
+
     this->mashmap_estimated_identity = mashmap_estimated_identity;
     this->wflign_mismatch_score = wflign_mismatch_score;
     this->wflign_gap_opening_score = wflign_gap_opening_score;
@@ -328,18 +341,18 @@ void WFlign::wflign_affine_wavefront(
 
     const int minhash_kmer_size = std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
 
-    // Set penalties
+    // Set penalties for wfa affine
     wflign_penalties_t wfa_affine_penalties;
     if (wfa_mismatch_score > 0 && wfa_gap_opening_score > 0 && wfa_gap_extension_score > 0){
         wfa_affine_penalties.match = 0;
         wfa_affine_penalties.mismatch = wfa_mismatch_score;
-        wfa_affine_penalties.gap_opening = wfa_gap_opening_score;
-        wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
+        wfa_affine_penalties.gap_opening1 = wfa_gap_opening_score;
+        wfa_affine_penalties.gap_extension1 = wfa_gap_extension_score;
     } else {
         wfa_affine_penalties.match = 0;
-        wfa_affine_penalties.mismatch = 4;
-        wfa_affine_penalties.gap_opening = 6;
-        wfa_affine_penalties.gap_extension = 1;
+        wfa_affine_penalties.mismatch = 6;
+        wfa_affine_penalties.gap_opening1 = 8;
+        wfa_affine_penalties.gap_extension1 = 1;
         /*
         if (mashmap_estimated_identity >= 0.80) {
             // Polynomial fitting
@@ -357,6 +370,24 @@ void WFlign::wflign_affine_wavefront(
             wfa_affine_penalties.gap_extension = 1;
         }
         */
+    }
+
+    // Set penalties for wfa convex
+    wflign_penalties_t wfa_convex_penalties;
+    if (wfa_patching_mismatch_score > 0 && wfa_patching_gap_opening_score1 > 0 && wfa_patching_gap_extension_score1 > 0 && wfa_patching_gap_opening_score2 > 0 && wfa_patching_gap_extension_score2 > 0){
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = wfa_patching_mismatch_score;
+        wfa_convex_penalties.gap_opening1 = wfa_patching_gap_opening_score1;
+        wfa_convex_penalties.gap_extension1 = wfa_patching_gap_extension_score1;
+        wfa_convex_penalties.gap_opening2 = wfa_patching_gap_opening_score2;
+        wfa_convex_penalties.gap_extension2 = wfa_patching_gap_extension_score2;
+    } else {
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = 5;
+        wfa_convex_penalties.gap_opening1 = 8;
+        wfa_convex_penalties.gap_extension1 = 2;
+        wfa_convex_penalties.gap_opening2 = 49;
+        wfa_convex_penalties.gap_extension2 = 1;
     }
 
     // heuristic bound on the max mash dist, adaptive based on estimated
@@ -405,11 +436,14 @@ void WFlign::wflign_affine_wavefront(
             (mashmap_estimated_identity >= 0.99
              && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)
             ) {
-        wfa::WFAlignerGapAffine* wf_aligner =
-                new wfa::WFAlignerGapAffine(
-                        wfa_affine_penalties.mismatch,
-                        wfa_affine_penalties.gap_opening,
-                        wfa_affine_penalties.gap_extension,
+        wfa::WFAlignerGapAffine2Pieces* wf_aligner =
+                new wfa::WFAlignerGapAffine2Pieces(
+                        0,
+                        wfa_convex_penalties.mismatch,
+                        wfa_convex_penalties.gap_opening1,
+                        wfa_convex_penalties.gap_extension1,
+                        wfa_convex_penalties.gap_opening2,
+                        wfa_convex_penalties.gap_extension2,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
         wf_aligner->setHeuristicNone();
@@ -466,12 +500,16 @@ void WFlign::wflign_affine_wavefront(
         delete wf_aligner;
 
         // use biWFA for all patching
-        wf_aligner = new wfa::WFAlignerGapAffine(
-            wfa_affine_penalties.mismatch,
-            wfa_affine_penalties.gap_opening,
-            wfa_affine_penalties.gap_extension,
-            wfa::WFAligner::Alignment,
-            wfa::WFAligner::MemoryUltralow);
+        wf_aligner =
+                new wfa::WFAlignerGapAffine2Pieces(
+                        0,
+                        wfa_convex_penalties.mismatch,
+                        wfa_convex_penalties.gap_opening1,
+                        wfa_convex_penalties.gap_extension1,
+                        wfa_convex_penalties.gap_opening2,
+                        wfa_convex_penalties.gap_extension2,
+                        wfa::WFAligner::Alignment,
+                        wfa::WFAligner::MemoryUltralow);
         wf_aligner->setHeuristicNone();
 
         // write a merged alignment
@@ -479,7 +517,7 @@ void WFlign::wflign_affine_wavefront(
                 *out,
                 trace,
                 *wf_aligner,
-                wfa_affine_penalties,
+                wfa_convex_penalties,
                 emit_md_tag,
                 paf_format_else_sam,
                 no_seq_in_sam,
@@ -549,29 +587,29 @@ void WFlign::wflign_affine_wavefront(
         if (wflign_mismatch_score > 0 && wflign_gap_opening_score > 0 && wflign_gap_extension_score > 0){
             wflambda_affine_penalties.match = 0;
             wflambda_affine_penalties.mismatch = wflign_mismatch_score;
-            wflambda_affine_penalties.gap_opening = wflign_gap_opening_score;
-            wflambda_affine_penalties.gap_extension = wflign_gap_extension_score;
+            wflambda_affine_penalties.gap_opening1 = wflign_gap_opening_score;
+            wflambda_affine_penalties.gap_extension1 = wflign_gap_extension_score;
         } else {
             wflambda_affine_penalties.match = 0;
             wflambda_affine_penalties.mismatch = 4;
-            wflambda_affine_penalties.gap_opening = 6;
-            wflambda_affine_penalties.gap_extension = 1;
+            wflambda_affine_penalties.gap_opening1 = 6;
+            wflambda_affine_penalties.gap_extension1 = 1;
         }
 
         //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
         //std::cerr << "wfa_affine_penalties.gap_opening " << wfa_affine_penalties.gap_opening << std::endl;
         //std::cerr << "wfa_affine_penalties.gap_extension " << wfa_affine_penalties.gap_extension << std::endl;
         //std::cerr << "wflambda_affine_penalties.mismatch " << wflambda_affine_penalties.mismatch << std::endl;
-        //std::cerr << "wflambda_affine_penalties.gap_opening " << wflambda_affine_penalties.gap_opening << std::endl;
-        //std::cerr << "wflambda_affine_penalties.gap_extension " << wflambda_affine_penalties.gap_extension << std::endl;
+        //std::cerr << "wflambda_affine_penalties.gap_opening1 " << wflambda_affine_penalties.gap_opening1 << std::endl;
+        //std::cerr << "wflambda_affine_penalties.gap_extension1 " << wflambda_affine_penalties.gap_extension1 << std::endl;
         //std::cerr << "max_mash_dist_to_evaluate " << max_mash_dist_to_evaluate << std::endl;
 
         // Configure the attributes of the wflambda-aligner
         wfa::WFAlignerGapAffine* wflambda_aligner =
                 new wfa::WFAlignerGapAffine(
                         wflambda_affine_penalties.mismatch,
-                        wflambda_affine_penalties.gap_opening,
-                        wflambda_affine_penalties.gap_extension,
+                        wflambda_affine_penalties.gap_opening1,
+                        wflambda_affine_penalties.gap_extension1,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
         wflambda_aligner->setHeuristicNone(); // It should help
@@ -591,8 +629,8 @@ void WFlign::wflign_affine_wavefront(
         wfa::WFAlignerGapAffine* wf_aligner =
                 new wfa::WFAlignerGapAffine(
                         wfa_affine_penalties.mismatch,
-                        wfa_affine_penalties.gap_opening,
-                        wfa_affine_penalties.gap_extension,
+                        wfa_affine_penalties.gap_opening1,
+                        wfa_affine_penalties.gap_extension1,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryHigh);
         wf_aligner->setHeuristicNone();
@@ -923,12 +961,16 @@ void WFlign::wflign_affine_wavefront(
                 delete wf_aligner;
 
                 // use biWFA for all patching
-                wf_aligner = new wfa::WFAlignerGapAffine(
-                    wfa_affine_penalties.mismatch,
-                    wfa_affine_penalties.gap_opening,
-                    wfa_affine_penalties.gap_extension,
-                    wfa::WFAligner::Alignment,
-                    wfa::WFAligner::MemoryUltralow);
+                wfa::WFAlignerGapAffine2Pieces* wf_aligner =
+                        new wfa::WFAlignerGapAffine2Pieces(
+                                0,
+                                wfa_convex_penalties.mismatch,
+                                wfa_convex_penalties.gap_opening1,
+                                wfa_convex_penalties.gap_extension1,
+                                wfa_convex_penalties.gap_opening2,
+                                wfa_convex_penalties.gap_extension2,
+                                wfa::WFAligner::Alignment,
+                                wfa::WFAligner::MemoryUltralow);
                 wf_aligner->setHeuristicNone();
 
                 // write a merged alignment
@@ -936,7 +978,7 @@ void WFlign::wflign_affine_wavefront(
                         *out,
                         trace,
                         *wf_aligner,
-                        wfa_affine_penalties,
+                        wfa_convex_penalties,
                         emit_md_tag,
                         paf_format_else_sam,
                         no_seq_in_sam,

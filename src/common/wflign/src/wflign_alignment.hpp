@@ -20,8 +20,10 @@ typedef struct {
 typedef struct {
     int match;
     int mismatch;
-    int gap_opening;
-    int gap_extension;
+    int gap_opening1;
+    int gap_extension1;
+    int gap_opening2;
+    int gap_extension2;
 } wflign_penalties_t;
 
 /*
