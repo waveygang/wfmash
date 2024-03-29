@@ -254,9 +254,11 @@ void write_merged_alignment(
         const uint64_t& target_offset,
         const uint64_t& target_length,
         const float& min_identity,
+#ifdef WFA_PNG_TSV_TIMING
         const long& elapsed_time_wflambda_ms,
         const uint64_t& num_alignments,
         const uint64_t& num_alignments_performed,
+#endif
         const float& mashmap_estimated_identity,
         const uint64_t& wflign_max_len_major,
         const uint64_t& wflign_max_len_minor,
@@ -265,7 +267,7 @@ void write_merged_alignment(
         const int& max_patching_score,
         const int& min_wf_length,
         const int& max_dist_threshold,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         const std::string* prefix_wavefront_plot_in_png,
         const uint64_t& wfplot_max_size,
         const bool& emit_patching_tsv,
@@ -380,9 +382,8 @@ void write_merged_alignment(
                 &max_dist_threshold, &wf_aligner,
                 &convex_penalties,
                 &chain_gap, &max_patching_score
-#ifdef WFA_PNG_AND_TSV
-                ,
-                &emit_patching_tsv,
+#ifdef WFA_PNG_TSV_TIMING
+                ,&emit_patching_tsv,
                 &out_patching_tsv
 #endif
         ](std::vector<char> &unpatched,
@@ -948,7 +949,7 @@ void write_merged_alignment(
                                         size_region_to_repatch = 0;
                                     }
                                 }
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                                 if (emit_patching_tsv) {
                                     *out_patching_tsv
                                             << query_name << "\t" << query_pos << "\t" << query_pos + query_delta << "\t"
@@ -1448,7 +1449,7 @@ query_start : query_end)
 #endif
     */
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     bool emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
     if (emit_png) {
         const int pattern_length = (int)query_length;
@@ -1633,6 +1634,7 @@ query_start : query_end)
             }
         };
 
+#ifdef WFA_PNG_TSV_TIMING
         const long elapsed_time_patching_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time)
@@ -1643,6 +1645,7 @@ query_start : query_end)
                 "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
                 "\taa:i:" + std::to_string(num_alignments) +
                 "\tap:i:" + std::to_string(num_alignments_performed);
+#endif
 
         if (paf_format_else_sam) {
             out << query_name << "\t" << query_total_length << "\t"
@@ -1680,8 +1683,12 @@ query_start : query_end)
                 write_tag_and_md_string(out, cigarv, target_start);
             }
 
+#ifdef WFA_PNG_TSV_TIMING
             out << "\t" << timings_and_num_alignements << "\t"
                 << "cg:Z:" << cigarv << "\n";
+#else
+            out << "\t" << "cg:Z:" << cigarv << "\n";
+#endif
         } else {
             out << query_name                          // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
@@ -1763,8 +1770,11 @@ query_start : query_end)
 
                 write_tag_and_md_string(out, cigarv, target_start);
             }
-
+#ifdef WFA_PNG_TSV_TIMING
             out << "\t" << timings_and_num_alignements << "\n";
+#else
+            out << "\n";
+#endif
         }
     }
 
