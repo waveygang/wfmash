@@ -163,10 +163,10 @@ sudo pacman -S jemalloc     # arch linux
 
 #### Notes for debugging/plotting
 
-To enable the functionality of producing wavefront plots (in PNG format) and tables (in TSV format), add the `-DWFA_PNG_AND_TSV=ON` option:
+To enable the functionality of emitting wavefront plots (in PNG format), tables (in TSV format), and timing information, add the `-DWFA_PNG_TSV_TIMING=ON` option:
 
 ```shell
-cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Release -DWFA_PNG_AND_TSV=ON && cmake --build build -- -j 3
+cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Release -DWFA_PNG_TSV_TIMING=ON && cmake --build build -- -j 3
 ```
 
 Note that this may make the tool a little bit slower.

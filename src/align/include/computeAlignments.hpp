@@ -305,7 +305,7 @@ namespace align
                   }
               };
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
           auto writer_thread_tsv =
                   [&]() {
               if (!param.tsvOutputPrefix.empty()) {
@@ -362,13 +362,13 @@ namespace align
                           break;
                       } else if (rec != nullptr) {
                           std::stringstream output;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                           std::stringstream output_tsv;
                           std::stringstream patching_output_tsv;
 #endif
                           doAlignment(
                                   output,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                                   output_tsv,
                                   patching_output_tsv,
 #endif
@@ -384,7 +384,7 @@ namespace align
                               delete paf_rec;
                           }
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                           auto* tsv_rec = new std::string(output_tsv.str());
                           if (!tsv_rec->empty()) {
                               tsv_queue.push(tsv_rec);
@@ -412,7 +412,7 @@ namespace align
           std::thread reader(reader_thread);
           // launch PAF/SAM writer
           std::thread writer(writer_thread);
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
           // launch TSV writer
           std::thread writer_tsv(writer_thread_tsv);
           std::thread writer_patching_tsv(writer_thread_patching_tsv);
@@ -432,7 +432,7 @@ namespace align
           }
           // and finally the writer
           writer.join();
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
           writer_tsv.join();
           writer_patching_tsv.join();
           ofstream_patching_tsv.close();
@@ -452,7 +452,7 @@ namespace align
        */
       void doAlignment(
               std::stringstream& output,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
               std::stringstream& output_tsv,
               std::stringstream& patching_output_tsv,
 #endif
@@ -543,7 +543,7 @@ namespace align
                 param.wflign_max_patching_score);
         wflign->set_output(
                 &output,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                 !param.tsvOutputPrefix.empty(),
                 &output_tsv,
                 param.prefix_wavefront_plot_in_png,

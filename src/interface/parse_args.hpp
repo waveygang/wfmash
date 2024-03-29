@@ -136,7 +136,7 @@ void parse_args(int argc,
     args::Flag keep_temp_files(general_opts, "", "keep intermediate files", {'Z', "keep-temp"});
     //args::Flag show_progress(general_opts, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     args::Group debugging_opts(parser, "[ Debugging Options ]");
     args::ValueFlag<std::string> prefix_wavefront_info_in_tsv(parser, "PREFIX", " write wavefronts' information for each alignment in TSV format files with this PREFIX", {'T', "tsv"});
     args::ValueFlag<std::string> prefix_wavefront_plot_in_png(parser, "PREFIX", " write wavefronts' plot for each alignment in PNG format files with this PREFIX", {'u', "prefix-png"});
@@ -639,7 +639,7 @@ void parse_args(int argc,
         align_parameters.pafOutputFile = "/dev/stdout";
     }
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     align_parameters.tsvOutputPrefix = (prefix_wavefront_info_in_tsv && !args::get(prefix_wavefront_info_in_tsv).empty())
             ? args::get(prefix_wavefront_info_in_tsv)
             : "";

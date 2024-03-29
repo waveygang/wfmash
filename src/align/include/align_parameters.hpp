@@ -58,7 +58,7 @@ struct Parameters {
     bool sam_format;                              //Emit the output in SAM format (PAF default)
     bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     // plotting
     std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
     uint64_t wfplot_max_size;                     // Max size (width/height) of the wfplot
