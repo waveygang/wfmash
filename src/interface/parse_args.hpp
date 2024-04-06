@@ -419,8 +419,8 @@ void parse_args(int argc,
         map_parameters.chain_gap = l;
         align_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 20000;
-        align_parameters.chain_gap = 20000;
+        map_parameters.chain_gap = 4*map_parameters.segLength;
+        align_parameters.chain_gap = 4*map_parameters.segLength;
     }
 
     if (drop_low_map_pct_identity) {
