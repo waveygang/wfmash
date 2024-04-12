@@ -1658,8 +1658,7 @@ query_start : query_end)
                 << "\t" << target_total_length << "\t"
                 << target_offset - target_pointer_shift + target_start << "\t"
                 << target_offset + target_end << "\t" << matches << "\t"
-                << std::max(total_target_aligned_length,
-                            total_query_aligned_length)
+                << matches + mismatches + inserted_bp + deleted_bp
                 << "\t"
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
