@@ -78,7 +78,7 @@ bool do_wfa_segment_alignment(
         aln.j = j;
         aln.i = i;
 
-        aln.ok = (status == 0);
+        aln.ok = (status == WF_STATUS_ALG_COMPLETED);
 
         // fill the alignment info if we aligned
         if (aln.ok) {
@@ -191,19 +191,23 @@ void do_wfa_patch_alignment(
         const char* target,
         const uint64_t& i,
         const uint64_t& target_length,
-        wfa::WFAlignerGapAffine& wf_aligner,
-        const wflign_penalties_t& affine_penalties,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+        const wflign_penalties_t& convex_penalties,
         alignment_t& aln,
         const int64_t& chain_gap,
         const int& max_patching_score) {
 
     const int max_score
             = max_patching_score ? max_patching_score :
-                    affine_penalties.gap_opening +
-                     (affine_penalties.gap_extension * std::min(
+                    // gap_opening2/gap_extension1 is usually > gap_opening1/gap_extension2
+                    convex_penalties.gap_opening2 +
+                     (convex_penalties.gap_extension1 * std::min(
                        (int)chain_gap,
                        (int)std::max(target_length, query_length)
-                     ));
+                     )) + 64;
+    // + 64 because we are not really setting the MaxScore, but the MaxAlignmentSteps.
+    // AlignmentStep is usually > Score (they are the same with edit-distance)
+    
     wf_aligner.setMaxAlignmentSteps(max_score);
     const int status = wf_aligner.alignEnd2End(target + i,target_length,query + j,query_length);
     aln.ok = (status == WF_STATUS_ALG_COMPLETED);
@@ -230,13 +234,11 @@ void do_wfa_patch_alignment(
     }
 }
 
-#define MIN_WFA_HEAD_TAIL_PATCH_LENGTH 256
-
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
-        wfa::WFAlignerGapAffine& wf_aligner,
-        const wflign_penalties_t& affine_penalties,
+        wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+        const wflign_penalties_t& convex_penalties,
         const bool& emit_md_tag,
         const bool& paf_format_else_sam,
         const bool& no_seq_in_sam,
@@ -252,9 +254,11 @@ void write_merged_alignment(
         const uint64_t& target_offset,
         const uint64_t& target_length,
         const float& min_identity,
+#ifdef WFA_PNG_TSV_TIMING
         const long& elapsed_time_wflambda_ms,
         const uint64_t& num_alignments,
         const uint64_t& num_alignments_performed,
+#endif
         const float& mashmap_estimated_identity,
         const uint64_t& wflign_max_len_major,
         const uint64_t& wflign_max_len_minor,
@@ -263,7 +267,7 @@ void write_merged_alignment(
         const int& max_patching_score,
         const int& min_wf_length,
         const int& max_dist_threshold,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         const std::string* prefix_wavefront_plot_in_png,
         const uint64_t& wfplot_max_size,
         const bool& emit_patching_tsv,
@@ -274,10 +278,6 @@ void write_merged_alignment(
     int64_t target_pointer_shift = 0;
 
     uint64_t target_length_mut = target_length;
-
-    // patching parameters
-    // we will nibble patching back to this length
-    const uint64_t min_wfa_patch_length = 8;
 
     // we need to get the start position in the query and target
     // then run through the whole alignment building up the cigar
@@ -315,61 +315,60 @@ void write_merged_alignment(
         // gaps in query and ref and adding our results to the final trace as we
         // go
 
-#define MAX_NUM_INDELS_TO_LOOK_AT 4
-        auto distance_close_big_enough_indels =
-                [](const uint32_t indel_len, auto iterator,
-                   const std::vector<char> &trace) {
-                    const uint32_t min_indel_len_to_find = indel_len / 3;
-                    const uint16_t max_dist_to_look_at =
-                            std::min(indel_len * 64, (uint32_t)8096);
+#define MAX_NUM_INDELS_TO_LOOK_AT 2
+        auto distance_close_big_enough_indels =	
+                [](const uint32_t indel_len, auto iterator,	
+                   const std::vector<char> &trace,
+                   const uint16_t&max_dist_to_look_at) {	
+                    const uint32_t min_indel_len_to_find = indel_len / 3;	
 
-                    // std::cerr << "min_indel_len_to_find " <<
-                    // min_indel_len_to_find << std::endl; std::cerr <<
-                    // "max_dist_to_look_at " << max_dist_to_look_at << std::endl;
+                    // std::cerr << "min_indel_len_to_find " <<	
+                    // min_indel_len_to_find << std::endl; std::cerr <<	
+                    // "max_dist_to_look_at " << max_dist_to_look_at << std::endl;	
 
-                    auto q = iterator;
+                    auto q = iterator;	
 
-                    uint8_t num_indels_to_find = MAX_NUM_INDELS_TO_LOOK_AT;
-                    uint32_t curr_size_close_indel = 0;
-                    int32_t dist_close_indels = 0;
+                    uint8_t num_indels_to_find = MAX_NUM_INDELS_TO_LOOK_AT;	
+                    uint32_t curr_size_close_indel = 0;	
+                    int32_t dist_close_indels = 0;	
 
-                    //std::cerr << "indel_len " << indel_len << std::endl;
-                    //std::cerr << "min_indel_len_to_find " << min_indel_len_to_find << std::endl;
-                    //std::cerr << "max_dist_to_look_at " << max_dist_to_look_at << std::endl;
+                    // std::cerr << "indel_len " << indel_len << std::endl;	
+                    // std::cerr << "min_indel_len_to_find " << min_indel_len_to_find << std::endl;	
+                    // std::cerr << "max_dist_to_look_at " << max_dist_to_look_at << std::endl;	
 
-                    while (q != trace.end() &&
-                           dist_close_indels < max_dist_to_look_at) {
-                        curr_size_close_indel = 0;
-                        while (q != trace.end() && (*q == 'I' || *q == 'D')) {
-                            ++curr_size_close_indel;
+                    while (q != trace.end() &&	
+                           dist_close_indels < max_dist_to_look_at) {	
+                        curr_size_close_indel = 0;	
+                        while (q != trace.end() && (*q == 'I' || *q == 'D')) {	
+                            ++curr_size_close_indel;	
 
-                            ++dist_close_indels;
-                            ++q;
-                        }
-                        // std::cerr << "\t\tcurr_size_close_indel " <<
-                        // curr_size_close_indel << std::endl;
-                        if (curr_size_close_indel >= min_indel_len_to_find) {
-                            // std::cerr << "\t\tnum_indels_to_find " <<
-                            // (uint16_t)num_indels_to_find << std::endl;
-                            if (--num_indels_to_find == 0) {
-                                break;
-                            }
-                        }
+                            ++dist_close_indels;	
+                            ++q;	
+                        }	
+                        // std::cerr << "\t\tcurr_size_close_indel " <<	
+                        // curr_size_close_indel << std::endl;	
+                        if (curr_size_close_indel >= min_indel_len_to_find) {	
+                            // std::cerr << "\t\tnum_indels_to_find " <<	
+                            // (uint16_t)num_indels_to_find << std::endl;	
+                            if (--num_indels_to_find == 0) {	
+                                break;	
+                            }	
+                        }	
 
-                        while (q != trace.end() &&
-                               (dist_close_indels < max_dist_to_look_at) &&
-                               *q != 'I' && *q != 'D') {
-                            ++dist_close_indels;
-                            ++q;
-                        }
-                    }
+                        while (q != trace.end() &&	
+                               (dist_close_indels < max_dist_to_look_at) &&	
+                               *q != 'I' && *q != 'D') {	
+                            ++dist_close_indels;	
+                            ++q;	
+                        }	
+                    }	
 
-                    //std::cerr << "dist_close_indels " << dist_close_indels << std::endl;
-                    //std::cerr << "num_indels_found " << MAX_NUM_INDELS_TO_LOOK_AT - num_indels_to_find << std::endl;
+                    // std::cerr << "dist_close_indels " << dist_close_indels << std::endl;	
+                    // std::cerr << "num_indels_found " << MAX_NUM_INDELS_TO_LOOK_AT - num_indels_to_find << std::endl;	
 
-                    return num_indels_to_find < MAX_NUM_INDELS_TO_LOOK_AT
-                           ? dist_close_indels
-                           : -1;
+                    return num_indels_to_find < MAX_NUM_INDELS_TO_LOOK_AT	
+                           ? dist_close_indels	
+                           : -1;	
                 };
 
         auto patching = [&query, &query_name, &query_length, &query_start,
@@ -381,15 +380,17 @@ void write_merged_alignment(
                 &wflign_max_len_minor,
                 &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
-                &affine_penalties,
+                &convex_penalties,
                 &chain_gap, &max_patching_score
-#ifdef WFA_PNG_AND_TSV
-                ,
-                &emit_patching_tsv,
+#ifdef WFA_PNG_TSV_TIMING
+                ,&emit_patching_tsv,
                 &out_patching_tsv
 #endif
         ](std::vector<char> &unpatched,
-                                   std::vector<char> &patched) {
+                                   std::vector<char> &patched,
+                                   const uint16_t &min_wfa_head_tail_patch_length,
+                                   const uint16_t &min_wfa_patch_length,
+                                   const uint16_t &max_dist_to_look_at) {
             auto q = unpatched.begin();
 
             uint64_t query_pos = query_start;
@@ -418,7 +419,7 @@ void write_merged_alignment(
                     // nibble forward if we're below the correct length
                     // this gives a bit of context for the alignment
                     while (q != unpatched.end() &&
-                           (query_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH || target_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH)) {
+                           (query_delta < min_wfa_head_tail_patch_length || target_delta < min_wfa_head_tail_patch_length)) {
                         const auto &c = *q++;
                         switch (c) {
                             case 'M': case 'X':
@@ -514,16 +515,15 @@ void write_merged_alignment(
                             target_delta + target_delta_to_shift;
 
                     if (target_delta_x > 0) {
-//                        std::cerr << "B HEAD patching in "
-//                                  << query_name << " "
-//                                  << query_offset << "@ " << query_pos <<
-//                                  " - " << query_delta
-//                                << " --- "
-//                                << target_name << " " << target_offset
-//                                << " @ " <<
-//                                target_pos << " - "
-//                                << target_delta_x
-//                                << std::endl;
+                    //    std::cerr << "B HEAD patching in "
+                    //              << query_name << " "
+                    //              << query_offset + query_pos <<
+                    //              " - " << query_delta
+                    //            << " --- "
+                    //            << target_name << " " 
+                    //            << target_offset + target_pos << " - "
+                    //            << target_delta_x
+                    //            << std::endl;
 
                         std::string query_rev(query + query_pos, query_delta);
                         std::reverse(query_rev.begin(), query_rev.end());
@@ -543,18 +543,22 @@ void write_merged_alignment(
 //                        }
 //                        std::cerr << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_heads =
-                                new wfa::WFAlignerGapAffine(
-                                        affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_heads =
+                                new wfa::WFAlignerGapAffine2Pieces(
+                                        0,
+                                        convex_penalties.mismatch,
+                                        convex_penalties.gap_opening1,
+                                        convex_penalties.gap_extension1,
+                                        convex_penalties.gap_opening2,
+                                        convex_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
                                         wfa::WFAligner::MemoryMed);
                         wf_aligner_heads->setHeuristicWFmash(min_wf_length,max_dist_threshold);
                         const int status = wf_aligner_heads->alignEndsFree(
                                 target_rev.c_str(),target_rev.size(),0,0,
                                 query_rev.c_str(),query_rev.size(),0,query_rev.size());
-                        if (status == 0) { // WF_ALIGN_SUCCESSFUL
+                        //std::cerr << "Head patching status " << status << "\n";
+                        if (status == WF_STATUS_ALG_COMPLETED || status == WF_STATUS_ALG_PARTIAL) {
                             //hack_cigar(wf_aligner_heads->cigar, query_rev.c_str(), target_rev.c_str(), query_rev.size(), target_rev.size(), 0, 0);
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -571,7 +575,6 @@ void write_merged_alignment(
                             }
 #endif
 
-                            //std::cerr << "Head patching\n";
                             got_alignment = true;
 
                             target_pos = target_pos_x;
@@ -584,6 +587,28 @@ void write_merged_alignment(
                             char* cigar_ops;
                             int cigar_length;
                             wf_aligner_heads->getAlignment(&cigar_ops,&cigar_length);
+
+                            // Put the missing part of the CIGAR string first and then its aligned part
+                            uint64_t missing_query_len = query_rev.size();
+                            uint64_t missing_target_len = target_rev.size();
+                            for(int xxx = cigar_length - 1; xxx >= 0; --xxx) {
+                                // The CIGAR string can be incomplete
+                                switch (cigar_ops[xxx]) {
+                                    case 'M': case 'X':
+                                        --missing_query_len; --missing_target_len; break;
+                                    case 'I': --missing_query_len; break;
+                                    case 'D': --missing_target_len; break;
+                                    default: break;
+                                }
+                            }
+                            // Put the missing part of the CIGAR string
+                            for (uint64_t i = 0; i < missing_query_len; ++i) {
+                                patched.push_back('I');
+                            }
+                            for (uint64_t i = 0; i < missing_target_len; ++i) {
+                                patched.push_back('D');
+                            }
+
                             for(int xxx = cigar_length - 1; xxx >= 0; --xxx) {
                                 //std::cerr << cigar_ops[xxx];
                                 patched.push_back(cigar_ops[xxx]);
@@ -685,22 +710,18 @@ void write_merged_alignment(
                                  (query_delta < wflign_max_len_minor ||
                                   target_delta < wflign_max_len_minor))) {
 
-                        // this should only happen if we're at >99% identity
-                        int32_t distance_close_indels = -1;
-                        /*
-                        int32_t distance_close_indels = (query_delta > 3 || target_delta > 3) ?
-                                                        distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched) :
-                                                        -1;
-                        */
+                        int32_t distance_close_indels = 
+                            (query_delta > 10 || target_delta > 10) ?	
+                            distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched, max_dist_to_look_at) :	
+                            -1;
 
-                        // std::cerr << "distance_close_indels "
-                        //           <<  distance_close_indels << std::endl;
                         // Trigger the patching if there is a dropout
                         // (consecutive Is and Ds) or if there is a close and
                         // big enough indel forward
                         if (size_region_to_repatch > 0 ||
                             (query_delta > 0 && target_delta > 0) ||
-                            (distance_close_indels > 0)) {
+                            (query_delta > 2 || target_delta > 2) ||
+                            distance_close_indels > 0) {
 #ifdef WFLIGN_DEBUG
                             // std::cerr << "query_delta " << query_delta <<
                             // "\n"; std::cerr << "target_delta " << target_delta
@@ -747,8 +768,6 @@ void write_merged_alignment(
                                     patched.pop_back();
                                     --size_region_to_repatch;
                                 }
-
-                                //distance_close_indels = distance_close_big_enough_indels(std::max(query_delta, target_delta), q, unpatched);
                             } else {
                                 // nibble backward if we're below the correct
                                 // length
@@ -805,30 +824,30 @@ void write_merged_alignment(
                                 --distance_close_indels;
                             }
 
-                            // Nibble until the close, big enough indel is
-                            // reached Important when the patching can't be
-                            // computed correctly without including the next
-                            // indel
-                            while (q != unpatched.end() &&
-                                   distance_close_indels > 0) {
-                                const auto &c = *q++;
-                                switch (c) {
-                                    case 'M':
-                                    case 'X':
-                                        ++query_delta;
-                                        ++target_delta;
-                                        break;
-                                    case 'I':
-                                        ++query_delta;
-                                        break;
-                                    case 'D':
-                                        ++target_delta;
-                                        break;
-                                    default:
-                                        break;
-                                }
+                            // Nibble until the close, big enough indel is	
+                            // reached Important when the patching can't be	
+                            // computed correctly without including the next	
+                            // indel	
+                            while (q != unpatched.end() &&	
+                                   distance_close_indels > 0) {	
+                                const auto &c = *q++;	
+                                switch (c) {	
+                                    case 'M':	
+                                    case 'X':	
+                                        ++query_delta;	
+                                        ++target_delta;	
+                                        break;	
+                                    case 'I':	
+                                        ++query_delta;	
+                                        break;	
+                                    case 'D':	
+                                        ++target_delta;	
+                                        break;	
+                                    default:	
+                                        break;	
+                                }	
 
-                                --distance_close_indels;
+                                --distance_close_indels;	
                             }
 
                             // check forward if there are other Is/Ds to merge
@@ -875,7 +894,7 @@ void write_merged_alignment(
                                 do_wfa_patch_alignment(
                                         query, query_pos, query_delta,
                                         target - target_pointer_shift, target_pos, target_delta,
-                                        wf_aligner, affine_penalties, patch_aln, chain_gap, max_patching_score);
+                                        wf_aligner, convex_penalties, patch_aln, chain_gap, max_patching_score);
                                 if (patch_aln.ok) {
                                     // std::cerr << "got an ok patch aln" <<
                                     // std::endl;
@@ -930,11 +949,11 @@ void write_merged_alignment(
                                         size_region_to_repatch = 0;
                                     }
                                 }
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                                 if (emit_patching_tsv) {
                                     *out_patching_tsv
-                                            << query_name << ":" << query_pos << "-" << query_pos + query_delta << "\t"
-                                            << target_name << ":" << target_pos - target_pointer_shift << "-" << target_pos - target_pointer_shift + target_delta << "\t"
+                                            << query_name << "\t" << query_pos << "\t" << query_pos + query_delta << "\t"
+                                            << target_name << "\t" << (target_pos - target_pointer_shift) << "\t" << (target_pos - target_pointer_shift + target_delta) << "\t"
                                             << patch_aln.ok << std::endl;
                                 }
 #endif
@@ -991,7 +1010,7 @@ void write_merged_alignment(
                     // nibble backward if we're below the correct length
                     // this gives a bit of context for the alignment
                     while (!patched.empty() &&
-                           (query_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH || target_delta < MIN_WFA_HEAD_TAIL_PATCH_LENGTH)) {
+                           (query_delta < min_wfa_head_tail_patch_length || target_delta < min_wfa_head_tail_patch_length)) {
                         const auto& c = patched.back();
                         switch (c) {
                             case 'M': case 'X':
@@ -1030,30 +1049,31 @@ void write_merged_alignment(
                                 target_pos + target_delta));
 
                     if (target_delta_x > 0) {
-//                        std::cerr << "B TAIL patching in "
-//                                  << query_name << " " <<
-//                                  query_offset << " @ " <<
-//                                  query_pos << " - " <<
-//                                  query_delta << " "
-//                                  << target_name << " " <<
-//                                  target_offset << " @ "
-//                                  << target_pos - target_pointer_shift << " - "
-//                                  << target_delta_x
-//                                  << std::endl;
+                    //    std::cerr << "B TAIL patching in "
+                    //              << query_name << " " <<
+                    //              query_offset + query_pos << " - " <<
+                    //              query_delta << " "
+                    //              << target_name << " " <<
+                    //              target_offset + target_pos - target_pointer_shift << " - "
+                    //              << target_delta_x
+                    //              << std::endl;
 
-                        wfa::WFAlignerGapAffine* wf_aligner_tails =
-                                new wfa::WFAlignerGapAffine(
-                                        affine_penalties.mismatch,
-                                        affine_penalties.gap_opening,
-                                        affine_penalties.gap_extension,
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails =
+                                new wfa::WFAlignerGapAffine2Pieces(
+                                        0,
+                                        convex_penalties.mismatch,
+                                        convex_penalties.gap_opening1,
+                                        convex_penalties.gap_extension1,
+                                        convex_penalties.gap_opening2,
+                                        convex_penalties.gap_extension2,
                                         wfa::WFAligner::Alignment,
                                         wfa::WFAligner::MemoryMed);
                         wf_aligner_tails->setHeuristicWFmash(min_wf_length,max_dist_threshold);
                         const int status = wf_aligner_tails->alignEndsFree(
                                 target - target_pointer_shift + target_pos, target_delta_x,0,0,
                                 query + query_pos, query_delta,0,query_delta);
-
-                        if (status == 0) { // WF_ALIGN_SUCCESSFUL
+                        //std::cerr << "Tail patching status " << status << "\n";
+                        if (status == WF_STATUS_ALG_COMPLETED || status == WF_STATUS_ALG_PARTIAL) {
                             //hack_cigar(wf_aligner_tails->cigar, query + query_pos, target - target_pointer_shift + target_pos, query_delta, target_delta_x, 0, 0);
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -1070,7 +1090,6 @@ void write_merged_alignment(
                             }
 #endif
 
-                            //std::cerr << "Tail patching\n";
                             got_alignment = true;
 
                             {
@@ -1091,11 +1110,29 @@ void write_merged_alignment(
                             char* cigar_ops;
                             int cigar_length;
                             wf_aligner_tails->getAlignment(&cigar_ops,&cigar_length);
+                            uint64_t missing_query_len = query_delta;
+                            uint64_t missing_target_len = target_delta;
                             for(int xxx = 0; xxx < cigar_length; ++xxx) {
                                 //std::cerr << cigar_ops[xxx];
                                 patched.push_back(cigar_ops[xxx]);
+
+                                // The CIGAR string can be incomplete
+                                switch (cigar_ops[xxx]) {
+                                    case 'M': case 'X':
+                                        --missing_query_len; --missing_target_len; break;
+                                    case 'I': --missing_query_len; break;
+                                    case 'D': --missing_target_len; break;
+                                    default: break;
+                                }
                             }
                             //std::cerr << "\n";
+                            // Put the missing part of the CIGAR string
+                            for (uint64_t i = 0; i < missing_query_len; ++i) {
+                                patched.push_back('I');
+                            }
+                            for (uint64_t i = 0; i < missing_target_len; ++i) {
+                                patched.push_back('D');
+                            }
                         }
                         delete wf_aligner_tails;
                     }
@@ -1282,7 +1319,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev);
+            patching(erodev, pre_tracev, 4096, 32, 512); // In the 1st round, we patch more aggressively
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -1310,9 +1347,9 @@ void write_merged_alignment(
             sort_indels(tracev);
         }
 
-        // std::cerr << "SECOND PATCH ROUND
+        //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev);
+        patching(pre_tracev, tracev, 256, 8, 128); // In the 2nd round, we patch less aggressively
     }
 
     // normalize the indels
@@ -1412,7 +1449,7 @@ query_start : query_end)
 #endif
     */
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     bool emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
     if (emit_png) {
         const int pattern_length = (int)query_length;
@@ -1597,6 +1634,7 @@ query_start : query_end)
             }
         };
 
+#ifdef WFA_PNG_TSV_TIMING
         const long elapsed_time_patching_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time)
@@ -1607,6 +1645,7 @@ query_start : query_end)
                 "\tpt:i:" + std::to_string(elapsed_time_patching_ms) +
                 "\taa:i:" + std::to_string(num_alignments) +
                 "\tap:i:" + std::to_string(num_alignments_performed);
+#endif
 
         if (paf_format_else_sam) {
             out << query_name << "\t" << query_total_length << "\t"
@@ -1619,15 +1658,14 @@ query_start : query_end)
                 << "\t" << target_total_length << "\t"
                 << target_offset - target_pointer_shift + target_start << "\t"
                 << target_offset + target_end << "\t" << matches << "\t"
-                << std::max(total_target_aligned_length,
-                            total_query_aligned_length)
+                << matches + mismatches + inserted_bp + deleted_bp
                 << "\t"
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
                 << "\t"
-                << "gi:f:" << gap_compressed_identity * 100.0 << "\t"
+                << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:"
-                << block_identity * 100.0
+                << block_identity
                 //<< "\t" << "md:f:" << mash_dist_sum / trace.size()
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
@@ -1636,7 +1674,7 @@ query_start : query_end)
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "dd:i:" << deleted_bp
                 << "\t"
-                << "md:f:" << mashmap_estimated_identity * 100.0;
+                << "md:f:" << mashmap_estimated_identity;
 
             if (emit_md_tag) {
                 out << "\t";
@@ -1644,8 +1682,12 @@ query_start : query_end)
                 write_tag_and_md_string(out, cigarv, target_start);
             }
 
+#ifdef WFA_PNG_TSV_TIMING
             out << "\t" << timings_and_num_alignements << "\t"
                 << "cg:Z:" << cigarv << "\n";
+#else
+            out << "\t" << "cg:Z:" << cigarv << "\n";
+#endif
         } else {
             out << query_name                          // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
@@ -1727,8 +1769,11 @@ query_start : query_end)
 
                 write_tag_and_md_string(out, cigarv, target_start);
             }
-
+#ifdef WFA_PNG_TSV_TIMING
             out << "\t" << timings_and_num_alignements << "\n";
+#else
+            out << "\n";
+#endif
         }
     }
 

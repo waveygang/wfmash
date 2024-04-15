@@ -516,7 +516,7 @@ void wavefront_aligner_set_alignment_free_ends(
     const int text_begin_free,
     const int text_end_free) {
   wf_aligner->alignment_form.span = alignment_endsfree;
-  wf_aligner->alignment_form.extension = false;
+  wf_aligner->alignment_form.extension = true;
   wf_aligner->alignment_form.pattern_begin_free = pattern_begin_free;
   wf_aligner->alignment_form.pattern_end_free = pattern_end_free;
   wf_aligner->alignment_form.text_begin_free = text_begin_free;

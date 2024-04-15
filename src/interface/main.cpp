@@ -73,6 +73,12 @@ int main(int argc, char** argv) {
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
         std::cerr << "[wfmash::map] time spent computing the reference index: " << timeRefSketch.count() << " sec" << std::endl;
 
+        if (referSketch.minmerIndex.size() == 0)
+        {
+            std::cerr << "[wfmash::map] ERROR, reference sketch is empty. Reference sequences shorter than the segment length are not indexed" << std::endl;
+            return 1;
+        }
+
         //Map the sequences in query file
         t0 = skch::Time::now();
 
@@ -151,7 +157,7 @@ int main(int argc, char** argv) {
             << "\t" << 0
             << "\t" << std::max(e.rEndPos - e.rStartPos, e.qEndPos - e.qStartPos)
             << "\t" << 255
-            << "\t" << "id:f:" << e.mashmap_estimated_identity * 100.0
+            << "\t" << "id:f:" << e.mashmap_estimated_identity
             << "\n";
         }
     }

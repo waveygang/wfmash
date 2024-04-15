@@ -52,16 +52,16 @@ namespace wflign {
                 const char* target,
                 const uint64_t& i,
                 const uint64_t& target_length,
-                wfa::WFAlignerGapAffine& _wf_aligner,
-                const wflign_penalties_t& affine_penalties,
+                wfa::WFAlignerGapAffine2Pieces& _wf_aligner,
+                const wflign_penalties_t& convex_penalties,
                 alignment_t& aln,
                 const int64_t& chain_gap,
                 const int& max_patching_score);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
-                wfa::WFAlignerGapAffine& wf_aligner,
-                const wflign_penalties_t& affine_penalties,
+                wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+                const wflign_penalties_t& convex_penalties,
                 const bool& emit_md_tag,
                 const bool& paf_format_else_sam,
                 const bool& no_seq_in_sam,
@@ -77,9 +77,11 @@ namespace wflign {
                 const uint64_t& target_offset,
                 const uint64_t& target_length,
                 const float& min_identity,
+#ifdef WFA_PNG_TSV_TIMING
                 const long& elapsed_time_wflambda_ms,
                 const uint64_t& num_alignments,
                 const uint64_t& num_alignments_performed,
+#endif
                 const float& mashmap_estimated_identity,
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
@@ -88,7 +90,7 @@ namespace wflign {
                 const int& max_patching_score,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                 const std::string* prefix_wavefront_plot_in_png,
                 const uint64_t& wfplot_max_size,
                 const bool& emit_patching_tsv,

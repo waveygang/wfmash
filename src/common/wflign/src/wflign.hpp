@@ -40,9 +40,17 @@ namespace wflign {
             uint16_t segment_length;
             float min_identity;
             int _minhash_kmer_size;
+
             int wfa_mismatch_score;
             int wfa_gap_opening_score;
             int wfa_gap_extension_score;
+
+            int wfa_patching_mismatch_score;
+            int wfa_patching_gap_opening_score1;
+            int wfa_patching_gap_extension_score1;
+            int wfa_patching_gap_opening_score2;
+            int wfa_patching_gap_extension_score2;
+            
             float mashmap_estimated_identity;
             // WFlign parameters
             int wflign_mismatch_score;
@@ -71,7 +79,7 @@ namespace wflign {
             uint64_t target_length;
             // Output
             std::ostream* out;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
             bool emit_tsv;
             std::ostream* out_tsv;
             const std::string* prefix_wavefront_plot_in_png;
@@ -90,6 +98,11 @@ namespace wflign {
                     const int wfa_mismatch_score,
                     const int wfa_gap_opening_score,
                     const int wfa_gap_extension_score,
+                    const int wfa_patching_mismatch_score,
+                    const int wfa_patching_gap_opening_score1,
+                    const int wfa_patching_gap_extension_score1,
+                    const int wfa_patching_gap_opening_score2,
+                    const int wfa_patching_gap_extension_score2,
                     const float mashmap_estimated_identity,
                     const int wflign_mismatch_score,
                     const int wflign_gap_opening_score,
@@ -105,7 +118,7 @@ namespace wflign {
             // Set output configuration
             void set_output(
                     std::ostream* const out,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                     const bool emit_tsv,
                     std::ostream* const out_tsv,
                     const std::string &wfplot_filepath,
@@ -163,12 +176,14 @@ typedef struct {
 //    int last_breakpoint_h;
 //    wflign_penalties_t* wfa_affine_penalties;
     // Stats
+#ifdef WFA_PNG_TSV_TIMING
     uint64_t num_alignments;
     uint64_t num_alignments_performed;
+#endif
     // For performance improvements
     uint64_t max_num_sketches_in_memory;
     uint64_t num_sketches_allocated;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     // wfplot
     bool emit_png;
     robin_hood::unordered_set<uint64_t>* high_order_dp_matrix_mismatch;

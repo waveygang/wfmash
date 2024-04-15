@@ -124,7 +124,7 @@ namespace align
         // Extract the mashmap identity from the string
         const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
         // if the estimated identity is missing, avoid assuming too low values
-        const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back())/(float) 100.0 : skch::fixed::percentage_identity; // divide by 100 for consistency with block alignment
+        const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
         //Save words into currentRecord
         {
@@ -305,7 +305,7 @@ namespace align
                   }
               };
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
           auto writer_thread_tsv =
                   [&]() {
               if (!param.tsvOutputPrefix.empty()) {
@@ -362,13 +362,13 @@ namespace align
                           break;
                       } else if (rec != nullptr) {
                           std::stringstream output;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                           std::stringstream output_tsv;
                           std::stringstream patching_output_tsv;
 #endif
                           doAlignment(
                                   output,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                                   output_tsv,
                                   patching_output_tsv,
 #endif
@@ -384,7 +384,7 @@ namespace align
                               delete paf_rec;
                           }
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                           auto* tsv_rec = new std::string(output_tsv.str());
                           if (!tsv_rec->empty()) {
                               tsv_queue.push(tsv_rec);
@@ -412,7 +412,7 @@ namespace align
           std::thread reader(reader_thread);
           // launch PAF/SAM writer
           std::thread writer(writer_thread);
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
           // launch TSV writer
           std::thread writer_tsv(writer_thread_tsv);
           std::thread writer_patching_tsv(writer_thread_patching_tsv);
@@ -432,7 +432,7 @@ namespace align
           }
           // and finally the writer
           writer.join();
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
           writer_tsv.join();
           writer_patching_tsv.join();
           ofstream_patching_tsv.close();
@@ -452,7 +452,7 @@ namespace align
        */
       void doAlignment(
               std::stringstream& output,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
               std::stringstream& output_tsv,
               std::stringstream& patching_output_tsv,
 #endif
@@ -524,6 +524,11 @@ namespace align
                 param.wfa_mismatch_score,
                 param.wfa_gap_opening_score,
                 param.wfa_gap_extension_score,
+                param.wfa_patching_mismatch_score,
+                param.wfa_patching_gap_opening_score1,
+                param.wfa_patching_gap_extension_score1,
+                param.wfa_patching_gap_opening_score2,
+                param.wfa_patching_gap_extension_score2,
                 currentRecord.mashmap_estimated_identity,
                 param.wflign_mismatch_score,
                 param.wflign_gap_opening_score,
@@ -538,7 +543,7 @@ namespace align
                 param.wflign_max_patching_score);
         wflign->set_output(
                 &output,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                 !param.tsvOutputPrefix.empty(),
                 &output_tsv,
                 param.prefix_wavefront_plot_in_png,

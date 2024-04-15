@@ -45,6 +45,11 @@ WFlign::WFlign(
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
+    const int wfa_patching_mismatch_score,
+    const int wfa_patching_gap_opening_score1,
+    const int wfa_patching_gap_extension_score1,
+    const int wfa_patching_gap_opening_score2,
+    const int wfa_patching_gap_extension_score2,
     const float mashmap_estimated_identity,
     const int wflign_mismatch_score,
     const int wflign_gap_opening_score,
@@ -60,9 +65,17 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
+
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
     this->wfa_gap_extension_score = wfa_gap_extension_score;
+
+    this->wfa_patching_mismatch_score = wfa_patching_mismatch_score;
+    this->wfa_patching_gap_opening_score1 = wfa_patching_gap_opening_score1;
+    this->wfa_patching_gap_extension_score1 = wfa_patching_gap_extension_score1;
+    this->wfa_patching_gap_opening_score2 = wfa_patching_gap_opening_score2;
+    this->wfa_patching_gap_extension_score2 = wfa_patching_gap_extension_score2;
+
     this->mashmap_estimated_identity = mashmap_estimated_identity;
     this->wflign_mismatch_score = wflign_mismatch_score;
     this->wflign_gap_opening_score = wflign_gap_opening_score;
@@ -90,7 +103,7 @@ WFlign::WFlign(
     this->target_length = 0;
     // Output
     this->out = nullptr;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     this->emit_tsv = false;
     this->out_tsv = nullptr;
     this->prefix_wavefront_plot_in_png = nullptr;
@@ -108,7 +121,7 @@ WFlign::WFlign(
 */
 void WFlign::set_output(
     std::ostream* const out,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     const bool emit_tsv,
     std::ostream* const out_tsv,
     const std::string &wfplot_filepath,
@@ -121,7 +134,7 @@ void WFlign::set_output(
     const bool paf_format_else_sam,
     const bool no_seq_in_sam) {
     this->out = out;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     this->emit_tsv = emit_tsv;
     this->out_tsv = out_tsv;
     this->prefix_wavefront_plot_in_png = &wfplot_filepath;
@@ -154,7 +167,7 @@ int wflambda_extend_match(
     robin_hood::unordered_flat_map<uint64_t,alignment_t*>& alignments = *(extend_data->alignments);
     std::vector<std::vector<rkmh::hash_t>*>& query_sketches = *(extend_data->query_sketches);
     std::vector<std::vector<rkmh::hash_t>*>& target_sketches = *(extend_data->target_sketches);
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     // wfplots
     const bool emit_png = extend_data->emit_png;
     robin_hood::unordered_set<uint64_t>& high_order_dp_matrix_mismatch = *(extend_data->high_order_dp_matrix_mismatch);
@@ -194,7 +207,7 @@ int wflambda_extend_match(
                             step_size,
                             extend_data,
                             *aln);
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
             if (wflign.emit_tsv) {
                 // 0) Mis-match, alignment skipped
                 // 1) Mis-match, alignment performed
@@ -204,9 +217,13 @@ int wflambda_extend_match(
                                   << std::endl;
             }
 #endif
+#ifdef WFA_PNG_TSV_TIMING
             ++(extend_data->num_alignments);
+#endif
             if (alignment_performed) {
+#ifdef WFA_PNG_TSV_TIMING
                 ++(extend_data->num_alignments_performed);
+#endif
                 if (aln->ok){
                     is_a_match = true;
                     alignments[k] = aln;
@@ -214,7 +231,7 @@ int wflambda_extend_match(
                     alignments[k] = nullptr;
                 }
             }
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
             else {
                 if (emit_png) {
                     // Save only the mismatches, as they are not cached
@@ -328,18 +345,18 @@ void WFlign::wflign_affine_wavefront(
 
     const int minhash_kmer_size = std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
 
-    // Set penalties
+    // Set penalties for wfa affine
     wflign_penalties_t wfa_affine_penalties;
     if (wfa_mismatch_score > 0 && wfa_gap_opening_score > 0 && wfa_gap_extension_score > 0){
         wfa_affine_penalties.match = 0;
         wfa_affine_penalties.mismatch = wfa_mismatch_score;
-        wfa_affine_penalties.gap_opening = wfa_gap_opening_score;
-        wfa_affine_penalties.gap_extension = wfa_gap_extension_score;
+        wfa_affine_penalties.gap_opening1 = wfa_gap_opening_score;
+        wfa_affine_penalties.gap_extension1 = wfa_gap_extension_score;
     } else {
         wfa_affine_penalties.match = 0;
-        wfa_affine_penalties.mismatch = 4;
-        wfa_affine_penalties.gap_opening = 6;
-        wfa_affine_penalties.gap_extension = 1;
+        wfa_affine_penalties.mismatch = 6;
+        wfa_affine_penalties.gap_opening1 = 8;
+        wfa_affine_penalties.gap_extension1 = 1;
         /*
         if (mashmap_estimated_identity >= 0.80) {
             // Polynomial fitting
@@ -357,6 +374,24 @@ void WFlign::wflign_affine_wavefront(
             wfa_affine_penalties.gap_extension = 1;
         }
         */
+    }
+
+    // Set penalties for wfa convex
+    wflign_penalties_t wfa_convex_penalties;
+    if (wfa_patching_mismatch_score > 0 && wfa_patching_gap_opening_score1 > 0 && wfa_patching_gap_extension_score1 > 0 && wfa_patching_gap_opening_score2 > 0 && wfa_patching_gap_extension_score2 > 0){
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = wfa_patching_mismatch_score;
+        wfa_convex_penalties.gap_opening1 = wfa_patching_gap_opening_score1;
+        wfa_convex_penalties.gap_extension1 = wfa_patching_gap_extension_score1;
+        wfa_convex_penalties.gap_opening2 = wfa_patching_gap_opening_score2;
+        wfa_convex_penalties.gap_extension2 = wfa_patching_gap_extension_score2;
+    } else {
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = 5;
+        wfa_convex_penalties.gap_opening1 = 8;
+        wfa_convex_penalties.gap_extension1 = 2;
+        wfa_convex_penalties.gap_opening2 = 49;
+        wfa_convex_penalties.gap_extension2 = 1;
     }
 
     // heuristic bound on the max mash dist, adaptive based on estimated
@@ -398,18 +433,22 @@ void WFlign::wflign_affine_wavefront(
     // accumulate runs of matches in reverse order
     // then trim the cigars of successive mappings
     std::vector<alignment_t*> trace;
+#ifdef WFA_PNG_TSV_TIMING
     const auto start_time = std::chrono::steady_clock::now();
-
+#endif
     if (
             (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
             (mashmap_estimated_identity >= 0.99
              && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)
             ) {
-        wfa::WFAlignerGapAffine* wf_aligner =
-                new wfa::WFAlignerGapAffine(
-                        wfa_affine_penalties.mismatch,
-                        wfa_affine_penalties.gap_opening,
-                        wfa_affine_penalties.gap_extension,
+        wfa::WFAlignerGapAffine2Pieces* wf_aligner =
+                new wfa::WFAlignerGapAffine2Pieces(
+                        0,
+                        wfa_convex_penalties.mismatch,
+                        wfa_convex_penalties.gap_opening1,
+                        wfa_convex_penalties.gap_extension1,
+                        wfa_convex_penalties.gap_opening2,
+                        wfa_convex_penalties.gap_extension2,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
         wf_aligner->setHeuristicNone();
@@ -458,20 +497,26 @@ void WFlign::wflign_affine_wavefront(
 
         trace.push_back(aln);
 
+#ifdef WFA_PNG_TSV_TIMING
         const long elapsed_time_wflambda_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time).count();
+#endif
 
         // Free old aligner
         delete wf_aligner;
 
         // use biWFA for all patching
-        wf_aligner = new wfa::WFAlignerGapAffine(
-            wfa_affine_penalties.mismatch,
-            wfa_affine_penalties.gap_opening,
-            wfa_affine_penalties.gap_extension,
-            wfa::WFAligner::Alignment,
-            wfa::WFAligner::MemoryUltralow);
+        wf_aligner =
+                new wfa::WFAlignerGapAffine2Pieces(
+                        0,
+                        wfa_convex_penalties.mismatch,
+                        wfa_convex_penalties.gap_opening1,
+                        wfa_convex_penalties.gap_extension1,
+                        wfa_convex_penalties.gap_opening2,
+                        wfa_convex_penalties.gap_extension2,
+                        wfa::WFAligner::Alignment,
+                        wfa::WFAligner::MemoryUltralow);
         wf_aligner->setHeuristicNone();
 
         // write a merged alignment
@@ -479,7 +524,7 @@ void WFlign::wflign_affine_wavefront(
                 *out,
                 trace,
                 *wf_aligner,
-                wfa_affine_penalties,
+                wfa_convex_penalties,
                 emit_md_tag,
                 paf_format_else_sam,
                 no_seq_in_sam,
@@ -495,9 +540,11 @@ void WFlign::wflign_affine_wavefront(
                 target_offset,
                 target_length,
                 min_identity,
+#ifdef WFA_PNG_TSV_TIMING
                 elapsed_time_wflambda_ms,
                 1,
                 1,
+#endif
                 mashmap_estimated_identity,
                 wflign_max_len_major,
                 wflign_max_len_minor,
@@ -506,7 +553,7 @@ void WFlign::wflign_affine_wavefront(
                 max_patching_score,
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                 ,
                 prefix_wavefront_plot_in_png,
                 wfplot_max_size,
@@ -518,7 +565,7 @@ void WFlign::wflign_affine_wavefront(
         // Free biWFA aligner
         delete wf_aligner;
     } else {
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         if (emit_tsv) {
             *out_tsv << "# query_name=" << query_name << std::endl;
             *out_tsv << "# query_start=" << query_offset << std::endl;
@@ -549,29 +596,29 @@ void WFlign::wflign_affine_wavefront(
         if (wflign_mismatch_score > 0 && wflign_gap_opening_score > 0 && wflign_gap_extension_score > 0){
             wflambda_affine_penalties.match = 0;
             wflambda_affine_penalties.mismatch = wflign_mismatch_score;
-            wflambda_affine_penalties.gap_opening = wflign_gap_opening_score;
-            wflambda_affine_penalties.gap_extension = wflign_gap_extension_score;
+            wflambda_affine_penalties.gap_opening1 = wflign_gap_opening_score;
+            wflambda_affine_penalties.gap_extension1 = wflign_gap_extension_score;
         } else {
             wflambda_affine_penalties.match = 0;
             wflambda_affine_penalties.mismatch = 4;
-            wflambda_affine_penalties.gap_opening = 6;
-            wflambda_affine_penalties.gap_extension = 1;
+            wflambda_affine_penalties.gap_opening1 = 6;
+            wflambda_affine_penalties.gap_extension1 = 1;
         }
 
         //std::cerr << "wfa_affine_penalties.mismatch " << wfa_affine_penalties.mismatch << std::endl;
         //std::cerr << "wfa_affine_penalties.gap_opening " << wfa_affine_penalties.gap_opening << std::endl;
         //std::cerr << "wfa_affine_penalties.gap_extension " << wfa_affine_penalties.gap_extension << std::endl;
         //std::cerr << "wflambda_affine_penalties.mismatch " << wflambda_affine_penalties.mismatch << std::endl;
-        //std::cerr << "wflambda_affine_penalties.gap_opening " << wflambda_affine_penalties.gap_opening << std::endl;
-        //std::cerr << "wflambda_affine_penalties.gap_extension " << wflambda_affine_penalties.gap_extension << std::endl;
+        //std::cerr << "wflambda_affine_penalties.gap_opening1 " << wflambda_affine_penalties.gap_opening1 << std::endl;
+        //std::cerr << "wflambda_affine_penalties.gap_extension1 " << wflambda_affine_penalties.gap_extension1 << std::endl;
         //std::cerr << "max_mash_dist_to_evaluate " << max_mash_dist_to_evaluate << std::endl;
 
         // Configure the attributes of the wflambda-aligner
         wfa::WFAlignerGapAffine* wflambda_aligner =
                 new wfa::WFAlignerGapAffine(
                         wflambda_affine_penalties.mismatch,
-                        wflambda_affine_penalties.gap_opening,
-                        wflambda_affine_penalties.gap_extension,
+                        wflambda_affine_penalties.gap_opening1,
+                        wflambda_affine_penalties.gap_extension1,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
         wflambda_aligner->setHeuristicNone(); // It should help
@@ -591,8 +638,8 @@ void WFlign::wflign_affine_wavefront(
         wfa::WFAlignerGapAffine* wf_aligner =
                 new wfa::WFAlignerGapAffine(
                         wfa_affine_penalties.mismatch,
-                        wfa_affine_penalties.gap_opening,
-                        wfa_affine_penalties.gap_extension,
+                        wfa_affine_penalties.gap_opening1,
+                        wfa_affine_penalties.gap_extension1,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryHigh);
         wf_aligner->setHeuristicNone();
@@ -619,12 +666,14 @@ void WFlign::wflign_affine_wavefront(
 //        extend_data.last_breakpoint_v = 0;
 //        extend_data.last_breakpoint_h = 0;
 //        extend_data.wfa_affine_penalties = &wfa_affine_penalties;
+#ifdef WFA_PNG_TSV_TIMING
         extend_data.num_alignments = 0;
         extend_data.num_alignments_performed = 0;
+#endif
         extend_data.num_sketches_allocated = 0;
         // 1 GB / (hash_t*mash_sketch_rate*segment_length*2); 1 GB = 1×8×1024×1024×1024; '*2' to account query/target sequences
         extend_data.max_num_sketches_in_memory = std::ceil(8589934592.0 / (8.0*sizeof(rkmh::hash_t)*mash_sketch_rate*segment_length_to_use*2) );
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
         extend_data.high_order_dp_matrix_mismatch = &high_order_dp_matrix_mismatch;
 #endif
@@ -636,14 +685,18 @@ void WFlign::wflign_affine_wavefront(
 
         // Extract the trace
         if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_ALG_COMPLETED) {
+#ifdef WFA_PNG_TSV_TIMING
             extend_data.num_alignments += wflambda_trace_match(
                     alignments,*wflambda_aligner,trace,pattern_length,text_length);
+#else
+            wflambda_trace_match(alignments,*wflambda_aligner,trace,pattern_length,text_length);
+#endif
         }
 
         // Free
         delete wflambda_aligner;
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         if (extend_data.emit_png) {
             const int wfplot_vmin = 0, wfplot_vmax = pattern_length; //v_max;
             const int wfplot_hmin = 0, wfplot_hmax = text_length; //h_max
@@ -764,11 +817,11 @@ void WFlign::wflign_affine_wavefront(
                 //p.second = nullptr;
             }
         }
-
+#ifdef WFA_PNG_TSV_TIMING
         const long elapsed_time_wflambda_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now()-start_time).count();
-
+#endif
         //#define WFLIGN_DEBUG
     #ifdef WFLIGN_DEBUG
         // get alignment score
@@ -923,12 +976,16 @@ void WFlign::wflign_affine_wavefront(
                 delete wf_aligner;
 
                 // use biWFA for all patching
-                wf_aligner = new wfa::WFAlignerGapAffine(
-                    wfa_affine_penalties.mismatch,
-                    wfa_affine_penalties.gap_opening,
-                    wfa_affine_penalties.gap_extension,
-                    wfa::WFAligner::Alignment,
-                    wfa::WFAligner::MemoryUltralow);
+                wfa::WFAlignerGapAffine2Pieces* wf_aligner =
+                        new wfa::WFAlignerGapAffine2Pieces(
+                                0,
+                                wfa_convex_penalties.mismatch,
+                                wfa_convex_penalties.gap_opening1,
+                                wfa_convex_penalties.gap_extension1,
+                                wfa_convex_penalties.gap_opening2,
+                                wfa_convex_penalties.gap_extension2,
+                                wfa::WFAligner::Alignment,
+                                wfa::WFAligner::MemoryUltralow);
                 wf_aligner->setHeuristicNone();
 
                 // write a merged alignment
@@ -936,7 +993,7 @@ void WFlign::wflign_affine_wavefront(
                         *out,
                         trace,
                         *wf_aligner,
-                        wfa_affine_penalties,
+                        wfa_convex_penalties,
                         emit_md_tag,
                         paf_format_else_sam,
                         no_seq_in_sam,
@@ -952,9 +1009,11 @@ void WFlign::wflign_affine_wavefront(
                         target_offset,
                         target_length,
                         min_identity,
+#ifdef WFA_PNG_TSV_TIMING
                         elapsed_time_wflambda_ms,
                         extend_data.num_alignments,
                         extend_data.num_alignments_performed,
+#endif
                         mashmap_estimated_identity,
                         wflign_max_len_major,
                         wflign_max_len_minor,
@@ -963,7 +1022,7 @@ void WFlign::wflign_affine_wavefront(
                         max_patching_score,
                         MIN_WF_LENGTH,
                         wf_max_dist_threshold
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                         ,
                         prefix_wavefront_plot_in_png,
                         wfplot_max_size,
