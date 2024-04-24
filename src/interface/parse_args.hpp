@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unistd.h>
+#include <limits.h>
 
 #include "common/args.hxx"
 
@@ -623,9 +624,14 @@ void parse_args(int argc,
         if (tmp_base) {
             temp_file::set_dir(args::get(tmp_base));
         } else {
-            char* cwd = get_current_dir_name();
-            temp_file::set_dir(std::string(cwd));
-            free(cwd);
+            char cwd[PATH_MAX];
+            if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                temp_file::set_dir(std::string(cwd));
+            } else {
+                // Handle error: getcwd() failed
+                std::cerr << "[wfmash] ERROR, skch::parseandSave, problem in getting the current directory." << std::endl;
+                exit(1);
+            }
         }
 
         if (align_input_paf) {
