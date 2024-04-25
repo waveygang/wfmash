@@ -531,8 +531,8 @@ namespace skch
 
       void computeFreqSeedSet()
       {
-        for(auto& [kmerHash, posList] : this->minmerPosLookupIndex) {
-          if (posList.size() / 2 >= this->freqThreshold) {
+        for(auto& [kmerHash, frequency] : this->hashFreq) {
+          if (frequency >= this->freqThreshold) {
             this->frequentSeeds.insert(kmerHash);
           }
         }
