@@ -62,7 +62,7 @@ namespace skch
       const skch::Parameters &param;
 
       //Minmers that occur this or more times will be ignored (computed based on percentageThreshold)
-      int freqThreshold = std::numeric_limits<int>::max();
+      uint64_t freqThreshold = std::numeric_limits<uint64_t>::max();
 
       //Set of frequent seeds to be ignored
       ankerl::unordered_dense::set<hash_t> frequentSeeds;
@@ -72,8 +72,12 @@ namespace skch
 
       public:
 
-      typedef std::vector< MinmerInfo > MI_Type;
+      using MI_Type = std::vector< MinmerInfo >;
       using MIIter_t = MI_Type::const_iterator;
+      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
+
+      // Frequency of each hash
+      HF_Map_t hashFreq;
 
       //Keep sequence length, name that appear in the sequence (for printing the mappings later)
       std::vector< ContigInfo > metadata;
@@ -111,7 +115,7 @@ namespace skch
 
       //Frequency histogram of minmers
       //[... ,x -> y, ...] implies y number of minmers occur x times
-      std::map<int, int> minmerFreqHistogram;
+      std::map<uint64_t, uint64_t> minmerFreqHistogram;
 
       public:
 
@@ -123,7 +127,19 @@ namespace skch
         :
           param(p) {
             this->build();
-            this->index();
+            if (param.loadIndexFilename.empty())
+            {
+              this->computeFreqHist();
+              this->computeFreqSeedSet();
+              this->dropFreqSeedSet();
+              this->hashFreq.clear();
+            } else {
+              this->loadPosListBinary();
+              this->loadFreqKmersBinary();
+            }
+            std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << minmerPosLookupIndex.size() << std::endl;
+            std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
+
             if (!param.saveIndexFilename.empty()) {
               if (param.saveIndexFilename.extension() == ".tsv") {
                 this->saveIndexTSV();
@@ -131,10 +147,8 @@ namespace skch
                 this->saveIndexBinary();
               }
               this->savePosListBinary();
+              this->saveFreqKmersBinary();
             }
-            this->computeFreqHist();
-            this->computeFreqSeedSet();
-            this->dropFreqSeedSet();
           }
 
       private:
@@ -224,9 +238,8 @@ namespace skch
           while ( threadPool.running() )
             this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
         }
-
-        std::cerr << "[mashmap::skch::Sketch::build] minmer windows picked from reference = " << minmerIndex.size() << std::endl;
-
+        std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
       }
 
       /**
@@ -257,10 +270,28 @@ namespace skch
        * @brief                 routine to handle thread's local minmer index
        * @param[in] output      thread local minmer output
        */
-      void buildHandleThreadOutput(MI_Type* output)
+      void buildHandleThreadOutput(MI_Type* contigMinmerIndex)
       {
-        this->minmerIndex.insert(this->minmerIndex.end(), output->begin(), output->end());
-        delete output;
+        for (MinmerInfo& mi : *contigMinmerIndex)
+        {
+          if (minmerPosLookupIndex[mi.hash].size() == 0 
+                  || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                  || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+            {
+              this->hashFreq[mi.hash]++;
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+            } else {
+              minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+          }
+        }
+
+        this->minmerIndex.insert(
+            this->minmerIndex.end(), 
+            std::make_move_iterator(contigMinmerIndex->begin()), 
+            std::make_move_iterator(contigMinmerIndex->end()));
+
+        delete contigMinmerIndex;
       }
 
 
@@ -311,6 +342,26 @@ namespace skch
           typename MI_Type::size_type size = ipVec.size();
           outStream.write((char*)&size, sizeof(size));
           outStream.write((char*)&ipVec[0], ipVec.size() * sizeof(MinmerMapValueType::value_type));
+        }
+      }
+
+
+      /**
+       * @brief  Save posList for quick loading
+       */
+      void saveFreqKmersBinary() 
+      {
+        fs::path freqListFilename = fs::path(param.saveIndexFilename);
+        freqListFilename += ".freq";
+        std::ofstream outStream;
+        outStream.open(freqListFilename, std::ios::binary);
+        typename MI_Map_t::size_type size = frequentSeeds.size();
+        outStream.write((char*)&size, sizeof(size));
+
+        for (hash_t kmerHash : frequentSeeds) 
+        {
+          MinmerMapKeyType key = kmerHash;
+          outStream.write((char*)&key, sizeof(key));
         }
       }
 
@@ -373,35 +424,28 @@ namespace skch
         }
       }
 
+
       /**
-       * @brief   build the index for fast lookups using minmer table
+       * @brief  Load frequent kmers from file
        */
-      void index()
+      void loadFreqKmersBinary() 
       {
-        //Parse all the minmers and push into the map
-        //minmerPosLookupIndex.set_empty_key(0);
-        if (param.loadIndexFilename.empty())
+        fs::path freqListFilename = fs::path(param.loadIndexFilename);
+        freqListFilename += ".freq";
+        std::ifstream inStream;
+        inStream.open(freqListFilename, std::ios::binary);
+        typename MI_Map_t::size_type numKeys = 0;
+        inStream.read((char*)&numKeys, sizeof(numKeys));
+        frequentSeeds.reserve(numKeys);
+
+        for (auto idx = 0; idx < numKeys; idx++) 
         {
-          for(auto &mi : minmerIndex)
-          {
-            // [hash value -> info about minmer]
-            if (minmerPosLookupIndex[mi.hash].size() == 0 
-                || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
-            {
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
-            } else {
-              minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
-            }
-          }
+          MinmerMapKeyType key = 0;
+          inStream.read((char*)&key, sizeof(key));
+          frequentSeeds.insert(key);
         }
-        else
-        {
-          this->loadPosListBinary();
-        }
-        std::cerr << "[mashmap::skch::Sketch::index] unique minmers = " << minmerPosLookupIndex.size() << std::endl;
       }
+
 
       /**
        * @brief   report the frequency histogram of minmers using position lookup index
@@ -409,19 +453,19 @@ namespace skch
        */
       void computeFreqHist()
       {
-          if (!minmerPosLookupIndex.empty()) {
+          if (!this->minmerPosLookupIndex.empty()) {
               //1. Compute histogram
 
-              for (auto &e : this->minmerPosLookupIndex)
-                  this->minmerFreqHistogram[e.second.size()] += 1;
+              for (auto& [kmerHash, freq] : this->hashFreq)
+                  this->minmerFreqHistogram[freq]++;
 
-              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmer interval points = "
+              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmer intervals = "
                         << *this->minmerFreqHistogram.begin() << " ... " << *this->minmerFreqHistogram.rbegin()
                         << std::endl;
 
               //2. Compute frequency threshold to ignore most frequent minmers
 
-              int64_t totalUniqueMinmers = this->minmerPosLookupIndex.size();
+              int64_t totalUniqueMinmers = this->hashFreq.size();
               int64_t minmerToIgnore = totalUniqueMinmers * param.kmer_pct_threshold / 100;
 
               int64_t sum = 0;
@@ -442,11 +486,11 @@ namespace skch
 
               if (this->freqThreshold != std::numeric_limits<int>::max())
                   std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, ignore minmers occurring >= " << this->freqThreshold << " times during lookup."
+                            << "\%, ignore minmers with more than >= " << this->freqThreshold << " intervals during mapping."
                             << std::endl;
               else
                   std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, consider all minmers during lookup." << std::endl;
+                            << "\%, consider all minmers during mapping." << std::endl;
           } else {
               std::cerr << "[mashmap::skch::Sketch::computeFreqHist] No minmers." << std::endl;
           }
@@ -487,9 +531,9 @@ namespace skch
 
       void computeFreqSeedSet()
       {
-        for(auto &e : this->minmerPosLookupIndex) {
-          if (e.second.size() >= this->freqThreshold) {
-            this->frequentSeeds.insert(e.first);
+        for(auto& [kmerHash, posList] : this->minmerPosLookupIndex) {
+          if (posList.size() / 2 >= this->freqThreshold) {
+            this->frequentSeeds.insert(kmerHash);
           }
         }
       }
@@ -498,9 +542,13 @@ namespace skch
       {
         this->minmerIndex.erase(
           std::remove_if(minmerIndex.begin(), minmerIndex.end(), [&] 
-            (auto& mi) {return this->frequentSeeds.find(mi.hash) != this->frequentSeeds.end();}
+            (auto& mi) {return isFreqSeed(mi.hash);}
           ), minmerIndex.end()
         );
+        for (hash_t kmer : this->frequentSeeds)
+        {
+          this->minmerPosLookupIndex.erase(kmer);
+        }
       }
 
       bool isFreqSeed(hash_t h) const
