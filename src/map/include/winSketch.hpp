@@ -274,11 +274,11 @@ namespace skch
       {
         for (MinmerInfo& mi : *contigMinmerIndex)
         {
+          this->hashFreq[mi.hash]++;
           if (minmerPosLookupIndex[mi.hash].size() == 0 
                   || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                   || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
             {
-              this->hashFreq[mi.hash]++;
               minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
               minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
             } else {
