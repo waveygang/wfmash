@@ -65,6 +65,7 @@ target_link_libraries(wfmash
   pthread
   libwflign_static
   hts
+  rt
   wfa2cpp
   jemalloc
   z
