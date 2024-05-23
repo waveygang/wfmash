@@ -68,7 +68,7 @@ struct Parameters
     float kmerComplexityThreshold;                    //minimum kmer complexity to consider (default 0)
 
 	std::string query_list;                           // file containing list of query sequence names
-	std::string query_prefix;                         // prefix for query sequences to use
+	std::vector<std::string> query_prefix;            // prefix for query sequences to use
 
     int sketchSize;
     bool use_spaced_seeds;                            //

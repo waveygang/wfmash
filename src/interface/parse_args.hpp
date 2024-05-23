@@ -82,7 +82,7 @@ void parse_args(int argc,
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
 	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
 	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
-	args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx", "use only queries whose names start with this prefix", {'Q', "query-prefix"});
+	args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "use only queries whose names start with these prefixes (comma delimited)", {'Q', "query-prefix"});
 	args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
@@ -104,19 +104,19 @@ void parse_args(int argc,
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, remove alignments with gap-compressed identity below --map-pct-id x 0.8, else keep all alignments "
-                                                   "[default: if an input PAF is specified, keep all alignments, else remove alignments with gap-compressed identity below --map-pct-id x 0.8]",
+								"[default: if an input PAF is specified, keep all alignments, else remove alignments with gap-compressed identity below --map-pct-id x 0.8]",
                                 {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                            "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 6,8,1]",
-                                            {"wfa-params"});
+												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 6,8,1]",
+												  {"wfa-params"});
     args::ValueFlag<std::string> wfa_patching_score_params(alignment_opts, "mismatch,gap1,ext1,gap2,ext2",
-                                            "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 5,8,2,49,1]",
-                                            {"wfa-patching-params"});
+														   "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 5,8,2,49,1]",
+														   {"wfa-patching-params"});
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
-                                                       "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 4,6,1]",
-                                                       {"wflign-params"});
+													 "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 4,6,1]",
+													 {"wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
     args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
     args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 2048/(estimated_identity^2)]", {'q', "wflign-max-distance"});
@@ -210,7 +210,7 @@ void parse_args(int argc,
 	}
 	
 	if (query_prefix) {
-		map_parameters.query_prefix = args::get(query_prefix);
+		map_parameters.query_prefix = skch::CommonFunc::split(args::get(query_prefix), ',');
 	}
 	
     if (target_sequence_file) {

@@ -298,8 +298,15 @@ namespace skch
                     auto line_split = CommonFunc::split(line, '\t');
 					// if we have a param.target_prefix and the sequence name matches, skip it
 					auto seq_name = line_split[0];
+					bool prefix_skip = true;
+					for (const auto& prefix : param.query_prefix) {
+						if (seq_name.substr(0, prefix.size()) == prefix) {
+							prefix_skip = false;
+							break;
+						}
+					}
 					if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
-						|| !param.query_prefix.empty() && seq_name.substr(0, param.query_prefix.size()) == param.query_prefix) {
+						|| !param.query_prefix.empty() && !prefix_skip) {
 						total_seqs++;
 						total_seq_length += std::stoul(line_split[1]);
 					}

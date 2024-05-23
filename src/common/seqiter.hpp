@@ -122,7 +122,7 @@ void for_each_seq_in_file(
 	
 void for_each_seq_in_file_filtered(
     const std::string& filename,
-    const std::string& query_prefix,
+    const std::vector<std::string>& query_prefix,
     const std::unordered_set<std::string>& query_list,
     const std::function<void(const std::string&, const std::string&)>& func) {
     faidx_t* fai = fai_load(filename.c_str());
@@ -135,7 +135,14 @@ void for_each_seq_in_file_filtered(
     int num_seqs = faidx_nseq(fai);
     for (int i = 0; i < num_seqs; i++) {
         const char* seq_name = faidx_iseq(fai, i);
-        if (!query_prefix.empty() && strncmp(seq_name, query_prefix.c_str(), query_prefix.size()) != 0) {
+		bool prefix_skip = true;
+		for (const auto& prefix : query_prefix) {
+			if (strncmp(seq_name, prefix.c_str(), prefix.size()) == 0) {
+				prefix_skip = false;
+				break;
+			}
+		}
+		if (!query_prefix.empty() && prefix_skip) {
             continue;
         }
         if (!query_list.empty() && query_list.count(seq_name) == 0) {
