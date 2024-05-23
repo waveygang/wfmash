@@ -274,6 +274,16 @@ namespace skch
         //Create the thread pool
         ThreadPool<InputSeqProgContainer, MapModuleOutput> threadPool( [this](InputSeqProgContainer* e){return mapModule(e);}, param.threads);
 
+		// allowed set of queries
+		std::unordered_set<std::string> allowed_query_names;
+		if (!param.query_list.empty()) {
+			std::ifstream filter_list(param.query_list);
+			std::string name;
+			while (getline(filter_list, name)) {
+				allowed_query_names.insert(name); 
+			}
+		}
+
         // kind've expensive if the fasta index is not available for the query sequences,
         // but it can help people know how long we're going to take
         uint64_t total_seqs = 0;
@@ -288,6 +298,7 @@ namespace skch
                 while (std::getline(in, line)) {
                     auto line_split = CommonFunc::split(line, '\t');
 					// if we have a param.target_prefix and the sequence name matches, skip it
+					// XXXXX TODO this must be updated to filter query sequences
 					if (param.skip_self
 						&& param.target_prefix != ""
 						&& line_split[0].substr(0, param.target_prefix.size()) == param.target_prefix) {
@@ -299,6 +310,7 @@ namespace skch
             } else {
                 // if not, warn that this is expensive
                 std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to sum sequence length (slow)" << std::endl;
+				// XXXXX TODO this must be updated to filter query sequences
                 seqiter::for_each_seq_in_file(
                     fileName, {}, "",
                     [&](const std::string& seq_name,

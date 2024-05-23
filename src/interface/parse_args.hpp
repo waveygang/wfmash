@@ -64,9 +64,9 @@ void parse_args(int argc,
     args::Group mandatory_opts(parser, "[ MANDATORY OPTIONS ]");
     args::Positional<std::string> target_sequence_file(mandatory_opts, "target", "alignment target/reference sequence file");
 
-    args::Group io_opts(parser, "[ Files IO Options ]");
-    args::PositionalList<std::string> query_sequence_files(io_opts, "queries", "query sequences file");
-    args::ValueFlag<std::string> query_sequence_file_list(io_opts, "queries", "alignment queries files list", {'Q', "query-file-list"});
+	args::Group io_opts(parser, "[ Files IO Options ]");
+    args::PositionalList<std::string> query_sequence_files(io_opts, "queries", "query sequence file(s)");
+    //args::ValueFlag<std::string> query_sequence_file_list(io_opts, "queries", "alignment queries files list", {'Q', "query-file-list"});
 
     args::Group mapping_opts(parser, "[ Mapping Options ]");
     args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
@@ -80,8 +80,10 @@ void parse_args(int argc,
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
-	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose name starts with this prefix", {'P', "target-prefix"});
-	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'A', "target-list"});
+	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
+	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
+	args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx", "use only queries whose names start with this prefix", {'Q', "query-prefix"});
+	args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 4*segment_length, up to 20k]", {'c', "chain-gap"});
@@ -202,6 +204,14 @@ void parse_args(int argc,
 	if (target_prefix) {
 		map_parameters.target_prefix = args::get(target_prefix);
 	}
+
+	if (query_list) {
+		map_parameters.query_list = args::get(query_list);
+	}
+	
+	if (query_prefix) {
+		map_parameters.query_prefix = args::get(query_prefix);
+	}
 	
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
@@ -214,10 +224,6 @@ void parse_args(int argc,
             map_parameters.querySequences.push_back(q);
             align_parameters.querySequences.push_back(q);
         }
-    }
-    if (query_sequence_file_list) {
-        skch::parseFileList(args::get(query_sequence_file_list), map_parameters.querySequences);
-        skch::parseFileList(args::get(query_sequence_file_list), align_parameters.querySequences);
     }
 
 	if (target_sequence_file && map_parameters.querySequences.empty()
