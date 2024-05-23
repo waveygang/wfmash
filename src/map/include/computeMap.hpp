@@ -1,3 +1,4 @@
+
 /**
  * @file    computeMap.hpp
  * @brief   implements the sequence mapping logic
@@ -284,50 +285,39 @@ namespace skch
 			}
 		}
 
-        // kind've expensive if the fasta index is not available for the query sequences,
-        // but it can help people know how long we're going to take
-        uint64_t total_seqs = 0;
-        uint64_t total_seq_length = 0;
-        for(const auto &fileName : param.querySequences) {
-            // check if there is a .fai
-            std::string fai_name = fileName + ".fai";
-            if (fs::exists(fai_name)) {
-                // if so, process the .fai to determine our sequence length
-                std::string line;
-                std::ifstream in(fai_name.c_str());
+		// Count the total number of sequences and sequence length
+		uint64_t total_seqs = 0;
+		uint64_t total_seq_length = 0;
+		for (const auto& fileName : param.querySequences) {
+			// Check if there is a .fai file
+			std::string fai_name = fileName + ".fai";
+			if (fs::exists(fai_name)) {
+				std::string line;
+				std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
                     auto line_split = CommonFunc::split(line, '\t');
 					// if we have a param.target_prefix and the sequence name matches, skip it
-					// XXXXX TODO this must be updated to filter query sequences
-					if (param.skip_self
-						&& param.target_prefix != ""
-						&& line_split[0].substr(0, param.target_prefix.size()) == param.target_prefix) {
-						continue;
+					auto seq_name = line_split[0];
+					if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
+						|| !param.query_prefix.empty() && seq_name.substr(0, param.query_prefix.size()) == param.query_prefix) {
+						total_seqs++;
+						total_seq_length += std::stoul(line_split[1]);
 					}
-					++total_seqs;
-                    total_seq_length += std::stoul(line_split[1]);
-                }
-            } else {
-                // if not, warn that this is expensive
-                std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to sum sequence length (slow)" << std::endl;
-				// XXXXX TODO this must be updated to filter query sequences
-                seqiter::for_each_seq_in_file(
-                    fileName, {}, "",
-                    [&](const std::string& seq_name,
-                        const std::string& seq) {
-						// if we have a param.target_prefix and the sequence name matches, skip it
-						if (param.skip_self
-							&& param.target_prefix != ""
-							&& seq_name.substr(0, param.target_prefix.size()) == param.target_prefix) {
-							// skip
-						} else {
-							++total_seqs;
-							total_seq_length += seq.size();
-						}
-                    });
-            }
-        }
-
+				}
+			} else {
+				// If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
+				std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to filter query sequences (slow)" << std::endl;
+				seqiter::for_each_seq_in_file_filtered(
+					fileName,
+					param.query_prefix,
+					allowed_query_names,
+					[&](const std::string& seq_name, const std::string& seq) {
+						++total_seqs;
+						total_seq_length += seq.size();
+					});
+			}
+		}
+		
         progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
         for(const auto &fileName : param.querySequences)
@@ -337,8 +327,10 @@ namespace skch
             std::cerr << "[mashmap::skch::Map::mapQuery] mapping reads in " << fileName << std::endl;
 #endif
 
-            seqiter::for_each_seq_in_file(
-                fileName, {}, "",
+			seqiter::for_each_seq_in_file_filtered(
+				fileName,
+				param.query_prefix,
+				allowed_query_names,
                 [&](const std::string& seq_name,
                     const std::string& seq) {
                     // todo: offset_t is an 32-bit integer, which could cause problems
