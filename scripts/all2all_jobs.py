@@ -29,20 +29,27 @@ def group_sequences(sequences, grouping):
             grouped_sequences[group_key] = []
         grouped_sequences[group_key].append(sequence)
 
-    return list(grouped_sequences.values())
+    return grouped_sequences
 
 def generate_pairings(grouped_sequences, num_queries):
     pairings = []
-    for target_group in grouped_sequences:
-        for query_chunk in itertools.combinations(grouped_sequences, num_queries):
-            query_chunk = [seq for group in query_chunk for seq in group if seq not in target_group]
+    groups = list(grouped_sequences.keys())
+    num_groups = len(groups)
+    
+    for i in range(num_groups):
+        target_group = groups[i]
+        query_groups = [group for j, group in enumerate(groups) if j != i]
+        
+        for query_chunk in itertools.zip_longest(*[iter(query_groups)] * num_queries):
+            query_chunk = [q for q in query_chunk if q is not None]
             pairings.append((target_group, query_chunk))
+    
     return pairings
 
 def main():
     parser = argparse.ArgumentParser(description='Generate pairings for all-to-all alignment using PanSN format.')
     parser.add_argument('fasta_file', help='Path to the FASTA file (can be gzipped)')
-    parser.add_argument('--num-queries', type=int, default=5, help='Number of query groups per target group (default: 5)')
+    parser.add_argument('--num-queries', type=int, default=4, help='Number of query groups per target group (default: 4)')
     parser.add_argument('--grouping', choices=['genome', 'haplotype'], default='haplotype', help='Grouping level: genome or haplotype (default: haplotype)')
     parser.add_argument('--output', help='Output file to save the pairings')
 
@@ -61,14 +68,10 @@ def main():
     if args.output:
         with open(args.output, 'w') as file:
             for target_group, query_groups in pairings:
-                file.write(f"Target Group: {', '.join(target_group)}\n")
-                file.write(f"Query Groups: {', '.join([seq for group in query_groups for seq in group])}\n")
-                file.write("\n")
+                file.write(f"{target_group},{','.join(query_groups)}\n")
     else:
         for target_group, query_groups in pairings:
-            print(f"Target Group: {', '.join(target_group)}")
-            print(f"Query Groups: {', '.join([seq for group in query_groups for seq in group])}")
-            print()
+            print(f"{target_group},{','.join(query_groups)}")
 
 if __name__ == '__main__':
     main()
