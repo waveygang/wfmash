@@ -16,10 +16,12 @@ def group_sequences(sequences, grouping):
     for sequence in sequences:
         if '#' in sequence:
             fields = sequence.split('#')
-            if grouping == 'genome':
+            if grouping in ['g', 'genome']:
                 group_key = fields[0]
-            elif grouping == 'haplotype':
+            elif grouping in ['h', 'haplotype']:
                 group_key = '#'.join(fields[:2])
+            elif grouping in ['c', 'contig']:
+                group_key = sequence
             else:
                 raise ValueError(f"Invalid grouping: {grouping}")
         else:
@@ -31,47 +33,58 @@ def group_sequences(sequences, grouping):
 
     return grouped_sequences
 
-def generate_pairings(grouped_sequences, num_queries):
+def generate_pairings(target_grouped_sequences, query_grouped_sequences, num_queries):
     pairings = []
-    groups = list(grouped_sequences.keys())
-    num_groups = len(groups)
+    target_groups = list(target_grouped_sequences.keys())
+    query_groups = list(query_grouped_sequences.keys())
     
-    for i in range(num_groups):
-        target_group = groups[i]
-        query_groups = [group for j, group in enumerate(groups) if j != i]
+    for target_group in target_groups:
+        query_pool = [group for group in query_groups if group != target_group]
         
-        for query_chunk in itertools.zip_longest(*[iter(query_groups)] * num_queries):
+        for query_chunk in itertools.zip_longest(*[iter(query_pool)] * num_queries):
             query_chunk = [q for q in query_chunk if q is not None]
             pairings.append((target_group, query_chunk))
     
     return pairings
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate pairings for all-to-all alignment using PanSN format.')
+    parser = argparse.ArgumentParser(description='Generate pairings or wfmash command lines for all-to-all alignment using PanSN format.')
     parser.add_argument('fasta_file', help='Path to the FASTA file (can be gzipped)')
-    parser.add_argument('--num-queries', type=int, default=4, help='Number of query groups per target group (default: 4)')
-    parser.add_argument('--grouping', choices=['genome', 'haplotype'], default='haplotype', help='Grouping level: genome or haplotype (default: haplotype)')
-    parser.add_argument('--output', help='Output file to save the pairings')
+    parser.add_argument('-n', '--num-queries', type=int, default=4, help='Number of query groups per target group (default: 4)')
+    parser.add_argument('-t', '--target-grouping', choices=['g', 'genome', 'h', 'haplotype', 'c', 'contig'], default='haplotype', help='Grouping level for targets: g/genome, h/haplotype, or c/contig (default: haplotype)')
+    parser.add_argument('-q', '--query-grouping', choices=['g', 'genome', 'h', 'haplotype', 'c', 'contig'], default='haplotype', help='Grouping level for queries: g/genome, h/haplotype, or c/contig (default: haplotype)')
+    parser.add_argument('-o', '--output', help='Output file to save the pairings or command lines')
 
-    args = parser.parse_args()
+    args, wfmash_args = parser.parse_known_args()
 
     # Parse the FASTA index file
     sequences = parse_fasta_index(args.fasta_file)
 
-    # Group sequences based on the specified grouping level
-    grouped_sequences = group_sequences(sequences, args.grouping)
+    # Group sequences based on the specified grouping levels
+    target_grouped_sequences = group_sequences(sequences, args.target_grouping)
+    query_grouped_sequences = group_sequences(sequences, args.query_grouping)
 
     # Generate pairings
-    pairings = generate_pairings(grouped_sequences, args.num_queries)
+    pairings = generate_pairings(target_grouped_sequences, query_grouped_sequences, args.num_queries)
 
-    # Save or print the pairings
-    if args.output:
-        with open(args.output, 'w') as file:
+    # Save or print the pairings or command lines
+    if wfmash_args:
+        wfmash_options = ' '.join(wfmash_args)
+        if args.output:
+            with open(args.output, 'w') as file:
+                for target_group, query_groups in pairings:
+                    file.write(f"wfmash {wfmash_options} -T {target_group} -Q {','.join(query_groups)}\n")
+        else:
             for target_group, query_groups in pairings:
-                file.write(f"{target_group},{','.join(query_groups)}\n")
+                print(f"wfmash {wfmash_options} -T {target_group} -Q {','.join(query_groups)}")
     else:
-        for target_group, query_groups in pairings:
-            print(f"{target_group},{','.join(query_groups)}")
+        if args.output:
+            with open(args.output, 'w') as file:
+                for target_group, query_groups in pairings:
+                    file.write(f"{target_group}\t{','.join(query_groups)}\n")
+        else:
+            for target_group, query_groups in pairings:
+                print(f"{target_group}\t{','.join(query_groups)}")
 
 if __name__ == '__main__':
     main()
