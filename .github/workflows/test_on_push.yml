@@ -38,9 +38,9 @@ jobs:
       - name: Test mapping coverage with 8 yeast genomes (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y '#' > scerevisiae8.paf; scripts/test.sh data/scerevisiae8.fa.gz.fai scerevisiae8.paf 0.92
       - name: Test mapping+alignment with a subset of the LPA dataset (PAF output)
-        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz -n 10 -G wflign_info. -u ./ -L --path-patching-tsv x.tsv > LPA.subset.paf && head LPA.subset.paf && head x.tsv
+        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz -n 10 -L > LPA.subset.paf && head LPA.subset.paf
       - name: Test mapping+alignment with a subset of the LPA dataset (SAM output)
-        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz -N -a -G wflign_info. -L > LPA.subset.sam && samtools view LPA.subset.sam -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam && samtools view LPA.subset.bam | head | cut -f 1-9
+        run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/LPA.subset.fa.gz -N -a -L > LPA.subset.sam && samtools view LPA.subset.sam -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam && samtools view LPA.subset.bam | head | cut -f 1-9
       - name: Test mapping+alignment with short reads (500 bps) to a reference (SAM output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head
       - name: Test mapping+alignment with short reads (255bps) (PAF output)
