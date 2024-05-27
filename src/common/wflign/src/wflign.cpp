@@ -695,6 +695,7 @@ void WFlign::wflign_affine_wavefront(
 
         // Free
         delete wflambda_aligner;
+        delete wf_aligner;
 
 #ifdef WFA_PNG_TSV_TIMING
         if (extend_data.emit_png) {
@@ -972,9 +973,6 @@ void WFlign::wflign_affine_wavefront(
             }
 
             if (merge_alignments) {
-                // Free old aligner
-                delete wf_aligner;
-
                 // use biWFA for all patching
                 wfa::WFAlignerGapAffine2Pieces* wf_aligner =
                         new wfa::WFAlignerGapAffine2Pieces(
@@ -1029,7 +1027,9 @@ void WFlign::wflign_affine_wavefront(
                         emit_patching_tsv,
                         out_patching_tsv
 #endif
-                        );
+                );
+
+                delete wf_aligner;
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -1050,9 +1050,6 @@ void WFlign::wflign_affine_wavefront(
                 }
             }
         }
-
-        // Free
-        delete wf_aligner;
     }
 }
 
