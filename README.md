@@ -173,10 +173,22 @@ Note that this may make the tool a little bit slower.
 
 ### nix
 
-If you have `nix`, build and installation in your profile are as simple as:
+If you have `nix`, you can install directly from the repository via:
 
 ```shell
-nix-build && nix-env -i ./result
+nix profile install github:waveygang/wfmash
+```
+
+For local development, from the wfmash repo directory:
+
+```shell
+nix build .#wfmash
+```
+
+And you can install into your profile from the source repo with:
+
+```shell
+nix profile install .#wfmash
 ```
 
 ### guix
@@ -192,7 +204,7 @@ guix build -f guix.scm
 Nix is also able to build an Docker image, which can then be loaded by Docker and converted to a Singularity image.
 
 ```
-nix-build docker.nix
+nix build .#dockerImage
 docker load < result
 singularity build wfmash.sif docker-daemon://wfmash-docker:latest
 ```
