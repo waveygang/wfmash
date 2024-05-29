@@ -16,8 +16,8 @@
       src = pkgs.fetchFromGitHub {
         owner = "waveygang";
         repo = "wfmash";
-        rev = "517e1bc5c133ecac483a8479c5403f8a13d0fdd5";
-        sha256 = "sha256-pjaFbcSA7cNx1ONg7JiBO4g22++EOYXQfdieyy1kAuI=";
+        rev = "e2df9c89d07a126c87518eaa1b34e75e26ddc41b";
+        sha256 = "sha256-uKTbvABIR0VTZCuFe5Mr3NPR7ynbn0rkJAivTVQe9dc=";
       };
 
       nativeBuildInputs = [ pkgs.cmake pkgs.makeWrapper ];
@@ -31,6 +31,14 @@
         pkgs.zlib
         pkgs.pkg-config
       ];
+
+      # Define custom attributes
+      enableOptimizations = true;
+      reproducibleBuild = false;
+
+      # Use custom attributes to set compiler flags
+      CFLAGS = if enableOptimizations then "-O3 -march=native" else "";
+      CXXFLAGS = if enableOptimizations then "-O3 -march=native" else "";
 
       postPatch = ''
         mkdir -p include
