@@ -16,8 +16,8 @@
       src = pkgs.fetchFromGitHub {
         owner = "waveygang";
         repo = "wfmash";
-        rev = "e2df9c89d07a126c87518eaa1b34e75e26ddc41b";
-        sha256 = "sha256-uKTbvABIR0VTZCuFe5Mr3NPR7ynbn0rkJAivTVQe9dc=";
+        rev = "7376468d0d1f67ad58ca3fc5d07e888745b22c06";
+        sha256 = "sha256-0vThKJflmasPoVhGdFwm1l9VUoxZkEwZruYhlzF1Ehw=";
       };
 
       nativeBuildInputs = [ pkgs.cmake pkgs.makeWrapper ];
