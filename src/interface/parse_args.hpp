@@ -102,6 +102,7 @@ void parse_args(int argc,
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
+    args::Flag force_biwfa_alignment(alignment_opts, "force-biwfa", "force alignment with biWFA for all sequence pairs", {'I', "force-biwfa"});
     args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, remove alignments with gap-compressed identity below --map-pct-id x 0.8, else keep all alignments "
 								"[default: if an input PAF is specified, keep all alignments, else remove alignments with gap-compressed identity below --map-pct-id x 0.8]",
                                 {'O', "invert-filtering"});
@@ -365,6 +366,7 @@ void parse_args(int argc,
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
+    align_parameters.force_biwfa_alignment = args::get(force_biwfa_alignment);
     map_parameters.split = !args::get(no_split);
     map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
     align_parameters.split = !args::get(no_split);

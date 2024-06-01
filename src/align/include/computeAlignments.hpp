@@ -496,6 +496,7 @@ namespace align
         wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
                 param.wflambda_segment_length,
                 param.min_identity,
+                param.force_biwfa_alignment,
                 param.wfa_mismatch_score,
                 param.wfa_gap_opening_score,
                 param.wfa_gap_extension_score,
