@@ -27,6 +27,7 @@ jobs:
           autoconf
           libgsl-dev
           zlib1g-dev
+          libdeflate-dev
           libhts-dev
           samtools
           libjemalloc-dev
