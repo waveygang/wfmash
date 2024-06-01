@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard is not
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-option(BUILD_STATIC "Build static binary" ON)
+option(BUILD_STATIC "Build static binary" OFF)
 
 if (BUILD_STATIC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
