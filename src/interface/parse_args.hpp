@@ -65,8 +65,7 @@ void parse_args(int argc,
     args::Positional<std::string> target_sequence_file(mandatory_opts, "target", "alignment target/reference sequence file");
 
 	args::Group io_opts(parser, "[ Files IO Options ]");
-    args::PositionalList<std::string> query_sequence_files(io_opts, "queries", "query sequence file(s)");
-    //args::ValueFlag<std::string> query_sequence_file_list(io_opts, "queries", "alignment queries files list", {'Q', "query-file-list"});
+    args::Positional<std::string> query_sequence_file(io_opts, "query", "query sequence file (optional)");
 
     args::Group mapping_opts(parser, "[ Mapping Options ]");
     args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
@@ -219,11 +218,9 @@ void parse_args(int argc,
     }
     map_parameters.referenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
-    if (query_sequence_files) {
-        for (auto& q : args::get(query_sequence_files)) {
-            map_parameters.querySequences.push_back(q);
-            align_parameters.querySequences.push_back(q);
-        }
+    if (query_sequence_file) {
+        map_parameters.querySequences.push_back(args::get(query_sequence_file));
+        align_parameters.querySequences.push_back(args::get(query_sequence_file));
     }
 
 	if (target_sequence_file && map_parameters.querySequences.empty()
