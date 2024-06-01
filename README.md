@@ -133,17 +133,27 @@ After installing the required dependencies, clone the `wfmash` git repository an
 ```
 git clone --recursive https://github.com/ekg/wfmash.git
 cd wfmash
-cmake -H. -Bbuild && cmake --build build -- -j 3
+cmake -H. -Bbuild && cmake --build build -- -j 8
 ```
+
+Of course, you can use as many cores as you like.
 
 If your system has several versions of the `gcc`/`g++` compilers you might tell `cmake` which one to use with:
 
 ```
 cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10'
-cmake --build build -- -j 3
+cmake --build build -- -j 8
 ```
-
 The `wfmash` binary will be in `build/bin`.
+
+#### Static compilation
+
+By default, we build `wfmash` in Release mode (with optimizations) and as a dynamically linked executable.
+Alternatively we can build a static binary:
+
+```
+cmake -H. -Bbuild -DBUILD_STATIC=ON && cmake --build build -- -j 16
+```
 
 #### Notes for distribution
 
