@@ -638,10 +638,12 @@ void parse_args(int argc,
         }
 
         if (align_input_paf) {
+            // directly use the input mapping file
             yeet_parameters.remapping = true;
             map_parameters.outFileName = args::get(align_input_paf);
-            align_parameters.mashmapPafFile = temp_file::create();
+            align_parameters.mashmapPafFile = args::get(align_input_paf);
         } else {
+            // make a temporary mapping file
             map_parameters.outFileName = temp_file::create();
             align_parameters.mashmapPafFile = map_parameters.outFileName;
         }
