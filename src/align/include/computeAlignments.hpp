@@ -85,19 +85,19 @@ struct seq_record_t {
 typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, false, false> seq_atomic_queue_t;
 
 /**
- * @brief A single-producer, multi-consumer (SPMC) atomic queue for storing pointers to std::string objects.
+ * @brief A multi-producer, single-consumer (MPSC) atomic queue for storing pointers to std::string objects.
  *
- * This queue is designed for a setup where there is a single producer and multiple consumers.
- * The producer enqueues pointers to std::string objects, which represent PAF (Pairwise Alignment Format) strings.
- * Multiple consumers dequeue these pointers and write out the PAF strings.
+ * This queue is designed for a setup where there are multiple producers and a single consumer.
+ * Multiple producers enqueue pointers to std::string objects, which represent PAF (Pairwise Alignment Format) strings.
+ * The single consumer dequeues these pointers and writes out the PAF strings.
  *
  * The queue has the following characteristics:
  * - Capacity: 1024 elements
  * - Default value for empty elements: nullptr
- * - MINIMIZE_CONTENTION: true (minimizes contention among consumers)
+ * - MINIMIZE_CONTENTION: true (minimizes contention among producers)
  * - MAXIMIZE_THROUGHPUT: true (optimized for high throughput)
  * - TOTAL_ORDER: false (relaxed memory ordering for better performance)
- * - SPSC: false (single-producer, multi-consumer mode)
+ * - SPSC: false (multi-producer, single-consumer mode)
  */
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
