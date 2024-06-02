@@ -67,10 +67,39 @@ struct seq_record_t {
         { }
 };
 
-// load into this
-typedef atomic_queue::AtomicQueue<seq_record_t*, 2 << 10> seq_atomic_queue_t;
-// results into this, write out
-typedef atomic_queue::AtomicQueue<std::string*, 2 << 10> paf_atomic_queue_t;
+/**
+ * @brief A single-producer, multi-consumer (SPMC) atomic queue for storing pointers to seq_record_t objects.
+ *
+ * This queue is designed for a setup where there is a single producer and multiple consumers.
+ * The producer enqueues pointers to seq_record_t objects, which represent sequences to be processed.
+ * Multiple consumers dequeue these pointers and perform long-running alignment processes on the sequences.
+ *
+ * The queue has the following characteristics:
+ * - Capacity: 1024 elements
+ * - Default value for empty elements: nullptr
+ * - MINIMIZE_CONTENTION: true (minimizes contention among consumers)
+ * - MAXIMIZE_THROUGHPUT: true (optimized for high throughput)
+ * - TOTAL_ORDER: false (relaxed memory ordering for better performance)
+ * - SPSC: false (single-producer, multi-consumer mode)
+ */
+typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, false, false> seq_atomic_queue_t;
+
+/**
+ * @brief A single-producer, multi-consumer (SPMC) atomic queue for storing pointers to std::string objects.
+ *
+ * This queue is designed for a setup where there is a single producer and multiple consumers.
+ * The producer enqueues pointers to std::string objects, which represent PAF (Pairwise Alignment Format) strings.
+ * Multiple consumers dequeue these pointers and write out the PAF strings.
+ *
+ * The queue has the following characteristics:
+ * - Capacity: 1024 elements
+ * - Default value for empty elements: nullptr
+ * - MINIMIZE_CONTENTION: true (minimizes contention among consumers)
+ * - MAXIMIZE_THROUGHPUT: true (optimized for high throughput)
+ * - TOTAL_ORDER: false (relaxed memory ordering for better performance)
+ * - SPSC: false (single-producer, multi-consumer mode)
+ */
+typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
   /**
    * @class     align::Aligner
