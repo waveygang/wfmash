@@ -34,7 +34,7 @@
 namespace align
 {
 
-  long double float2phred(long double prob) {
+long double float2phred(long double prob) {
     if (prob == 1)
         return 255;  // guards against "-0"
     long double p = -10 * (long double) log10(prob);
@@ -42,22 +42,35 @@ namespace align
         return 255;
     else
         return p;
-  }
+}
 
-  struct seq_record_t {
-      MappingBoundaryRow currentRecord;
-      std::string mappingRecordLine;
-      std::shared_ptr<std::string> qSequence;
-      seq_record_t(const MappingBoundaryRow& c, const std::string& r, const shared_ptr<std::string>& q)
-          : currentRecord(c)
-          , mappingRecordLine(r)
-          , qSequence(q)
-          { }
-  };
-  // load into this
-  typedef atomic_queue::AtomicQueue<seq_record_t*, 2 << 16> seq_atomic_queue_t;
-  // results into this, write out
-  typedef atomic_queue::AtomicQueue<std::string*, 2 << 16> paf_atomic_queue_t;
+struct seq_record_t {
+    MappingBoundaryRow currentRecord;
+    std::string mappingRecordLine;
+    std::string refSequence;  
+    std::string querySequence;
+    uint64_t refStartPos;
+    uint64_t refLen;
+    uint64_t queryStartPos;
+    uint64_t queryLen;
+    seq_record_t(const MappingBoundaryRow& c, const std::string& r, 
+                 const std::string& ref, uint64_t refStart, uint64_t refLength,
+                 const std::string& query, uint64_t queryStart, uint64_t queryLength)
+        : currentRecord(c)
+        , mappingRecordLine(r)
+        , refSequence(ref)
+        , querySequence(query)
+        , refStartPos(refStart)
+        , refLen(refLength)
+        , queryStartPos(queryStart)
+        , queryLen(queryLength)
+        { }
+};
+
+// load into this
+typedef atomic_queue::AtomicQueue<seq_record_t*, 2 << 10> seq_atomic_queue_t;
+// results into this, write out
+typedef atomic_queue::AtomicQueue<std::string*, 2 << 10> paf_atomic_queue_t;
 
   /**
    * @class     align::Aligner
@@ -71,35 +84,23 @@ namespace align
       //algorithm parameters
       const align::Parameters &param;
 
-      refSequenceMap_t refSequences;
-      std::vector<faidx_t*> target_faidxs;
-	  std::vector<faidx_t*> query_faidxs;
+      faidx_t* ref_faidx;
+      faidx_t* query_faidx;
 
     public:
-      /**
-       * @brief                 destructor, cleans up faidx index
-       */
-      ~Aligner()
-      {
-          for (auto& faid : this->target_faidxs) {
-              fai_destroy(faid);
-          }
-          for (auto& faid : this->query_faidxs) {
-              fai_destroy(faid);
-          }
+
+      explicit Aligner(const align::Parameters &p) : param(p) {
+          assert(param.refSequences.size() == 1);
+          assert(param.querySequences.size() == 1);
+          ref_faidx = fai_load(param.refSequences.front().c_str());
+          query_faidx = fai_load(param.querySequences.front().c_str());
       }
 
-      /**
-       * @brief                 constructor, also reads reference sequences
-       * @param[in] p           algorithm parameters
-       */
-      explicit Aligner(const align::Parameters &p) :
-        param(p)
-      {
-          this->getRefSequences();
-		  this->getQuerySequences();
+      ~Aligner() {
+          fai_destroy(ref_faidx);
+          fai_destroy(query_faidx);  
       }
-
+      
       /**
        * @brief                 compute alignments
        */
@@ -147,32 +148,6 @@ namespace align
   private:
 
       /**
-       * @brief                 parse and save all the reference sequences
-       */
-      void getRefSequences() {
-          auto& nthreads = param.threads;
-          assert(param.refSequences.size() == 1);
-          auto& filename = param.refSequences.front();
-          for (int i = 0; i < nthreads; ++i) {
-              auto faid = fai_load(filename.c_str());
-              target_faidxs.push_back(faid);
-          }
-      }
-
-      /**
-       * @brief                 parse and save all the reference sequences
-       */
-      void getQuerySequences() {
-          auto& nthreads = param.threads;
-          assert(param.querySequences.size() == 1);
-          auto& filename = param.querySequences.front();
-          for (int i = 0; i < nthreads; ++i) {
-              auto faid = fai_load(filename.c_str());
-              query_faidxs.push_back(faid);
-          }
-      }
-
-      /**
        * @brief                 parse query sequences and mashmap mappings
        *                        to compute sequence alignments
        */
@@ -215,26 +190,44 @@ namespace align
               w.store(true);
           }
 
-		  // reader picks up candidate alignments from input
-		  auto reader_thread =
-			  [&]() {
-				  std::ifstream mappingListStream(param.mashmapPafFile);
-				  std::string mappingRecordLine;
-				  MappingBoundaryRow currentRecord;
+          auto reader_thread = [&]() {
+              std::ifstream mappingListStream(param.mashmapPafFile);
+              std::string mappingRecordLine;
+              MappingBoundaryRow currentRecord;
 
-				  while (!mappingListStream.eof()) {
-					  std::getline(mappingListStream, mappingRecordLine);
-					  if (!mappingRecordLine.empty()) {
-						  parseMashmapRow(mappingRecordLine, currentRecord);
-						  total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-						  auto q = new seq_record_t(currentRecord, mappingRecordLine, nullptr);
-						  seq_queue.push(q);
-					  }
-				  }
+              while (!mappingListStream.eof()) {
+                  std::getline(mappingListStream, mappingRecordLine);
+                  if (!mappingRecordLine.empty()) {
+                      parseMashmapRow(mappingRecordLine, currentRecord);
+            
+                      // Extract reference sequence with flanking regions
+                      const int64_t ref_size = faidx_seq_len(ref_faidx, currentRecord.refId.c_str());
+                      const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
+                      const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+            
+                      int64_t ref_len;
+                      char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
+                                                        currentRecord.rStartPos - head_padding, currentRecord.rEndPos + tail_padding, &ref_len);
+            
+                      // Extract query sequence
+                      int64_t query_len;
+                      char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
+                                                          currentRecord.qStartPos, currentRecord.qEndPos, &query_len);
+            
+                      seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine, 
+                                                           std::string(ref_seq, ref_len), currentRecord.rStartPos - head_padding, ref_len,
+                                                           std::string(query_seq, query_len), currentRecord.qStartPos, query_len);
+            
+                      free(ref_seq);
+                      free(query_seq);
 
-				  mappingListStream.close();
-				  reader_done.store(true);
-			  };
+                      seq_queue.push(rec);
+                  }
+              }
+
+              mappingListStream.close();
+              reader_done.store(true);
+          };
 
           // helper to check if we're still aligning
           auto still_working =
@@ -327,14 +320,13 @@ namespace align
                           std::stringstream patching_output_tsv;
 #endif
                           doAlignment(
-                                  output,
+                              output,
 #ifdef WFA_PNG_TSV_TIMING
-                                  output_tsv,
-                                  patching_output_tsv,
+                              output_tsv,
+                              patching_output_tsv,
 #endif
-                                  rec->currentRecord,
-                                  rec->mappingRecordLine,
-                                  tid);
+                              rec,
+                              tid);
                           progress.increment(rec->currentRecord.qEndPos - rec->currentRecord.qStartPos);
 
                           auto* paf_rec = new std::string(output.str());
@@ -403,155 +395,98 @@ namespace align
                     << ", total aligned bp = " << total_alignment_length << std::endl;
       }
 
-        /**
-       * @brief                           compute alignment using WFA
-       * @param[in]   currentRecord       mashmap mapping parsed information
-       * @param[in]   mappingRecordLine   mashmap mapping output raw string
-       * @param[in]   qSequence           query sequence
-       * @param[in]   outstrm             output stream
-       */
+      // core alignment computation function
       void doAlignment(
-              std::stringstream& output,
+          std::stringstream& output,
 #ifdef WFA_PNG_TSV_TIMING
-              std::stringstream& output_tsv,
-              std::stringstream& patching_output_tsv,
+          std::stringstream& output_tsv,
+          std::stringstream& patching_output_tsv,
 #endif
-              MappingBoundaryRow &currentRecord,
-              const std::string &mappingRecordLine,
-              uint64_t tid) {
-
+          seq_record_t* rec,
+          uint64_t tid) {
 #ifdef DEBUG
-        std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << mappingRecordLine << std::endl;
+          std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << rec->mappingRecordLine << std::endl;
 #endif
 
-        //Obtain reference substring for this mapping
-        // htslib caches are not threadsafe! so we use a thread-specific faidx_t
-        faidx_t* tfaid = target_faidxs[tid];
-        const int64_t ref_size = faidx_seq_len(tfaid, currentRecord.refId.c_str());
+          std::string& ref_seq = rec->refSequence;
+          std::string& query_seq = rec->querySequence;
 
-        // Take flanking sequences to support head/tail patching due to noisy (inaccurate) mapping boundaries
-        const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
-        const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+          skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq.data(), ref_seq.length());
+          skch::CommonFunc::makeUpperCaseAndValidDNA(query_seq.data(), query_seq.length());
 
-        int64_t got_seq_len = 0;
-        char * ref_seq = faidx_fetch_seq64(
-			tfaid, currentRecord.refId.c_str(),
-			currentRecord.rStartPos - head_padding,
-			currentRecord.rEndPos + tail_padding,
-			&got_seq_len
-			);
+          uint64_t refStartPos = rec->refStartPos;
+          uint64_t refLen = rec->refLen;
+          uint64_t queryStartPos = rec->queryStartPos;
+          uint64_t queryLen = rec->queryLen;
+    
+          // Adjust the reference sequence to start from the original start position
+          char* ref_seq_ptr = &ref_seq[rec->currentRecord.rStartPos - refStartPos];
 
-        // hack to make it 0-terminated as expected by WFA
-        ref_seq[got_seq_len] = '\0';
+          char* queryRegionStrand = new char[queryLen+1];
 
-        // upper-case our input and make sure it's canonical DNA (for WFA)
-        skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq, got_seq_len);
+          if(rec->currentRecord.strand == skch::strnd::FWD) {
+              strncpy(queryRegionStrand, query_seq.data(), queryLen);
+          } else {
+              skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand, queryLen);
+          }
 
-        // Shift the pointer to the currentRecord.rStartPos position
-        ref_seq = ref_seq + head_padding;
+          // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix there is just one alignment for the query)
+          const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(rec->currentRecord.rankMapping) : "";
 
-        skch::offset_t refLen = currentRecord.rEndPos - currentRecord.rStartPos;
-
-        //Define query substring for this mapping
-        // Obtain query substring for this mapping
-        // htslib caches are not threadsafe! so we use a thread-specific faidx_t
-		faidx_t* qfaid = query_faidxs[tid];
-		const int64_t query_size = faidx_seq_len(qfaid, currentRecord.qId.c_str());
-
-		int64_t got_query_len = 0;
-		char* query_seq = faidx_fetch_seq64(
-			qfaid, currentRecord.qId.c_str(),
-			currentRecord.qStartPos,
-			currentRecord.qEndPos,
-			&got_query_len
-			);
-
-        // hack to make it 0-terminated as expected by WFA
-		query_seq[got_query_len] = '\0';
-
-        // upper-case our input and make sure it's canonical DNA (for WFA)
-		skch::CommonFunc::makeUpperCaseAndValidDNA(query_seq, got_query_len);
-
-		skch::offset_t queryLen = currentRecord.qEndPos - currentRecord.qStartPos;
-
-		char* queryRegionStrand = new char[queryLen+1];
-
-		if(currentRecord.strand == skch::strnd::FWD) {
-			strncpy(queryRegionStrand, query_seq, queryLen);    //Copy the same string
-		} else {
-			skch::CommonFunc::reverseComplement(query_seq, queryRegionStrand, queryLen); //Reverse complement
-		}
-
-		assert(queryLen <= query_size);
-
-        //Compute alignment
-#ifdef DEBUG
-        std::cerr << "INFO, align::Aligner::doAlignment, WFA execution starting, query region length = " << queryLen
-          << ", reference region length= " << refLen << ", edit distance limit= " << editDistanceLimit << std::endl; 
-#endif
-
-        // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix in there is just one alignment for the query)
-        const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
-
-        wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
-                param.wflambda_segment_length,
-                param.min_identity,
-                param.force_biwfa_alignment,
-                param.wfa_mismatch_score,
-                param.wfa_gap_opening_score,
-                param.wfa_gap_extension_score,
-                param.wfa_patching_mismatch_score,
-                param.wfa_patching_gap_opening_score1,
-                param.wfa_patching_gap_extension_score1,
-                param.wfa_patching_gap_opening_score2,
-                param.wfa_patching_gap_extension_score2,
-                currentRecord.mashmap_estimated_identity,
-                param.wflign_mismatch_score,
-                param.wflign_gap_opening_score,
-                param.wflign_gap_extension_score,
-                param.wflign_max_mash_dist,
-                param.wflign_min_wavefront_length,
-                param.wflign_max_distance_threshold,
-                param.wflign_max_len_major,
-                param.wflign_max_len_minor,
-                param.wflign_erode_k,
-                param.chain_gap,
-                param.wflign_max_patching_score);
-        wflign->set_output(
-                &output,
+          wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
+              param.wflambda_segment_length,
+              param.min_identity,
+              param.force_biwfa_alignment,
+              param.wfa_mismatch_score,
+              param.wfa_gap_opening_score,
+              param.wfa_gap_extension_score,
+              param.wfa_patching_mismatch_score,
+              param.wfa_patching_gap_opening_score1,
+              param.wfa_patching_gap_extension_score1,
+              param.wfa_patching_gap_opening_score2,
+              param.wfa_patching_gap_extension_score2,
+              rec->currentRecord.mashmap_estimated_identity,
+              param.wflign_mismatch_score,
+              param.wflign_gap_opening_score,
+              param.wflign_gap_extension_score,
+              param.wflign_max_mash_dist,
+              param.wflign_min_wavefront_length,
+              param.wflign_max_distance_threshold,
+              param.wflign_max_len_major,
+              param.wflign_max_len_minor,
+              param.wflign_erode_k,
+              param.chain_gap,
+              param.wflign_max_patching_score);
+          wflign->set_output(
+              &output,
 #ifdef WFA_PNG_TSV_TIMING
-                !param.tsvOutputPrefix.empty(),
-                &output_tsv,
-                param.prefix_wavefront_plot_in_png,
-                param.wfplot_max_size,
-                !param.path_patching_info_in_tsv.empty(),
-                &patching_output_tsv,
+              !param.tsvOutputPrefix.empty(),
+              &output_tsv,
+              param.prefix_wavefront_plot_in_png,
+              param.wfplot_max_size,
+              !param.path_patching_info_in_tsv.empty(),
+              &patching_output_tsv,
 #endif
-                true, // merge alignments
-                param.emit_md_tag,
-                !param.sam_format,
-                param.no_seq_in_sam);
-        wflign->wflign_affine_wavefront(
-                currentRecord.qId + query_name_suffix,
-                queryRegionStrand,
-                query_size,
-                currentRecord.qStartPos,
-                queryLen,
-                currentRecord.strand != skch::strnd::FWD,
-                currentRecord.refId,
-                ref_seq,
-                ref_size,
-                currentRecord.rStartPos,
-                refLen);
-        delete wflign;
+              true, // merge alignments
+              param.emit_md_tag,
+              !param.sam_format,
+              param.no_seq_in_sam);
+          wflign->wflign_affine_wavefront(
+              rec->currentRecord.qId + query_name_suffix,
+              queryRegionStrand,
+              queryLen,
+              queryStartPos,
+              queryLen,
+              rec->currentRecord.strand != skch::strnd::FWD,
+              rec->currentRecord.refId,
+              ref_seq_ptr,
+              refLen,
+              rec->currentRecord.rStartPos,
+              rec->currentRecord.rEndPos - rec->currentRecord.rStartPos);
+          delete wflign;
 
-        delete [] queryRegionStrand;
-
-        // Re-shift the pointer to the malloc()-ed address
-        ref_seq = ref_seq - head_padding;
-        free(ref_seq);
-		// Free the query sequence
-		free(query_seq);
+          delete[] queryRegionStrand;
+          // n.b. rec is deleted in calling context
       }
   };
 }
