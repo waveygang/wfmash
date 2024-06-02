@@ -192,6 +192,10 @@ typedef atomic_queue::AtomicQueue<std::string*, 2 << 10> paf_atomic_queue_t;
 
           auto reader_thread = [&]() {
               std::ifstream mappingListStream(param.mashmapPafFile);
+              if (!mappingListStream.is_open()) {
+                  throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open input mapping file: " + param.mashmapPafFile);
+              }
+
               std::string mappingRecordLine;
               MappingBoundaryRow currentRecord;
 
