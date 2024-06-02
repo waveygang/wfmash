@@ -42,6 +42,7 @@ void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
 WFlign::WFlign(
     const uint16_t segment_length,
     const float min_identity,
+    const bool force_biwfa_alignment,
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
@@ -65,6 +66,8 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
+
+    this->force_biwfa_alignment = force_biwfa_alignment;
 
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
@@ -436,7 +439,7 @@ void WFlign::wflign_affine_wavefront(
 #ifdef WFA_PNG_TSV_TIMING
     const auto start_time = std::chrono::steady_clock::now();
 #endif
-    if (
+    if (force_biwfa_alignment ||
             (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
             (mashmap_estimated_identity >= 0.99
              && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)

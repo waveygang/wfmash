@@ -91,10 +91,12 @@ namespace wflign {
             bool emit_md_tag;
             bool paf_format_else_sam;
             bool no_seq_in_sam;
+            bool force_biwfa_alignment;
             // Setup
             WFlign(
                     const uint16_t segment_length,
                     const float min_identity,
+                    const bool force_biwfa_alignment,
                     const int wfa_mismatch_score,
                     const int wfa_gap_opening_score,
                     const int wfa_gap_extension_score,
