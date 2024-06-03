@@ -103,9 +103,6 @@ void parse_args(int argc,
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::Flag force_biwfa_alignment(alignment_opts, "force-biwfa", "force alignment with biWFA for all sequence pairs", {'I', "force-biwfa"});
-    args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, remove alignments with gap-compressed identity below --map-pct-id x 0.8, else keep all alignments "
-								"[default: if an input PAF is specified, keep all alignments, else remove alignments with gap-compressed identity below --map-pct-id x 0.8]",
-                                {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
 												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 2,3,1]",
@@ -507,20 +504,7 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
-
-    if (align_input_paf) {
-        if (invert_filtering) {
-            align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
-        } else {
-            align_parameters.min_identity = 0; // disabled
-        }
-    } else {
-        if (invert_filtering) {
-            align_parameters.min_identity = 0; // disable
-        } else {
-            align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
-        }
-    }
+    align_parameters.min_identity = 0; // disabled
 
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
