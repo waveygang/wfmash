@@ -246,29 +246,12 @@ int wflambda_extend_match(
                 delete aln;
             }
 
-            // cleanup all sketches when they are too many
             if (extend_data->num_sketches_allocated > extend_data->max_num_sketches_in_memory) {
                 clean_up_sketches(query_sketches);
                 clean_up_sketches(target_sketches);
-
-                //std::cerr << "extend_data->num_sketches_allocated " <<  extend_data->num_sketches_allocated << std::endl;
                 extend_data->num_sketches_allocated = 0;
             }
 
-//            // cleanup all sketches when the breakpoint changes
-//            int last_breakpoint_v, last_breakpoint_h;
-//            extend_data->wflambda_aligner->getLastBreakpoint(&last_breakpoint_v, &last_breakpoint_h);
-//            if (extend_data->last_breakpoint_v != last_breakpoint_v || extend_data->last_breakpoint_h != last_breakpoint_h) {
-//                //std::cerr << v << "\t" << h << "\t" << last_breakpoint_v << "\t" << last_breakpoint_h << std::endl;
-//                extend_data->last_breakpoint_v = last_breakpoint_v;
-//                extend_data->last_breakpoint_h = last_breakpoint_h;
-//
-//                clean_up_sketches(query_sketches);
-//                clean_up_sketches(target_sketches);
-//
-//                //std::cerr << "extend_data->num_sketches_allocated " <<  extend_data->num_sketches_allocated << std::endl;
-//                //extend_data->num_sketches_allocated = 0;
-//            }
         }
     } else if (h < 0 || v < 0) { // It can be removed using an edit-distance
         // mode as high-level of WF-inception
@@ -674,8 +657,9 @@ void WFlign::wflign_affine_wavefront(
         extend_data.num_alignments_performed = 0;
 #endif
         extend_data.num_sketches_allocated = 0;
-        // 1 GB / (hash_t*mash_sketch_rate*segment_length*2); 1 GB = 1×8×1024×1024×1024; '*2' to account query/target sequences
-        extend_data.max_num_sketches_in_memory = std::ceil(8589934592.0 / (8.0*sizeof(rkmh::hash_t)*mash_sketch_rate*segment_length_to_use*2) );
+        // 128 MB of memory for sketches
+        extend_data.max_num_sketches_in_memory = 128 * 1024 * 1024
+            / (sizeof(std::vector<rkmh::hash_t>) + mash_sketch_rate * segment_length_to_use * sizeof(rkmh::hash_t));
 #ifdef WFA_PNG_TSV_TIMING
         extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
         extend_data.high_order_dp_matrix_mismatch = &high_order_dp_matrix_mismatch;
