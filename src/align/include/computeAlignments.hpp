@@ -51,19 +51,23 @@ struct seq_record_t {
     std::string querySequence;
     uint64_t refStartPos;
     uint64_t refLen;
+    uint64_t refTotalLength;
     uint64_t queryStartPos;
     uint64_t queryLen;
+    uint64_t queryTotalLength;
     seq_record_t(const MappingBoundaryRow& c, const std::string& r, 
-                 const std::string& ref, uint64_t refStart, uint64_t refLength,
-                 const std::string& query, uint64_t queryStart, uint64_t queryLength)
+                 const std::string& ref, uint64_t refStart, uint64_t refLength, uint64_t refTotalLength,
+                 const std::string& query, uint64_t queryStart, uint64_t queryLength, uint64_t queryTotalLength)
         : currentRecord(c)
         , mappingRecordLine(r)
         , refSequence(ref)
         , querySequence(query)
         , refStartPos(refStart)
         , refLen(refLength)
+        , refTotalLength(refTotalLength)
         , queryStartPos(queryStart)
         , queryLen(queryLength)
+        , queryTotalLength(queryTotalLength)
         { }
 };
 
@@ -100,6 +104,7 @@ typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, fals
  * - SPSC: false (multi-producer, single-consumer mode)
  */
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
+
 
   /**
    * @class     align::Aligner
@@ -190,12 +195,14 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               std::ifstream mappingListStream(param.mashmapPafFile);
               std::string mappingRecordLine;
               MappingBoundaryRow currentRecord;
+              uint64_t total_records = 0;
 
               while(!mappingListStream.eof()) {
                   std::getline(mappingListStream, mappingRecordLine);
                   if (!mappingRecordLine.empty()) {
                       parseMashmapRow(mappingRecordLine, currentRecord);
                       total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                      ++total_records;
                   }
               }
           }
@@ -219,6 +226,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               w.store(true);
           }
 
+          size_t total_alignments_queued = 0;
           auto reader_thread = [&]() {
               std::ifstream mappingListStream(param.mashmapPafFile);
               if (!mappingListStream.is_open()) {
@@ -233,27 +241,36 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
                   if (!mappingRecordLine.empty()) {
                       parseMashmapRow(mappingRecordLine, currentRecord);
             
-                      // Extract reference sequence with flanking regions
+                      // Get the reference sequence length
                       const int64_t ref_size = faidx_seq_len(ref_faidx, currentRecord.refId.c_str());
-                      const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
-                      const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
-            
+                      // Get the query sequence length
+                      const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
+
+                      // Compute padding
+                      const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
+                          ? param.wflign_max_len_minor : currentRecord.rStartPos;
+                      const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
+                          ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+
+                      // Extract reference sequence
                       int64_t ref_len;
                       char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
                                                         currentRecord.rStartPos - head_padding, currentRecord.rEndPos + tail_padding, &ref_len);
-            
+
                       // Extract query sequence
                       int64_t query_len;
                       char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
                                                           currentRecord.qStartPos, currentRecord.qEndPos, &query_len);
-            
-                      seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine, 
-                                                           std::string(ref_seq, ref_len), currentRecord.rStartPos - head_padding, ref_len,
-                                                           std::string(query_seq, query_len), currentRecord.qStartPos, query_len);
+
+                      // Create a new seq_record_t object for the alignment
+                      seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
+                                                           std::string(ref_seq, ref_len), currentRecord.rStartPos - head_padding, ref_len, ref_size,
+                                                           std::string(query_seq, query_len), currentRecord.qStartPos, query_len, query_size);
             
                       free(ref_seq);
                       free(query_seq);
 
+                      ++total_alignments_queued;
                       seq_queue.push(rec);
                   }
               }
@@ -275,6 +292,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           // writer, picks output from queue and writes it to our output stream
           std::ofstream outstrm(param.pafOutputFile, ios::app);
 
+          size_t total_alignments_written = 0;
           auto writer_thread =
               [&]() {
                   while (true) {
@@ -283,6 +301,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
                           && !still_working(working)) {
                           break;
                       } else if (paf_lines != nullptr) {
+                          ++total_alignments_written;
                           outstrm << *paf_lines;
                           delete paf_lines;
                       } else {
@@ -422,6 +441,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           writer_patching_tsv.join();
           ofstream_patching_tsv.close();
 #endif
+
           progress.finish();
           std::cerr << "[wfmash::align::computeAlignments] "
                     << "count of mapped reads = " << total_seqs
@@ -447,20 +467,15 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq.data(), ref_seq.length());
           skch::CommonFunc::makeUpperCaseAndValidDNA(query_seq.data(), query_seq.length());
 
-          uint64_t refStartPos = rec->refStartPos;
-          uint64_t refLen = rec->refLen;
-          uint64_t queryStartPos = rec->queryStartPos;
-          uint64_t queryLen = rec->queryLen;
-    
           // Adjust the reference sequence to start from the original start position
-          char* ref_seq_ptr = &ref_seq[rec->currentRecord.rStartPos - refStartPos];
+          char* ref_seq_ptr = &ref_seq[rec->currentRecord.rStartPos - rec->refStartPos];
 
-          char* queryRegionStrand = new char[queryLen+1];
+          char* queryRegionStrand = new char[query_seq.size() + 1];
 
           if(rec->currentRecord.strand == skch::strnd::FWD) {
-              strncpy(queryRegionStrand, query_seq.data(), queryLen);
+              strncpy(queryRegionStrand, query_seq.data(), query_seq.size());
           } else {
-              skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand, queryLen);
+              skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand, query_seq.size());
           }
 
           // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix there is just one alignment for the query)
@@ -507,13 +522,13 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           wflign->wflign_affine_wavefront(
               rec->currentRecord.qId + query_name_suffix,
               queryRegionStrand,
-              queryLen,
-              queryStartPos,
-              queryLen,
+              rec->queryTotalLength,
+              rec->queryStartPos,
+              rec->queryLen,
               rec->currentRecord.strand != skch::strnd::FWD,
               rec->currentRecord.refId,
               ref_seq_ptr,
-              refLen,
+              rec->refTotalLength,
               rec->currentRecord.rStartPos,
               rec->currentRecord.rEndPos - rec->currentRecord.rStartPos);
           delete wflign;
