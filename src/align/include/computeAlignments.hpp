@@ -148,35 +148,37 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
        * @param[in]   mappingRecordLine
        * @param[out]  currentRecord
        */
-      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord)
-      {
-        std::stringstream ss(mappingRecordLine); // Insert the string into a stream
-        std::string word; // Have a buffer string
+      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord) {
+          std::stringstream ss(mappingRecordLine); // Insert the string into a stream
+          std::string word; // Have a buffer string
 
-        vector<std::string> tokens; // Create vector to hold our words
+          vector<std::string> tokens; // Create vector to hold our words
 
-        while (ss >> word)
-          tokens.push_back(word);
+          while (ss >> word) {
+              tokens.push_back(word);
+          }
 
-        //We expect and need at least these many values in a mashmap mapping
-        assert(tokens.size() >= 9);
+          // Check if the number of tokens is at least 13
+          if (tokens.size() < 13) {
+              throw std::runtime_error("[wfmash::align::parseMashmapRow] Error! Invalid mashmap mapping record: " + mappingRecordLine);
+          }
 
-        // Extract the mashmap identity from the string
-        const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
-        // if the estimated identity is missing, avoid assuming too low values
-        const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
+          // Extract the mashmap identity from the string
+          const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
+          // if the estimated identity is missing, avoid assuming too low values
+          const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
-        //Save words into currentRecord
-        {
-            currentRecord.qId = tokens[0];
-            currentRecord.qStartPos = std::stoi(tokens[2]);
-            currentRecord.qEndPos = std::stoi(tokens[3]);
-            currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
-            currentRecord.refId = tokens[5];
-            currentRecord.rStartPos = std::stoi(tokens[7]);
-            currentRecord.rEndPos = std::stoi(tokens[8]);
-            currentRecord.mashmap_estimated_identity = mm_id;
-        }
+          // Save words into currentRecord
+          {
+              currentRecord.qId = tokens[0];
+              currentRecord.qStartPos = std::stoi(tokens[2]);
+              currentRecord.qEndPos = std::stoi(tokens[3]);
+              currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
+              currentRecord.refId = tokens[5];
+              currentRecord.rStartPos = std::stoi(tokens[7]);
+              currentRecord.rEndPos = std::stoi(tokens[8]);
+              currentRecord.mashmap_estimated_identity = mm_id;
+          }
       }
 
   private:
