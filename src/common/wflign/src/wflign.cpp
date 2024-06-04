@@ -183,8 +183,8 @@ int wflambda_extend_match(
         if (f != alignments.end()) {
             is_a_match = (alignments[k] != nullptr);
         } else {
-            const int query_begin = v * step_size;
-            const int target_begin = h * step_size;
+            const int64_t query_begin = v * step_size;
+            const int64_t target_begin = h * step_size;
 
             // The last fragment can be longer than segment_length_to_use (max 2*segment_length_to_use - 1)
             const uint16_t segment_length_to_use_q =

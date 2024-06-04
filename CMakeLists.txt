@@ -37,10 +37,10 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-    set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
-    set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
+  #set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
+  #  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
     if (NOT EXTRA_FLAGS)
-      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3")
+      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -g")
     endif()
 endif ()
 
@@ -103,11 +103,20 @@ ExternalProject_Add(jemalloc
   BUILD_IN_SOURCE 1
 )
 
+ExternalProject_Add(gcc-13.2.0
+  URL https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gcc-13.2.0
+  CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gcc-13.2.0 --enable-languages=c,c++ --disable-multilib --enable-libsanitizer=address
+  BUILD_COMMAND $(MAKE)
+  INSTALL_COMMAND $(MAKE) install
+  BUILD_IN_SOURCE 1
+)
+
 add_executable(wfmash
   src/common/utils.cpp
   src/interface/main.cpp)
 
-add_dependencies(wfmash htslib gsl libdeflate jemalloc)
+add_dependencies(wfmash htslib gsl libdeflate jemalloc gcc-13.2.0)
 
 target_include_directories(wfmash PRIVATE
   src
@@ -135,6 +144,7 @@ target_link_libraries(wfmash
   z
   ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib64/libdeflate.a
   Threads::Threads
+  ${CMAKE_CURRENT_BINARY_DIR}/gcc-13.2.0/lib64/libasan.a
 )
 
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
