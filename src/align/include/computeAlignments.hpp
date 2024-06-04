@@ -259,18 +259,27 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
                       char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
                                                         currentRecord.rStartPos - head_padding, currentRecord.rEndPos + tail_padding, &ref_len);
 
+                      // Convert to std::string and append null character
+                      std::string ref_seq_str(ref_seq, ref_len);
+                      ref_seq_str.push_back('\0');
+
                       // Extract query sequence
                       int64_t query_len;
                       char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
                                                           currentRecord.qStartPos, currentRecord.qEndPos, &query_len);
 
-                      // Create a new seq_record_t object for the alignment
+                      // Convert to std::string and append null character
+                      std::string query_seq_str(query_seq, query_len);
+                      query_seq_str.push_back('\0');
+
+                      // Create a new seq_record_t object for the alignment using std::move
                       seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
-                                                           std::string(ref_seq, ref_len), currentRecord.rStartPos - head_padding, ref_len, ref_size,
-                                                           std::string(query_seq, query_len), currentRecord.qStartPos, query_len, query_size);
-            
-                      free(ref_seq);
-                      free(query_seq);
+                                                           std::move(ref_seq_str), currentRecord.rStartPos - head_padding, ref_len, ref_size,
+                                                           std::move(query_seq_str), currentRecord.qStartPos, query_len, query_size);
+
+                      // Clean up
+                      delete[] ref_seq;
+                      delete[] query_seq;
 
                       ++total_alignments_queued;
                       seq_queue.push(rec);
