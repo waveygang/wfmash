@@ -63,31 +63,77 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
+include(ExternalProject)
+
+ExternalProject_Add(htslib
+  URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/htslib
+  CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/htslib --disable-libcurl --disable-s3 
+  BUILD_COMMAND $(MAKE)
+  INSTALL_COMMAND $(MAKE) install
+  BUILD_IN_SOURCE 1
+)
+
+ExternalProject_Add(gsl
+  URL https://mirror.ibcp.fr/pub/gnu/gsl/gsl-2.8.tar.gz
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gsl
+  CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gsl
+  BUILD_COMMAND $(MAKE)
+  INSTALL_COMMAND $(MAKE) install
+  BUILD_IN_SOURCE 1
+)
+
+ExternalProject_Add(libdeflate
+  URL https://github.com/ebiggers/libdeflate/releases/download/v1.20/libdeflate-1.20.tar.gz
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libdeflate
+  CMAKE_ARGS
+    -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/libdeflate
+    -DCMAKE_BUILD_TYPE=Release
+  BUILD_COMMAND cmake --build . --config Release
+  INSTALL_COMMAND cmake --install . --config Release
+  BUILD_IN_SOURCE 1
+)
+
+ExternalProject_Add(jemalloc
+  URL https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2
+  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/jemalloc
+  CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/jemalloc
+  BUILD_COMMAND $(MAKE)
+  INSTALL_COMMAND $(MAKE) install
+  BUILD_IN_SOURCE 1
+)
+
 add_executable(wfmash
   src/common/utils.cpp
   src/interface/main.cpp)
+
+add_dependencies(wfmash htslib gsl libdeflate jemalloc)
 
 target_include_directories(wfmash PRIVATE
   src
   src/common
   src/common/wflign/deps
   src/common/wflign/deps/WFA2-lib
+  ${CMAKE_CURRENT_BINARY_DIR}/htslib/include
+  ${CMAKE_CURRENT_BINARY_DIR}/gsl/include
+  ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/include
+  ${CMAKE_CURRENT_BINARY_DIR}/jemalloc/include
 )
 
 target_link_libraries(wfmash
-  gsl
-  gslcblas
+  ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgsl.a
+  ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgslcblas.a
   m
   pthread
   libwflign_static
-  hts
+  ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
   rt
   wfa2cpp_static
-  jemalloc
+  ${CMAKE_CURRENT_BINARY_DIR}/jemalloc/lib/libjemalloc.a
   lzma
   bz2
   z
-  deflate
+  ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib64/libdeflate.a
   Threads::Threads
 )
 
