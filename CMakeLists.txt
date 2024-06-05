@@ -94,29 +94,11 @@ ExternalProject_Add(libdeflate
   BUILD_IN_SOURCE 1
 )
 
-ExternalProject_Add(jemalloc
-  URL https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2
-  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/jemalloc
-  CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/jemalloc
-  BUILD_COMMAND $(MAKE)
-  INSTALL_COMMAND $(MAKE) install
-  BUILD_IN_SOURCE 1
-)
-
-ExternalProject_Add(gcc-13.2.0
-  URL https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.gz
-  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gcc-13.2.0
-  CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gcc-13.2.0 --enable-languages=c,c++ --disable-multilib --enable-libsanitizer=address
-  BUILD_COMMAND $(MAKE)
-  INSTALL_COMMAND $(MAKE) install
-  BUILD_IN_SOURCE 1
-)
-
 add_executable(wfmash
   src/common/utils.cpp
   src/interface/main.cpp)
 
-add_dependencies(wfmash htslib gsl libdeflate jemalloc gcc-13.2.0)
+add_dependencies(wfmash htslib gsl libdeflate)
 
 target_include_directories(wfmash PRIVATE
   src
@@ -126,7 +108,6 @@ target_include_directories(wfmash PRIVATE
   ${CMAKE_CURRENT_BINARY_DIR}/htslib/include
   ${CMAKE_CURRENT_BINARY_DIR}/gsl/include
   ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/include
-  ${CMAKE_CURRENT_BINARY_DIR}/jemalloc/include
 )
 
 target_link_libraries(wfmash
@@ -138,13 +119,12 @@ target_link_libraries(wfmash
   ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
   rt
   wfa2cpp_static
-  ${CMAKE_CURRENT_BINARY_DIR}/jemalloc/lib/libjemalloc.a
+  jemalloc
   lzma
   bz2
   z
   ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib64/libdeflate.a
   Threads::Threads
-  ${CMAKE_CURRENT_BINARY_DIR}/gcc-13.2.0/lib64/libasan.a
 )
 
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
