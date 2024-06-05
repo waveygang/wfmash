@@ -28,6 +28,7 @@ find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(LibLZMA REQUIRED)
 find_package(Threads REQUIRED)
+find_package(OpenMP REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -37,11 +38,11 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-  #set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
-  #  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
-    if (NOT EXTRA_FLAGS)
-      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -g")
-    endif()
+  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
+  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
+  if (NOT EXTRA_FLAGS)
+    set(EXTRA_FLAGS "-Ofast -march=x86-64-v3")
+  endif()
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
@@ -119,7 +120,6 @@ target_link_libraries(wfmash
   ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
   rt
   wfa2cpp_static
-  jemalloc
   lzma
   bz2
   z
