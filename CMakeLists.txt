@@ -123,7 +123,7 @@ target_link_libraries(wfmash
   lzma
   bz2
   z
-  ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib64/libdeflate.a
+  ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib/libdeflate.a
   Threads::Threads
 )
 
