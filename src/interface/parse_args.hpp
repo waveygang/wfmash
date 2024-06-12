@@ -103,19 +103,16 @@ void parse_args(int argc,
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
     args::Flag force_biwfa_alignment(alignment_opts, "force-biwfa", "force alignment with biWFA for all sequence pairs", {'I', "force-biwfa"});
-    args::Flag invert_filtering(alignment_opts, "A", "if an input PAF is specified, remove alignments with gap-compressed identity below --map-pct-id x 0.8, else keep all alignments "
-								"[default: if an input PAF is specified, keep all alignments, else remove alignments with gap-compressed identity below --map-pct-id x 0.8]",
-                                {'O', "invert-filtering"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
-												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 6,8,1]",
+												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 2,3,1]",
 												  {"wfa-params"});
     args::ValueFlag<std::string> wfa_patching_score_params(alignment_opts, "mismatch,gap1,ext1,gap2,ext2",
-														   "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 5,8,2,49,1]",
+														   "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 3,4,2,24,1]",
 														   {"wfa-patching-params"});
     //wflign parameters
     args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
-													 "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 4,6,1]",
+													 "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 2,3,1]",
 													 {"wflign-params"});
     args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
     args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
@@ -282,9 +279,9 @@ void parse_args(int argc,
         align_parameters.wfa_gap_opening_score = params[1];
         align_parameters.wfa_gap_extension_score = params[2];
     } else {
-        align_parameters.wfa_mismatch_score = -1;
-        align_parameters.wfa_gap_opening_score = -1;
-        align_parameters.wfa_gap_extension_score = -1;
+        align_parameters.wfa_mismatch_score = 2;
+        align_parameters.wfa_gap_opening_score = 3;
+        align_parameters.wfa_gap_extension_score = 1;
     }
 
     if (!args::get(wfa_patching_score_params).empty()) {
@@ -305,11 +302,11 @@ void parse_args(int argc,
         align_parameters.wfa_patching_gap_opening_score2 = params[3];
         align_parameters.wfa_patching_gap_extension_score2 = params[4];
     } else {
-        align_parameters.wfa_patching_mismatch_score = -1;
-        align_parameters.wfa_patching_gap_opening_score1 = -1;
-        align_parameters.wfa_patching_gap_extension_score1 = -1;
-        align_parameters.wfa_patching_gap_opening_score2 = -1;
-        align_parameters.wfa_patching_gap_extension_score2 = -1;
+        align_parameters.wfa_patching_mismatch_score = 3;
+        align_parameters.wfa_patching_gap_opening_score1 = 4;
+        align_parameters.wfa_patching_gap_extension_score1 = 2;
+        align_parameters.wfa_patching_gap_opening_score2 = 24;
+        align_parameters.wfa_patching_gap_extension_score2 = 1;
     }
 
     if (!args::get(wflign_score_params).empty()) {
@@ -328,9 +325,9 @@ void parse_args(int argc,
         align_parameters.wflign_gap_opening_score = params[1];
         align_parameters.wflign_gap_extension_score = params[2];
     } else {
-        align_parameters.wflign_mismatch_score = -1;
-        align_parameters.wflign_gap_opening_score = -1;
-        align_parameters.wflign_gap_extension_score = -1;
+        align_parameters.wflign_mismatch_score = 2;
+        align_parameters.wflign_gap_opening_score = 3;
+        align_parameters.wflign_gap_extension_score = 1;
     }
 
     if (wflign_max_mash_dist) {
@@ -507,20 +504,7 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
-
-    if (align_input_paf) {
-        if (invert_filtering) {
-            align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
-        } else {
-            align_parameters.min_identity = 0; // disabled
-        }
-    } else {
-        if (invert_filtering) {
-            align_parameters.min_identity = 0; // disable
-        } else {
-            align_parameters.min_identity = map_parameters.percentageIdentity * 0.8; // in [0,1]
-        }
-    }
+    align_parameters.min_identity = 0; // disabled
 
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);

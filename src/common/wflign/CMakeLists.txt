@@ -20,8 +20,8 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-    #set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
-    set(EXTRA_FLAGS "-Ofast -march=native")
+    #set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -flto -fno-fat-lto-objects")
+    set(EXTRA_FLAGS "-Ofast -march=x86-64-v3")
     set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
 endif ()
 

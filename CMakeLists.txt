@@ -40,7 +40,7 @@ if (${CMAKE_BUILD_TYPE} MATCHES Release)
     set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
     set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
     if (NOT EXTRA_FLAGS)
-      set(EXTRA_FLAGS "-Ofast -march=native")
+      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3")
     endif()
 endif ()
 

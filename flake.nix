@@ -37,8 +37,8 @@
       reproducibleBuild = false;
 
       # Use custom attributes to set compiler flags
-      CFLAGS = if enableOptimizations then "-O3 -march=native" else "";
-      CXXFLAGS = if enableOptimizations then "-O3 -march=native" else "";
+      CFLAGS = if enableOptimizations then "-Ofast -march=x86-64-v3" else "";
+      CXXFLAGS = if enableOptimizations then "-Ofast -march=x86-64-v3" else "";
 
       postPatch = ''
         mkdir -p include
