@@ -15,6 +15,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are use
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(BUILD_STATIC "Build static binary" OFF)
+option(BUILD_DEPS "Build external dependencies" OFF)
+option(BUILD_RETARGETABLE "Build retargetable binary" OFF)
 
 if (BUILD_STATIC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
@@ -28,6 +30,7 @@ find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(LibLZMA REQUIRED)
 find_package(Threads REQUIRED)
+find_package(OpenMP REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -37,11 +40,23 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-    set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
-    set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
-    if (NOT EXTRA_FLAGS)
-      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3")
+  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
+  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
+  if (NOT EXTRA_FLAGS)
+    if (BUILD_RETARGETABLE)
+      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -flto")
+    else()
+      set(EXTRA_FLAGS "-Ofast -march=native -flto")
     endif()
+  endif()
+endif ()
+
+if (${CMAKE_BUILD_TYPE} MATCHES Generic)
+  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
+  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
+  if (NOT EXTRA_FLAGS)
+    set(EXTRA_FLAGS "-Ofast -flto")
+  endif()
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
@@ -63,9 +78,76 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
+include(ExternalProject)
+
+if (BUILD_DEPS)
+  ExternalProject_Add(htslib
+    URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/htslib
+    CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/htslib --disable-libcurl --disable-s3 
+    BUILD_COMMAND $(MAKE)
+    INSTALL_COMMAND $(MAKE) install
+    BUILD_IN_SOURCE 1
+  )
+
+  ExternalProject_Add(gsl
+    URL https://mirror.ibcp.fr/pub/gnu/gsl/gsl-2.8.tar.gz
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gsl
+    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gsl
+    BUILD_COMMAND $(MAKE)
+    INSTALL_COMMAND $(MAKE) install
+    BUILD_IN_SOURCE 1
+  )
+
+  ExternalProject_Add(libdeflate
+    URL https://github.com/ebiggers/libdeflate/releases/download/v1.20/libdeflate-1.20.tar.gz
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libdeflate
+    CMAKE_ARGS
+      -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/libdeflate
+      -DCMAKE_BUILD_TYPE=Release
+    BUILD_COMMAND cmake --build . --config Release
+    INSTALL_COMMAND cmake --install . --config Release
+    BUILD_IN_SOURCE 1
+  )
+
+  add_dependencies(wfmash htslib gsl libdeflate)
+endif()
+
 add_executable(wfmash
   src/common/utils.cpp
   src/interface/main.cpp)
+
+if (BUILD_DEPS)
+  target_include_directories(wfmash PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/htslib/include
+    ${CMAKE_CURRENT_BINARY_DIR}/gsl/include
+    ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/include
+  )
+
+  target_link_libraries(wfmash
+    ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgsl.a
+    ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgslcblas.a
+    ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
+    ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib/libdeflate.a
+  )
+else()
+  #find_package(HTSLIB REQUIRED)
+  #find_package(GSL REQUIRED)
+  #find_package(LibDeflate REQUIRED)
+
+  #target_include_directories(wfmash PRIVATE
+  #  ${HTSLIB_INCLUDE_DIR}
+  #  ${GSL_INCLUDE_DIR}
+  #  ${LIBDEFLATE_INCLUDE_DIR}
+  #)
+
+  target_link_libraries(wfmash
+  gsl
+  gslcblas
+  hts
+  deflate
+  )
+endif()
 
 target_include_directories(wfmash PRIVATE
   src
@@ -75,19 +157,14 @@ target_include_directories(wfmash PRIVATE
 )
 
 target_link_libraries(wfmash
-  gsl
-  gslcblas
   m
   pthread
   libwflign_static
-  hts
   rt
   wfa2cpp_static
-  jemalloc
   lzma
   bz2
   z
-  deflate
   Threads::Threads
 )
 

@@ -28,18 +28,25 @@ bool do_wfa_segment_alignment(
         const char* query,
         std::vector<rkmh::hash_t>*& query_sketch,
         const uint64_t& query_length,
-        const int& j,
+        const int64_t& j,
         const std::string& target_name,
         const char* target,
         std::vector<rkmh::hash_t>*& target_sketch,
         const uint64_t& target_length,
-        const int& i,
+        const int64_t& i,
         const uint16_t& segment_length_q,
         const uint16_t& segment_length_t,
         const uint16_t& step_size,
         wflign_extend_data_t* extend_data,
         alignment_t& aln) {
 
+    // if our i or j index plus segment length in the query or target is too long we'll make a memory access error and weird stuff will happen
+    if (i + segment_length_t > target_length || j + segment_length_q > query_length) {
+        // display function parameters
+        std::cerr << "query_name: " << query_name << " query_length: " << query_length << " target_name: " << target_name << " target_length: " << target_length << std::endl;
+        std::cerr << "i: " << i << " j: " << j << " segment_length_t: " << segment_length_t << " segment_length_q: " << segment_length_q << std::endl;
+    }
+    
     // first make the sketches if we haven't yet
     if (query_sketch == nullptr) {
         query_sketch = new std::vector<rkmh::hash_t>();
@@ -48,7 +55,7 @@ bool do_wfa_segment_alignment(
         ++extend_data->num_sketches_allocated;
     }
     if (target_sketch == nullptr) {
-        target_sketch = new std::vector<rkmh::hash_t>();
+        target_sketch = new std::vector<rkmh::hash_t>();        
         *target_sketch = rkmh::hash_sequence(
                 target + i, segment_length_t, extend_data->minhash_kmer_size, (uint64_t)((float)segment_length_t * extend_data->mash_sketch_rate));
         ++extend_data->num_sketches_allocated;
