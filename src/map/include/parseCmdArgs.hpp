@@ -73,8 +73,8 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
     cmd.defineOption("numMappingsForShortSeq", "number of mappings to retain for each sequence shorter than segment length [default: 1]", ArgvParser::OptionRequiresValue);
     
-    cmd.defineOption("saveIndex", "Prefix of index files to save. PREFIX.map and PREFIX.index files will be created", ArgvParser::OptionRequiresValue);
-    cmd.defineOption("loadIndex", "Prefix of index files to load, where PREFIX.map and PREFIX.index are the files to be loaded", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("index", "Writes index to provided filename if it doesn't exist, otherwise reads the index", ArgvParser::OptionRequiresValue);
+    cmd.defineOption("overwriteIndex", "Overwrites provided index filename");
 
 
     cmd.defineOption("noSplit", "disable splitting of input sequences during mapping [enabled by default]");
@@ -370,19 +370,14 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     }
 
 
-    if (cmd.foundOption("saveIndex")) {
-        str << cmd.optionValue("saveIndex");
-        str >> parameters.saveIndexFilename;
+    if (cmd.foundOption("index")) {
+        str << cmd.optionValue("index");
+        str >> parameters.indexFilename;
     } else {
-        parameters.saveIndexFilename = "";
+        parameters.indexFilename = "";
     }
-    if (cmd.foundOption("loadIndex")) {
-        str << cmd.optionValue("loadIndex");
-        str >> parameters.loadIndexFilename;
-    } else {
-        parameters.loadIndexFilename = "";
-    }
-    str.clear();
+
+    parameters.overwrite_index = cmd.foundOption("overwriteIndex");
 
     parameters.alphabetSize = 4;
     //Do not expose the option to set protein alphabet in mashmap

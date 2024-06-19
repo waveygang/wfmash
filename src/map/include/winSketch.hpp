@@ -126,39 +126,37 @@ namespace skch
       Sketch(const skch::Parameters &p) 
         :
           param(p) {
-            this->build();
-            if (param.loadIndexFilename.empty())
+            if (param.indexFilename.empty() 
+                || !stdfs::exists(param.indexFilename)
+                || param.overwrite_index)
             {
+              this->build(true);
               this->computeFreqHist();
               this->computeFreqSeedSet();
               this->dropFreqSeedSet();
               this->hashFreq.clear();
+              if (!param.indexFilename.empty())
+              {
+                this->writeIndex();
+              }
             } else {
-              this->loadPosListBinary();
-              this->loadFreqKmersBinary();
+              this->build(false);
+              this->readIndex();
             }
             std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << minmerPosLookupIndex.size() << std::endl;
             std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-
-            if (!param.saveIndexFilename.empty()) {
-              if (param.saveIndexFilename.extension() == ".tsv") {
-                this->saveIndexTSV();
-              } else {
-                this->saveIndexBinary();
-              }
-              this->savePosListBinary();
-              this->saveFreqKmersBinary();
-            }
           }
 
       private:
 
       /**
-       * @brief     build the sketch table
-       * @details   compute and save minmers from the reference sequence(s)
+       * @brief     Get sequence metadata and optionally build the sketch table
+       *
+       * @details   Iterate through ref sequences to get metadata and
+       *            optionally compute and save minmers from the reference sequence(s)
        *            assuming a fixed window size
        */
-      void build()
+      void build(bool compute_seeds)
       {
 
         // allowed set of targets
@@ -177,13 +175,6 @@ namespace skch
 
         //Create the thread pool 
         ThreadPool<InputSeqContainer, MI_Type> threadPool( [this](InputSeqContainer* e) {return buildHelper(e);}, param.threads);
-        if (!param.loadIndexFilename.empty()) {
-          if (param.loadIndexFilename.extension() == ".tsv") {
-            this->loadIndexTSV();
-          } else {
-            this->loadIndexBinary();
-          }
-        }
 
         for(const auto &fileName : param.refSequences)
         {
@@ -213,7 +204,7 @@ namespace skch
                 }
                 else
                 {
-                  if (param.loadIndexFilename.empty()) {
+                  if (compute_seeds) {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
                     
                     //Collect output if available
@@ -233,13 +224,13 @@ namespace skch
           exit(1);
         }
 
-        if (param.loadIndexFilename.empty()) {
+        if (compute_seeds) {
           //Collect remaining output objects
           while ( threadPool.running() )
             this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+          std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
         }
-        std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
       }
 
       /**
@@ -296,12 +287,12 @@ namespace skch
 
 
       /**
-       * @brief  Save index. TSV indexing is slower but can be debugged easier
+       * @brief  Write sketch as tsv. TSV indexing is slower but can be debugged easier
        */
-      void saveIndexTSV() 
+      void writeSketchTSV() 
       {
         std::ofstream outStream;
-        outStream.open(param.saveIndexFilename);
+        outStream.open(std::string(param.indexFilename) + ".tsv");
         outStream << "seqId" << "\t" << "strand" << "\t" << "start" << "\t" << "end" << "\t" << "hash\n";
         for (auto& mi : this->minmerIndex) {
           outStream << mi.seqId << "\t" << std::to_string(mi.strand) << "\t" << mi.wpos << "\t" << mi.wpos_end << "\t" << mi.hash << "\n";
@@ -309,29 +300,22 @@ namespace skch
         outStream.close(); 
       }
 
+
       /**
-       * @brief  Save index for quick loading
+       * @brief  Write sketch for quick loading
        */
-      void saveIndexBinary() 
+      void writeSketchBinary(std::ofstream& outStream) 
       {
-        fs::path indexFilename = fs::path(param.saveIndexFilename);
-        indexFilename += ".index";
-        std::ofstream outStream;
-        outStream.open(indexFilename, std::ios::binary);
         typename MI_Type::size_type size = minmerIndex.size();
         outStream.write((char*)&size, sizeof(size));
         outStream.write((char*)&minmerIndex[0], minmerIndex.size() * sizeof(MinmerInfo));
       }
 
       /**
-       * @brief  Save posList for quick loading
+       * @brief  Write posList for quick loading
        */
-      void savePosListBinary() 
+      void writePosListBinary(std::ofstream& outStream) 
       {
-        fs::path posListFilename = fs::path(param.saveIndexFilename);
-        posListFilename += ".map";
-        std::ofstream outStream;
-        outStream.open(posListFilename, std::ios::binary);
         typename MI_Map_t::size_type size = minmerPosLookupIndex.size();
         outStream.write((char*)&size, sizeof(size));
 
@@ -347,14 +331,10 @@ namespace skch
 
 
       /**
-       * @brief  Save posList for quick loading
+       * @brief  Write posList for quick loading
        */
-      void saveFreqKmersBinary() 
+      void writeFreqKmersBinary(std::ofstream& outStream) 
       {
-        fs::path freqListFilename = fs::path(param.saveIndexFilename);
-        freqListFilename += ".freq";
-        std::ofstream outStream;
-        outStream.open(freqListFilename, std::ios::binary);
         typename MI_Map_t::size_type size = frequentSeeds.size();
         outStream.write((char*)&size, sizeof(size));
 
@@ -367,11 +347,25 @@ namespace skch
 
 
       /**
-       * @brief Load index from TSV file
+       * @brief  Write all index data structures to disk
        */
-      void loadIndexTSV() 
+      void writeIndex() 
       {
-        io::CSVReader<5, io::trim_chars<' '>, io::no_quote_escape<'\t'>> inReader(param.loadIndexFilename);
+        fs::path freqListFilename = fs::path(param.indexFilename);
+        std::ofstream outStream;
+        outStream.open(freqListFilename, std::ios::binary);
+
+        writeSketchBinary(outStream);
+        writePosListBinary(outStream);
+        writeFreqKmersBinary(outStream);
+      }
+
+      /**
+       * @brief Read sketch from TSV file
+       */
+      void readSketchTSV() 
+      {
+        io::CSVReader<5, io::trim_chars<' '>, io::no_quote_escape<'\t'>> inReader(std::string(param.indexFilename) + ".tsv");
         inReader.read_header(io::ignore_missing_column, "seqId", "strand", "start", "end", "hash");
         hash_t hash;
         offset_t start, end;
@@ -384,14 +378,10 @@ namespace skch
       }
 
       /**
-       * @brief Load index from binary file
+       * @brief Read sketch from binary file
        */
-      void loadIndexBinary() 
+      void readSketchBinary(std::ifstream& inStream) 
       {
-        fs::path indexFilename = fs::path(param.loadIndexFilename);
-        indexFilename += ".index";
-        std::ifstream inStream;
-        inStream.open(indexFilename, std::ios::binary);
         typename MI_Type::size_type size = 0;
         inStream.read((char*)&size, sizeof(size));
         minmerIndex.resize(size);
@@ -399,14 +389,10 @@ namespace skch
       }
 
       /**
-       * @brief  Save posList for quick loading
+       * @brief  Save posList for quick reading
        */
-      void loadPosListBinary() 
+      void readPosListBinary(std::ifstream& inStream) 
       {
-        fs::path posListFilename = fs::path(param.loadIndexFilename);
-        posListFilename += ".map";
-        std::ifstream inStream;
-        inStream.open(posListFilename, std::ios::binary);
         typename MI_Map_t::size_type numKeys = 0;
         inStream.read((char*)&numKeys, sizeof(numKeys));
         minmerPosLookupIndex.reserve(numKeys);
@@ -420,20 +406,15 @@ namespace skch
 
           minmerPosLookupIndex[key].resize(size);
           inStream.read((char*)&minmerPosLookupIndex[key][0], size * sizeof(MinmerMapValueType::value_type));
-
         }
       }
 
 
       /**
-       * @brief  Load frequent kmers from file
+       * @brief  read frequent kmers from file
        */
-      void loadFreqKmersBinary() 
+      void readFreqKmersBinary(std::ifstream& inStream) 
       {
-        fs::path freqListFilename = fs::path(param.loadIndexFilename);
-        freqListFilename += ".freq";
-        std::ifstream inStream;
-        inStream.open(freqListFilename, std::ios::binary);
         typename MI_Map_t::size_type numKeys = 0;
         inStream.read((char*)&numKeys, sizeof(numKeys));
         frequentSeeds.reserve(numKeys);
@@ -444,6 +425,20 @@ namespace skch
           inStream.read((char*)&key, sizeof(key));
           frequentSeeds.insert(key);
         }
+      }
+
+
+      /**
+       * @brief  Read all index data structures from file
+       */
+      void readIndex() 
+      { 
+        fs::path indexFilename = fs::path(param.indexFilename);
+        std::ifstream inStream;
+        inStream.open(indexFilename, std::ios::binary);
+        readSketchBinary(inStream);
+        readPosListBinary(inStream);
+        readFreqKmersBinary(inStream);
       }
 
 
@@ -484,7 +479,7 @@ namespace skch
                   }
               }
 
-              if (this->freqThreshold != std::numeric_limits<int>::max())
+              if (this->freqThreshold != std::numeric_limits<uint64_t>::max())
                   std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
                             << "\%, ignore minmers with more than >= " << this->freqThreshold << " intervals during mapping."
                             << std::endl;
