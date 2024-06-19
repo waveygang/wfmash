@@ -42,6 +42,7 @@ void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
 WFlign::WFlign(
     const uint16_t segment_length,
     const float min_identity,
+    const bool force_biwfa_alignment,
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
@@ -65,6 +66,8 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
+
+    this->force_biwfa_alignment = force_biwfa_alignment;
 
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
@@ -103,7 +106,7 @@ WFlign::WFlign(
     this->target_length = 0;
     // Output
     this->out = nullptr;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     this->emit_tsv = false;
     this->out_tsv = nullptr;
     this->prefix_wavefront_plot_in_png = nullptr;
@@ -121,7 +124,7 @@ WFlign::WFlign(
 */
 void WFlign::set_output(
     std::ostream* const out,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     const bool emit_tsv,
     std::ostream* const out_tsv,
     const std::string &wfplot_filepath,
@@ -134,7 +137,7 @@ void WFlign::set_output(
     const bool paf_format_else_sam,
     const bool no_seq_in_sam) {
     this->out = out;
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     this->emit_tsv = emit_tsv;
     this->out_tsv = out_tsv;
     this->prefix_wavefront_plot_in_png = &wfplot_filepath;
@@ -167,7 +170,7 @@ int wflambda_extend_match(
     robin_hood::unordered_flat_map<uint64_t,alignment_t*>& alignments = *(extend_data->alignments);
     std::vector<std::vector<rkmh::hash_t>*>& query_sketches = *(extend_data->query_sketches);
     std::vector<std::vector<rkmh::hash_t>*>& target_sketches = *(extend_data->target_sketches);
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
     // wfplots
     const bool emit_png = extend_data->emit_png;
     robin_hood::unordered_set<uint64_t>& high_order_dp_matrix_mismatch = *(extend_data->high_order_dp_matrix_mismatch);
@@ -180,8 +183,8 @@ int wflambda_extend_match(
         if (f != alignments.end()) {
             is_a_match = (alignments[k] != nullptr);
         } else {
-            const int query_begin = v * step_size;
-            const int target_begin = h * step_size;
+            const int64_t query_begin = v * step_size;
+            const int64_t target_begin = h * step_size;
 
             // The last fragment can be longer than segment_length_to_use (max 2*segment_length_to_use - 1)
             const uint16_t segment_length_to_use_q =
@@ -207,7 +210,7 @@ int wflambda_extend_match(
                             step_size,
                             extend_data,
                             *aln);
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
             if (wflign.emit_tsv) {
                 // 0) Mis-match, alignment skipped
                 // 1) Mis-match, alignment performed
@@ -217,9 +220,13 @@ int wflambda_extend_match(
                                   << std::endl;
             }
 #endif
+#ifdef WFA_PNG_TSV_TIMING
             ++(extend_data->num_alignments);
+#endif
             if (alignment_performed) {
+#ifdef WFA_PNG_TSV_TIMING
                 ++(extend_data->num_alignments_performed);
+#endif
                 if (aln->ok){
                     is_a_match = true;
                     alignments[k] = aln;
@@ -227,7 +234,7 @@ int wflambda_extend_match(
                     alignments[k] = nullptr;
                 }
             }
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
             else {
                 if (emit_png) {
                     // Save only the mismatches, as they are not cached
@@ -239,29 +246,12 @@ int wflambda_extend_match(
                 delete aln;
             }
 
-            // cleanup all sketches when they are too many
             if (extend_data->num_sketches_allocated > extend_data->max_num_sketches_in_memory) {
                 clean_up_sketches(query_sketches);
                 clean_up_sketches(target_sketches);
-
-                //std::cerr << "extend_data->num_sketches_allocated " <<  extend_data->num_sketches_allocated << std::endl;
                 extend_data->num_sketches_allocated = 0;
             }
 
-//            // cleanup all sketches when the breakpoint changes
-//            int last_breakpoint_v, last_breakpoint_h;
-//            extend_data->wflambda_aligner->getLastBreakpoint(&last_breakpoint_v, &last_breakpoint_h);
-//            if (extend_data->last_breakpoint_v != last_breakpoint_v || extend_data->last_breakpoint_h != last_breakpoint_h) {
-//                //std::cerr << v << "\t" << h << "\t" << last_breakpoint_v << "\t" << last_breakpoint_h << std::endl;
-//                extend_data->last_breakpoint_v = last_breakpoint_v;
-//                extend_data->last_breakpoint_h = last_breakpoint_h;
-//
-//                clean_up_sketches(query_sketches);
-//                clean_up_sketches(target_sketches);
-//
-//                //std::cerr << "extend_data->num_sketches_allocated " <<  extend_data->num_sketches_allocated << std::endl;
-//                //extend_data->num_sketches_allocated = 0;
-//            }
         }
     } else if (h < 0 || v < 0) { // It can be removed using an edit-distance
         // mode as high-level of WF-inception
@@ -429,9 +419,10 @@ void WFlign::wflign_affine_wavefront(
     // accumulate runs of matches in reverse order
     // then trim the cigars of successive mappings
     std::vector<alignment_t*> trace;
+#ifdef WFA_PNG_TSV_TIMING
     const auto start_time = std::chrono::steady_clock::now();
-
-    if (
+#endif
+    if (force_biwfa_alignment ||
             (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
             (mashmap_estimated_identity >= 0.99
              && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)
@@ -492,9 +483,11 @@ void WFlign::wflign_affine_wavefront(
 
         trace.push_back(aln);
 
+#ifdef WFA_PNG_TSV_TIMING
         const long elapsed_time_wflambda_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time).count();
+#endif
 
         // Free old aligner
         delete wf_aligner;
@@ -533,9 +526,11 @@ void WFlign::wflign_affine_wavefront(
                 target_offset,
                 target_length,
                 min_identity,
+#ifdef WFA_PNG_TSV_TIMING
                 elapsed_time_wflambda_ms,
                 1,
                 1,
+#endif
                 mashmap_estimated_identity,
                 wflign_max_len_major,
                 wflign_max_len_minor,
@@ -544,7 +539,7 @@ void WFlign::wflign_affine_wavefront(
                 max_patching_score,
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                 ,
                 prefix_wavefront_plot_in_png,
                 wfplot_max_size,
@@ -556,7 +551,7 @@ void WFlign::wflign_affine_wavefront(
         // Free biWFA aligner
         delete wf_aligner;
     } else {
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         if (emit_tsv) {
             *out_tsv << "# query_name=" << query_name << std::endl;
             *out_tsv << "# query_start=" << query_offset << std::endl;
@@ -657,12 +652,15 @@ void WFlign::wflign_affine_wavefront(
 //        extend_data.last_breakpoint_v = 0;
 //        extend_data.last_breakpoint_h = 0;
 //        extend_data.wfa_affine_penalties = &wfa_affine_penalties;
+#ifdef WFA_PNG_TSV_TIMING
         extend_data.num_alignments = 0;
         extend_data.num_alignments_performed = 0;
+#endif
         extend_data.num_sketches_allocated = 0;
-        // 1 GB / (hash_t*mash_sketch_rate*segment_length*2); 1 GB = 1×8×1024×1024×1024; '*2' to account query/target sequences
-        extend_data.max_num_sketches_in_memory = std::ceil(8589934592.0 / (8.0*sizeof(rkmh::hash_t)*mash_sketch_rate*segment_length_to_use*2) );
-#ifdef WFA_PNG_AND_TSV
+        // 128 MB of memory for sketches
+        extend_data.max_num_sketches_in_memory = 128 * 1024 * 1024
+            / (sizeof(std::vector<rkmh::hash_t>) + mash_sketch_rate * segment_length_to_use * sizeof(rkmh::hash_t));
+#ifdef WFA_PNG_TSV_TIMING
         extend_data.emit_png = !prefix_wavefront_plot_in_png->empty() && wfplot_max_size > 0;
         extend_data.high_order_dp_matrix_mismatch = &high_order_dp_matrix_mismatch;
 #endif
@@ -674,14 +672,19 @@ void WFlign::wflign_affine_wavefront(
 
         // Extract the trace
         if (wflambda_aligner->getAlignmentStatus() == WF_STATUS_ALG_COMPLETED) {
+#ifdef WFA_PNG_TSV_TIMING
             extend_data.num_alignments += wflambda_trace_match(
                     alignments,*wflambda_aligner,trace,pattern_length,text_length);
+#else
+            wflambda_trace_match(alignments,*wflambda_aligner,trace,pattern_length,text_length);
+#endif
         }
 
         // Free
         delete wflambda_aligner;
+        delete wf_aligner;
 
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
         if (extend_data.emit_png) {
             const int wfplot_vmin = 0, wfplot_vmax = pattern_length; //v_max;
             const int wfplot_hmin = 0, wfplot_hmax = text_length; //h_max
@@ -802,11 +805,11 @@ void WFlign::wflign_affine_wavefront(
                 //p.second = nullptr;
             }
         }
-
+#ifdef WFA_PNG_TSV_TIMING
         const long elapsed_time_wflambda_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now()-start_time).count();
-
+#endif
         //#define WFLIGN_DEBUG
     #ifdef WFLIGN_DEBUG
         // get alignment score
@@ -957,9 +960,6 @@ void WFlign::wflign_affine_wavefront(
             }
 
             if (merge_alignments) {
-                // Free old aligner
-                delete wf_aligner;
-
                 // use biWFA for all patching
                 wfa::WFAlignerGapAffine2Pieces* wf_aligner =
                         new wfa::WFAlignerGapAffine2Pieces(
@@ -994,9 +994,11 @@ void WFlign::wflign_affine_wavefront(
                         target_offset,
                         target_length,
                         min_identity,
+#ifdef WFA_PNG_TSV_TIMING
                         elapsed_time_wflambda_ms,
                         extend_data.num_alignments,
                         extend_data.num_alignments_performed,
+#endif
                         mashmap_estimated_identity,
                         wflign_max_len_major,
                         wflign_max_len_minor,
@@ -1005,14 +1007,16 @@ void WFlign::wflign_affine_wavefront(
                         max_patching_score,
                         MIN_WF_LENGTH,
                         wf_max_dist_threshold
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                         ,
                         prefix_wavefront_plot_in_png,
                         wfplot_max_size,
                         emit_patching_tsv,
                         out_patching_tsv
 #endif
-                        );
+                );
+
+                delete wf_aligner;
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
@@ -1033,9 +1037,6 @@ void WFlign::wflign_affine_wavefront(
                 }
             }
         }
-
-        // Free
-        delete wf_aligner;
     }
 }
 

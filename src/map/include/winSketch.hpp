@@ -170,7 +170,7 @@ namespace skch
                         allowed_target_names.insert(name); 
                 }
         }
-
+		
 
         //sequence counter while parsing file
         seqno_t seqCounter = 0;

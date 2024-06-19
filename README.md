@@ -111,72 +111,158 @@ To prevent lags when starting a mapping process, users should apply `samtools in
 The `.fai` indexes are then used to quickly compute the sum of query lengths.
 
 
-## installation
+## Installation
 
-### building from source
+### Static binaries
 
-The build is orchestrated with `cmake`. At least GCC version 9.3.0 is required for compilation. You can check your version via:
+We provide [static builds of wfmash releases](https://github.com/waveygang/wfmash/releases) targeted at the `x86-64-v3` instruction set.
+
+### Bioconda
+
+`wfmash` recipes for Bioconda are available at https://anaconda.org/bioconda/wfmash.
+To install the latest version using `Conda` execute:
 
 ``` bash
-gcc --version
-g++ --version
+conda install -c bioconda wfmash
 ```
 
-It may be necessary to install several system-level libraries to build `wfmash`. On `Ubuntu 20.04`, these can be installed using `apt`:
+## Building from Source
 
-```
-sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev libhts-dev
+The build process for `wfmash` is managed using `CMake`, providing various options to customize the build.
+
+### Prerequisites
+
+Before building `wfmash`, you need the following dependencies installed on your system:
+
+- GCC (version 9.3.0 or higher) or a recent version of Clang/LLVM
+- CMake
+- Zlib
+- GSL
+- HTSlib
+- LibLZMA
+- BZip2
+- Threads
+- OpenMP
+
+On Ubuntu >20.04, these dependencies can be installed with the following command:
+
+```sh
+sudo apt install build-essential cmake zlib1g-dev libgsl-dev libhts-dev liblzma-dev libbz2-dev
 ```
 
-After installing the required dependencies, clone the `wfmash` git repository and build with:
+### Clone the Repository
 
-```
-git clone --recursive https://github.com/ekg/wfmash.git
+Clone the `wfmash` repository:
+
+```sh
+git clone https://github.com/waveygang/wfmash.git
 cd wfmash
-cmake -H. -Bbuild && cmake --build build -- -j 3
 ```
 
-If your system has several versions of the `gcc`/`g++` compilers you might tell `cmake` which one to use with:
+### Build Options
 
-```
-cmake -H. -Bbuild -DCMAKE_C_COMPILER='/usr/bin/gcc-10' -DCMAKE_CXX_COMPILER='/usr/bin/g++-10'
-cmake --build build -- -j 3
+`wfmash` provides several CMake options to customize the build process:
+
+- `BUILD_STATIC` (default: `OFF`): Build a static binary.
+- `BUILD_DEPS` (default: `OFF`): Build external dependencies (htslib, gsl, libdeflate) from source. Use this if system libraries are not available or you want to use specific versions. HTSlib will be built without curl support, which removes a warning for static compilation related to `dlopen`.
+- `BUILD_RETARGETABLE` (default: `OFF`): Build a retargetable binary. When this option is enabled, the binary will not include machine-specific optimizations (`-march=native`).
+
+These can be mixed and matched.
+
+### Building with System Libraries
+
+To build `wfmash` using system libraries:
+
+```sh
+cmake -H. -Bbuild && cmake --build build -- -j 8
 ```
 
-The `wfmash` binary will be in `build/bin`.
+This command will configure and build `wfmash` in the `build` directory, using as many cores as you specify with the `-j` option.
+
+### Building with External Dependencies
+
+If you need to build with external dependencies, use the `BUILD_DEPS` option:
+
+```sh
+cmake -H. -Bbuild -DBUILD_DEPS=ON && cmake --build build -- -j 8
+```
+
+This will download and build the necessary external dependencies.
+
+### Building a Static Binary
+
+To build a static binary, use the `BUILD_STATIC` option:
+
+```sh
+cmake -H. -Bbuild -DBUILD_STATIC=ON && cmake --build build -- -j 16
+```
+
+### Building a Retargetable Binary
+
+To build a retargetable binary, use the `BUILD_RETARGETABLE` option:
+
+```sh
+cmake -H. -Bbuild -DBUILD_RETARGETABLE=ON && cmake --build build -- -j 8
+```
+
+This will configure the build without `-march=native`, allowing the binary to be run on different types of machines.
+
+### Installing
+
+After building, you can install `wfmash` using:
+
+```sh
+cmake --install build
+```
+
+This will install the `wfmash` binary and any required libraries to the default installation directory (typically `/usr/local/bin` for binaries).
+
+#### Tests
+
+To build and run tests:
+
+```sh
+cmake --build build --target test
+```
 
 #### Notes for distribution
 
 If you need to avoid machine-specific optimizations, use the `CMAKE_BUILD_TYPE=Generic` build type:
 
 ```shell
-cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Generic && cmake --build build -- -j 3
+cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Generic && cmake --build build -- -j 8
 ```
 
-#### Notes on dependencies
-
-On `Arch Linux`, the `jemalloc` dependency can be installed with:
-
-```
-sudo pacman -S jemalloc     # arch linux
-```
+The resulting binary should be compatible with all x86 processors.
 
 #### Notes for debugging/plotting
 
-To enable the functionality of producing wavefront plots (in PNG format) and tables (in TSV format), add the `-DWFA_PNG_AND_TSV=ON` option:
+To enable the functionality of emitting wavefront plots (in PNG format), tables (in TSV format), and timing information, add the `-DWFA_PNG_TSV_TIMING=ON` option:
 
 ```shell
-cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Release -DWFA_PNG_AND_TSV=ON && cmake --build build -- -j 3
+cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Release -DWFA_PNG_TSV_TIMING=ON && cmake --build build -- -j 3
 ```
 
 Note that this may make the tool a little bit slower.
 
 ### nix
 
-If you have `nix`, build and installation in your profile are as simple as:
+If you have `nix`, you can install directly from the repository via:
 
 ```shell
-nix-build && nix-env -i ./result
+nix profile install github:waveygang/wfmash
+```
+
+For local development, from the wfmash repo directory:
+
+```shell
+nix build .#wfmash
+```
+
+And you can install into your profile from the source repo with:
+
+```shell
+nix profile install .#wfmash
 ```
 
 ### guix
@@ -192,7 +278,7 @@ guix build -f guix.scm
 Nix is also able to build an Docker image, which can then be loaded by Docker and converted to a Singularity image.
 
 ```
-nix-build docker.nix
+nix build .#dockerImage
 docker load < result
 singularity build wfmash.sif docker-daemon://wfmash-docker:latest
 ```
@@ -204,16 +290,6 @@ singularity run wfmash.sif $ARGS
 ```
 
 Where `$ARGS` are your typical command line arguments to `wfmash`.
-
-
-### Bioconda
-
-`wfmash` recipes for Bioconda are available at https://anaconda.org/bioconda/wfmash.
-To install the latest version using `Conda` execute:
-
-``` bash
-conda install -c bioconda wfmash
-```
 
 ### Guix
 
@@ -320,6 +396,8 @@ This emits a `results/wfmash` folder which stores all the `wfmash` output.
 
 
 ## <a name=“publications”></a>publications
+
+- **Santiago Marco-Sola, Jordan M. Eizenga, Andrea Guarracino, Benedict Paten, Erik Garrison, and Miquel Moreto**. ["Optimal gap-affine alignment in O (s) space"](https://doi.org/10.1093/bioinformatics/btad074). *Bioinformatics*, 2023.
 
 - **Santiago Marco-Sola, Juan Carlos Moure, Miquel Moreto, and Antonio Espinosa** ["Fast gap-affine pairwise alignment using the wavefront algorithm"](https://doi.org/10.1093/bioinformatics/btaa777) *Bioinformatics*, 2020.
 

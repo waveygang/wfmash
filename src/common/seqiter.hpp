@@ -106,4 +106,57 @@ void for_each_seq_in_file(
     }
 }
 
+void for_each_seq_in_file(
+    faidx_t* fai,
+    const std::vector<std::string>& seq_names,
+    const std::function<void(const std::string&, const std::string&)>& func) {
+    for (const auto& seq_name : seq_names) {
+        int len;
+        char* seq = fai_fetch(fai, seq_name.c_str(), &len);
+        if (seq != nullptr) {
+            func(seq_name, std::string(seq));
+            free(seq);
+        }
+    }
+}
+	
+void for_each_seq_in_file_filtered(
+    const std::string& filename,
+    const std::vector<std::string>& query_prefix,
+    const std::unordered_set<std::string>& query_list,
+    const std::function<void(const std::string&, const std::string&)>& func) {
+    faidx_t* fai = fai_load(filename.c_str());
+    if (fai == nullptr) {
+        std::cerr << "Error: Failed to load FASTA index for file " << filename << std::endl;
+        return;
+    }
+
+    std::vector<std::string> query_seq_names;
+    int num_seqs = faidx_nseq(fai);
+    for (int i = 0; i < num_seqs; i++) {
+        const char* seq_name = faidx_iseq(fai, i);
+		bool prefix_skip = true;
+		for (const auto& prefix : query_prefix) {
+			if (strncmp(seq_name, prefix.c_str(), prefix.size()) == 0) {
+				prefix_skip = false;
+				break;
+			}
+		}
+		if (!query_prefix.empty() && prefix_skip) {
+            continue;
+        }
+        if (!query_list.empty() && query_list.count(seq_name) == 0) {
+            continue;
+        }
+        query_seq_names.push_back(seq_name);
+    }
+
+    for_each_seq_in_file(
+        fai,
+        query_seq_names,
+        func);
+
+    fai_destroy(fai);
+}
+
 } // namespace seqiter

@@ -1,7 +1,6 @@
-;; To use this file to build a version of wfmash using git HEAD:
+;; To use this file to build a static version of wfmash using git HEAD:
 ;;
-;;  rm -rf build/*
-;;  guix build -f guix.scm
+;;   guix build -f guix.scm
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
@@ -22,29 +21,42 @@
 
 (use-modules
  ((guix licenses) #:prefix license:)
- (guix gexp)
- (guix packages)
- (guix git-download)
- (guix build-system cmake)
-                                        ; (guix gexp)
- (guix utils)
- (gnu packages algebra)
- (gnu packages base)
- (gnu packages bioinformatics)
- (gnu packages build-tools)
- (gnu packages compression)
-                                        ; (gnu packages curl)
- (gnu packages gcc)
- (gnu packages jemalloc)
- (gnu packages llvm)
- (gnu packages maths)
- (gnu packages multiprecision)
- (gnu packages pkg-config)
- (gnu packages python)
- (gnu packages version-control)
- (srfi srfi-1)
- (ice-9 popen)
- (ice-9 rdelim))
+  (guix gexp)
+  (guix packages)
+  (guix git-download)
+  (guix build-system cmake)
+  ; (guix gexp)
+  (guix utils)
+  (gnu packages algebra)
+  (gnu packages base)
+  (gnu packages bioinformatics)
+  (gnu packages build-tools)
+  (gnu packages compression)
+  ; (gnu packages curl)
+  (gnu packages gcc)
+  (gnu packages jemalloc)
+  (gnu packages llvm)
+  (gnu packages maths)
+  (gnu packages multiprecision)
+  (gnu packages pkg-config)
+  (gnu packages python)
+  (gnu packages version-control)
+  (srfi srfi-1)
+  (ice-9 popen)
+  (ice-9 rdelim))
+
+;; A minimal version of htslib that does not depend on curl and openssl. This
+;; reduces the number of higher order dependencies in static linking.
+(define-public htslib-static
+  (package
+    (inherit htslib)
+    (name "htslib-static")
+    (arguments
+     (substitute-keyword-arguments (package-arguments htslib)
+       ((#:configure-flags flags ''())
+        ''())))
+    (inputs
+     (list bzip2 xz))))
 
 (define %source-dir (dirname (current-filename)))
 
@@ -62,20 +74,20 @@
        ;; ("clang" ,clang)      ; add this to test clang builds
        ;; ("lld" ,lld)          ; add this to test clang builds
        ("gcc" ,gcc-12)
-       ("gsl" ,gsl)
+       ("gsl-static" ,gsl-static)
        ("gmp" ,gmp)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
        ("jemalloc" ,jemalloc)
-       ("htslib" ,htslib)
+       ("htslib" ,htslib-static)
        ("git" ,git)
        ; ("bc" ,bc)               ; for tests
        ("coreutils" ,coreutils) ; for echo and env in tests
        ; ("curl" ,curl)
        ; ("parallel" ,parallel) ; for wfmash-parallel
-       ("bzip2" ,bzip2)
-       ("xz" ,xz)
-       ("zlib" ,zlib)))
+       ("bzip2-static" ,bzip2 "static")    ; libz2 part of htslib for static builds
+       ("xz-static" ,xz "static")     ; for static builds
+       ("zlib-static" ,zlib "static")))
      (synopsis "wfmash")
      (description
       "wfmash.")

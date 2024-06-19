@@ -34,12 +34,12 @@ namespace wflign {
                 const char* query,
                 std::vector<rkmh::hash_t>*& query_sketch,
                 const uint64_t& query_length,
-                const int& j,
+                const int64_t& j,
                 const std::string& target_name,
                 const char* target,
                 std::vector<rkmh::hash_t>*& target_sketch,
                 const uint64_t& target_length,
-                const int& i,
+                const int64_t& i,
                 const uint16_t& segment_length_q,
                 const uint16_t& segment_length_t,
                 const uint16_t& step_size,
@@ -77,9 +77,11 @@ namespace wflign {
                 const uint64_t& target_offset,
                 const uint64_t& target_length,
                 const float& min_identity,
+#ifdef WFA_PNG_TSV_TIMING
                 const long& elapsed_time_wflambda_ms,
                 const uint64_t& num_alignments,
                 const uint64_t& num_alignments_performed,
+#endif
                 const float& mashmap_estimated_identity,
                 const uint64_t& wflign_max_len_major,
                 const uint64_t& wflign_max_len_minor,
@@ -88,7 +90,7 @@ namespace wflign {
                 const int& max_patching_score,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
-#ifdef WFA_PNG_AND_TSV
+#ifdef WFA_PNG_TSV_TIMING
                 const std::string* prefix_wavefront_plot_in_png,
                 const uint64_t& wfplot_max_size,
                 const bool& emit_patching_tsv,

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 project(wflign VERSION 0.0.1)
 
 include(GNUInstallDirs)
@@ -20,9 +20,9 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-    #set(EXTRA_FLAGS "-Ofast -march=native -flto -fno-fat-lto-objects")
-    set(EXTRA_FLAGS "-Ofast -march=native")
-    set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
+    #set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -flto -fno-fat-lto-objects")
+    set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -g")
+    #set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
@@ -36,8 +36,8 @@ else()
 endif ()
 
 if(WFA_PNG_AND_TSV)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWFA_PNG_AND_TSV")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWFA_PNG_AND_TSV")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWFA_PNG_TSV_TIMING")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWFA_PNG_TSV_TIMING")
 endif ()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
