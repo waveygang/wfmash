@@ -451,16 +451,16 @@ namespace skch
           if (!this->minmerPosLookupIndex.empty()) {
               //1. Compute histogram
 
-              for (auto& [kmerHash, freq] : this->hashFreq)
-                  this->minmerFreqHistogram[freq]++;
+              for (auto& e : this->minmerPosLookupIndex)
+                  this->minmerFreqHistogram[e.second.size()]++;
 
-              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmer intervals = "
+              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmer interval points = "
                         << *this->minmerFreqHistogram.begin() << " ... " << *this->minmerFreqHistogram.rbegin()
                         << std::endl;
 
               //2. Compute frequency threshold to ignore most frequent minmers
 
-              int64_t totalUniqueMinmers = this->hashFreq.size();
+              int64_t totalUniqueMinmers = this->minmerPosLookupIndex.size();
               int64_t minmerToIgnore = totalUniqueMinmers * param.kmer_pct_threshold / 100;
 
               int64_t sum = 0;
@@ -481,7 +481,7 @@ namespace skch
 
               if (this->freqThreshold != std::numeric_limits<uint64_t>::max())
                   std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, ignore minmers with more than >= " << this->freqThreshold << " intervals during mapping."
+                            << "\%, ignore minmers with more than >= " << this->freqThreshold << " interval points during mapping."
                             << std::endl;
               else
                   std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
@@ -526,9 +526,9 @@ namespace skch
 
       void computeFreqSeedSet()
       {
-        for(auto& [kmerHash, frequency] : this->hashFreq) {
-          if (frequency >= this->freqThreshold) {
-            this->frequentSeeds.insert(kmerHash);
+        for(auto &e : this->minmerPosLookupIndex) {
+          if (e.second.size() >= this->freqThreshold) {
+            this->frequentSeeds.insert(e.first);
           }
         }
       }
@@ -537,13 +537,9 @@ namespace skch
       {
         this->minmerIndex.erase(
           std::remove_if(minmerIndex.begin(), minmerIndex.end(), [&] 
-            (auto& mi) {return isFreqSeed(mi.hash);}
+            (auto& mi) {return this->frequentSeeds.find(mi.hash) != this->frequentSeeds.end();}
           ), minmerIndex.end()
         );
-        for (hash_t kmer : this->frequentSeeds)
-        {
-          this->minmerPosLookupIndex.erase(kmer);
-        }
       }
 
       bool isFreqSeed(hash_t h) const
