@@ -347,6 +347,18 @@ namespace skch
 
 
       /**
+       * @brief Write parameters 
+       */
+      void writeParameters(std::ofstream& outStream)
+      {
+        // Write segment length, sketch size, and kmer size
+        outStream.write((char*) &param.segLength, sizeof(param.segLength));
+        outStream.write((char*) &param.sketchSize, sizeof(param.sketchSize));
+        outStream.write((char*) &param.kmerSize, sizeof(param.kmerSize));
+      }
+
+
+      /**
        * @brief  Write all index data structures to disk
        */
       void writeIndex() 
@@ -355,6 +367,7 @@ namespace skch
         std::ofstream outStream;
         outStream.open(freqListFilename, std::ios::binary);
 
+        writeParameters(outStream);
         writeSketchBinary(outStream);
         writePosListBinary(outStream);
         writeFreqKmersBinary(outStream);
@@ -429,6 +442,34 @@ namespace skch
 
 
       /**
+       * @brief  Read parameters and compare to CLI params
+       */
+      void readParameters(std::ifstream& inStream)
+      {
+        // Read segment length, sketch size, and kmer size
+        decltype(param.segLength) index_segLength;
+        decltype(param.sketchSize) index_sketchSize;
+        decltype(param.kmerSize) index_kmerSize;
+
+        inStream.read((char*) &index_segLength, sizeof(index_segLength));
+        inStream.read((char*) &index_sketchSize, sizeof(index_sketchSize));
+        inStream.read((char*) &index_kmerSize, sizeof(index_kmerSize));
+
+        if (param.segLength != index_segLength 
+            || param.sketchSize != index_sketchSize
+            || param.kmerSize != index_kmerSize)
+        {
+          std::cerr << "[mashmap::skch::Sketch::build] ERROR: Parameters of indexed sketch differ from CLI parameters" << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] ERROR: Index --> segLength=" << index_segLength
+            << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] ERROR: CLI   --> segLength=" << param.segLength
+            << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
+          exit(1);
+        }
+      }
+
+
+      /**
        * @brief  Read all index data structures from file
        */
       void readIndex() 
@@ -436,6 +477,7 @@ namespace skch
         fs::path indexFilename = fs::path(param.indexFilename);
         std::ifstream inStream;
         inStream.open(indexFilename, std::ios::binary);
+        readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
         readFreqKmersBinary(inStream);
