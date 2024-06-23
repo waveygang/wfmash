@@ -329,7 +329,9 @@ void WFlign::wflign_affine_wavefront(
         return;
     }
 
-    const int minhash_kmer_size = std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
+    // Check if mashmap_estimated_identity == 1 to avoid division by zero, leading to a minhash_kmer_size of 8.
+    // Such low value was leading to confusion in HORs alignments in the human centromeres (high runtime and memory usage, and wrong alignments)
+    const int minhash_kmer_size = mashmap_estimated_identity == 1 ? 17 : std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
 
     // Set penalties for wfa affine
     wflign_penalties_t wfa_affine_penalties;
