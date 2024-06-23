@@ -143,7 +143,7 @@ namespace skch
               this->build(false);
               this->readIndex();
             }
-            std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << minmerPosLookupIndex.size() << std::endl;
+            std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
             std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
           }
 
