@@ -482,7 +482,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           }
 
           // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix there is just one alignment for the query)
-          const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(rec->currentRecord.rankMapping) : "";
+          //const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(rec->currentRecord.rankMapping) : "";
 
           wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
               param.wflambda_segment_length,
@@ -523,7 +523,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               !param.sam_format,
               param.no_seq_in_sam);
           wflign->wflign_affine_wavefront(
-              rec->currentRecord.qId + query_name_suffix,
+              rec->currentRecord.qId,// + query_name_suffix,
               queryRegionStrand,
               rec->queryTotalLength,
               rec->queryStartPos,
