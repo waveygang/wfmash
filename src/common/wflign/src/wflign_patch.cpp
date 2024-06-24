@@ -1715,24 +1715,12 @@ query_start : query_end)
                     query_offset +
                     (query_is_rev ? query_length - query_start : query_end);
 
-            if (query_is_rev) {
-                if (query_length > query_end_pos) {
-                    out << (query_length - query_end_pos) << "H";
-                }
-            } else {
-                if (query_start_pos > 0) {
-                    out << query_start_pos << "H";
-                }
+            if (query_start_pos > 0) {
+                out << query_start_pos << "H";
             }
             out << cigarv;
-            if (query_is_rev) {
-                if (query_start_pos > 0) {
-                    out << query_start_pos << "H";
-                }
-            } else {
-                if (query_length > query_end_pos) {
-                    out << (query_length - query_end_pos) << "H";
-                }
+            if (query_total_length > query_end_pos) {
+                out << (query_total_length - query_end_pos) << "H";
             }
 
             out << "\t"
