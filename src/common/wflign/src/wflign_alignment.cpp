@@ -11,18 +11,82 @@
 /*
  * Wflign Alignment
  */
-alignment_t::alignment_t() {
-    j = 0;
-    i = 0;
-    query_length = 0;
-    target_length = 0;
-    ok = false;
-    keep = false;
-    edit_cigar = {NULL, 0, 0};
+
+// Default constructor
+alignment_t::alignment_t()
+    : j(0), i(0), query_length(0), target_length(0), ok(false), keep(false) {
+    edit_cigar = {nullptr, 0, 0};
 }
+
+// Destructor
 alignment_t::~alignment_t() {
-    free(edit_cigar.cigar_ops);
+        free(edit_cigar.cigar_ops);
+    }
+
+// Copy constructor
+alignment_t::alignment_t(const alignment_t& other)
+    : j(other.j), i(other.i), query_length(other.query_length),
+      target_length(other.target_length), ok(other.ok), keep(other.keep) {
+    if (other.edit_cigar.cigar_ops) {
+        edit_cigar.cigar_ops = (char*)malloc((other.edit_cigar.end_offset - other.edit_cigar.begin_offset) * sizeof(char));
+        memcpy(edit_cigar.cigar_ops, other.edit_cigar.cigar_ops + other.edit_cigar.begin_offset, 
+               (other.edit_cigar.end_offset - other.edit_cigar.begin_offset) * sizeof(char));
+    } else {
+        edit_cigar.cigar_ops = nullptr;
+    }
+    edit_cigar.begin_offset = 0;
+    edit_cigar.end_offset = other.edit_cigar.end_offset - other.edit_cigar.begin_offset;
 }
+
+// Move constructor
+alignment_t::alignment_t(alignment_t&& other) noexcept
+    : j(other.j), i(other.i), query_length(other.query_length),
+      target_length(other.target_length), ok(other.ok), keep(other.keep),
+      edit_cigar(other.edit_cigar) {
+    other.edit_cigar = {nullptr, 0, 0};
+}
+
+// Copy assignment operator
+alignment_t& alignment_t::operator=(const alignment_t& other) {
+    if (this != &other) {
+        j = other.j;
+        i = other.i;
+        query_length = other.query_length;
+        target_length = other.target_length;
+        ok = other.ok;
+        keep = other.keep;
+
+        free(edit_cigar.cigar_ops);
+        if (other.edit_cigar.cigar_ops) {
+            edit_cigar.cigar_ops = (char*)malloc((other.edit_cigar.end_offset - other.edit_cigar.begin_offset) * sizeof(char));
+            memcpy(edit_cigar.cigar_ops, other.edit_cigar.cigar_ops + other.edit_cigar.begin_offset, 
+                   (other.edit_cigar.end_offset - other.edit_cigar.begin_offset) * sizeof(char));
+        } else {
+            edit_cigar.cigar_ops = nullptr;
+        }
+        edit_cigar.begin_offset = 0;
+        edit_cigar.end_offset = other.edit_cigar.end_offset - other.edit_cigar.begin_offset;
+    }
+    return *this;
+}
+
+// Move assignment operator
+alignment_t& alignment_t::operator=(alignment_t&& other) noexcept {
+    if (this != &other) {
+        j = other.j;
+        i = other.i;
+        query_length = other.query_length;
+        target_length = other.target_length;
+        ok = other.ok;
+        keep = other.keep;
+
+        free(edit_cigar.cigar_ops);
+        edit_cigar = other.edit_cigar;
+        other.edit_cigar = {nullptr, 0, 0};
+    }
+    return *this;
+}
+
 //void alignment_t::display(void) {
 //    std::cerr << j << " " << i << " " << query_length << " "
 //              << target_length << " " << ok << std::endl;

@@ -35,21 +35,27 @@ public:
     int i;
     uint16_t query_length;
     uint16_t target_length;
-    bool ok = false;
-    bool keep = false;
+    bool ok;
+    bool keep;
     wflign_cigar_t edit_cigar;
-    // Setup
+    // Default constructor
     alignment_t();
+    // Destructor
     ~alignment_t();
-    // Utils
-//    bool validate(
-//            const char* query,
-//            const char* target);
+    // Copy constructor
+    alignment_t(const alignment_t& other);
+    // Move constructor
+    alignment_t(alignment_t&& other) noexcept;
+    // Copy assignment operator
+    alignment_t& operator=(const alignment_t& other);
+    // Move assignment operator
+    alignment_t& operator=(alignment_t&& other) noexcept;
+    // Trim functions
     void trim_front(int query_trim);
     void trim_back(int query_trim);
-//    // Display
-//    void display(void);
 };
+
+
 /*
  * Wflign Trace-Pos: Links a position in a traceback matrix to its edit
  */
