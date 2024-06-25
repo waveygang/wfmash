@@ -216,7 +216,7 @@ void do_wfa_patch_alignment(
     const int status = wf_aligner.alignEnd2End(target + i, target_length, query + j, query_length);
     aln.ok = (status == WF_STATUS_ALG_COMPLETED);
 
-    std::cerr << "score is " << wf_aligner.getAlignmentScore() << std::endl;
+    //std::cerr << "score is " << wf_aligner.getAlignmentScore() << std::endl;
 
     if (aln.ok) {
 #ifdef VALIDATE_WFA_WFLIGN
@@ -243,7 +243,7 @@ void do_wfa_patch_alignment(
         rev_aln.ok = (wf_aligner.getAlignmentScore() > -2147483648 && rev_status == WF_STATUS_ALG_COMPLETED);
 
         if (rev_aln.ok) {
-            std::cerr << "reverse complement alignment worked!" << std::endl;
+            //std::cerr << "reverse complement alignment worked!" << std::endl;
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
                                 target_length, 0, 0)) {
@@ -1824,6 +1824,31 @@ query_start : query_end)
 
     // always clean up
     free(cigarv);
+
+    // write how many reverse complement alignments were found
+    //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
+    for (auto& rev_patch_aln : rev_patch_alns) {
+        bool rev_query_is_rev = !query_is_rev;  // Flip the orientation
+        write_alignment(
+            out,
+            rev_patch_aln,
+            query_name,
+            query_total_length,
+            query_offset,
+            query_length,
+            rev_query_is_rev,  // Use the flipped orientation
+            target_name,
+            target_total_length,
+            target_offset,
+            target_length,
+            min_identity,
+            mashmap_estimated_identity,
+            false  // Don't add an endline after each alignment
+            );
+        // write tag indicating that this is a reverse complement alignment
+        out << "\t" << "rc:Z:true" << "\n";
+    }
+    out << std::flush;
 }
 
 void write_alignment(
