@@ -139,4 +139,6 @@ void wflign_edit_cigar_copy(
         wfa::WFAligner& wf_aligner,
         wflign_cigar_t* const cigar_dst);
 
+int calculate_alignment_score(const wflign_cigar_t& cigar, const wflign_penalties_t& penalties);
+
 #endif /* WFLIGN_ALIGNMENT_HPP_ */

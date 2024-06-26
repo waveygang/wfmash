@@ -645,6 +645,51 @@ void wflign_edit_cigar_copy(
     cigar_dst->end_offset = cigar_length;
     memcpy(cigar_dst->cigar_ops,cigar_ops,cigar_length);
 }
+
+int calculate_alignment_score(const wflign_cigar_t& cigar, const wflign_penalties_t& penalties) {
+    int score = 0;
+    char prev_op = '\0';
+    int gap_length = 0;
+
+    auto process_gap = [&](char op, int length) {
+        switch (op) {
+            case 'M':
+                // Match is free (best case)
+                break;
+            case 'X':
+                score += length * penalties.mismatch;
+                break;
+            case 'I':
+            case 'D':
+                score += penalties.gap_opening1 + penalties.gap_extension1;
+                if (length > 1) {
+                    score += std::min(
+                        penalties.gap_extension1 * (length - 1),
+                        penalties.gap_opening2 + penalties.gap_extension2 * (length - 1)
+                    );
+                }
+                break;
+        }
+    };
+
+    for (int i = cigar.begin_offset; i <= cigar.end_offset; ++i) {
+        char op = (i < cigar.end_offset) ? cigar.cigar_ops[i] : '\0';  // '\0' to process last gap
+        
+        if (op != prev_op || i == cigar.end_offset) {
+            if (gap_length > 0) {
+                process_gap(prev_op, gap_length);
+            }
+            gap_length = 1;
+        } else {
+            ++gap_length;
+        }
+        
+        prev_op = op;
+    }
+
+    return score;
+}
+
 /*
 // No more necessary
 bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
