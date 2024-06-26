@@ -52,8 +52,8 @@ struct Parameters
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
-    stdfs::path saveIndexFilename;                    //output file name of index
-    stdfs::path loadIndexFilename;                    //input file name of index
+    stdfs::path indexFilename;                        //output file name of index
+    bool overwrite_index;                             //overwrite index if it exists
     bool split;                                       //Split read mapping (done if this is true)
     bool lower_triangular;                            // set to true if we should filter out half of the mappings
     bool skip_self;                                   //skip self mappings

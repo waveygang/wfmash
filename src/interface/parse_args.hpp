@@ -64,7 +64,7 @@ void parse_args(int argc,
     args::Group mandatory_opts(parser, "[ MANDATORY OPTIONS ]");
     args::Positional<std::string> target_sequence_file(mandatory_opts, "target", "alignment target/reference sequence file");
 
-	args::Group io_opts(parser, "[ Files IO Options ]");
+    args::Group io_opts(parser, "[ Files IO Options ]");
     args::Positional<std::string> query_sequence_file(io_opts, "query", "query sequence file (optional)");
 
     args::Group mapping_opts(parser, "[ Mapping Options ]");
@@ -75,14 +75,14 @@ void parse_args(int argc,
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
-	args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
+    args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
-	args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
-	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
-	args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "use only queries whose names start with these prefixes (comma delimited)", {'Q', "query-prefix"});
-	args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
+    args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
+    args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
+    args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "use only queries whose names start with these prefixes (comma delimited)", {'Q', "query-prefix"});
+    args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 4*segment_length, up to 20k]", {'c', "chain-gap"});
@@ -99,6 +99,8 @@ void parse_args(int argc,
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
     args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
+    args::ValueFlag<std::string> mashmap_index(mapping_opts, "FILE", "Use MashMap index if FILE exists, else create one and save as FILE", {'4', "mm-index"});
+    args::Flag overwrite_mashmap_index(mapping_opts, "", "Confidence value for the hypergeometric filtering [default: 99.9%]", {'5', "overwrite-mm-index"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -603,6 +605,15 @@ void parse_args(int argc,
     //} else {
         //map_parameters.world_minimizers = true;
     //}
+
+    if (mashmap_index)
+    {
+      map_parameters.indexFilename = args::get(mashmap_index);
+    } else {
+      map_parameters.indexFilename = "";
+    }
+
+    map_parameters.overwrite_index = overwrite_mashmap_index;
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
