@@ -784,8 +784,9 @@ void write_merged_alignment(
                 // how long was our last gap?
                 // if it's long enough, patch it
                 int32_t size_region_to_repatch = 0;
+                // unused!
 
-                do {
+                {
                     got_alignment = false;
 
                     if ((size_region_to_repatch > 0 ||
@@ -984,6 +985,7 @@ void write_merged_alignment(
                                         wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
                                         chain_gap, max_patching_score);
                                 if (rev_patch_aln.ok) {
+                                    // we got a good reverse alignment
                                     rev_patch_alns.push_back(rev_patch_aln);
                                 }
                                 if (patch_aln.ok) {
@@ -995,14 +997,13 @@ void write_merged_alignment(
                                     const int end_idx =
                                             patch_aln.edit_cigar.end_offset;
                                     for (int i = start_idx; i < end_idx; i++) {
-                                        // std::cerr <<
-                                        // patch_aln.edit_cigar.cigar_ops[i];
                                         patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
                                     }
                                     // std::cerr << "\n";
 
                                     // Check if there are too many indels in the
                                     // patch
+                                    /*
                                     uint32_t size_indel = 0;
                                     for (int i = end_idx - 1; i >= start_idx;
                                          --i) {
@@ -1026,12 +1027,14 @@ void write_merged_alignment(
                                             size_indel = 0;
                                         }
                                     }
+                                    */
                                     // std::cerr << std::endl;
 
                                     // Not too big, to avoid repatching
                                     // structural variants boundaries
                                     //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
                                     //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
+                                    /*
                                     if (size_indel > 7 && size_indel <= 4096 &&
                                         size_region_to_repatch <
                                                 (end_idx - start_idx)) {
@@ -1039,6 +1042,7 @@ void write_merged_alignment(
                                     } else {
                                         size_region_to_repatch = 0;
                                     }
+                                    */
                                 }
 #ifdef WFA_PNG_TSV_TIMING
                                 if (emit_patching_tsv) {
@@ -1070,7 +1074,7 @@ void write_merged_alignment(
 
                     query_delta = 0;
                     target_delta = 0;
-                } while (size_region_to_repatch > 0);
+                }
             }
 
             // Tail patching
@@ -1889,8 +1893,8 @@ query_start : query_end)
             target_length,
             min_identity,
             mashmap_estimated_identity,
-            false  // Don't add an endline after each alignment
-            );
+            false,  // Don't add an endline after each alignment
+            true);  // This is a reverse complement alignment
         // write tag indicating that this is a reverse complement alignment
         out << "\t" << "rc:Z:true" << "\n";
     }
@@ -1911,7 +1915,8 @@ void write_alignment(
         const uint64_t& target_length, // unused
         const float& min_identity,
         const float& mashmap_estimated_identity,
-        const bool& with_endline) {
+        const bool& with_endline,
+        const bool& is_rev_patch) {
 
     if (aln.ok) {
         uint64_t matches = 0;
@@ -1939,9 +1944,9 @@ void write_alignment(
 
         if (gap_compressed_identity >= min_identity) {
             uint64_t q_start;
-            if (query_is_rev) {
+            if (query_is_rev && !is_rev_patch) {
                 q_start =
-                        query_offset + (query_length - (aln.j + qAlignedLength));
+                    query_offset + (query_length - (aln.j + qAlignedLength));
             } else {
                 q_start = query_offset + aln.j;
             }

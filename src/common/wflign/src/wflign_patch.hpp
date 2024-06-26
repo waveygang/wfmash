@@ -112,7 +112,8 @@ namespace wflign {
                 const uint64_t& target_length, // unused
                 const float& min_identity,
                 const float& mashmap_estimated_identity,
-                const bool& with_endline = true);
+                const bool& with_endline = true,
+                const bool& is_rev_patch = false);
         double float2phred(const double& prob);
         void sort_indels(std::vector<char>& v);
 
