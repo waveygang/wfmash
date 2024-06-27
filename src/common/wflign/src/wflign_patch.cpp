@@ -472,11 +472,13 @@ void write_merged_alignment(
                 ,&emit_patching_tsv,
                 &out_patching_tsv
 #endif
-        ](std::vector<char> &unpatched,
-                                   std::vector<char> &patched,
-                                   const uint16_t &min_wfa_head_tail_patch_length,
-                                   const uint16_t &min_wfa_patch_length,
-                                   const uint16_t &max_dist_to_look_at) {
+            ](std::vector<char> &unpatched,
+              std::vector<char> &patched,
+              const uint16_t &min_wfa_head_tail_patch_length,
+              const uint16_t &min_wfa_patch_length,
+              const uint16_t &max_dist_to_look_at,
+              bool save_rev_patch_alns) {
+
             auto q = unpatched.begin();
 
             uint64_t query_pos = query_start;
@@ -984,7 +986,7 @@ void write_merged_alignment(
                                         target - target_pointer_shift, target_pos, target_delta,
                                         wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
                                         chain_gap, max_patching_score);
-                                if (rev_patch_aln.ok) {
+                                if (rev_patch_aln.ok && save_rev_patch_alns) {
                                     // we got a good reverse alignment
                                     rev_patch_alns.push_back(rev_patch_aln);
                                 }
@@ -1414,7 +1416,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev, 4096, 32, 512); // In the 1st round, we patch more aggressively
+            patching(erodev, pre_tracev, 4096, 32, 512, false); // In the 1st round, we patch more aggressively and don't save inversions
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -1444,7 +1446,7 @@ void write_merged_alignment(
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev, 256, 8, 128); // In the 2nd round, we patch less aggressively
+        patching(pre_tracev, tracev, 256, 8, 128, true); // In the 2nd round, we patch less aggressively but we save inversions
     }
 
     // normalize the indels
