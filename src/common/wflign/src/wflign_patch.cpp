@@ -296,6 +296,7 @@ void do_wfa_patch_alignment(
     if (rev_aln.ok && rev_score < fwd_score) {
         rev_aln.ok = true;
         aln.ok = false;
+#ifdef WFLIGN_DEBUG
         std::cerr << "got better score with reverse complement alignment" << std::endl
               << " query_length " << query_length
               << " target_length " << target_length
@@ -308,6 +309,7 @@ void do_wfa_patch_alignment(
               << "query " << std::string(query + j, query_length)
               << " target " << std::string(target + i, target_length)
               << std::endl;
+#endif
     } else {
         rev_aln.ok = false;
     }
