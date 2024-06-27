@@ -57,7 +57,8 @@ namespace wflign {
             alignment_t& aln,
             alignment_t& rev_aln,
             const int64_t& chain_gap,
-            const int& max_patching_score);
+            const int& max_patching_score,
+            const uint64_t& min_inversion_length);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
@@ -89,6 +90,7 @@ namespace wflign {
                 const int& erode_k,
                 const int64_t& chain_gap,
                 const int& max_patching_score,
+                const uint64_t& min_inversion_length,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
 #ifdef WFA_PNG_TSV_TIMING

@@ -64,6 +64,7 @@ namespace wflign {
             int erode_k;
             int64_t chain_gap;
             int max_patching_score;
+            uint64_t min_inversion_length;
             // Query
             const std::string* query_name;
             char* query;

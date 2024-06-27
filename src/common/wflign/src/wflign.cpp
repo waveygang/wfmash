@@ -91,6 +91,7 @@ WFlign::WFlign(
     this->erode_k = erode_k;
     this->chain_gap = chain_gap;
     this->max_patching_score = max_patching_score;
+    this->min_inversion_length = 23;
     // Query
     this->query_name = nullptr;
     this->query = nullptr;
@@ -539,6 +540,7 @@ void WFlign::wflign_affine_wavefront(
                 erode_k,
                 chain_gap,
                 max_patching_score,
+                min_inversion_length,
                 MIN_WF_LENGTH,
                 wf_max_dist_threshold
 #ifdef WFA_PNG_TSV_TIMING
@@ -1007,6 +1009,7 @@ void WFlign::wflign_affine_wavefront(
                         erode_k,
                         chain_gap,
                         max_patching_score,
+                        min_inversion_length,
                         MIN_WF_LENGTH,
                         wf_max_dist_threshold
 #ifdef WFA_PNG_TSV_TIMING

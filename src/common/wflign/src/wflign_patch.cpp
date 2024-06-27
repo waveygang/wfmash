@@ -203,7 +203,8 @@ void do_wfa_patch_alignment(
         alignment_t& aln,
         alignment_t& rev_aln,
         const int64_t& chain_gap,
-        const int& max_patching_score) {
+        const int& max_patching_score,
+        const uint64_t& min_inversion_length) {
 
     const int max_score =
         max_patching_score ? max_patching_score :
@@ -255,42 +256,42 @@ void do_wfa_patch_alignment(
         fwd_score = calculate_alignment_score(aln.edit_cigar, convex_penalties);
         //std::cerr << "forward score is " << fwd_score << std::endl;
     }
-    // if the score is -int32 max, we can try to reverse complement the query
-    //     auto fwd_score = wf_aligner.getAlignmentScore(); // this is broken
-    // compute with
-    //int calculate_alignment_score(const char* cigar, const wflign_penalties_t& penalties) {
-    //if (wf_aligner.getAlignmentScore() == -2147483648) {
-    // Try reverse complement alignment
-    std::string rev_comp_query = reverse_complement(std::string(query + j, query_length));
-    const int rev_status = wf_aligner.alignEnd2End(target + i, target_length, rev_comp_query.c_str(), query_length);
 
-    //auto rev_score = wf_aligner.getAlignmentScore();
-    //rev_aln.ok = (rev_score > fwd_score && rev_status == WF_STATUS_ALG_COMPLETED);
-    rev_aln.ok = (rev_status == WF_STATUS_ALG_COMPLETED);
+    if (query_length >= min_inversion_length && target_length >= min_inversion_length) {
+        // Try reverse complement alignment
+        std::string rev_comp_query = reverse_complement(std::string(query + j, query_length));
+        const int rev_status = wf_aligner.alignEnd2End(target + i, target_length, rev_comp_query.c_str(), query_length);
 
-    if (rev_aln.ok) {
-        //std::cerr << "reverse complement alignment worked!" << std::endl;
+        //auto rev_score = wf_aligner.getAlignmentScore();
+        //rev_aln.ok = (rev_score > fwd_score && rev_status == WF_STATUS_ALG_COMPLETED);
+        rev_aln.ok = (rev_status == WF_STATUS_ALG_COMPLETED);
+
+        if (rev_aln.ok) {
+            //std::cerr << "reverse complement alignment worked!" << std::endl;
 #ifdef VALIDATE_WFA_WFLIGN
-        if (!validate_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
-                            target_length, 0, 0)) {
-            std::cerr << "cigar failure at reverse complement alignment " << j << " " << i << std::endl;
-            unpack_display_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
-                                 target_length, 0, 0);
-            std::cerr << ">query (reverse complement)" << std::endl
-                      << rev_comp_query << std::endl;
-            std::cerr << ">target" << std::endl
-                      << std::string(target + i, target_length) << std::endl;
-            assert(false);
-        }
+            if (!validate_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
+                                target_length, 0, 0)) {
+                std::cerr << "cigar failure at reverse complement alignment " << j << " " << i << std::endl;
+                unpack_display_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
+                                     target_length, 0, 0);
+                std::cerr << ">query (reverse complement)" << std::endl
+                          << rev_comp_query << std::endl;
+                std::cerr << ">target" << std::endl
+                          << std::string(target + i, target_length) << std::endl;
+                assert(false);
+            }
 #endif
 
-        wflign_edit_cigar_copy(wf_aligner, &rev_aln.edit_cigar);
-        rev_score = calculate_alignment_score(rev_aln.edit_cigar, convex_penalties);
-        //std::cerr << "reverse score is " << rev_score << std::endl;
-        rev_aln.j = j;
-        rev_aln.i = i;
-        rev_aln.query_length = query_length;
-        rev_aln.target_length = target_length;
+            wflign_edit_cigar_copy(wf_aligner, &rev_aln.edit_cigar);
+            rev_score = calculate_alignment_score(rev_aln.edit_cigar, convex_penalties);
+            //std::cerr << "reverse score is " << rev_score << std::endl;
+            rev_aln.j = j;
+            rev_aln.i = i;
+            rev_aln.query_length = query_length;
+            rev_aln.target_length = target_length;
+        }
+    } else {
+        rev_aln.ok = false;
     }
 
     if (rev_aln.ok && rev_score < fwd_score) {
@@ -351,6 +352,7 @@ void write_merged_alignment(
         const int& erode_k,
         const int64_t& chain_gap,
         const int& max_patching_score,
+        const uint64_t& min_inversion_length,
         const int& min_wf_length,
         const int& max_dist_threshold,
 #ifdef WFA_PNG_TSV_TIMING
@@ -469,7 +471,7 @@ void write_merged_alignment(
                 &max_dist_threshold, &wf_aligner,
                 &rev_patch_alns,
                 &convex_penalties,
-                &chain_gap, &max_patching_score
+                &chain_gap, &max_patching_score, &min_inversion_length
 #ifdef WFA_PNG_TSV_TIMING
                 ,&emit_patching_tsv,
                 &out_patching_tsv
@@ -987,7 +989,7 @@ void write_merged_alignment(
                                         query, query_pos, query_delta,
                                         target - target_pointer_shift, target_pos, target_delta,
                                         wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
-                                        chain_gap, max_patching_score);
+                                        chain_gap, max_patching_score, min_inversion_length);
                                 if (rev_patch_aln.ok && save_rev_patch_alns) {
                                     // we got a good reverse alignment
                                     rev_patch_alns.push_back(rev_patch_aln);
