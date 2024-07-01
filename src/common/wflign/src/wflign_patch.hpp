@@ -46,17 +46,19 @@ namespace wflign {
                 wflign_extend_data_t* extend_data,
                 alignment_t& aln);
         void do_wfa_patch_alignment(
-                const char* query,
-                const uint64_t& j,
-                const uint64_t& query_length,
-                const char* target,
-                const uint64_t& i,
-                const uint64_t& target_length,
-                wfa::WFAlignerGapAffine2Pieces& _wf_aligner,
-                const wflign_penalties_t& convex_penalties,
-                alignment_t& aln,
-                const int64_t& chain_gap,
-                const int& max_patching_score);
+            const char* query,
+            const uint64_t& j,
+            const uint64_t& query_length,
+            const char* target,
+            const uint64_t& i,
+            const uint64_t& target_length,
+            wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+            const wflign_penalties_t& convex_penalties,
+            alignment_t& aln,
+            alignment_t& rev_aln,
+            const int64_t& chain_gap,
+            const int& max_patching_score,
+            const uint64_t& min_inversion_length);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
@@ -88,6 +90,7 @@ namespace wflign {
                 const int& erode_k,
                 const int64_t& chain_gap,
                 const int& max_patching_score,
+                const uint64_t& min_inversion_length,
                 const int& min_wf_length,
                 const int& max_dist_threshold,
 #ifdef WFA_PNG_TSV_TIMING
@@ -111,7 +114,8 @@ namespace wflign {
                 const uint64_t& target_length, // unused
                 const float& min_identity,
                 const float& mashmap_estimated_identity,
-                const bool& with_endline = true);
+                const bool& with_endline = true,
+                const bool& is_rev_patch = false);
         double float2phred(const double& prob);
         void sort_indels(std::vector<char>& v);
 
