@@ -49,6 +49,7 @@ struct Parameters {
     int wflign_erode_k;
     int kmerSize;                                 //kmer size for pre-checking before aligning a fragment
     int64_t chain_gap;                            //max distance for 2d range union-find mapping chaining;
+    int wflign_min_inv_patch_len;                 //minimum length of an inverted patch
     int wflign_max_patching_score;                //maximum score allowed for patching
 
     std::vector<std::string> refSequences;        //reference sequence(s)

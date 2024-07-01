@@ -124,6 +124,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
     args::ValueFlag<std::string> wflign_max_len_minor(alignment_opts, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
     args::ValueFlag<int> wflign_erode_k(alignment_opts, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
+    args::ValueFlag<int> wflign_min_inv_patch_len(alignment_opts, "N", "minimum length of inverted patch for output [default: 23]", {'V', "min-inv-len"});
     args::ValueFlag<int> wflign_max_patching_score(alignment_opts, "N", "maximum score allowed when patching [default: adaptive with respect to gap penalties and sequence length]", {"max-patching-score"});
 
     args::Group output_opts(parser, "[ Output Format Options ]");
@@ -544,6 +545,12 @@ void parse_args(int argc,
         align_parameters.wflign_erode_k = args::get(wflign_erode_k);
     } else {
         align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
+    }
+
+    if (wflign_min_inv_patch_len) {
+        align_parameters.wflign_min_inv_patch_len = args::get(wflign_min_inv_patch_len);
+    } else {
+        align_parameters.wflign_min_inv_patch_len = 23;
     }
 
     if (wflign_max_patching_score) {
