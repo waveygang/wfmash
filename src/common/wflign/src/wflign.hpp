@@ -63,8 +63,8 @@ namespace wflign {
             uint64_t wflign_max_len_minor;
             int erode_k;
             int64_t chain_gap;
+            int min_inversion_length;
             int max_patching_score;
-            uint64_t min_inversion_length;
             // Query
             const std::string* query_name;
             char* query;
@@ -117,6 +117,7 @@ namespace wflign {
                     const uint64_t wflign_max_len_minor,
                     const int erode_k,
                     const int64_t chain_gap,
+                    const int min_inversion_length,
                     const int max_patching_score);
             // Set output configuration
             void set_output(

@@ -507,6 +507,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               param.wflign_max_len_minor,
               param.wflign_erode_k,
               param.chain_gap,
+              param.wflign_min_inv_patch_len,
               param.wflign_max_patching_score);
           wflign->set_output(
               &output,

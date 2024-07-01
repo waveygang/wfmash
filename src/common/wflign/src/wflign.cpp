@@ -62,6 +62,7 @@ WFlign::WFlign(
     const uint64_t wflign_max_len_minor,
     const int erode_k,
     const int64_t chain_gap,
+    const int min_inversion_length,
     const int max_patching_score) {
     // Parameters
     this->segment_length = segment_length;
@@ -91,7 +92,7 @@ WFlign::WFlign(
     this->erode_k = erode_k;
     this->chain_gap = chain_gap;
     this->max_patching_score = max_patching_score;
-    this->min_inversion_length = 23;
+    this->min_inversion_length = min_inversion_length;
     // Query
     this->query_name = nullptr;
     this->query = nullptr;
