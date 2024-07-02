@@ -99,8 +99,9 @@ void parse_args(int argc,
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
     args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
-    args::ValueFlag<std::string> mashmap_index(mapping_opts, "FILE", "Use MashMap index if FILE exists, else create one and save as FILE", {'4', "mm-index"});
-    args::Flag overwrite_mashmap_index(mapping_opts, "", "Confidence value for the hypergeometric filtering [default: 99.9%]", {'5', "overwrite-mm-index"});
+    args::ValueFlag<std::string> mashmap_index(mapping_opts, "FILE", "Use MashMap index in FILE, create if it doesn't exist", {"mm-index"});
+    args::Flag create_mashmap_index_only(mapping_opts, "create-index-only", "Create only the index file without performing mapping", {"create-index-only"});
+    args::Flag overwrite_mashmap_index(mapping_opts, "overwrite-mm-index", "Overwrite MashMap index if it exists", {"overwrite-mm-index"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -621,6 +622,7 @@ void parse_args(int argc,
     }
 
     map_parameters.overwrite_index = overwrite_mashmap_index;
+    map_parameters.create_index_only = create_mashmap_index_only;
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";

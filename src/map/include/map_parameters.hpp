@@ -54,6 +54,7 @@ struct Parameters
     std::string outFileName;                          //output file name
     stdfs::path indexFilename;                        //output file name of index
     bool overwrite_index;                             //overwrite index if it exists
+    bool create_index_only;                           //only create index and exit
     bool split;                                       //Split read mapping (done if this is true)
     bool lower_triangular;                            // set to true if we should filter out half of the mappings
     bool skip_self;                                   //skip self mappings

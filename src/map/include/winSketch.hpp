@@ -139,6 +139,11 @@ namespace skch
               {
                 this->writeIndex();
               }
+              if (param.create_index_only)
+              {
+                std::cerr << "[mashmap::skch::Sketch] Index created successfully. Exiting." << std::endl;
+                exit(0);
+              }
             } else {
               this->build(false);
               this->readIndex();
