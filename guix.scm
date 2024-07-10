@@ -18,7 +18,7 @@
 ;;
 ;;   mkdir -p /usr/bin ; ln -s $GUIX_ENVIRONMENT/bin/env /usr/bin/env
 ;;
-;; by Pjotr Prins (c) 2023
+;; by Pjotr Prins & Andrea Guarracino (c) 2023-2024
 
 (use-modules
  ((guix licenses) #:prefix license:)
@@ -75,7 +75,8 @@
        ; ("parallel" ,parallel) ; for wfmash-parallel
        ("bzip2" ,bzip2)
        ("xz" ,xz)
-       ("zlib" ,zlib)))
+       ("zlib" ,zlib)
+       ("libdeflate" ,libdeflate)))
      (synopsis "wfmash")
      (description
       "wfmash.")
