@@ -266,7 +266,7 @@ void do_wfa_patch_alignment(
         //auto rev_score = wf_aligner.getAlignmentScore();
         //rev_aln.ok = (rev_score > fwd_score && rev_status == WF_STATUS_ALG_COMPLETED);
         rev_aln.ok = (rev_status == WF_STATUS_ALG_COMPLETED);
-        aln.is_rev = true;
+        rev_aln.is_rev = true;
 
         if (rev_aln.ok) {
             //std::cerr << "reverse complement alignment worked!" << std::endl;
@@ -398,6 +398,51 @@ void erode_alignment(alignment_t& aln, int erode_k) {
     aln.target_length = target_adjust;
 }
 
+struct AlignmentBounds {
+    int64_t query_start_offset;
+    int64_t query_end_offset;
+    int64_t target_start_offset;
+    int64_t target_end_offset;
+};
+
+AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
+    AlignmentBounds bounds;
+    bounds.query_start_offset = 0;
+    bounds.query_end_offset = 0;
+    bounds.target_start_offset = 0;
+    bounds.target_end_offset = 0;
+
+    int64_t query_pos = 0;
+    int64_t target_pos = 0;
+    bool found_first_match = false;
+
+    for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
+        char op = aln.edit_cigar.cigar_ops[i];
+        switch (op) {
+            case 'M':
+            case 'X':
+                if (!found_first_match) {
+                    bounds.query_start_offset = query_pos;
+                    bounds.target_start_offset = target_pos;
+                    found_first_match = true;
+                }
+                bounds.query_end_offset = query_pos;
+                bounds.target_end_offset = target_pos;
+                ++query_pos;
+                ++target_pos;
+                break;
+            case 'I':
+                ++query_pos;
+                break;
+            case 'D':
+                ++target_pos;
+                break;
+        }
+    }
+
+    return bounds;
+}
+
 std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const char* query,
     const uint64_t& query_start,
@@ -418,7 +463,7 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     uint64_t remaining_query_length = query_length;
     uint64_t remaining_target_length = target_length;
 
-    while (remaining_query_length > 0 && remaining_target_length > 0) {
+    while (remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
         alignment_t aln, rev_aln;
         
         do_wfa_patch_alignment(
@@ -441,15 +486,27 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             
             // Erode short matches throughout the alignment
             //erode_alignment(chosen_aln, erode_k);
+            auto bounds = find_alignment_bounds(chosen_aln);
+            std::cerr << "bounds: " << bounds.query_start_offset << " " << bounds.query_end_offset << " " << bounds.target_start_offset << " " << bounds.target_end_offset << std::endl;
 
             if (chosen_aln.query_length > 0 && chosen_aln.target_length > 0) {
                 alignments.push_back(chosen_aln);
+                auto last_query_start = current_query_start;
+                auto last_target_start = current_target_start;
 
                 // Update the start positions and remaining lengths for the next iteration
-                current_query_start += chosen_aln.query_length;
-                current_target_start += chosen_aln.target_length;
-                remaining_query_length = query_length - (current_query_start - query_start);
-                remaining_target_length = target_length - (current_target_start - target_start);
+                std::cerr << "is rev? " << chosen_aln.is_rev << std::endl;
+                if (chosen_aln.is_rev) {
+                    std::cerr << "is rev" << std::endl;
+                    current_query_start += bounds.query_start_offset;
+                } else {
+                    current_query_start += bounds.query_end_offset;
+                }
+                current_target_start += bounds.target_end_offset;
+                std::cerr << "current starts: " << current_query_start << " " << current_target_start << std::endl;
+                remaining_query_length -= (current_query_start - last_query_start);
+                remaining_target_length -= (current_target_start - last_target_start);
+                std::cerr << "remaining lengths: " << remaining_query_length << " " << remaining_target_length << std::endl;
             } else {
                 // If the alignment was completely eroded, break the loop
                 break;
