@@ -37,6 +37,7 @@ public:
     int target_length;
     bool ok;
     bool keep;
+    bool is_rev;
     wflign_cigar_t edit_cigar;
     // Default constructor
     alignment_t();

@@ -59,6 +59,19 @@ namespace wflign {
             const int64_t& chain_gap,
             const int& max_patching_score,
             const uint64_t& min_inversion_length);
+        std::vector<alignment_t> do_progressive_wfa_patch_alignment(
+            const char* query,
+            const uint64_t& query_start,
+            const uint64_t& query_length,
+            const char* target,
+            const uint64_t& target_start,
+            const uint64_t& target_length,
+            wfa::WFAlignerGapAffine2Pieces& wf_aligner,
+            const wflign_penalties_t& convex_penalties,
+            const int64_t& chain_gap,
+            const int& max_patching_score,
+            const uint64_t& min_inversion_length,
+            const int& erode_k);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,
