@@ -1185,13 +1185,11 @@ void write_merged_alignment(
                                         target - target_pointer_shift, target_pos, target_delta,
                                         wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
                                         chain_gap, max_patching_score, min_inversion_length);
+                                // collect inverse patch alignments
                                 if (rev_patch_aln.ok && save_rev_patch_alns) {
-                                    // we got a good reverse alignment
                                     rev_patch_alns.push_back(rev_patch_aln);
                                 }
                                 if (patch_aln.ok) {
-                                    // std::cerr << "got an ok patch aln" <<
-                                    // std::endl;
                                     got_alignment = true;
                                     const int start_idx =
                                             patch_aln.edit_cigar.begin_offset;
@@ -1200,50 +1198,6 @@ void write_merged_alignment(
                                     for (int i = start_idx; i < end_idx; i++) {
                                         patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
                                     }
-                                    // std::cerr << "\n";
-
-                                    // Check if there are too many indels in the
-                                    // patch
-                                    /*
-                                    uint32_t size_indel = 0;
-                                    for (int i = end_idx - 1; i >= start_idx;
-                                         --i) {
-                                        // std::cerr <<
-                                        // patch_aln.edit_cigar.operations[i];
-                                        if (patch_aln.edit_cigar.cigar_ops[i] == 'I' ||
-                                            patch_aln.edit_cigar.cigar_ops[i] == 'D') {
-                                            ++size_indel;
-                                            ++size_region_to_repatch;
-                                        } else {
-                                            // Not too big, to avoid repatching
-                                            // structural variants boundaries
-                                            if (size_indel > 7 &&
-                                                size_indel <= 4096 &&
-                                                size_indel <
-                                                        (end_idx - start_idx)) {
-                                                break;
-                                            }
-
-                                            ++size_region_to_repatch;
-                                            size_indel = 0;
-                                        }
-                                    }
-                                    */
-                                    // std::cerr << std::endl;
-
-                                    // Not too big, to avoid repatching
-                                    // structural variants boundaries
-                                    //std::cerr << "size_region_to_repatch " << size_region_to_repatch << std::endl;
-                                    //std::cerr << "end_idx - start_idx " << end_idx - start_idx << std::endl;
-                                    /*
-                                    if (size_indel > 7 && size_indel <= 4096 &&
-                                        size_region_to_repatch <
-                                                (end_idx - start_idx)) {
-                                        //std::cerr << "REPATCH " << std::endl;
-                                    } else {
-                                        size_region_to_repatch = 0;
-                                    }
-                                    */
                                 }
 #ifdef WFA_PNG_TSV_TIMING
                                 if (emit_patching_tsv) {
