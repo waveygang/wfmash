@@ -128,69 +128,6 @@ bool do_wfa_segment_alignment(
     }
 }
 
-/*
-// No more necessary
-bool hack_cigar(wfa::cigar_t &cigar, const char *query, const char *target,
-        const uint64_t &query_aln_len, const uint64_t &target_aln_len,
-        uint64_t j, uint64_t i) {
-    const int start_idx = cigar.begin_offset;
-    const int end_idx = cigar.end_offset;
-    const uint64_t j_max = j + query_aln_len;
-    const uint64_t i_max = i + target_aln_len;
-    bool ok = true;
-    // std::cerr << "start to end " << start_idx << " " << end_idx << std::endl;
-    for (int c = start_idx; c < end_idx; c++) {
-    if (j >= j_max && i >= i_max) {
-        cigar.end_offset = c;
-        ok = false;
-        break;
-    }
-    // if new sequence of same moves started
-    switch (cigar.operations[c]) {
-        case 'M':
-            // check that we match
-            if (j < j_max && i < i_max && query[j] != target[i]) {
-                // std::cerr << "mismatch @ " << j << " " << i << " " <<
-                // query[j] << " " << target[i] << std::endl;
-                cigar.operations[c] = 'X';
-                ok = false;
-            }
-            if (j >= j_max) {
-                // std::cerr << "query out of bounds @ " << j << " " << i << " "
-                // << query[j] << " " << target[i] << std::endl;
-                cigar.operations[c] = 'D';
-                ok = false;
-            }
-            if (i >= i_max) {
-                // std::cerr << "target out of bounds @ " << j << " " << i << "
-                // " << query[j] << " " << target[i] << std::endl;
-                cigar.operations[c] = 'I';
-                ok = false;
-            }
-            ++j;
-            ++i;
-            break;
-        case 'X':
-            if (j < j_max && i < i_max && query[j] == target[i]) {
-                cigar.operations[c] = 'M';
-                ok = false;
-            }
-            ++j;
-            ++i;
-            break;
-        case 'I':
-            ++j;
-            break;
-        case 'D':
-            ++i;
-            break;
-        default:
-            break;
-        }
-    }
-    return ok;
-}*/
-
 void do_wfa_patch_alignment(
         const char* query,
         const uint64_t& j,
