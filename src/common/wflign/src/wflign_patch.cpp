@@ -424,26 +424,20 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             // Erode short matches throughout the alignment
             //erode_alignment(chosen_aln, erode_k);
             auto bounds = find_alignment_bounds(chosen_aln);
-            std::cerr << "bounds: " << bounds.query_start_offset << " " << bounds.query_end_offset << " " << bounds.target_start_offset << " " << bounds.target_end_offset << std::endl;
-
             if (chosen_aln.query_length > 0 && chosen_aln.target_length > 0) {
                 alignments.push_back(chosen_aln);
                 auto last_query_start = current_query_start;
                 auto last_target_start = current_target_start;
 
                 // Update the start positions and remaining lengths for the next iteration
-                std::cerr << "is rev? " << chosen_aln.is_rev << std::endl;
                 if (chosen_aln.is_rev) {
-                    std::cerr << "is rev" << std::endl;
                     current_query_start += bounds.query_start_offset;
                 } else {
                     current_query_start += bounds.query_end_offset;
                 }
                 current_target_start += bounds.target_end_offset;
-                std::cerr << "current starts: " << current_query_start << " " << current_target_start << std::endl;
                 remaining_query_length -= (current_query_start - last_query_start);
                 remaining_target_length -= (current_target_start - last_target_start);
-                std::cerr << "remaining lengths: " << remaining_query_length << " " << remaining_target_length << std::endl;
             } else {
                 // If the alignment was completely eroded, break the loop
                 break;
@@ -1118,16 +1112,39 @@ void write_merged_alignment(
 
                             size_region_to_repatch = 0;
                             {
+                                alignment_t patch_aln;
+                                alignment_t rev_patch_aln;
+                                bool do_progressive_patch = false;
+                                // WFA is only global
+                                do_wfa_patch_alignment(
+                                        query, query_pos, query_delta,
+                                        target - target_pointer_shift, target_pos, target_delta,
+                                        wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
+                                        chain_gap, max_patching_score, min_inversion_length);
+                                // collect inverse patch alignments
+                                if (rev_patch_aln.ok && save_rev_patch_alns) {
+                                    //
+                                    do_progressive_patch = true;
+                                }
+                                if (patch_aln.ok) {
+                                    got_alignment = true;
+                                    const int start_idx =
+                                            patch_aln.edit_cigar.begin_offset;
+                                    const int end_idx =
+                                            patch_aln.edit_cigar.end_offset;
+                                    for (int i = start_idx; i < end_idx; i++) {
+                                        patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
+                                    }
+                                }
 
-                                // Inside the write_merged_alignment function, replace the existing patching logic with:
-
-                                std::vector<alignment_t> patch_alignments;
-                                {
+                                if (do_progressive_patch) {
+                                    /*
                                     std::cerr << "Starting progressive patching for region:" << std::endl;
                                     std::cerr << "Query: " << query_pos << "-" << query_pos + query_delta << " (length: " << query_delta << ")" << std::endl;
                                     std::cerr << "Target: " << target_pos << "-" << target_pos + target_delta << " (length: " << target_delta << ")" << std::endl;
+                                    */
 
-                                    patch_alignments = do_progressive_wfa_patch_alignment(
+                                    auto patch_alignments = do_progressive_wfa_patch_alignment(
                                         query,
                                         query_pos,
                                         query_delta,
@@ -1141,6 +1158,14 @@ void write_merged_alignment(
                                         min_inversion_length,
                                         erode_k);
 
+                                    // save the ok reverse patch alignments into our list
+                                    for (auto& aln : patch_alignments) {
+                                        if (aln.is_rev && aln.ok) {
+                                            rev_patch_alns.push_back(aln);
+                                        }
+                                    }
+
+                                    /*
                                     std::cerr << "Progressive patching found " << patch_alignments.size() << " alignments" << std::endl;
 
                                     for (size_t i = 0; i < patch_alignments.size(); ++i) {
@@ -1174,31 +1199,9 @@ void write_merged_alignment(
                                         std::cerr << "  Target snippet: " << std::string(target - target_pointer_shift + aln.i, std::min((int)aln.target_length, snippet_length)) << std::endl;
                                         std::cerr << std::endl;
                                     }
+                                    */
                                 }
 
-                                
-                                alignment_t patch_aln;
-                                alignment_t rev_patch_aln;
-                                // WFA is only global
-                                do_wfa_patch_alignment(
-                                        query, query_pos, query_delta,
-                                        target - target_pointer_shift, target_pos, target_delta,
-                                        wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
-                                        chain_gap, max_patching_score, min_inversion_length);
-                                // collect inverse patch alignments
-                                if (rev_patch_aln.ok && save_rev_patch_alns) {
-                                    rev_patch_alns.push_back(rev_patch_aln);
-                                }
-                                if (patch_aln.ok) {
-                                    got_alignment = true;
-                                    const int start_idx =
-                                            patch_aln.edit_cigar.begin_offset;
-                                    const int end_idx =
-                                            patch_aln.edit_cigar.end_offset;
-                                    for (int i = start_idx; i < end_idx; i++) {
-                                        patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
-                                    }
-                                }
 #ifdef WFA_PNG_TSV_TIMING
                                 if (emit_patching_tsv) {
                                     *out_patching_tsv
