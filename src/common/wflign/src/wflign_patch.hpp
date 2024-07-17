@@ -72,6 +72,7 @@ namespace wflign {
             const int& max_patching_score,
             const uint64_t& min_inversion_length,
             const int& erode_k);
+        void trim_alignment(alignment_t& aln);
         void write_merged_alignment(
                 std::ostream &out,
                 const std::vector<alignment_t *> &trace,

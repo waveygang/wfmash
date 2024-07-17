@@ -206,12 +206,13 @@ void do_wfa_patch_alignment(
         rev_aln.is_rev = true;
 
         if (rev_aln.ok) {
+            wflign_edit_cigar_copy(wf_aligner, &rev_aln.edit_cigar);
             //std::cerr << "reverse complement alignment worked!" << std::endl;
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
+            if (!validate_cigar(rev_aln.edit_cigar, rev_comp_query.c_str(), target + i, query_length,
                                 target_length, 0, 0)) {
                 std::cerr << "cigar failure at reverse complement alignment " << j << " " << i << std::endl;
-                unpack_display_cigar(wf_aligner.cigar, rev_comp_query.c_str(), target + i, query_length,
+                unpack_display_cigar(rev_aln.edit_cigar, rev_comp_query.c_str(), target + i, query_length,
                                      target_length, 0, 0);
                 std::cerr << ">query (reverse complement)" << std::endl
                           << rev_comp_query << std::endl;
@@ -221,7 +222,6 @@ void do_wfa_patch_alignment(
             }
 #endif
 
-            wflign_edit_cigar_copy(wf_aligner, &rev_aln.edit_cigar);
             rev_score = calculate_alignment_score(rev_aln.edit_cigar, convex_penalties);
             //std::cerr << "reverse score is " << rev_score << std::endl;
             rev_aln.j = j;
@@ -380,6 +380,58 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
     return bounds;
 }
 
+void trim_alignment(alignment_t& aln) {
+    bool is_reverse = aln.is_rev;
+    if (!aln.ok || aln.edit_cigar.end_offset <= aln.edit_cigar.begin_offset) {
+        return;  // Nothing to trim
+    }
+
+    int64_t trim_start = 0;
+    int64_t trim_end = 0;
+
+    // Trim start
+    for (int64_t i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
+        char op = aln.edit_cigar.cigar_ops[i];
+        if (op != 'I' && op != 'D') {
+            break;
+        }
+        ++trim_start;
+        if (op == 'I') {
+            if (is_reverse) {
+                --aln.query_length;  // Adjust query length for reverse alignment
+            } else {
+                ++aln.j;  // Adjust query start for forward alignment
+            }
+        } else {  // op == 'D'
+            ++aln.i;  // Adjust target start (same for both orientations)
+        }
+    }
+
+    // Trim end
+    for (int64_t i = aln.edit_cigar.end_offset - 1; i >= aln.edit_cigar.begin_offset + trim_start; --i) {
+        char op = aln.edit_cigar.cigar_ops[i];
+        if (op != 'I' && op != 'D') {
+            break;
+        }
+        ++trim_end;
+        if (op == 'I') {
+            if (is_reverse) {
+                ++aln.j;  // Adjust query start for reverse alignment
+            } else {
+                --aln.query_length;  // Adjust query length for forward alignment
+            }
+        } else {  // op == 'D'
+            --aln.target_length;  // Adjust target length (same for both orientations)
+        }
+    }
+
+    // Update CIGAR
+    if (trim_start > 0 || trim_end > 0) {
+        aln.edit_cigar.begin_offset += trim_start;
+        aln.edit_cigar.end_offset -= trim_end;
+    }
+}
+
 std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const char* query,
     const uint64_t& query_start,
@@ -425,6 +477,45 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             //erode_alignment(chosen_aln, erode_k);
             auto bounds = find_alignment_bounds(chosen_aln);
             if (chosen_aln.query_length > 0 && chosen_aln.target_length > 0) {
+
+#ifdef VALIDATE_WFA_WFLIGN
+                {
+                    std::string querystr = chosen_aln.is_rev ?
+                        reverse_complement(std::string(query + current_query_start, chosen_aln.query_length))
+                        : std::string(query + current_query_start, chosen_aln.query_length);
+                    std::string targetstr = std::string(target + current_target_start, chosen_aln.target_length);
+                    if (!validate_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                        chosen_aln.query_length, chosen_aln.target_length, 0, 0)) {
+                        std::cerr << "before trim cigar failure at " << current_query_start << " " << current_target_start << std::endl;
+                        unpack_display_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                             chosen_aln.query_length, chosen_aln.target_length, 0, 0);
+                        std::cerr << ">query" << std::endl << querystr << std::endl
+                                  << ">target" << std::endl << targetstr << std::endl;
+                        assert(false);
+                        exit(1);
+                    }
+                }
+#endif
+
+                trim_alignment(chosen_aln);
+#ifdef VALIDATE_WFA_WFLIGN
+                {
+                    std::string querystr = chosen_aln.is_rev ?
+                        reverse_complement(std::string(query + current_query_start, chosen_aln.query_length))
+                        : std::string(query + current_query_start, chosen_aln.query_length);
+                    std::string targetstr = std::string(target + current_target_start, chosen_aln.target_length);
+                    if (!validate_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                        chosen_aln.query_length, chosen_aln.target_length, 0, 0)) {
+                        std::cerr << "after trim cigar failure at " << current_query_start << " " << current_target_start << std::endl;
+                        unpack_display_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                             chosen_aln.query_length, chosen_aln.target_length, 0, 0);
+                        std::cerr << ">query" << std::endl << querystr << std::endl
+                                  << ">target" << std::endl << targetstr << std::endl;
+                        assert(false);
+                        exit(1);
+                    }
+                }
+#endif
                 alignments.push_back(chosen_aln);
                 auto last_query_start = current_query_start;
                 auto last_target_start = current_target_start;
