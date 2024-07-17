@@ -228,11 +228,6 @@ void do_wfa_patch_alignment(
             rev_aln.i = i;
             rev_aln.query_length = query_length;
             rev_aln.target_length = target_length;
-
-            // parse the cigar to see how much of the end of the query and target remain unaligned
-            // this is for exploring a multi-round patching
-            
-            
         }
     } else {
         rev_aln.ok = false;
@@ -454,7 +449,7 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
 
     while (remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
         alignment_t aln, rev_aln;
-        
+
         do_wfa_patch_alignment(
             query,
             current_query_start,
@@ -472,7 +467,6 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
 
         if (aln.ok || rev_aln.ok) {
             alignment_t& chosen_aln = (rev_aln.ok && (!aln.ok || calculate_alignment_score(rev_aln.edit_cigar, convex_penalties) < calculate_alignment_score(aln.edit_cigar, convex_penalties))) ? rev_aln : aln;
-            
             // Erode short matches throughout the alignment
             //erode_alignment(chosen_aln, erode_k);
             auto bounds = find_alignment_bounds(chosen_aln);
@@ -1270,7 +1264,6 @@ void write_merged_alignment(
                                             std::cerr << aln.edit_cigar.cigar_ops[c];
                                         }
                                         std::cerr << std::endl;
-        
                                         // Calculate and print alignment statistics
                                         uint64_t matches = 0, mismatches = 0, insertions = 0, deletions = 0;
                                         for (int c = aln.edit_cigar.begin_offset; c < aln.edit_cigar.end_offset; ++c) {
@@ -1283,7 +1276,6 @@ void write_merged_alignment(
                                         }
                                         std::cerr << "  Stats: Matches=" << matches << ", Mismatches=" << mismatches 
                                                   << ", Insertions=" << insertions << ", Deletions=" << deletions << std::endl;
-        
                                         // Print a snippet of the aligned sequences
                                         const int snippet_length = 50;
                                         std::cerr << "  Query snippet:  " << std::string(query + aln.j, std::min((int)aln.query_length, snippet_length)) << std::endl;
