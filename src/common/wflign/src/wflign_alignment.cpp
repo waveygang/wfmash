@@ -87,6 +87,23 @@ alignment_t& alignment_t::operator=(alignment_t&& other) noexcept {
     return *this;
 }
 
+int alignment_t::query_begin() {
+    return j;
+}
+
+int alignment_t::query_end() {
+    return j + query_length;
+}
+
+int alignment_t::target_begin() {
+    return i;
+}
+
+int alignment_t::target_end() {
+    return i + target_length;
+}
+
+
 //void alignment_t::display(void) {
 //    std::cerr << j << " " << i << " " << query_length << " "
 //              << target_length << " " << ok << std::endl;

@@ -449,7 +449,6 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
 
     while (remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
         alignment_t aln, rev_aln;
-
         do_wfa_patch_alignment(
             query,
             current_query_start,
@@ -469,7 +468,6 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             alignment_t& chosen_aln = (rev_aln.ok && (!aln.ok || calculate_alignment_score(rev_aln.edit_cigar, convex_penalties) < calculate_alignment_score(aln.edit_cigar, convex_penalties))) ? rev_aln : aln;
             // Erode short matches throughout the alignment
             //erode_alignment(chosen_aln, erode_k);
-            auto bounds = find_alignment_bounds(chosen_aln);
             if (chosen_aln.query_length > 0 && chosen_aln.target_length > 0) {
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -492,6 +490,8 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
 #endif
 
                 trim_alignment(chosen_aln);
+                auto bounds = find_alignment_bounds(chosen_aln);
+                
 #ifdef VALIDATE_WFA_WFLIGN
                 {
                     std::string querystr = chosen_aln.is_rev ?
@@ -523,6 +523,7 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
                 current_target_start += bounds.target_end_offset;
                 remaining_query_length -= (current_query_start - last_query_start);
                 remaining_target_length -= (current_target_start - last_target_start);
+
             } else {
                 // If the alignment was completely eroded, break the loop
                 break;
@@ -613,7 +614,7 @@ void write_merged_alignment(
 #endif
     // write trace into single cigar vector
     std::vector<char> tracev;
-    std::vector<alignment_t> rev_patch_alns;
+    std::vector<alignment_t> multi_patch_alns;
     {
         // patch: walk the cigar, patching directly when we have simultaneous
         // gaps in query and ref and adding our results to the final trace as we
@@ -684,7 +685,7 @@ void write_merged_alignment(
                 &wflign_max_len_minor,
                 &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
-                &rev_patch_alns,
+                &multi_patch_alns,
                 &convex_penalties,
                 &chain_gap, &max_patching_score, &min_inversion_length, &erode_k
 #ifdef WFA_PNG_TSV_TIMING
@@ -696,7 +697,7 @@ void write_merged_alignment(
               const uint16_t &min_wfa_head_tail_patch_length,
               const uint16_t &min_wfa_patch_length,
               const uint16_t &max_dist_to_look_at,
-              bool save_rev_patch_alns) {
+              bool save_multi_patch_alns) {
 
             auto q = unpatched.begin();
 
@@ -1207,7 +1208,7 @@ void write_merged_alignment(
                                         wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
                                         chain_gap, max_patching_score, min_inversion_length);
                                 // collect inverse patch alignments
-                                if (rev_patch_aln.ok && save_rev_patch_alns) {
+                                if (rev_patch_aln.ok && save_multi_patch_alns) {
                                     //
                                     do_progressive_patch = true;
                                 }
@@ -1243,10 +1244,17 @@ void write_merged_alignment(
                                         min_inversion_length,
                                         erode_k);
 
-                                    // save the ok reverse patch alignments into our list
+                                    // save the ok multi-patch alignments into our list
                                     for (auto& aln : patch_alignments) {
-                                        if (aln.is_rev && aln.ok) {
-                                            rev_patch_alns.push_back(aln);
+                                        if (aln.ok) {
+                                            // avoid overlapping patches: if alignments is non-empty, pop alignments off its back until
+                                            // the current query and target start are greater than the query and target end of the last alignment
+                                            while (!multi_patch_alns.empty()
+                                                   && (multi_patch_alns.back().query_end() > aln.query_begin()
+                                                       || multi_patch_alns.back().target_end() > aln.target_begin())) {
+                                                multi_patch_alns.pop_back();
+                                            }
+                                            multi_patch_alns.push_back(aln);
                                         }
                                     }
 
@@ -2106,11 +2114,11 @@ query_start : query_end)
 
     // write how many reverse complement alignments were found
     //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
-    for (auto& rev_patch_aln : rev_patch_alns) {
+    for (auto& patch_aln : multi_patch_alns) {
         bool rev_query_is_rev = !query_is_rev;  // Flip the orientation
         write_alignment(
             out,
-            rev_patch_aln,
+            patch_aln,
             query_name,
             query_total_length,
             query_offset,
@@ -2125,7 +2133,8 @@ query_start : query_end)
             false,  // Don't add an endline after each alignment
             true);  // This is a reverse complement alignment
         // write tag indicating that this is a reverse complement alignment
-        out << "\t" << "rc:Z:true" << "\n";
+        out << "\t" << "rc:Z:true" << "\t"
+            << "\t" << "inv:Z:" << (patch_aln.is_rev ? "true" : "false") << "\n";
     }
     out << std::flush;
 }
