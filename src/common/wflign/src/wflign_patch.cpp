@@ -2132,8 +2132,9 @@ query_start : query_end)
             mashmap_estimated_identity,
             false,  // Don't add an endline after each alignment
             true);  // This is a reverse complement alignment
-        // write tag indicating that this is a reverse complement alignment
-        out << "\t" << "rc:Z:true" << "\t"
+        // write tag indicating that this is a multipatch alignment
+        out << "\t" << "patch:Z:true" << "\t"
+            // and if the patch is inverted as well
             << "\t" << "inv:Z:" << (patch_aln.is_rev ? "true" : "false") << "\n";
     }
     out << std::flush;
