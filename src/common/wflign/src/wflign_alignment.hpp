@@ -37,6 +37,7 @@ public:
     int target_length;
     bool ok;
     bool keep;
+    bool is_rev;
     wflign_cigar_t edit_cigar;
     // Default constructor
     alignment_t();
@@ -53,6 +54,12 @@ public:
     // Trim functions
     void trim_front(int query_trim);
     void trim_back(int query_trim);
+    // query_begin, query_end, target_begin, target_end
+    // Accessors
+    int query_begin();
+    int query_end();
+    int target_begin();
+    int target_end();
 };
 
 
