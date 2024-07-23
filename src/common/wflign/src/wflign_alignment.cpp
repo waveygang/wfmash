@@ -14,7 +14,7 @@
 
 // Default constructor
 alignment_t::alignment_t()
-    : j(0), i(0), query_length(0), target_length(0), ok(false), keep(false) {
+    : j(0), i(0), query_length(0), target_length(0), score(std::numeric_limits<int>::max()), ok(false), keep(false) {
     edit_cigar = {nullptr, 0, 0};
 }
 

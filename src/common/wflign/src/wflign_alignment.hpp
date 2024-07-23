@@ -35,6 +35,7 @@ public:
     int i;
     int query_length;
     int target_length;
+    int score;
     bool ok;
     bool keep;
     bool is_rev;

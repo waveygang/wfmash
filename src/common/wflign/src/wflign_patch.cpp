@@ -166,8 +166,8 @@ void do_wfa_patch_alignment(
 
     wf_aligner.setMaxAlignmentSteps(max_score);
 
-    int fwd_score = std::numeric_limits<int>::max();
-    int rev_score = std::numeric_limits<int>::max();
+    //int fwd_score = std::numeric_limits<int>::max();
+    //int rev_score = std::numeric_limits<int>::max();
     
     const int status = wf_aligner.alignEnd2End(target + i, target_length, query + j, query_length);
     aln.ok = (status == WF_STATUS_ALG_COMPLETED);
@@ -191,13 +191,13 @@ void do_wfa_patch_alignment(
 #endif
 
         wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
-        fwd_score = calculate_alignment_score(aln.edit_cigar, convex_penalties);
+        aln.score = calculate_alignment_score(aln.edit_cigar, convex_penalties);
         //std::cerr << "forward score is " << fwd_score << std::endl;
     }
 
     if (query_length >= min_inversion_length && target_length >= min_inversion_length) {
         if (aln.ok) {
-            wf_aligner.setMaxAlignmentSteps(fwd_score * 2 + 64);
+            wf_aligner.setMaxAlignmentSteps(aln.score);
         }
         // Try reverse complement alignment
         std::string rev_comp_query = reverse_complement(std::string(query + j, query_length));
@@ -225,7 +225,7 @@ void do_wfa_patch_alignment(
             }
 #endif
 
-            rev_score = calculate_alignment_score(rev_aln.edit_cigar, convex_penalties);
+            rev_aln.score = calculate_alignment_score(rev_aln.edit_cigar, convex_penalties);
             //std::cerr << "reverse score is " << rev_score << std::endl;
             rev_aln.j = j;
             rev_aln.i = i;
@@ -236,7 +236,7 @@ void do_wfa_patch_alignment(
         rev_aln.ok = false;
     }
 
-    if (rev_aln.ok && rev_score < fwd_score) {
+    if (rev_aln.ok && rev_aln.score < aln.score) {
         rev_aln.ok = true;
         aln.ok = false;
 #ifdef WFLIGN_DEBUG
@@ -246,8 +246,8 @@ void do_wfa_patch_alignment(
               << " chain_gap " << chain_gap
               << " max_patching_score " << max_patching_score
               << " max_score " << max_score
-              << " fwd_score " << fwd_score
-              << " rev_score " << rev_score
+              << " fwd_score " << aln.score
+              << " rev_score " << rev_aln.score
               << std::endl
               << "query " << std::string(query + j, query_length)
               << " target " << std::string(target + i, target_length)
@@ -470,7 +470,7 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             min_inversion_length);
 
         if (aln.ok || rev_aln.ok) {
-            alignment_t& chosen_aln = (rev_aln.ok && (!aln.ok || calculate_alignment_score(rev_aln.edit_cigar, convex_penalties) < calculate_alignment_score(aln.edit_cigar, convex_penalties))) ? rev_aln : aln;
+            alignment_t& chosen_aln = (rev_aln.ok && (!aln.ok || rev_aln.score < aln.score)) ? rev_aln : aln;
             // Erode short matches throughout the alignment
             //erode_alignment(chosen_aln, erode_k);
             if (chosen_aln.query_length > 0 && chosen_aln.target_length > 0) {
@@ -1677,13 +1677,13 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev, 4096, 32, 512, false); // In the 1st round, we patch more aggressively and don't save inversions
+            patching(erodev, tracev, 4096, 32, 512, true); // one patchin gpass
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(pre_tracev, query,
+            if (!validate_trace(tracev, query,
                         target - target_pointer_shift, query_length,
                         target_length_mut, query_start, target_start)) {
-                std::cerr << "cigar failure in pre_tracev "
+                std::cerr << "cigar failure in tracev "
                           << "\t" << query_name << "\t" << query_total_length
                           << "\t"
                           << query_offset + (query_is_rev
@@ -1702,12 +1702,13 @@ void write_merged_alignment(
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(pre_tracev);
+            //sort_indels(pre_tracev);
         }
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev, 256, 8, 128, true); // In the 2nd round, we patch less aggressively but we save inversions
+        // in some tests long ago this appeared to help, but now it's unclear if it's necessary
+        //patching(pre_tracev, tracev, 256, 8, 128, true); // In the 2nd round, we patch less aggressively but we save inversions
     }
 
     // normalize the indels
