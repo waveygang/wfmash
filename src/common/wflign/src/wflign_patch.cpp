@@ -196,6 +196,9 @@ void do_wfa_patch_alignment(
     }
 
     if (query_length >= min_inversion_length && target_length >= min_inversion_length) {
+        if (aln.ok) {
+            wf_aligner.setMaxAlignmentSteps(fwd_score * 2 + 64);
+        }
         // Try reverse complement alignment
         std::string rev_comp_query = reverse_complement(std::string(query + j, query_length));
         const int rev_status = wf_aligner.alignEnd2End(target + i, target_length, rev_comp_query.c_str(), query_length);
@@ -358,10 +361,10 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
                     bounds.target_start_offset = target_pos;
                     found_first_match = true;
                 }
-                bounds.query_end_offset = query_pos;
-                bounds.target_end_offset = target_pos;
                 ++query_pos;
                 ++target_pos;
+                bounds.query_end_offset = query_pos;
+                bounds.target_end_offset = target_pos;
                 break;
             case 'I':
                 ++query_pos;
@@ -446,6 +449,8 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     uint64_t current_target_start = target_start;
     uint64_t remaining_query_length = query_length;
     uint64_t remaining_target_length = target_length;
+    const uint64_t query_end = query_start + query_length;
+    const uint64_t target_end = target_start + target_length;
 
     while (remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
         alignment_t aln, rev_aln;
@@ -521,9 +526,8 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
                     current_query_start += bounds.query_end_offset;
                 }
                 current_target_start += bounds.target_end_offset;
-                remaining_query_length -= (current_query_start - last_query_start);
-                remaining_target_length -= (current_target_start - last_target_start);
-
+                remaining_query_length = query_end - current_query_start;
+                remaining_target_length = target_end - current_target_start;
             } else {
                 // If the alignment was completely eroded, break the loop
                 break;
@@ -1252,6 +1256,16 @@ void write_merged_alignment(
                                             while (!multi_patch_alns.empty()
                                                    && (multi_patch_alns.back().query_end() > aln.query_begin()
                                                        || multi_patch_alns.back().target_end() > aln.target_begin())) {
+                                                // write some info about the popped alignment vs the current one
+                                                /*
+                                                std::cerr << std::endl
+                                                          << "Popped alignment: "
+                                                          << multi_patch_alns.back().query_begin() << "-" << multi_patch_alns.back().query_end()
+                                                          << " vs " << aln.query_begin() << "-" << aln.query_end() << std::endl
+                                                    // target
+                                                          << multi_patch_alns.back().target_begin() << "-" << multi_patch_alns.back().target_end()
+                                                          << " vs " << aln.target_begin() << "-" << aln.target_end() << std::endl;
+                                                */
                                                 multi_patch_alns.pop_back();
                                             }
                                             multi_patch_alns.push_back(aln);
@@ -1688,7 +1702,7 @@ void write_merged_alignment(
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(tracev);
+            sort_indels(pre_tracev);
         }
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
@@ -1697,7 +1711,7 @@ void write_merged_alignment(
     }
 
     // normalize the indels
-    //sort_indels(tracev);
+    sort_indels(tracev);
 
 #ifdef WFLIGN_DEBUG
     std::cerr << "[wflign::wflign_affine_wavefront] got full patched traceback: ";
