@@ -1677,13 +1677,13 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, tracev, 4096, 32, 512, true); // one patchin gpass
+            patching(erodev, pre_tracev, 4096, 32, 512, false); // one patching pass
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(tracev, query,
+            if (!validate_trace(pre_tracev, query,
                         target - target_pointer_shift, query_length,
                         target_length_mut, query_start, target_start)) {
-                std::cerr << "cigar failure in tracev "
+                std::cerr << "cigar failure in pre_tracev "
                           << "\t" << query_name << "\t" << query_total_length
                           << "\t"
                           << query_offset + (query_is_rev
@@ -1702,13 +1702,13 @@ void write_merged_alignment(
 #endif
 
             // normalize: sort so that I<D and otherwise leave it as-is
-            //sort_indels(pre_tracev);
+            sort_indels(pre_tracev);
         }
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
         // in some tests long ago this appeared to help, but now it's unclear if it's necessary
-        //patching(pre_tracev, tracev, 256, 8, 128, true); // In the 2nd round, we patch less aggressively but we save inversions
+        patching(pre_tracev, tracev, 256, 8, 128, true); // In the 2nd round, we patch less aggressively but we save inversions
     }
 
     // normalize the indels
