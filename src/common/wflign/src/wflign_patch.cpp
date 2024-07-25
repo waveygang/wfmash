@@ -1215,8 +1215,7 @@ void write_merged_alignment(
                                 if (rev_patch_aln.ok && save_multi_patch_alns) {
                                     //
                                     do_progressive_patch = true;
-                                }
-                                if (patch_aln.ok) {
+                                } else if (patch_aln.ok) {
                                     got_alignment = true;
                                     const int start_idx =
                                             patch_aln.edit_cigar.begin_offset;
@@ -1253,11 +1252,11 @@ void write_merged_alignment(
                                         if (aln.ok) {
                                             // avoid overlapping patches: if alignments is non-empty, pop alignments off its back until
                                             // the current query and target start are greater than the query and target end of the last alignment
+                                            /*
                                             while (!multi_patch_alns.empty()
                                                    && (multi_patch_alns.back().query_end() > aln.query_begin()
                                                        || multi_patch_alns.back().target_end() > aln.target_begin())) {
                                                 // write some info about the popped alignment vs the current one
-                                                /*
                                                 std::cerr << std::endl
                                                           << "Popped alignment: "
                                                           << multi_patch_alns.back().query_begin() << "-" << multi_patch_alns.back().query_end()
@@ -1265,9 +1264,9 @@ void write_merged_alignment(
                                                     // target
                                                           << multi_patch_alns.back().target_begin() << "-" << multi_patch_alns.back().target_end()
                                                           << " vs " << aln.target_begin() << "-" << aln.target_end() << std::endl;
-                                                */
                                                 multi_patch_alns.pop_back();
                                             }
+                                            */
                                             multi_patch_alns.push_back(aln);
                                         }
                                     }
@@ -1677,7 +1676,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev, 4096, 32, 512, false); // one patching pass
+            patching(erodev, pre_tracev, 4096, 32, 512, false);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(pre_tracev, query,
@@ -1707,8 +1706,7 @@ void write_merged_alignment(
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        // in some tests long ago this appeared to help, but now it's unclear if it's necessary
-        patching(pre_tracev, tracev, 256, 8, 128, true); // In the 2nd round, we patch less aggressively but we save inversions
+        patching(pre_tracev, tracev, 256, 8, 128, true);
     }
 
     // normalize the indels
