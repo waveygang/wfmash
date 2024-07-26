@@ -378,6 +378,38 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
     return bounds;
 }
 
+void trim_alignment(alignment_t& aln) {
+    // Trim head
+    int head_trim_q = 0, head_trim_t = 0;
+    while (aln.edit_cigar.begin_offset < aln.edit_cigar.end_offset) {
+        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.begin_offset];
+        if (op != 'I' && op != 'D') break;
+        if (op == 'I') head_trim_q++;
+        if (op == 'D') head_trim_t++;
+        aln.edit_cigar.begin_offset++;
+    }
+
+    // Trim tail
+    int tail_trim_q = 0, tail_trim_t = 0;
+    while (aln.edit_cigar.end_offset > aln.edit_cigar.begin_offset) {
+        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.end_offset - 1];
+        if (op != 'I' && op != 'D') break;
+        if (op == 'I') tail_trim_q++;
+        if (op == 'D') tail_trim_t++;
+        aln.edit_cigar.end_offset--;
+    }
+
+    // Adjust coordinates
+    if (aln.is_rev) {
+        aln.j += tail_trim_q;  // For reverse alignments, tail trim affects the start
+    } else {
+        aln.j += head_trim_q;
+    }
+    aln.i += head_trim_t;
+    aln.query_length -= (head_trim_q + tail_trim_q);
+    aln.target_length -= (head_trim_t + tail_trim_t);
+}
+        
 std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const char* query,
     const uint64_t& query_start,
@@ -1184,6 +1216,7 @@ void write_merged_alignment(
                                     }
                                 } else if (save_multi_patch_alns) {
                                     for (auto& aln : patch_alignments) {
+                                        trim_alignment(aln);
                                         multi_patch_alns.push_back(aln);
                                     }
                                 }
