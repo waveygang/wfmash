@@ -378,58 +378,6 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
     return bounds;
 }
 
-void trim_alignment(alignment_t& aln) {
-    bool is_reverse = aln.is_rev;
-    if (!aln.ok || aln.edit_cigar.end_offset <= aln.edit_cigar.begin_offset) {
-        return;  // Nothing to trim
-    }
-
-    int64_t trim_start = 0;
-    int64_t trim_end = 0;
-
-    // Trim start
-    for (int64_t i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
-        char op = aln.edit_cigar.cigar_ops[i];
-        if (op != 'I' && op != 'D') {
-            break;
-        }
-        ++trim_start;
-        if (op == 'I') {
-            if (is_reverse) {
-                --aln.query_length;  // Adjust query length for reverse alignment
-            } else {
-                ++aln.j;  // Adjust query start for forward alignment
-            }
-        } else {  // op == 'D'
-            ++aln.i;  // Adjust target start (same for both orientations)
-        }
-    }
-
-    // Trim end
-    for (int64_t i = aln.edit_cigar.end_offset - 1; i >= aln.edit_cigar.begin_offset + trim_start; --i) {
-        char op = aln.edit_cigar.cigar_ops[i];
-        if (op != 'I' && op != 'D') {
-            break;
-        }
-        ++trim_end;
-        if (op == 'I') {
-            if (is_reverse) {
-                ++aln.j;  // Adjust query start for reverse alignment
-            } else {
-                --aln.query_length;  // Adjust query length for forward alignment
-            }
-        } else {  // op == 'D'
-            --aln.target_length;  // Adjust target length (same for both orientations)
-        }
-    }
-
-    // Update CIGAR
-    if (trim_start > 0 || trim_end > 0) {
-        aln.edit_cigar.begin_offset += trim_start;
-        aln.edit_cigar.end_offset -= trim_end;
-    }
-}
-
 std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const char* query,
     const uint64_t& query_start,
@@ -452,8 +400,15 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const uint64_t query_end = query_start + query_length;
     const uint64_t target_end = target_start + target_length;
 
-    while (remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
+    //std::cerr << "BEGIN do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
+    bool first = true;
+
+    while (first || remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
+        first = false;
+        //std::cerr << "do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
         alignment_t aln, rev_aln;
+        aln.is_rev = false;
+        rev_aln.is_rev = true;
         do_wfa_patch_alignment(
             query,
             current_query_start,
@@ -469,75 +424,74 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             max_patching_score,
             min_inversion_length);
 
-        if (aln.ok || rev_aln.ok) {
-            alignment_t& chosen_aln = (rev_aln.ok && (!aln.ok || rev_aln.score < aln.score)) ? rev_aln : aln;
-            // Erode short matches throughout the alignment
-            //erode_alignment(chosen_aln, erode_k);
-            if (chosen_aln.query_length > 0 && chosen_aln.target_length > 0) {
+        //std::cerr << "WFA fwd alignment: " << aln << std::endl;
+        //std::cerr << "WFA rev alignment: " << rev_aln << std::endl;
+
+        if (rev_aln.ok && (!aln.ok || rev_aln.score < aln.score)) {
+            alignments.push_back(rev_aln);
+        } else if (aln.ok) {
+            alignments.push_back(aln);
+            //break;
+        }
 
 #ifdef VALIDATE_WFA_WFLIGN
-                {
-                    std::string querystr = chosen_aln.is_rev ?
-                        reverse_complement(std::string(query + current_query_start, chosen_aln.query_length))
-                        : std::string(query + current_query_start, chosen_aln.query_length);
-                    std::string targetstr = std::string(target + current_target_start, chosen_aln.target_length);
-                    if (!validate_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
-                                        chosen_aln.query_length, chosen_aln.target_length, 0, 0)) {
-                        std::cerr << "before trim cigar failure at " << current_query_start << " " << current_target_start << std::endl;
-                        unpack_display_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
-                                             chosen_aln.query_length, chosen_aln.target_length, 0, 0);
-                        std::cerr << ">query" << std::endl << querystr << std::endl
-                                  << ">target" << std::endl << targetstr << std::endl;
-                        assert(false);
-                        exit(1);
-                    }
-                }
-#endif
-
-                trim_alignment(chosen_aln);
-                auto bounds = find_alignment_bounds(chosen_aln);
-                
-#ifdef VALIDATE_WFA_WFLIGN
-                {
-                    std::string querystr = chosen_aln.is_rev ?
-                        reverse_complement(std::string(query + current_query_start, chosen_aln.query_length))
-                        : std::string(query + current_query_start, chosen_aln.query_length);
-                    std::string targetstr = std::string(target + current_target_start, chosen_aln.target_length);
-                    if (!validate_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
-                                        chosen_aln.query_length, chosen_aln.target_length, 0, 0)) {
-                        std::cerr << "after trim cigar failure at " << current_query_start << " " << current_target_start << std::endl;
-                        unpack_display_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
-                                             chosen_aln.query_length, chosen_aln.target_length, 0, 0);
-                        std::cerr << ">query" << std::endl << querystr << std::endl
-                                  << ">target" << std::endl << targetstr << std::endl;
-                        assert(false);
-                        exit(1);
-                    }
-                }
-#endif
-                alignments.push_back(chosen_aln);
-                auto last_query_start = current_query_start;
-                auto last_target_start = current_target_start;
-
-                // Update the start positions and remaining lengths for the next iteration
-                if (chosen_aln.is_rev) {
-                    current_query_start += bounds.query_start_offset;
-                } else {
-                    current_query_start += bounds.query_end_offset;
-                }
-                current_target_start += bounds.target_end_offset;
-                remaining_query_length = query_end - current_query_start;
-                remaining_target_length = target_end - current_target_start;
-            } else {
-                // If the alignment was completely eroded, break the loop
-                break;
+        {
+            std::string querystr = chosen_aln.is_rev ?
+                reverse_complement(std::string(query + current_query_start, chosen_aln.query_length))
+                : std::string(query + current_query_start, chosen_aln.query_length);
+            std::string targetstr = std::string(target + current_target_start, chosen_aln.target_length);
+            if (!validate_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                chosen_aln.query_length, chosen_aln.target_length, 0, 0)) {
+                std::cerr << "before trim cigar failure at " << current_query_start << " " << current_target_start << std::endl;
+                unpack_display_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                     chosen_aln.query_length, chosen_aln.target_length, 0, 0);
+                std::cerr << ">query" << std::endl << querystr << std::endl
+                          << ">target" << std::endl << targetstr << std::endl;
+                assert(false);
+                exit(1);
             }
-        } else {
-            // If no alignment was found, break the loop
+        }
+#endif
+
+        if (alignments.empty()) {
             break;
         }
-    }
+        auto& chosen_aln = alignments.back();
+        auto bounds = find_alignment_bounds(chosen_aln);
+                
+#ifdef VALIDATE_WFA_WFLIGN
+        {
+            std::string querystr = chosen_aln.is_rev ?
+                reverse_complement(std::string(query + current_query_start, chosen_aln.query_length))
+                : std::string(query + current_query_start, chosen_aln.query_length);
+            std::string targetstr = std::string(target + current_target_start, chosen_aln.target_length);
+            if (!validate_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                chosen_aln.query_length, chosen_aln.target_length, 0, 0)) {
+                std::cerr << "after trim cigar failure at " << current_query_start << " " << current_target_start << std::endl;
+                unpack_display_cigar(chosen_aln.edit_cigar, querystr.c_str(), targetstr.c_str(),
+                                     chosen_aln.query_length, chosen_aln.target_length, 0, 0);
+                std::cerr << ">query" << std::endl << querystr << std::endl
+                          << ">target" << std::endl << targetstr << std::endl;
+                assert(false);
+                exit(1);
+            }
+        }
+#endif
+        //alignments.push_back(chosen_aln);
+        auto last_query_start = current_query_start;
+        auto last_target_start = current_target_start;
 
+        // Update the start positions and remaining lengths for the next iteration
+        if (chosen_aln.is_rev) {
+            current_query_start += bounds.query_start_offset;
+        } else {
+            current_query_start += bounds.query_end_offset;
+        }
+        current_target_start += bounds.target_end_offset;
+        remaining_query_length = query_end - current_query_start;
+        remaining_target_length = target_end - current_target_start;
+    }
+    //std::cerr << "END do_progressive_wfa_patch_alignment got " << alignments.size() << " alignments" << std::endl;
     return alignments;
 }
 
@@ -1202,38 +1156,8 @@ void write_merged_alignment(
 
                             size_region_to_repatch = 0;
                             {
-                                alignment_t patch_aln;
-                                alignment_t rev_patch_aln;
-                                bool do_progressive_patch = false;
                                 // WFA is only global
-                                do_wfa_patch_alignment(
-                                        query, query_pos, query_delta,
-                                        target - target_pointer_shift, target_pos, target_delta,
-                                        wf_aligner, convex_penalties, patch_aln, rev_patch_aln,
-                                        chain_gap, max_patching_score, min_inversion_length);
-                                // collect inverse patch alignments
-                                if (rev_patch_aln.ok && save_multi_patch_alns) {
-                                    //
-                                    do_progressive_patch = true;
-                                } else if (patch_aln.ok) {
-                                    got_alignment = true;
-                                    const int start_idx =
-                                            patch_aln.edit_cigar.begin_offset;
-                                    const int end_idx =
-                                            patch_aln.edit_cigar.end_offset;
-                                    for (int i = start_idx; i < end_idx; i++) {
-                                        patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
-                                    }
-                                }
-
-                                if (do_progressive_patch) {
-                                    /*
-                                    std::cerr << "Starting progressive patching for region:" << std::endl;
-                                    std::cerr << "Query: " << query_pos << "-" << query_pos + query_delta << " (length: " << query_delta << ")" << std::endl;
-                                    std::cerr << "Target: " << target_pos << "-" << target_pos + target_delta << " (length: " << target_delta << ")" << std::endl;
-                                    */
-
-                                    auto patch_alignments = do_progressive_wfa_patch_alignment(
+                                auto patch_alignments = do_progressive_wfa_patch_alignment(
                                         query,
                                         query_pos,
                                         query_delta,
@@ -1246,64 +1170,22 @@ void write_merged_alignment(
                                         max_patching_score,
                                         min_inversion_length,
                                         erode_k);
-
-                                    // save the ok multi-patch alignments into our list
+                                if (patch_alignments.size() == 1
+                                    && patch_alignments.front().ok
+                                    && !patch_alignments.front().is_rev) {
+                                    got_alignment = true;
+                                    auto& patch_aln = patch_alignments.front();
+                                    const int start_idx =
+                                        patch_aln.edit_cigar.begin_offset;
+                                    const int end_idx =
+                                        patch_aln.edit_cigar.end_offset;
+                                    for (int i = start_idx; i < end_idx; i++) {
+                                        patched.push_back(patch_aln.edit_cigar.cigar_ops[i]);
+                                    }
+                                } else if (save_multi_patch_alns) {
                                     for (auto& aln : patch_alignments) {
-                                        if (aln.ok) {
-                                            // avoid overlapping patches: if alignments is non-empty, pop alignments off its back until
-                                            // the current query and target start are greater than the query and target end of the last alignment
-                                            /*
-                                            while (!multi_patch_alns.empty()
-                                                   && (multi_patch_alns.back().query_end() > aln.query_begin()
-                                                       || multi_patch_alns.back().target_end() > aln.target_begin())) {
-                                                // write some info about the popped alignment vs the current one
-                                                std::cerr << std::endl
-                                                          << "Popped alignment: "
-                                                          << multi_patch_alns.back().query_begin() << "-" << multi_patch_alns.back().query_end()
-                                                          << " vs " << aln.query_begin() << "-" << aln.query_end() << std::endl
-                                                    // target
-                                                          << multi_patch_alns.back().target_begin() << "-" << multi_patch_alns.back().target_end()
-                                                          << " vs " << aln.target_begin() << "-" << aln.target_end() << std::endl;
-                                                multi_patch_alns.pop_back();
-                                            }
-                                            */
-                                            multi_patch_alns.push_back(aln);
-                                        }
+                                        multi_patch_alns.push_back(aln);
                                     }
-
-                                    /*
-                                    std::cerr << "Progressive patching found " << patch_alignments.size() << " alignments" << std::endl;
-
-                                    for (size_t i = 0; i < patch_alignments.size(); ++i) {
-                                        const auto& aln = patch_alignments[i];
-                                        std::cerr << "Alignment " << i + 1 << ":" << std::endl;
-                                        std::cerr << "  Rev: " << (aln.is_rev?"true":"false") << std::endl;
-                                        std::cerr << "  Query: " << aln.j << "-" << aln.j + aln.query_length << " (length: " << aln.query_length << ")" << std::endl;
-                                        std::cerr << "  Target: " << aln.i << "-" << aln.i + aln.target_length << " (length: " << aln.target_length << ")" << std::endl;
-                                        std::cerr << "  CIGAR: ";
-                                        for (int c = aln.edit_cigar.begin_offset; c < aln.edit_cigar.end_offset; ++c) {
-                                            std::cerr << aln.edit_cigar.cigar_ops[c];
-                                        }
-                                        std::cerr << std::endl;
-                                        // Calculate and print alignment statistics
-                                        uint64_t matches = 0, mismatches = 0, insertions = 0, deletions = 0;
-                                        for (int c = aln.edit_cigar.begin_offset; c < aln.edit_cigar.end_offset; ++c) {
-                                            switch (aln.edit_cigar.cigar_ops[c]) {
-                                            case 'M': ++matches; break;
-                                            case 'X': ++mismatches; break;
-                                            case 'I': ++insertions; break;
-                                            case 'D': ++deletions; break;
-                                            }
-                                        }
-                                        std::cerr << "  Stats: Matches=" << matches << ", Mismatches=" << mismatches 
-                                                  << ", Insertions=" << insertions << ", Deletions=" << deletions << std::endl;
-                                        // Print a snippet of the aligned sequences
-                                        const int snippet_length = 50;
-                                        std::cerr << "  Query snippet:  " << std::string(query + aln.j, std::min((int)aln.query_length, snippet_length)) << std::endl;
-                                        std::cerr << "  Target snippet: " << std::string(target - target_pointer_shift + aln.i, std::min((int)aln.target_length, snippet_length)) << std::endl;
-                                        std::cerr << std::endl;
-                                    }
-                                    */
                                 }
 
 #ifdef WFA_PNG_TSV_TIMING
