@@ -1223,10 +1223,12 @@ void write_merged_alignment(
 
 #ifdef WFA_PNG_TSV_TIMING
                                 if (emit_patching_tsv) {
-                                    *out_patching_tsv
+                                    for (auto& aln : patch_alignments) {
+                                        *out_patching_tsv
                                             << query_name << "\t" << query_pos << "\t" << query_pos + query_delta << "\t"
                                             << target_name << "\t" << (target_pos - target_pointer_shift) << "\t" << (target_pos - target_pointer_shift + target_delta) << "\t"
-                                            << patch_aln.ok << std::endl;
+                                            << aln.ok << std::endl;
+                                    }
                                 }
 #endif
                             }
