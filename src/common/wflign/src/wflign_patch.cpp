@@ -2042,35 +2042,211 @@ query_start : query_end)
     // always clean up
     free(cigarv);
 
-    // write how many reverse complement alignments were found
-    //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
-    for (auto& patch_aln : multi_patch_alns) {
-        bool rev_query_is_rev = !query_is_rev;  // Flip the orientation
-        write_alignment(
-            out,
-            patch_aln,
-            query_name,
-            query_total_length,
-            query_offset,
-            query_length,
-            rev_query_is_rev,  // Use the flipped orientation
-            target_name,
-            target_total_length,
-            target_offset,
-            target_length,
-            min_identity,
-            mashmap_estimated_identity,
-            false,  // Don't add an endline after each alignment
-            true);  // This is a reverse complement alignment
-        // write tag indicating that this is a multipatch alignment
-        out << "\t" << "patch:Z:true" << "\t"
-            // and if the patch is inverted as well
-            << "\t" << "inv:Z:" << (patch_aln.is_rev ? "true" : "false") << "\n";
+
+    if (!paf_format_else_sam) {
+        for (auto& patch_aln : multi_patch_alns) {
+            write_alignment_sam(
+                out, patch_aln, query_name, query_total_length,
+                query_offset, query_length, patch_aln.is_rev,
+                target_name, target_total_length, target_offset, target_length,
+                min_identity, mashmap_estimated_identity,
+                no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift);
+        }
+    } else {
+        // write how many reverse complement alignments were found
+        //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
+        for (auto& patch_aln : multi_patch_alns) {
+            bool rev_query_is_rev = !query_is_rev;  // Flip the orientation
+            write_alignment_paf(
+                out,
+                patch_aln,
+                query_name,
+                query_total_length,
+                query_offset,
+                query_length,
+                rev_query_is_rev,  // Use the flipped orientation
+                target_name,
+                target_total_length,
+                target_offset,
+                target_length,
+                min_identity,
+                mashmap_estimated_identity,
+                false,  // Don't add an endline after each alignment
+                true);  // This is a reverse complement alignment
+            // write tag indicating that this is a multipatch alignment
+            out << "\t" << "pt:Z:true" << "\t"
+                // and if the patch is inverted as well
+                << "\t" << "iv:Z:" << (patch_aln.is_rev ? "true" : "false") << "\n";
+        }
     }
     out << std::flush;
 }
 
-void write_alignment(
+void write_tag_and_md_string(
+    std::ostream &out,
+    const char *cigar_ops,
+    const int cigar_start,
+    const int cigar_end,
+    const int target_start,
+    const char *target,
+    const int64_t target_offset,
+    const int64_t target_pointer_shift) {
+
+    out << "MD:Z:";
+
+    char last_op = '\0';
+    int last_len = 0;
+    int t_off = target_start, l_MD = 0;
+    int l = cigar_start;
+    int x = cigar_start;
+
+    while (x < cigar_end) {
+        while (x < cigar_end && isdigit(cigar_ops[x]))
+            ++x;
+        char op = cigar_ops[x];
+        int len = 0;
+        std::from_chars(cigar_ops + l, cigar_ops + x, len);
+        l = ++x;
+        if (last_len) {
+            if (last_op == op) {
+                len += last_len;
+            } else {
+                if (last_op == '=' || last_op == 'M') {
+                    l_MD += last_len;
+                    t_off += last_len;
+                } else if (last_op == 'X') {
+                    for (uint64_t ii = 0; ii < last_len; ++ii) {
+                        out << l_MD << target[t_off + ii - target_pointer_shift];
+                        l_MD = 0;
+                    }
+                    t_off += last_len;
+                } else if (last_op == 'D') {
+                    out << l_MD << "^";
+                    for (uint64_t ii = 0; ii < last_len; ++ii) {
+                        out << target[t_off + ii - target_pointer_shift];
+                    }
+                    l_MD = 0;
+                    t_off += last_len;
+                }
+            }
+        }
+        last_op = op;
+        last_len = len;
+    }
+
+    if (last_len) {
+        if (last_op == '=' || last_op == 'M') {
+            out << last_len + l_MD;
+        } else if (last_op == 'X') {
+            for (uint64_t ii = 0; ii < last_len; ++ii) {
+                out << l_MD << target[t_off + ii - target_pointer_shift];
+                l_MD = 0;
+            }
+            out << "0";
+        } else if (last_op == 'I') {
+            out << l_MD;
+        } else if (last_op == 'D') {
+            out << l_MD << "^";
+            for (uint64_t ii = 0; ii < last_len; ++ii) {
+                out << target[t_off + ii - target_pointer_shift];
+            }
+            out << "0";
+        }
+    }
+}
+
+void write_alignment_sam(
+    std::ostream &out,
+    const alignment_t& patch_aln,
+    const std::string& query_name,
+    const uint64_t& query_total_length,
+    const uint64_t& query_offset,
+    const uint64_t& query_length,
+    const bool& query_is_rev,
+    const std::string& target_name,
+    const uint64_t& target_total_length,
+    const uint64_t& target_offset,
+    const uint64_t& target_length,
+    const float& min_identity,
+    const float& mashmap_estimated_identity,
+    const bool& no_seq_in_sam,
+    const bool& emit_md_tag,
+    const char* query,
+    const char* target,
+    const int64_t& target_pointer_shift) {
+
+    uint64_t patch_matches = 0;
+    uint64_t patch_mismatches = 0;
+    uint64_t patch_insertions = 0;
+    uint64_t patch_inserted_bp = 0;
+    uint64_t patch_deletions = 0;
+    uint64_t patch_deleted_bp = 0;
+    uint64_t patch_refAlignedLength = 0;
+    uint64_t patch_qAlignedLength = 0;
+
+    char* patch_cigar = wfa_alignment_to_cigar(
+        &patch_aln.edit_cigar, patch_refAlignedLength, patch_qAlignedLength,
+        patch_matches, patch_mismatches, patch_insertions, patch_inserted_bp,
+        patch_deletions, patch_deleted_bp);
+
+    double patch_gap_compressed_identity = (double)patch_matches /
+        (double)(patch_matches + patch_mismatches + patch_insertions + patch_deletions);
+    double patch_block_identity = (double)patch_matches /
+        (double)(patch_matches + patch_mismatches + patch_inserted_bp + patch_deleted_bp);
+
+    /*
+    const uint64_t query_start_pos =
+        (query_is_rev ? query_offset + query_length : query_offset);
+    const uint64_t query_end_pos =
+        (query_is_rev ? query_offset : query_offset + query_length);
+    */
+
+    if (patch_gap_compressed_identity >= min_identity) {
+
+        out << query_name << "\t"
+            << (query_is_rev ? "16" : "0") << "\t"
+            << target_name << "\t"
+            << target_offset + patch_aln.i + 1 << "\t"
+            << std::round(float2phred(1.0 - patch_block_identity)) << "\t"
+            << patch_cigar << "\t"
+            << "*\t0\t0\t";
+
+        if (no_seq_in_sam) {
+            out << "*";
+        } else {
+            std::stringstream seq;
+            for (uint64_t p = patch_aln.j; p < patch_aln.j + patch_aln.query_length; ++p) {
+                seq << query[p];
+            }
+            if (query_is_rev) {
+                // reverse complement
+                out << reverse_complement(seq.str());
+            } else {
+                out << seq.str();
+            }
+        }
+        out << "\t*\t"
+            << "NM:i:" << (patch_mismatches + patch_inserted_bp + patch_deleted_bp) << "\t"
+            << "gi:f:" << patch_gap_compressed_identity << "\t"
+            << "bi:f:" << patch_block_identity << "\t"
+            << "md:f:" << mashmap_estimated_identity << "\t"
+            << "pt:Z:true" << "\t"
+            << "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
+
+        if (emit_md_tag) {
+            out << "\t";
+            write_tag_and_md_string(out, patch_cigar, 0, strlen(patch_cigar), 
+                                    target_offset + patch_aln.i,
+                                    target, target_offset, target_pointer_shift);
+        }
+
+        out << "\n";
+    }
+
+    free(patch_cigar);
+}
+
+void write_alignment_paf(
         std::ostream& out,
         const alignment_t& aln,
         const std::string& query_name,

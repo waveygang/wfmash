@@ -11,6 +11,7 @@
 #include <sstream>
 #include <functional>
 #include <fstream>
+#include <sstream>
 #include <lodepng/lodepng.h>
 
 #include "dna.hpp"
@@ -114,7 +115,35 @@ namespace wflign {
                 std::ostream* out_patching_tsv,
 #endif
                 const bool& with_endline = true);
-        void write_alignment(
+        void write_tag_and_md_string(
+            std::ostream &out,
+            const char *cigar_ops,
+            const int cigar_start,
+            const int cigar_end,
+            const int target_start,
+            const char *target,
+            const int64_t target_offset,
+            const int64_t target_pointer_shift);
+        void write_alignment_sam(
+            std::ostream &out,
+            const alignment_t& patch_aln,
+            const std::string& query_name,
+            const uint64_t& query_total_length,
+            const uint64_t& query_offset,
+            const uint64_t& query_length,
+            const bool& query_is_rev,
+            const std::string& target_name,
+            const uint64_t& target_total_length,
+            const uint64_t& target_offset,
+            const uint64_t& target_length,
+            const float& min_identity,
+            const float& mashmap_estimated_identity,
+            const bool& no_seq_in_sam,
+            const bool& emit_md_tag,
+            const char* query,
+            const char* target,
+            const int64_t& target_pointer_shift);
+        void write_alignment_paf(
                 std::ostream& out,
                 const alignment_t& aln,
                 const std::string& query_name,
