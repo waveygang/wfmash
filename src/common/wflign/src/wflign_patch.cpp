@@ -2203,7 +2203,7 @@ void write_alignment_sam(
     if (patch_gap_compressed_identity >= min_identity) {
 
         out << query_name << "\t"
-            << (query_is_rev ? "16" : "0") << "\t"
+            << (query_is_rev ^ patch_aln.is_rev ? "16" : "0") << "\t"
             << target_name << "\t"
             << target_offset + patch_aln.i + 1 << "\t"
             << std::round(float2phred(1.0 - patch_block_identity)) << "\t"
@@ -2217,7 +2217,7 @@ void write_alignment_sam(
             for (uint64_t p = patch_aln.j; p < patch_aln.j + patch_aln.query_length; ++p) {
                 seq << query[p];
             }
-            if (query_is_rev) {
+            if (patch_aln.is_rev) {
                 // reverse complement
                 out << reverse_complement(seq.str());
             } else {
