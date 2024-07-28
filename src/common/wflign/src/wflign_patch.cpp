@@ -2047,7 +2047,7 @@ query_start : query_end)
         for (auto& patch_aln : multi_patch_alns) {
             write_alignment_sam(
                 out, patch_aln, query_name, query_total_length,
-                query_offset, query_length, patch_aln.is_rev,
+                query_offset, query_length, query_is_rev,
                 target_name, target_total_length, target_offset, target_length,
                 min_identity, mashmap_estimated_identity,
                 no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift);
@@ -2056,7 +2056,6 @@ query_start : query_end)
         // write how many reverse complement alignments were found
         //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
         for (auto& patch_aln : multi_patch_alns) {
-            bool rev_query_is_rev = !query_is_rev;  // Flip the orientation
             write_alignment_paf(
                 out,
                 patch_aln,
@@ -2064,7 +2063,7 @@ query_start : query_end)
                 query_total_length,
                 query_offset,
                 query_length,
-                rev_query_is_rev,  // Use the flipped orientation
+                query_is_rev,
                 target_name,
                 target_total_length,
                 target_offset,
@@ -2253,7 +2252,7 @@ void write_alignment_paf(
         const uint64_t& query_total_length,
         const uint64_t& query_offset, // query offset on the forward strand
         const uint64_t& query_length, // used to compute the coordinates for reversed alignments
-        const bool& query_is_rev,
+        const bool& query_is_rev, // if the base homology mapping is in the reverse complement orientation
         const std::string& target_name,
         const uint64_t& target_total_length,
         const uint64_t& target_offset,
@@ -2288,16 +2287,45 @@ void write_alignment_paf(
         // PAF standard)
 
         if (gap_compressed_identity >= min_identity) {
-            uint64_t q_start;
+            //uint64_t q_start = query_offset;
+            /*
             if (query_is_rev && !is_rev_patch) {
                 q_start =
                     query_offset + (query_length - (aln.j + qAlignedLength));
             } else {
                 q_start = query_offset + aln.j;
+                }*/
+            /*
+            << query_offset +
+                (query_is_rev ? query_length - query_end : query_start)
+                << "\t"
+                << query_offset +
+                   (query_is_rev ? query_length - query_start : query_end)
+            */
+            std::cerr << "query_is_rev: " << query_is_rev
+                      << ", aln.is_rev: " << aln.is_rev
+                        << ", query_offset: " << query_offset
+                        << ", query_length: " << query_length
+                        << ", aln.j: " << aln.j
+                        << ", qAlignedLength: " << qAlignedLength
+                        << ", aln.query_length: " << aln.query_length
+                      << std::endl;
+            // four cases
+            // 1. query is forward, alignment is forward
+            // 2. query is forward, alignment is reverse
+            // 3. query is reverse, alignment is forward
+            // 4. query is reverse, alignment is reverse
+            uint64_t q_start, q_end;
+            if (query_is_rev) {
+                q_start = query_offset + (query_length - aln.j - qAlignedLength);
+                q_end = query_offset + (query_length - aln.j);
+            } else {
+                q_start = query_offset + aln.j;
+                q_end = query_offset + aln.j + qAlignedLength;
             }
             out << query_name << "\t" << query_total_length << "\t" << q_start
-                << "\t" << q_start + qAlignedLength << "\t"
-                << (query_is_rev ? "-" : "+") << "\t" << target_name << "\t"
+                << "\t" << q_end << "\t"
+                << (aln.is_rev ^ query_is_rev ? "-" : "+") << "\t" << target_name << "\t"
                 << target_total_length << "\t"
                 << target_offset + alignmentRefPos << "\t"
                 << target_offset + alignmentRefPos + refAlignedLength << "\t"
