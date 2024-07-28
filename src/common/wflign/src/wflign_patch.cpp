@@ -2283,38 +2283,8 @@ void write_alignment_paf(
         double block_identity =
                 (double)matches /
                 (double)(matches + mismatches + inserted_bp + deleted_bp);
-        // convert our coordinates to be relative to forward strand (matching
-        // PAF standard)
 
         if (gap_compressed_identity >= min_identity) {
-            //uint64_t q_start = query_offset;
-            /*
-            if (query_is_rev && !is_rev_patch) {
-                q_start =
-                    query_offset + (query_length - (aln.j + qAlignedLength));
-            } else {
-                q_start = query_offset + aln.j;
-                }*/
-            /*
-            << query_offset +
-                (query_is_rev ? query_length - query_end : query_start)
-                << "\t"
-                << query_offset +
-                   (query_is_rev ? query_length - query_start : query_end)
-            */
-            std::cerr << "query_is_rev: " << query_is_rev
-                      << ", aln.is_rev: " << aln.is_rev
-                        << ", query_offset: " << query_offset
-                        << ", query_length: " << query_length
-                        << ", aln.j: " << aln.j
-                        << ", qAlignedLength: " << qAlignedLength
-                        << ", aln.query_length: " << aln.query_length
-                      << std::endl;
-            // four cases
-            // 1. query is forward, alignment is forward
-            // 2. query is forward, alignment is reverse
-            // 3. query is reverse, alignment is forward
-            // 4. query is reverse, alignment is reverse
             uint64_t q_start, q_end;
             if (query_is_rev) {
                 q_start = query_offset + (query_length - aln.j - qAlignedLength);
