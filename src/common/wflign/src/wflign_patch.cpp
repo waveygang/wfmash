@@ -340,7 +340,7 @@ struct AlignmentBounds {
     int64_t target_end_offset;
 };
 
-AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
+AlignmentBounds ok_find_alignment_bounds(const alignment_t& aln, const int& erode_k) {
     AlignmentBounds bounds;
     bounds.query_start_offset = 0;
     bounds.query_end_offset = 0;
@@ -349,30 +349,185 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln) {
 
     int64_t query_pos = 0;
     int64_t target_pos = 0;
-    bool found_first_match = false;
+    int match_count = 0;
+    int reverse_match_count = 0;
+    bool found_start = false;
 
+    // Forward pass to find start bounds
     for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
         char op = aln.edit_cigar.cigar_ops[i];
         switch (op) {
             case 'M':
-            case 'X':
-                if (!found_first_match) {
+            case '=':
+                ++match_count;
+                if (match_count >= erode_k && !found_start) {
                     bounds.query_start_offset = query_pos;
                     bounds.target_start_offset = target_pos;
-                    found_first_match = true;
+                    found_start = true;
                 }
                 ++query_pos;
                 ++target_pos;
-                bounds.query_end_offset = query_pos;
-                bounds.target_end_offset = target_pos;
+                break;
+            case 'X':
+                match_count = 0;
+                ++query_pos;
+                ++target_pos;
                 break;
             case 'I':
+                match_count = 0;
                 ++query_pos;
                 break;
             case 'D':
+                match_count = 0;
                 ++target_pos;
                 break;
         }
+    }
+
+    // Reverse pass to find end bounds
+    query_pos = aln.query_length - 1;
+    target_pos = aln.target_length - 1;
+    for (int i = aln.edit_cigar.end_offset - 1; i >= aln.edit_cigar.begin_offset; --i) {
+        char op = aln.edit_cigar.cigar_ops[i];
+        switch (op) {
+            case 'M':
+            case '=':
+                ++reverse_match_count;
+                if (reverse_match_count >= erode_k) {
+                    bounds.query_end_offset = query_pos + 1;
+                    bounds.target_end_offset = target_pos + 1;
+                    return bounds;
+                }
+                --query_pos;
+                --target_pos;
+                break;
+            case 'X':
+                reverse_match_count = 0;
+                --query_pos;
+                --target_pos;
+                break;
+            case 'I':
+                reverse_match_count = 0;
+                --query_pos;
+                break;
+            case 'D':
+                reverse_match_count = 0;
+                --target_pos;
+                break;
+        }
+    }
+
+    // If we didn't find end bounds, set them to the end of the alignment
+    if (bounds.query_end_offset == 0) {
+        bounds.query_end_offset = aln.query_length;
+        bounds.target_end_offset = aln.target_length;
+    }
+
+    return bounds;
+}
+
+AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k) {
+    AlignmentBounds bounds;
+    bounds.query_start_offset = 0;
+    bounds.query_end_offset = 0;
+    bounds.target_start_offset = 0;
+    bounds.target_end_offset = 0;
+
+    int64_t query_pos = 0;
+    int64_t target_pos = 0;
+    int match_count = 0;
+    bool found_start = false;
+    bool found_end = false;
+
+    // Forward pass
+    for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
+        char op = aln.edit_cigar.cigar_ops[i];
+        switch (op) {
+            case 'M':
+            case '=':
+                ++match_count;
+                if (match_count >= erode_k && !found_start) {
+                    bounds.query_start_offset = query_pos;
+                    bounds.target_start_offset = target_pos;
+                    found_start = true;
+                }
+                ++query_pos;
+                ++target_pos;
+                break;
+            case 'X':
+                match_count = 0;
+                ++query_pos;
+                ++target_pos;
+                break;
+            case 'I':
+                match_count = 0;
+                ++query_pos;
+                break;
+            case 'D':
+                match_count = 0;
+                ++target_pos;
+                break;
+        }
+    }
+
+    // Reverse pass
+    query_pos = aln.query_length - 1;
+    target_pos = aln.target_length - 1;
+    match_count = 0;
+
+    for (int i = aln.edit_cigar.end_offset - 1; i >= aln.edit_cigar.begin_offset; --i) {
+        char op = aln.edit_cigar.cigar_ops[i];
+        switch (op) {
+            case 'M':
+            case '=':
+                ++match_count;
+                if (match_count >= erode_k && !found_end) {
+                    bounds.query_end_offset = query_pos + 1;
+                    bounds.target_end_offset = target_pos + 1;
+                    found_end = true;
+                }
+                --query_pos;
+                --target_pos;
+                break;
+            case 'X':
+                match_count = 0;
+                --query_pos;
+                --target_pos;
+                break;
+            case 'I':
+                match_count = 0;
+                --query_pos;
+                break;
+            case 'D':
+                match_count = 0;
+                --target_pos;
+                break;
+        }
+    }
+
+    // If we didn't find bounds, set them to the full alignment length
+    if (!found_start) {
+        bounds.query_start_offset = 0;
+        bounds.target_start_offset = 0;
+    } else {
+        // heuristic: subtract erode_k
+        //bounds.query_start_offset = std::max((int64_t)0, bounds.query_start_offset - erode_k);
+        //bounds.target_start_offset = std::max((int64_t)0, bounds.target_start_offset - erode_k);
+    }
+    if (!found_end) {
+        bounds.query_end_offset = aln.query_length;
+        bounds.target_end_offset = aln.target_length;
+    } else {
+        // heuristic: add erode_k
+        //bounds.query_end_offset = std::min((int64_t)aln.query_length, bounds.query_end_offset + erode_k);
+        //bounds.target_end_offset = std::min((int64_t)aln.target_length, bounds.target_end_offset + erode_k);
+    }
+
+    // Adjust bounds for reverse complement alignments
+    if (aln.is_rev) {
+        std::swap(bounds.query_start_offset, bounds.query_end_offset);
+        bounds.query_start_offset = aln.query_length - bounds.query_start_offset;
+        bounds.query_end_offset = aln.query_length - bounds.query_end_offset;
     }
 
     return bounds;
@@ -432,12 +587,12 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const uint64_t query_end = query_start + query_length;
     const uint64_t target_end = target_start + target_length;
 
-    //std::cerr << "BEGIN do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
+    std::cerr << "BEGIN do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
     bool first = true;
 
     while (first || remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
         first = false;
-        //std::cerr << "do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
+        std::cerr << "do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
         alignment_t aln, rev_aln;
         aln.is_rev = false;
         rev_aln.is_rev = true;
@@ -456,8 +611,8 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             max_patching_score,
             min_inversion_length);
 
-        //std::cerr << "WFA fwd alignment: " << aln << std::endl;
-        //std::cerr << "WFA rev alignment: " << rev_aln << std::endl;
+        std::cerr << "WFA fwd alignment: " << aln << std::endl;
+        std::cerr << "WFA rev alignment: " << rev_aln << std::endl;
 
         if (rev_aln.ok && (!aln.ok || rev_aln.score < aln.score)) {
             alignments.push_back(rev_aln);
@@ -489,7 +644,8 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             break;
         }
         auto& chosen_aln = alignments.back();
-        auto bounds = find_alignment_bounds(chosen_aln);
+        auto bounds = find_alignment_bounds(chosen_aln, erode_k);
+        std::cerr << "bounds: " << bounds.query_start_offset << " " << bounds.query_end_offset << " " << bounds.target_start_offset << " " << bounds.target_end_offset << std::endl;
                 
 #ifdef VALIDATE_WFA_WFLIGN
         {
@@ -514,6 +670,7 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
         auto last_target_start = current_target_start;
 
         // Update the start positions and remaining lengths for the next iteration
+        /*
         if (chosen_aln.is_rev) {
             current_query_start += bounds.query_start_offset;
         } else {
@@ -522,6 +679,45 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
         current_target_start += bounds.target_end_offset;
         remaining_query_length = query_end - current_query_start;
         remaining_target_length = target_end - current_target_start;
+        */
+        // instead of the above, we want to progressively find the largest incomplete region to align
+        // we should work with total area of the alignment over query and target to determine what to do
+        // this will change the way we update tracking variables for the next iteration
+        // basically: we take the larger of the two regions that will be at the start and end of the alignment
+        // if there isn't any remaining target or query sequence on one end, obviously it's not an option
+        // if there is, we should align the largest possible region that is still incomplete
+        /// ....
+        // Calculate the sizes of unaligned regions using only the bounds
+        uint64_t left_query_size = bounds.query_start_offset;
+        uint64_t right_query_size = remaining_query_length - bounds.query_end_offset;
+        uint64_t left_target_size = bounds.target_start_offset;
+        uint64_t right_target_size = remaining_target_length - bounds.target_end_offset;
+
+        uint64_t max_left_size = std::max(left_query_size, left_target_size);
+        uint64_t max_right_size = std::max(right_query_size, right_target_size);
+
+        std::cerr << "left_query_size: " << left_query_size << " left_target_size: " << left_target_size << std::endl
+                  << "right_query_size: " << right_query_size << " right_target_size: " << right_target_size << std::endl
+                  << "max_left_size: " << max_left_size << " max_right_size: " << max_right_size << std::endl;
+
+        if (max_left_size >= max_right_size && max_left_size > 0) {
+            std::cerr << "aligning left region" << std::endl
+                      << "left_query_size: " << left_query_size << " left_target_size: " << left_target_size << std::endl;
+            // Align the left region
+            remaining_query_length = left_query_size;
+            remaining_target_length = left_target_size;
+            // current_query_start and current_target_start remain unchanged
+        } else if (max_right_size > 0) {
+            std::cerr << "aligning right region" << std::endl
+                      << "right_query_size: " << right_query_size << " right_target_size: " << right_target_size << std::endl;
+            // Align the right region
+            current_query_start += bounds.query_end_offset;
+            current_target_start += bounds.target_end_offset;
+            remaining_query_length = right_query_size;
+            remaining_target_length = right_target_size;
+        } else {
+            break; // No more regions to align
+        }
     }
     //std::cerr << "END do_progressive_wfa_patch_alignment got " << alignments.size() << " alignments" << std::endl;
     return alignments;
