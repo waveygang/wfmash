@@ -438,6 +438,7 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
     int match_count = 0;
     bool found_start = false;
     bool found_end = false;
+    std::cerr << "erode_k = " << erode_k << std::endl;
 
     // Forward pass
     for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
@@ -455,16 +456,16 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
                 ++target_pos;
                 break;
             case 'X':
-                match_count = 0;
+                //match_count = 0;
                 ++query_pos;
                 ++target_pos;
                 break;
             case 'I':
-                match_count = 0;
+                //match_count = 0;
                 ++query_pos;
                 break;
             case 'D':
-                match_count = 0;
+                //match_count = 0;
                 ++target_pos;
                 break;
         }
@@ -490,16 +491,16 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
                 --target_pos;
                 break;
             case 'X':
-                match_count = 0;
+                //match_count = 0;
                 --query_pos;
                 --target_pos;
                 break;
             case 'I':
-                match_count = 0;
+                //match_count = 0;
                 --query_pos;
                 break;
             case 'D':
-                match_count = 0;
+                //match_count = 0;
                 --target_pos;
                 break;
         }
@@ -511,16 +512,16 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
         bounds.target_start_offset = 0;
     } else {
         // heuristic: subtract erode_k
-        //bounds.query_start_offset = std::max((int64_t)0, bounds.query_start_offset - erode_k);
-        //bounds.target_start_offset = std::max((int64_t)0, bounds.target_start_offset - erode_k);
+        bounds.query_start_offset = std::max((int64_t)0, bounds.query_start_offset - erode_k);
+        bounds.target_start_offset = std::max((int64_t)0, bounds.target_start_offset - erode_k);
     }
     if (!found_end) {
         bounds.query_end_offset = aln.query_length;
         bounds.target_end_offset = aln.target_length;
     } else {
         // heuristic: add erode_k
-        //bounds.query_end_offset = std::min((int64_t)aln.query_length, bounds.query_end_offset + erode_k);
-        //bounds.target_end_offset = std::min((int64_t)aln.target_length, bounds.target_end_offset + erode_k);
+        bounds.query_end_offset = std::min((int64_t)aln.query_length, bounds.query_end_offset + erode_k);
+        bounds.target_end_offset = std::min((int64_t)aln.target_length, bounds.target_end_offset + erode_k);
     }
 
     // Adjust bounds for reverse complement alignments
@@ -644,7 +645,9 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             break;
         }
         auto& chosen_aln = alignments.back();
-        auto bounds = find_alignment_bounds(chosen_aln, erode_k);
+        //auto bounds = ok_find_alignment_bounds(chosen_aln, erode_k);
+        //auto bounds = find_alignment_bounds(chosen_aln, erode_k);
+        auto bounds = find_alignment_bounds(chosen_aln, 7); // very light erosion of bounds on ends to avoid single-match starts and ends
         std::cerr << "bounds: " << bounds.query_start_offset << " " << bounds.query_end_offset << " " << bounds.target_start_offset << " " << bounds.target_end_offset << std::endl;
                 
 #ifdef VALIDATE_WFA_WFLIGN
