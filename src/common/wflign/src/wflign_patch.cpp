@@ -438,7 +438,6 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
     int match_count = 0;
     bool found_start = false;
     bool found_end = false;
-    std::cerr << "erode_k = " << erode_k << std::endl;
 
     // Forward pass
     for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; ++i) {
@@ -588,12 +587,12 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     const uint64_t query_end = query_start + query_length;
     const uint64_t target_end = target_start + target_length;
 
-    std::cerr << "BEGIN do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
+    //std::cerr << "BEGIN do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
     bool first = true;
 
     while (first || remaining_query_length >= min_inversion_length && remaining_target_length >= min_inversion_length) {
         first = false;
-        std::cerr << "do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
+        //std::cerr << "do_progressive_wfa_patch_alignment: " << current_query_start << " " << remaining_query_length << " " << current_target_start << " " << remaining_target_length << std::endl;
         alignment_t aln, rev_aln;
         aln.is_rev = false;
         rev_aln.is_rev = true;
@@ -612,14 +611,16 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             max_patching_score,
             min_inversion_length);
 
-        std::cerr << "WFA fwd alignment: " << aln << std::endl;
-        std::cerr << "WFA rev alignment: " << rev_aln << std::endl;
+        //std::cerr << "WFA fwd alignment: " << aln << std::endl;
+        //std::cerr << "WFA rev alignment: " << rev_aln << std::endl;
 
         if (rev_aln.ok && (!aln.ok || rev_aln.score < aln.score)) {
             alignments.push_back(rev_aln);
         } else if (aln.ok) {
             alignments.push_back(aln);
-            //break;
+            if (alignments.size() == 1) {
+                break;
+            }
         }
 
 #ifdef VALIDATE_WFA_WFLIGN
@@ -645,10 +646,8 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             break;
         }
         auto& chosen_aln = alignments.back();
-        //auto bounds = ok_find_alignment_bounds(chosen_aln, erode_k);
-        //auto bounds = find_alignment_bounds(chosen_aln, erode_k);
         auto bounds = find_alignment_bounds(chosen_aln, 7); // very light erosion of bounds on ends to avoid single-match starts and ends
-        std::cerr << "bounds: " << bounds.query_start_offset << " " << bounds.query_end_offset << " " << bounds.target_start_offset << " " << bounds.target_end_offset << std::endl;
+        //std::cerr << "bounds: " << bounds.query_start_offset << " " << bounds.query_end_offset << " " << bounds.target_start_offset << " " << bounds.target_end_offset << std::endl;
                 
 #ifdef VALIDATE_WFA_WFLIGN
         {
@@ -699,20 +698,16 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
         uint64_t max_left_size = std::max(left_query_size, left_target_size);
         uint64_t max_right_size = std::max(right_query_size, right_target_size);
 
-        std::cerr << "left_query_size: " << left_query_size << " left_target_size: " << left_target_size << std::endl
-                  << "right_query_size: " << right_query_size << " right_target_size: " << right_target_size << std::endl
-                  << "max_left_size: " << max_left_size << " max_right_size: " << max_right_size << std::endl;
+        //std::cerr << "left_query_size: " << left_query_size << " left_target_size: " << left_target_size << std::endl
+        //          << "right_query_size: " << right_query_size << " right_target_size: " << right_target_size << std::endl
+        //          << "max_left_size: " << max_left_size << " max_right_size: " << max_right_size << std::endl;
 
         if (max_left_size >= max_right_size && max_left_size > 0) {
-            std::cerr << "aligning left region" << std::endl
-                      << "left_query_size: " << left_query_size << " left_target_size: " << left_target_size << std::endl;
             // Align the left region
             remaining_query_length = left_query_size;
             remaining_target_length = left_target_size;
             // current_query_start and current_target_start remain unchanged
         } else if (max_right_size > 0) {
-            std::cerr << "aligning right region" << std::endl
-                      << "right_query_size: " << right_query_size << " right_target_size: " << right_target_size << std::endl;
             // Align the right region
             current_query_start += bounds.query_end_offset;
             current_target_start += bounds.target_end_offset;
