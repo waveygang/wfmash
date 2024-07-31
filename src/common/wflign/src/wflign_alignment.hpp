@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <sstream>
 #include "WFA2-lib/bindings/cpp/WFAligner.hpp"
 
 /*
@@ -35,6 +36,7 @@ public:
     int i;
     int query_length;
     int target_length;
+    int score;
     bool ok;
     bool keep;
     bool is_rev;
@@ -56,11 +58,15 @@ public:
     void trim_back(int query_trim);
     // query_begin, query_end, target_begin, target_end
     // Accessors
-    int query_begin();
-    int query_end();
-    int target_begin();
-    int target_end();
+    int query_begin() const;
+    int query_end() const;
+    int target_begin() const;
+    int target_end() const;
 };
+
+// debugging alignment writer
+std::ostream& operator<<(std::ostream& os, const alignment_t& aln);
+// debugging cigar writer
 
 
 /*

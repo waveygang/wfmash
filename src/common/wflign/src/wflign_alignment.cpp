@@ -14,7 +14,7 @@
 
 // Default constructor
 alignment_t::alignment_t()
-    : j(0), i(0), query_length(0), target_length(0), ok(false), keep(false) {
+    : j(0), i(0), query_length(0), target_length(0), score(std::numeric_limits<int>::max()), ok(false), keep(false), is_rev(false) {
     edit_cigar = {nullptr, 0, 0};
 }
 
@@ -25,7 +25,7 @@ alignment_t::~alignment_t() {
 
 // Copy constructor
 alignment_t::alignment_t(const alignment_t& other)
-    : j(other.j), i(other.i), query_length(other.query_length),
+    : j(other.j), i(other.i), query_length(other.query_length), is_rev(other.is_rev),
       target_length(other.target_length), ok(other.ok), keep(other.keep) {
     if (other.edit_cigar.cigar_ops) {
         edit_cigar.cigar_ops = (char*)malloc((other.edit_cigar.end_offset - other.edit_cigar.begin_offset) * sizeof(char));
@@ -40,7 +40,7 @@ alignment_t::alignment_t(const alignment_t& other)
 
 // Move constructor
 alignment_t::alignment_t(alignment_t&& other) noexcept
-    : j(other.j), i(other.i), query_length(other.query_length),
+    : j(other.j), i(other.i), query_length(other.query_length), is_rev(other.is_rev),
       target_length(other.target_length), ok(other.ok), keep(other.keep),
       edit_cigar(other.edit_cigar) {
     other.edit_cigar = {nullptr, 0, 0};
@@ -55,6 +55,7 @@ alignment_t& alignment_t::operator=(const alignment_t& other) {
         target_length = other.target_length;
         ok = other.ok;
         keep = other.keep;
+        is_rev = other.is_rev;
 
         free(edit_cigar.cigar_ops);
         if (other.edit_cigar.cigar_ops) {
@@ -79,6 +80,7 @@ alignment_t& alignment_t::operator=(alignment_t&& other) noexcept {
         target_length = other.target_length;
         ok = other.ok;
         keep = other.keep;
+        is_rev = other.is_rev;
 
         free(edit_cigar.cigar_ops);
         edit_cigar = other.edit_cigar;
@@ -87,19 +89,19 @@ alignment_t& alignment_t::operator=(alignment_t&& other) noexcept {
     return *this;
 }
 
-int alignment_t::query_begin() {
+int alignment_t::query_begin() const {
     return j;
 }
 
-int alignment_t::query_end() {
+int alignment_t::query_end() const {
     return j + query_length;
 }
 
-int alignment_t::target_begin() {
+int alignment_t::target_begin() const {
     return i;
 }
 
-int alignment_t::target_end() {
+int alignment_t::target_end() const {
     return i + target_length;
 }
 
@@ -705,6 +707,28 @@ int calculate_alignment_score(const wflign_cigar_t& cigar, const wflign_penaltie
     }
 
     return score;
+}
+
+std::string cigar_to_string(const wflign_cigar_t& cigar) {
+    std::stringstream ss;
+    const int start_idx = cigar.begin_offset;
+    const int end_idx = cigar.end_offset;
+    for (int c = start_idx; c < end_idx; c++) {
+        ss << cigar.cigar_ops[c];
+    }
+    return ss.str();
+}
+
+std::ostream& operator<<(std::ostream& os, const alignment_t& aln) {
+    return os << "Alignment: "
+              << "Query(" << aln.query_begin() << "-" << aln.query_end() << "/" << aln.query_length << ") "
+              << "Target(" << aln.target_begin() << "-" << aln.target_end() << "/" << aln.target_length << ") "
+              << "Score=" << aln.score << " "
+              << "Rev=" << (aln.is_rev ? "Yes" : "No") << " "
+              << "Status=" << (aln.ok ? "OK" : "NotOK") << " "
+              << "Keep=" << (aln.keep ? "Yes" : "No") << " "
+              << "CIGAR=" << cigar_to_string(aln.edit_cigar) << " "
+              << "Indices(i,j)=(" << aln.i << "," << aln.j << ")";
 }
 
 /*

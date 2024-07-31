@@ -1026,7 +1026,7 @@ void WFlign::wflign_affine_wavefront(
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {
-                    write_alignment(
+                    write_alignment_paf(
                             *out,
                             **x,
                             query_name,
