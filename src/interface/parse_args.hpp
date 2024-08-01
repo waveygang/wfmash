@@ -86,6 +86,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 6*segment_length, up to 30k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking [default: 1M]", {'P', "max-mapping-length"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
@@ -138,7 +139,6 @@ void parse_args(int argc,
     args::Group general_opts(parser, "[ General Options ]");
     args::ValueFlag<std::string> tmp_base(general_opts, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
     args::Flag keep_temp_files(general_opts, "", "keep intermediate files", {'Z', "keep-temp"});
-    //args::Flag show_progress(general_opts, "show-progress", "write alignment progress to stderr", {'P', "show-progress"});
 
 #ifdef WFA_PNG_TSV_TIMING
     args::Group debugging_opts(parser, "[ Debugging Options ]");
@@ -428,6 +428,17 @@ void parse_args(int argc,
     } else {
         map_parameters.chain_gap = std::min((int64_t)30000, 6*map_parameters.segLength);
         align_parameters.chain_gap = std::min((int64_t)30000, 6*map_parameters.segLength);
+    }
+
+    if (max_mapping_length) {
+        const int64_t l = wfmash::handy_parameter(args::get(max_mapping_length));
+        if (l <= 0) {
+            std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
+            exit(1);
+        }
+        map_parameters.max_mapping_length = l;
+    } else {
+        map_parameters.max_mapping_length = 1000000; // 1 Mbp default
     }
 
     if (drop_low_map_pct_identity) {
