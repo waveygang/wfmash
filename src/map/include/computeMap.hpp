@@ -1,4 +1,3 @@
-
 /**
  * @file    computeMap.hpp
  * @brief   implements the sequence mapping logic
@@ -1522,6 +1521,55 @@ namespace skch
           std::for_each(std::next(start), end, [](MappingResult& e) { e.discard = 1; });
       }
 
+      void adjustConsecutiveMappings(std::vector<MappingResult>& mappings) {
+          if (mappings.size() < 2) return;
+
+          // Sort mappings by query start position, then by reference start position
+          std::sort(mappings.begin(), mappings.end(), 
+                    [](const MappingResult& a, const MappingResult& b) {
+                        return std::tie(a.queryStartPos, a.refStartPos) < 
+                            std::tie(b.queryStartPos, b.refStartPos);
+                    });
+
+          // Define threshold for adjustment (e.g., 10 bases)
+          const int threshold = param.segLength;
+
+          for (size_t i = 1; i < mappings.size(); ++i) {
+              auto& prev = mappings[i-1];
+              auto& curr = mappings[i];
+
+              // Check if mappings are on the same reference sequence
+              if (prev.refSeqId != curr.refSeqId
+                  || prev.strand != curr.strand) continue;
+
+              // Calculate gaps
+              int query_gap = curr.queryStartPos - prev.queryEndPos;
+              int ref_gap = curr.refStartPos - prev.refEndPos;
+
+              // Check if both gaps are within the threshold
+              if (std::abs(query_gap) <= threshold && std::abs(ref_gap) <= threshold) {
+                  // Calculate midpoints
+                  int query_mid = (prev.queryEndPos + curr.queryStartPos) / 2;
+                  int ref_mid = (prev.refEndPos + curr.refStartPos) / 2;
+
+                  // Adjust the mappings
+                  prev.queryEndPos = query_mid;
+                  prev.refEndPos = ref_mid;
+                  curr.queryStartPos = query_mid;
+                  curr.refStartPos = ref_mid;
+
+                  // Update block lengths
+                  prev.blockLength = std::max(prev.refEndPos - prev.refStartPos, 
+                                              prev.queryEndPos - prev.queryStartPos);
+                  curr.blockLength = std::max(curr.refEndPos - curr.refStartPos, 
+                                              curr.queryEndPos - curr.queryStartPos);
+
+                  // Update approximate matches
+                  prev.approxMatches = std::round(prev.nucIdentity * prev.blockLength / 100.0);
+                  curr.approxMatches = std::round(curr.nucIdentity * curr.blockLength / 100.0);
+              }
+          }
+      }
       
       /**
        * @brief                       Merge fragment mappings by convolution of a 2D range over the alignment matrix
@@ -1542,6 +1590,9 @@ namespace skch
                   return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
                       < std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
               });
+
+          // tweak start and end positions of consecutive mappings
+          adjustConsecutiveMappings(readMappings);
 
           //First assign a unique id to each split mapping in the sorted order
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
@@ -1614,91 +1665,88 @@ namespace skch
           for(auto it = readMappings.begin(); it != readMappings.end();) {
               //Bucket by each chain
               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
-        
-              // sort the chain by query, then reference, start position
+
+              // Sort the chain by query, then reference, start position
               std::sort(it, it_end, [](const MappingResult &a, const MappingResult &b) {
                   return std::tie(a.queryStartPos, a.refStartPos) < std::tie(b.queryStartPos, b.refStartPos);
               });
 
-              // break the mapping chain into fragments
+              // First pass: Mark cuttable positions
+              const int consecutive_mappings_window = 4; // Configurable parameter
+              std::vector<bool> is_cuttable(std::distance(it, it_end), false);
+    
+              auto window_start = it;
+              int consecutive_count = 0;
+
+              for (auto current = it; current != it_end; ++current) {
+                  if (current == window_start || 
+                      std::prev(current)->queryEndPos == current->queryStartPos) {
+                      ++consecutive_count;
+                      if (consecutive_count == consecutive_mappings_window) {
+                          // Mark the second position as cuttable (if cutting after)
+                          is_cuttable[std::distance(it, std::next(window_start, 1))] = true;
+                          // Mark the third position as cuttable (if cutting before)
+                          is_cuttable[std::distance(it, std::next(window_start, 2))] = true;
+                          ++window_start;
+                          --consecutive_count;
+                      }
+                  } else {
+                      window_start = current;
+                      consecutive_count = 1;
+                  }
+              }
+
+              // Second pass: Choose cut points and process fragments
               auto fragment_start = it;
-              for (auto current = it; current != it_end;) {
-                  auto next = std::next(current);
-                  if (next == it_end) {
-                      // Last mapping in the chain, process the final fragment
-                      processMappingFragment(fragment_start, std::next(current));
-                      break;
-                  }
+              auto current = it;
+              offset_t accumulate_length = 0;
 
-                  // Check if we need to cut the chain here
-                  bool should_cut = false;
-                  int current_length = current->queryEndPos - fragment_start->queryStartPos;
-
-                  if (current_length > param.max_mapping_length) {
-                      should_cut = true;
-                  }
-
-                  if (should_cut) {
-                      // Look backward and forward to find the nearest contiguous pair of mappings
-                      uint64_t dist_prev = std::numeric_limits<uint64_t>::max();
-                      uint64_t dist_next = std::numeric_limits<uint64_t>::max();
-                      auto cut_point_prev = current;
-                      auto cut_point_next = next;
-
-                      // 1) Go backward
-                      while (cut_point_prev != fragment_start) {
-                          auto prev = std::prev(cut_point_prev);
-                          if (prev->queryEndPos == cut_point_prev->queryStartPos) {
-                              // Found a contiguous pair
-                              dist_prev = std::distance(prev, current);
-                              break;
+              while (current != it_end) {
+                  accumulate_length += current->queryEndPos - current->queryStartPos;
+        
+                  if (accumulate_length >= param.max_mapping_length) {
+                      // Find the nearest cuttable position
+                      auto nearest_cut = current;
+                      offset_t min_distance = std::abs((int64_t)accumulate_length - (int64_t)param.max_mapping_length);
+            
+                      for (auto cut_candidate = fragment_start; cut_candidate != std::next(current); ++cut_candidate) {
+                          offset_t candidate_length = cut_candidate->queryEndPos - fragment_start->queryStartPos;
+                          offset_t distance = std::abs((int64_t)candidate_length - (int64_t)param.max_mapping_length);
+                
+                          if (is_cuttable[std::distance(it, cut_candidate)] && distance < min_distance) {
+                              nearest_cut = cut_candidate;
+                              min_distance = distance;
                           }
-                          cut_point_prev = prev;
                       }
 
-                      // 2) Go forward
-                      while (cut_point_next != it_end) {
-                          auto next_next = std::next(cut_point_next);
-                          if (next_next != it_end && cut_point_next->queryEndPos == next_next->queryStartPos) {
-                              // Found a contiguous pair
-                              dist_next = std::distance(current, cut_point_next);
-                              break;
-                          }
-                          cut_point_next = next_next;
-                      }
-
-                      // Determine where to cut based on the nearest contiguous pair
-                      if (dist_prev <= dist_next) {
-                          // Cut at the previous contiguous pair
-                          processMappingFragment(fragment_start, cut_point_prev);
-                          fragment_start = cut_point_prev;
-                          current = cut_point_prev;
-                      } else {
-                          // Cut at the next contiguous pair
-                          processMappingFragment(fragment_start, cut_point_next);
-                          fragment_start = cut_point_next;
-                          current = cut_point_next;
-                      }
+                      // Process the fragment
+                      processMappingFragment(fragment_start, std::next(nearest_cut));
+            
+                      // Update pointers and reset accumulated length
+                      fragment_start = std::next(nearest_cut);
+                      current = fragment_start;
+                      accumulate_length = 0;
                   } else {
                       ++current;
                   }
               }
 
-              // compute
-              //int totalMergedN;                                   // total number of mappings merged in the original chain (pre cut), used for filtering
-              //offset_t totalMergedQueryLen;                       // total length of merged mappings in the original chain (pre cut), used for filtering
+              // Process any remaining fragment
+              if (fragment_start != current) {
+                  processMappingFragment(fragment_start, current);
+              }
 
-              // Compute the total number of mappings merged in the original chain (pre cut)
-              int n_in_full_chain = 0;
+              // Compute chain statistics
+              int n_in_full_chain = std::distance(it, it_end);
               offset_t query_len_in_full_chain = 0;
               for (auto x = it; x != it_end; ++x) {
-                  n_in_full_chain += 1;
                   query_len_in_full_chain += x->queryEndPos - x->queryStartPos;
               }
-        
+
+              // Assign chain statistics to all mappings in the chain
               for (auto x = it; x != it_end; ++x) {
-                  it->totalMergedN = n_in_full_chain;
-                  it->totalMergedQueryLen = query_len_in_full_chain;
+                  x->totalMergedN = n_in_full_chain;
+                  x->totalMergedQueryLen = query_len_in_full_chain;
               }
 
               // Move the iterator to the end of the processed chain
