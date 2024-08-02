@@ -1524,13 +1524,6 @@ namespace skch
       void adjustConsecutiveMappings(std::vector<MappingResult>& mappings) {
           if (mappings.size() < 2) return;
 
-          // Sort mappings by query start position, then by reference start position
-          std::sort(mappings.begin(), mappings.end(), 
-                    [](const MappingResult& a, const MappingResult& b) {
-                        return std::tie(a.queryStartPos, a.refStartPos) < 
-                            std::tie(b.queryStartPos, b.refStartPos);
-                    });
-
           // Define threshold for adjustment (e.g., 10 bases)
           const int threshold = param.segLength;
 
