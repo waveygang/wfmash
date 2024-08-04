@@ -92,7 +92,8 @@ namespace skch
             // count how many secondary alignments we keep
             int kept = 0;
 
-            for(auto it = L.begin(); it != L.end(); it++)
+            auto it = L.begin();
+            for( ; it != L.end(); it++)
             {
                 if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
                     break;
@@ -101,15 +102,18 @@ namespace skch
                 vec[*it].discard = 0;
                 ++kept;
             }
+            auto kit = it;
 
             // Check for overlaps and mark bad if necessary
-            for (auto it = L.begin(); it != L.end(); it++) {
+            for ( ; it != L.end(); it++) {
                 if (it == L.begin()) continue;
                 int idx = *it;
-                if (calculate_overlap(*beg, idx) > overlapThreshold) {
-                    vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
-                    vec[idx].discard = 1;
-                    if (kept > 0) --kept;
+                for (auto it2 = L.begin(); it2 != kit; it2++) {
+                    if (calculate_overlap(idx, *it2) > overlapThreshold) {
+                        vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
+                        vec[idx].discard = 1;
+                        break;
+                    }
                 }
             }
 
@@ -361,7 +365,8 @@ namespace skch
             // count how many secondary alignments we keep
             int kept = 0;
 
-            for(auto it = L.begin(); it != L.end(); it++)
+            auto it = L.begin();
+            for( ; it != L.end(); it++)
             {
                 if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
                     break;
@@ -370,15 +375,18 @@ namespace skch
                 vec[*it].discard = 0;
                 ++kept;
             }
+            auto kit = it;
 
             // Check for overlaps and mark bad if necessary
-            for (auto it = L.begin(); it != L.end(); it++) {
+            for ( ; it != L.end(); it++) {
                 if (it == L.begin()) continue;
                 int idx = *it;
-                if (calculate_overlap(*beg, idx) > overlapThreshold) {
-                    vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
-                    vec[idx].discard = 1;
-                    if (kept > 0) --kept;
+                for (auto it2 = L.begin(); it2 != kit; it2++) {
+                    if (calculate_overlap(idx, *it2) > overlapThreshold) {
+                        vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
+                        vec[idx].discard = 1;
+                        break;
+                    }
                 }
             }
 
