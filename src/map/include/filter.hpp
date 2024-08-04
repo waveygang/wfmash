@@ -84,7 +84,7 @@ namespace skch
          * @param[in/out]   L             container with mappings
          */
         template <typename Type>
-        inline void markGood(Type &L, int secondaryToKeep, bool dropRand)
+        inline void markGood(Type &L, int secondaryToKeep, bool dropRand, double overlapThreshold)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -106,7 +106,7 @@ namespace skch
             for (auto it = L.begin(); it != L.end(); it++) {
                 if (it == L.begin()) continue;
                 int idx = *it;
-                if (calculate_overlap(*beg, idx) > 0.5) {
+                if (calculate_overlap(*beg, idx) > overlapThreshold) {
                     vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
                     vec[idx].discard = 1;
                     if (kept > 0) --kept;
@@ -153,7 +153,7 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap
        */
       template <typename VecIn>
-      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand)
+      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold)
         {
           if(readMappings.size() <= 1)
             return;
@@ -201,7 +201,7 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep, dropRand);
+            obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
             it = it2;
           }
@@ -278,10 +278,10 @@ namespace skch
        *                                 until we only have secondaryToKeep secondary mappings
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand)
+      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
       {
           //Apply the main filtering algorithm to ensure the best mappings across complete axis
-          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand);
+          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold);
       }
 
      /**
@@ -352,8 +352,8 @@ namespace skch
          * @tparam          Type          std::set type to save mappings (sweep line status container)
          * @param[in/out]   L             container with mappings
          */
-                template <typename Type>
-        inline void markGood(Type &L, int secondaryToKeep, bool dropRand)
+          template <typename Type>
+          inline void markGood(Type &L, int secondaryToKeep, bool dropRand, double overlapThreshold)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -375,7 +375,7 @@ namespace skch
             for (auto it = L.begin(); it != L.end(); it++) {
                 if (it == L.begin()) continue;
                 int idx = *it;
-                if (calculate_overlap(*beg, idx) > 0.5) {
+                if (calculate_overlap(*beg, idx) > overlapThreshold) {
                     vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
                     vec[idx].discard = 1;
                     if (kept > 0) --kept;
@@ -442,7 +442,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep, bool dropRand)
+      void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
         {
           if(readMappings.size() <= 1)
             return;
@@ -493,7 +493,7 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep, dropRand);
+            obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
             it = it2;
           }

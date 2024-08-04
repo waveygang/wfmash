@@ -565,11 +565,11 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, this->refSketch, n_mappings, param.dropRand);
+                skch::Filter::ref::filterMappings(tmpMappings, this->refSketch, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
-              skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand);
+                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold);
             }
             filteredMappings.insert(
                 filteredMappings.end(), 

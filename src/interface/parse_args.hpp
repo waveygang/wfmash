@@ -88,6 +88,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 6*segment_length, up to 30k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking [default: 1M]", {'P', "max-mapping-length"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
+    args::ValueFlag<double> overlap_threshold(mapping_opts, "F", "drop mappings overlapping more than fraction F with a higher scoring mapping [default: 0.5]", {'O', "overlap-threshold"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
     //ToFix: args::Flag keep_ties(mapping_opts, "", "keep all mappings with equal score even if it results in more than n mappings", {'D', "keep-ties"});
@@ -445,6 +446,12 @@ void parse_args(int argc,
         map_parameters.keep_low_pct_id = false;
     } else {
         map_parameters.keep_low_pct_id = true;
+    }
+
+    if (overlap_threshold) {
+        map_parameters.overlap_threshold = args::get(overlap_threshold);
+    } else {
+        map_parameters.overlap_threshold = 0.5;
     }
 
     if (kmer_size) {
