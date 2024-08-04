@@ -454,8 +454,8 @@ namespace skch
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 return e.totalMergedQueryLen > e.blockLength
-                                     && e.totalMergedN < min_count;
+                                 return e.blockLength < param.block_length //e.queryLen > e.blockLength
+                                     || e.n_merged < min_count;
                              }),
               readMappings.end());
       }
@@ -1738,8 +1738,8 @@ namespace skch
 
               // Assign chain statistics to all mappings in the chain
               for (auto x = it; x != it_end; ++x) {
-                  x->totalMergedN = n_in_full_chain;
-                  x->totalMergedQueryLen = query_len_in_full_chain;
+                  x->n_merged = n_in_full_chain;
+                  x->blockLength = query_len_in_full_chain;
               }
 
               // Move the iterator to the end of the processed chain

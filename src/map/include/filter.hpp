@@ -41,7 +41,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength) ; }
+        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength); }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
@@ -68,6 +68,17 @@ namespace skch
           return x_score > y_score;
         }
 
+        double calculate_overlap(const int x, const int y) const {
+            offset_t overlap_start = std::max(vec[x].queryStartPos, vec[y].queryStartPos);
+            offset_t overlap_end = std::min(vec[x].queryEndPos, vec[y].queryEndPos);
+            offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
+            offset_t x_length = vec[x].queryEndPos - vec[x].queryStartPos;
+            offset_t y_length = vec[y].queryEndPos - vec[y].queryStartPos;
+            //std::cerr << "overlap_length: " << overlap_length << " x_length: " << x_length << " y_length: " << y_length
+            //          << " return: " << static_cast<double>(overlap_length) / std::min(x_length, y_length) << std::endl;
+            return static_cast<double>(overlap_length) / std::min(x_length, y_length);
+        }
+
         /*
          * @brief                         mark the mappings with maximum score as good (on query seq)
          * @tparam          Type          std::set type to save mappings (sweep line status container)
@@ -90,6 +101,17 @@ namespace skch
 
                 vec[*it].discard = 0;
                 ++kept;
+            }
+
+            // Check for overlaps and mark bad if necessary
+            for (auto it = L.begin(); it != L.end(); it++) {
+                if (it == L.begin()) continue;
+                int idx = *it;
+                if (calculate_overlap(*beg, idx) > 0.5) {
+                    vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
+                    vec[idx].discard = 1;
+                    if (kept > 0) --kept;
+                }
             }
 
             // check for the case where there are multiple best mappings > secondaryToKeep
@@ -139,7 +161,7 @@ namespace skch
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });
+          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; e.overlapped = 0; });
 
           //Initialize object of Helper struct
           Helper obj (readMappings);
@@ -187,11 +209,11 @@ namespace skch
 
           //Remove bad mappings
           readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
+              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1 || e.overlapped == 1; }),
               readMappings.end());
         }
 
-     /**
+      /**
        * @brief                       filter mappings (best for query sequence)
        * @details                     evaluate best N unmerged mappings for each position, assumes non-overlapping mappings in query
        * @param[in/out] readMappings  Mappings computed by Mashmap
