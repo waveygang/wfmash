@@ -68,14 +68,13 @@ namespace skch
           return x_score > y_score;
         }
 
+        // compute the overlap of the two mappings
         double calculate_overlap(const int x, const int y) const {
             offset_t overlap_start = std::max(vec[x].queryStartPos, vec[y].queryStartPos);
             offset_t overlap_end = std::min(vec[x].queryEndPos, vec[y].queryEndPos);
             offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
             offset_t x_length = vec[x].queryEndPos - vec[x].queryStartPos;
             offset_t y_length = vec[y].queryEndPos - vec[y].queryStartPos;
-            //std::cerr << "overlap_length: " << overlap_length << " x_length: " << x_length << " y_length: " << y_length
-            //          << " return: " << static_cast<double>(overlap_length) / std::min(x_length, y_length) << std::endl;
             return static_cast<double>(overlap_length) / std::min(x_length, y_length);
         }
 
@@ -338,13 +337,23 @@ namespace skch
           return x_score > y_score;
         }
 
+        // compute the overlap of the two mappings
+        double calculate_overlap(const int x, const int y) const {
+            offset_t overlap_start = std::max(vec[x].refStartPos, vec[y].refStartPos);
+            offset_t overlap_end = std::min(vec[x].refEndPos, vec[y].refEndPos);
+            offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
+            offset_t x_length = vec[x].refEndPos - vec[x].refStartPos;
+            offset_t y_length = vec[y].refEndPos - vec[y].refStartPos;
+            return static_cast<double>(overlap_length) / std::min(x_length, y_length);
+        }
+
         /**
          * @brief                         mark the mappings with maximum score as good (on query seq)
          * @tparam          Type          std::set type to save mappings (sweep line status container)
          * @param[in/out]   L             container with mappings
          */
-        template <typename Type>
-          inline void markGood(Type &L, int secondaryToKeep)
+                template <typename Type>
+        inline void markGood(Type &L, int secondaryToKeep, bool dropRand)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -354,10 +363,55 @@ namespace skch
 
             for(auto it = L.begin(); it != L.end(); it++)
             {
-              if((this->greater_score(*beg, *it) || vec[*it].discard == 0) && ++kept > secondaryToKeep)
-                break;
+                if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
+                    break;
+                }
 
-              vec[*it].discard = 0;
+                vec[*it].discard = 0;
+                ++kept;
+            }
+
+            // Check for overlaps and mark bad if necessary
+            for (auto it = L.begin(); it != L.end(); it++) {
+                if (it == L.begin()) continue;
+                int idx = *it;
+                if (calculate_overlap(*beg, idx) > 0.5) {
+                    vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
+                    vec[idx].discard = 1;
+                    if (kept > 0) --kept;
+                }
+            }
+
+            // check for the case where there are multiple best mappings > secondaryToKeep
+            // which have the same score
+            // we will hash the mapping struct and keep the one with the secondaryToKeep with the lowest hash value
+            if (kept > secondaryToKeep && dropRand) 
+            {
+              // we will use hashes of the mapping structs to break ties
+              // first we'll make a vector of the mappings including the hashes
+              std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
+              for(auto it = L.begin(); it != L.end(); it++)
+              {
+                  if(vec[*it].discard == 0)
+                  {
+                      score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
+                  }
+              }
+              // now we'll sort the vector by score and hash
+              std::sort(score_and_hash.begin(), score_and_hash.end(), std::greater{});
+              // reset kept counter
+              kept = 0;
+              for (auto& x : score_and_hash) {
+                  std::get<2>(x)->discard = 1;
+              }
+              // now we mark the best to keep
+              for (auto& x : score_and_hash) {
+                  if (kept > secondaryToKeep) {
+                      break;
+                  }
+                  std::get<2>(x)->discard = 0;
+                  ++kept;
+              }
             }
           }
 
@@ -388,7 +442,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep)
+        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep, bool dropRand)
         {
           if(readMappings.size() <= 1)
             return;
@@ -439,7 +493,7 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep);
+            obj.markGood(bst, secondaryToKeep, dropRand);
 
             it = it2;
           }

@@ -565,7 +565,7 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-              skch::Filter::ref::filterMappings(tmpMappings, this->refSketch, n_mappings);
+                skch::Filter::ref::filterMappings(tmpMappings, this->refSketch, n_mappings, param.dropRand);
             }
             else
             {
