@@ -55,6 +55,7 @@ struct seq_record_t {
     uint64_t queryStartPos;
     uint64_t queryLen;
     uint64_t queryTotalLength;
+
     seq_record_t(const MappingBoundaryRow& c, const std::string& r, 
                  const std::string& ref, uint64_t refStart, uint64_t refLength, uint64_t refTotalLength,
                  const std::string& query, uint64_t queryStart, uint64_t queryLength, uint64_t queryTotalLength)
@@ -183,363 +184,410 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 
   private:
 
-      /**
-       * @brief                 parse query sequences and mashmap mappings
-       *                        to compute sequence alignments
-       */
-      void computeAlignments()
-      {
-          uint64_t total_seqs = 0;
+seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord, 
+                              const std::string& mappingRecordLine,
+                              faidx_t* ref_faidx,
+                              faidx_t* query_faidx) {
+    // Get the reference sequence length
+    const int64_t ref_size = faidx_seq_len(ref_faidx, currentRecord.refId.c_str());
+    // Get the query sequence length
+    const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
 
-          // Count the number of mapped bases to align
-          uint64_t total_alignment_length = 0;
-          {
-              std::ifstream mappingListStream(param.mashmapPafFile);
-              std::string mappingRecordLine;
-              MappingBoundaryRow currentRecord;
-              uint64_t total_records = 0;
+    // Compute padding
+    const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
+        ? param.wflign_max_len_minor : currentRecord.rStartPos;
+    const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
+        ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
 
-              while(!mappingListStream.eof()) {
-                  std::getline(mappingListStream, mappingRecordLine);
-                  if (!mappingRecordLine.empty()) {
-                      parseMashmapRow(mappingRecordLine, currentRecord);
-                      total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                      ++total_records;
-                  }
-              }
-          }
+    // Extract reference sequence
+    int64_t ref_len;
+    char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
+                                      currentRecord.rStartPos - head_padding, 
+                                      currentRecord.rEndPos + tail_padding, &ref_len);
 
-          progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
+    // Extract query sequence
+    int64_t query_len;
+    char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
+                                        currentRecord.qStartPos, currentRecord.qEndPos, &query_len);
 
-          // input atomic queue
-          seq_atomic_queue_t seq_queue;
-          // output atomic queues
-          paf_atomic_queue_t paf_queue, tsv_queue, patching_tsv_queue;
-          // flag when we're done reading
-          std::atomic<bool> reader_done;
-          reader_done.store(false);
+    // Create a new seq_record_t object for the alignment
+    seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
+                                         std::string(ref_seq, ref_len), 
+                                         currentRecord.rStartPos - head_padding, ref_len, ref_size,
+                                         std::string(query_seq, query_len), 
+                                         currentRecord.qStartPos, query_len, query_size);
 
-          auto& nthreads = param.threads;
-          //for (
+    // Clean up
+    free(ref_seq);
+    free(query_seq);
 
-          // atomics to record if we're working or not
-          std::vector<std::atomic<bool>> working(nthreads);
-          for (auto& w : working) {
-              w.store(true);
-          }
+    return rec;
+}
 
-          size_t total_alignments_queued = 0;
-          auto reader_thread = [&]() {
-              std::ifstream mappingListStream(param.mashmapPafFile);
-              if (!mappingListStream.is_open()) {
-                  throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open input mapping file: " + param.mashmapPafFile);
-              }
+std::string processAlignment(seq_record_t* rec) {
+    std::string& ref_seq = rec->refSequence;
+    std::string& query_seq = rec->querySequence;
 
-              std::string mappingRecordLine;
-              MappingBoundaryRow currentRecord;
+    skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq.data(), ref_seq.length());
+    skch::CommonFunc::makeUpperCaseAndValidDNA(query_seq.data(), query_seq.length());
 
-              while (!mappingListStream.eof()) {
-                  std::getline(mappingListStream, mappingRecordLine);
-                  if (!mappingRecordLine.empty()) {
-                      parseMashmapRow(mappingRecordLine, currentRecord);
+    // Adjust the reference sequence to start from the original start position
+    char* ref_seq_ptr = &ref_seq[rec->currentRecord.rStartPos - rec->refStartPos];
+
+    std::vector<char> queryRegionStrand(query_seq.size() + 1);
+
+    if(rec->currentRecord.strand == skch::strnd::FWD) {
+        std::copy(query_seq.begin(), query_seq.end(), queryRegionStrand.begin());
+    } else {
+        skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand.data(), query_seq.size());
+    }
+
+    wflign::wavefront::WFlign wflign(
+        param.wflambda_segment_length,
+        param.min_identity,
+        param.force_biwfa_alignment,
+        param.wfa_mismatch_score,
+        param.wfa_gap_opening_score,
+        param.wfa_gap_extension_score,
+        param.wfa_patching_mismatch_score,
+        param.wfa_patching_gap_opening_score1,
+        param.wfa_patching_gap_extension_score1,
+        param.wfa_patching_gap_opening_score2,
+        param.wfa_patching_gap_extension_score2,
+        rec->currentRecord.mashmap_estimated_identity,
+        param.wflign_mismatch_score,
+        param.wflign_gap_opening_score,
+        param.wflign_gap_extension_score,
+        param.wflign_max_mash_dist,
+        param.wflign_min_wavefront_length,
+        param.wflign_max_distance_threshold,
+        param.wflign_max_len_major,
+        param.wflign_max_len_minor,
+        param.wflign_erode_k,
+        param.chain_gap,
+        param.wflign_min_inv_patch_len,
+        param.wflign_max_patching_score);
+
+    std::stringstream output;
+    wflign.set_output(
+        &output,
+#ifdef WFA_PNG_TSV_TIMING
+        !param.tsvOutputPrefix.empty(),
+        nullptr,
+        param.prefix_wavefront_plot_in_png,
+        param.wfplot_max_size,
+        !param.path_patching_info_in_tsv.empty(),
+        nullptr,
+#endif
+        true, // merge alignments
+        param.emit_md_tag,
+        !param.sam_format,
+        param.no_seq_in_sam);
+
+    wflign.wflign_affine_wavefront(
+        rec->currentRecord.qId,
+        queryRegionStrand.data(),
+        rec->queryTotalLength,
+        rec->queryStartPos,
+        rec->queryLen,
+        rec->currentRecord.strand != skch::strnd::FWD,
+        rec->currentRecord.refId,
+        ref_seq_ptr,
+        rec->refTotalLength,
+        rec->currentRecord.rStartPos,
+        rec->currentRecord.rEndPos - rec->currentRecord.rStartPos);
+
+    return output.str();
+}
+
+void single_reader_thread(const std::string& input_file,
+                          atomic_queue::AtomicQueue<std::string*, 1024>& line_queue,
+                          std::atomic<bool>& reader_done) {
+    std::ifstream mappingListStream(input_file);
+    if (!mappingListStream.is_open()) {
+        throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open input mapping file: " + input_file);
+    }
+
+    std::string line;
+    while (std::getline(mappingListStream, line)) {
+        if (!line.empty()) {
+            std::string* line_ptr = new std::string(std::move(line));
+            line_queue.push(line_ptr);
+        }
+    }
+
+    mappingListStream.close();
+    reader_done.store(true);
+}
+
+void processor_thread(std::atomic<size_t>& total_alignments_queued,
+                      std::atomic<bool>& reader_done,
+                      atomic_queue::AtomicQueue<std::string*, 1024>& line_queue,
+                      seq_atomic_queue_t& seq_queue,
+                      std::atomic<bool>& thread_should_exit) {
+    faidx_t* local_ref_faidx = fai_load(param.refSequences.front().c_str());
+    faidx_t* local_query_faidx = fai_load(param.querySequences.front().c_str());
+
+    while (!thread_should_exit.load()) {
+        std::string* line_ptr = nullptr;
+        if (line_queue.try_pop(line_ptr)) {
+            MappingBoundaryRow currentRecord;
+            parseMashmapRow(*line_ptr, currentRecord);
             
-                      // Get the reference sequence length
-                      const int64_t ref_size = faidx_seq_len(ref_faidx, currentRecord.refId.c_str());
-                      // Get the query sequence length
-                      const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
+            // Process the record and create seq_record_t
+            seq_record_t* rec = createSeqRecord(currentRecord, *line_ptr, local_ref_faidx, local_query_faidx);
 
-                      // Compute padding
-                      const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
-                          ? param.wflign_max_len_minor : currentRecord.rStartPos;
-                      const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
-                          ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+            while (!seq_queue.try_push(rec)) {
+                if (thread_should_exit.load()) {
+                    delete rec;
+                    delete line_ptr;
+                    goto cleanup;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
 
-                      // Extract reference sequence
-                      int64_t ref_len;
-                      char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
-                                                        currentRecord.rStartPos - head_padding, currentRecord.rEndPos + tail_padding, &ref_len);
+            ++total_alignments_queued;
+            delete line_ptr;
+        } else if (reader_done.load() && line_queue.was_empty()) {
+            break;
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
 
-                      // Extract query sequence
-                      int64_t query_len;
-                      char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
-                                                          currentRecord.qStartPos, currentRecord.qEndPos, &query_len);
+cleanup:
+    fai_destroy(local_ref_faidx);
+    fai_destroy(local_query_faidx);
+}
 
-                      // Create a new seq_record_t object for the alignment using std::move
-                      seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
-                                                           std::string(ref_seq, ref_len), currentRecord.rStartPos - head_padding, ref_len, ref_size,
-                                                           std::string(query_seq, query_len), currentRecord.qStartPos, query_len, query_size);
+void processor_manager(seq_atomic_queue_t& seq_queue,
+                       atomic_queue::AtomicQueue<std::string*, 1024>& line_queue,
+                       std::atomic<size_t>& total_alignments_queued,
+                       std::atomic<bool>& reader_done,
+                       std::atomic<bool>& processor_done,
+                       size_t max_processors) {
+    std::vector<std::thread> processor_threads;
+    std::vector<std::atomic<bool>> thread_should_exit(max_processors);
 
-                      // Clean up
-                      free(ref_seq);
-                      free(query_seq);
+    const size_t queue_capacity = seq_queue.capacity();
+    const size_t low_threshold = queue_capacity * 0.2;
+    const size_t high_threshold = queue_capacity * 0.8;
 
-                      ++total_alignments_queued;
-                      seq_queue.push(rec);
-                  }
-              }
+    auto spawn_processor = [&](size_t id) {
+        thread_should_exit[id].store(false);
+        processor_threads.emplace_back([this, &total_alignments_queued, &reader_done, &line_queue, &seq_queue, &thread_should_exit, id]() {
+            this->processor_thread(total_alignments_queued, reader_done, line_queue, seq_queue, thread_should_exit[id]);
+        });
+    };
 
-              mappingListStream.close();
-              reader_done.store(true);
-          };
+    // Start with one processor
+    spawn_processor(0);
+    size_t current_processors = 1;
 
-          // helper to check if we're still aligning
-          auto still_working =
-              [&](const std::vector<std::atomic<bool>>& working) {
-                  bool ongoing = false;
-                  for (auto& w : working) {
-                      ongoing = ongoing || w.load();
-                  }
-                  return ongoing;
-              };
+    while (!reader_done.load() || !line_queue.was_empty() || !seq_queue.was_empty()) {
+        size_t queue_size = seq_queue.was_size();
 
-          // writer, picks output from queue and writes it to our output stream
-          std::ofstream outstrm(param.pafOutputFile, ios::app);
+        if (queue_size < low_threshold && current_processors < max_processors) {
+            spawn_processor(current_processors++);
+        } else if (queue_size > high_threshold && current_processors > 1) {
+            thread_should_exit[--current_processors].store(true);
+        }
 
-          size_t total_alignments_written = 0;
-          auto writer_thread =
-              [&]() {
-                  while (true) {
-                      std::string* paf_lines = nullptr;
-                      if (!paf_queue.try_pop(paf_lines)
-                          && !still_working(working)) {
-                          break;
-                      } else if (paf_lines != nullptr) {
-                          ++total_alignments_written;
-                          outstrm << *paf_lines;
-                          delete paf_lines;
-                      } else {
-                          std::this_thread::sleep_for(100ns);
-                      }
-                  }
-              };
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
-#ifdef WFA_PNG_TSV_TIMING
-          auto writer_thread_tsv =
-                  [&]() {
-              if (!param.tsvOutputPrefix.empty()) {
-                  uint64_t num_alignments_completed = 0;
+    // Signal all remaining threads to exit
+    for (size_t i = 0; i < current_processors; ++i) {
+        thread_should_exit[i].store(true);
+    }
 
-                  while (true) {
-                      std::string* tsv_lines = nullptr;
-                      if (!tsv_queue.try_pop(tsv_lines)
-                      && !still_working(working)) {
-                          break;
-                      } else if (tsv_lines != nullptr) {
-                          std::ofstream ofstream_tsv(param.tsvOutputPrefix + std::to_string(num_alignments_completed++) + ".tsv");
-                          ofstream_tsv << *tsv_lines;
-                          ofstream_tsv.close();
+    // Wait for all processor threads to finish
+    for (auto& thread : processor_threads) {
+        thread.join();
+    }
+    processor_done.store(true);
+}
 
-                          delete tsv_lines;
-                      } else {
-                          std::this_thread::sleep_for(100ns);
-                      }
-                  }
-              }
-          };
+void worker_thread(uint64_t tid,
+                   std::atomic<bool>& is_working,
+                   seq_atomic_queue_t& seq_queue,
+                   paf_atomic_queue_t& paf_queue,
+                   std::atomic<bool>& reader_done,
+                   std::atomic<bool>& processor_done,
+                   progress_meter::ProgressMeter& progress,
+                   std::atomic<uint64_t>& processed_alignment_length) {
+    is_working.store(true);
+    while (true) {
+        seq_record_t* rec = nullptr;
+        if (seq_queue.try_pop(rec)) {
+            is_working.store(true);
+            std::string alignment_output = processAlignment(rec);
+            
+            // Push the alignment output to the paf_queue
+            paf_queue.push(new std::string(std::move(alignment_output)));
+            
+            // Update progress meter and processed alignment length
+            uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
+            progress.increment(alignment_length);
+            processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+            
+            delete rec;
+        } else if (reader_done.load() && processor_done.load() && seq_queue.was_empty()) {
+            break;
+        } else {
+            is_working.store(false);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    is_working.store(false);
+}
 
-          std::ofstream ofstream_patching_tsv(param.path_patching_info_in_tsv);
-          auto writer_thread_patching_tsv =
-                  [&]() {
-                      if (!param.path_patching_info_in_tsv.empty()) {
-                          while (true) {
-                              std::string* tsv_lines = nullptr;
-                              if (!patching_tsv_queue.try_pop(tsv_lines)
-                                  && !still_working(working)) {
-                                  break;
-                              } else if (tsv_lines != nullptr) {
-                                  ofstream_patching_tsv << *tsv_lines;
+void write_sam_header(std::ofstream& outstream) {
+    for(const auto &fileName : param.refSequences) {
+        // check if there is a .fai
+        std::string fai_name = fileName + ".fai";
+        if (fs::exists(fai_name)) {
+            // if so, process the .fai to determine our sequence length
+            std::string line;
+            std::ifstream in(fai_name.c_str());
+            while (std::getline(in, line)) {
+                auto line_split = skch::CommonFunc::split(line, '\t');
+                const std::string seq_name = line_split[0];
+                const uint64_t seq_len = std::stoull(line_split[1]);
+                outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
+            }
+        } else {
+            // if not, warn that this is expensive
+            std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
+            seqiter::for_each_seq_in_file(
+                fileName, {}, "",
+                [&](const std::string& seq_name,
+                    const std::string& seq) {
+                    outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
+                });
+        }
+    }
+    outstream << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
+}
 
-                                  delete tsv_lines;
-                              } else {
-                                  std::this_thread::sleep_for(100ns);
-                              }
-                          }
-                      }
-                  };
-#endif
+void writer_thread(const std::string& output_file,
+                   paf_atomic_queue_t& paf_queue,
+                   std::atomic<bool>& reader_done,
+                   std::atomic<bool>& processor_done,
+                   const std::vector<std::atomic<bool>>& worker_working) {
+    std::ofstream outstream(output_file);
+    // if the output file is SAM, we write the header
+    if (param.sam_format) {
+        write_sam_header(outstream);
+    }
 
-          // worker, takes candidate alignments and runs wfa alignment on them
-          auto worker_thread = 
-              [&](uint64_t tid,
-                  std::atomic<bool>& is_working) {
-                  is_working.store(true);
-                  while (true) {
-                      seq_record_t* rec = nullptr;
-                      if (!seq_queue.try_pop(rec)
-                          && reader_done.load()) {
-                          break;
-                      } else if (rec != nullptr) {
-                          std::stringstream output;
-#ifdef WFA_PNG_TSV_TIMING
-                          std::stringstream output_tsv;
-                          std::stringstream patching_output_tsv;
-#endif
-                          doAlignment(
-                              output,
-#ifdef WFA_PNG_TSV_TIMING
-                              output_tsv,
-                              patching_output_tsv,
-#endif
-                              rec,
-                              tid);
-                          progress.increment(rec->currentRecord.qEndPos - rec->currentRecord.qStartPos);
+    if (!outstream.is_open()) {
+        throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open output file: " + output_file);
+    }
 
-                          auto* paf_rec = new std::string(output.str());
-                          if (!paf_rec->empty()) {
-                              paf_queue.push(paf_rec);
-                          } else {
-                              delete paf_rec;
-                          }
+    auto all_workers_done = [&]() {
+        return std::all_of(worker_working.begin(), worker_working.end(),
+                           [](const std::atomic<bool>& w) { return !w.load(); });
+    };
 
-#ifdef WFA_PNG_TSV_TIMING
-                          auto* tsv_rec = new std::string(output_tsv.str());
-                          if (!tsv_rec->empty()) {
-                              tsv_queue.push(tsv_rec);
-                          } else {
-                              delete tsv_rec;
-                          }
+    while (true) {
+        std::string* paf_output = nullptr;
+        if (paf_queue.try_pop(paf_output)) {
+            outstream << *paf_output;
+            outstream.flush();
+            delete paf_output;
+        } else if (reader_done.load() && processor_done.load() && paf_queue.was_empty() && all_workers_done()) {
+            break;
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
 
-                          auto* patching_tsv_rec = new std::string(patching_output_tsv.str());
-                          if (!patching_tsv_rec->empty()) {
-                              patching_tsv_queue.push(patching_tsv_rec);
-                          } else {
-                              delete patching_tsv_rec;
-                          }
-#endif
+    outstream.close();
+}
 
-                          delete rec;
-                      } else {
-                          std::this_thread::sleep_for(100ns);
-                      }
-                  }
-                  is_working.store(false);
-              };
+void computeAlignments() {
+    std::atomic<size_t> total_alignments_queued(0);
+    std::atomic<bool> reader_done(false);
+    std::atomic<bool> processor_done(false);
 
-          // launch reader
-          std::thread reader(reader_thread);
-          // launch PAF/SAM writer
-          std::thread writer(writer_thread);
-#ifdef WFA_PNG_TSV_TIMING
-          // launch TSV writer
-          std::thread writer_tsv(writer_thread_tsv);
-          std::thread writer_patching_tsv(writer_thread_patching_tsv);
-#endif
-          // launch workers
-          std::vector<std::thread> workers; workers.reserve(nthreads);
-          for (uint64_t t = 0; t < nthreads; ++t) {
-              workers.emplace_back(worker_thread,
-                                   t,
-                                   std::ref(working[t]));
-          }
+    // Create queues
+    atomic_queue::AtomicQueue<std::string*, 1024> line_queue;
+    seq_atomic_queue_t seq_queue;
+    paf_atomic_queue_t paf_queue;  // Add this line
 
-          // wait for reader and workers to complete
-          reader.join();
-          for (auto& worker : workers) {
-              worker.join();
-          }
-          // and finally the writer
-          writer.join();
-#ifdef WFA_PNG_TSV_TIMING
-          writer_tsv.join();
-          writer_patching_tsv.join();
-          ofstream_patching_tsv.close();
-#endif
+    // Calculate max_processors based on the number of worker threads
+    size_t max_processors = std::max(1UL, static_cast<unsigned long>(param.threads));
 
-          progress.finish();
-          std::cerr << "[wfmash::align::computeAlignments] "
-                    << "count of mapped reads = " << total_seqs
-                    << ", total aligned bp = " << total_alignment_length << std::endl;
-      }
+    // Calculate total alignment length
+    uint64_t total_alignment_length = 0;
+    {
+        std::ifstream mappingListStream(param.mashmapPafFile);
+        std::string mappingRecordLine;
+        MappingBoundaryRow currentRecord;
 
-      // core alignment computation function
-      void doAlignment(
-          std::stringstream& output,
-#ifdef WFA_PNG_TSV_TIMING
-          std::stringstream& output_tsv,
-          std::stringstream& patching_output_tsv,
-#endif
-          seq_record_t* rec,
-          uint64_t tid) {
-#ifdef DEBUG
-          std::cerr << "INFO, align::Aligner::doAlignment, aligning mashmap record: " << rec->mappingRecordLine << std::endl;
-#endif
+        while(std::getline(mappingListStream, mappingRecordLine)) {
+            if (!mappingRecordLine.empty()) {
+                parseMashmapRow(mappingRecordLine, currentRecord);
+                total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+            }
+        }
+    }
 
-          std::string& ref_seq = rec->refSequence;
-          std::string& query_seq = rec->querySequence;
+    // Create progress meter
+    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
 
-          skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq.data(), ref_seq.length());
-          skch::CommonFunc::makeUpperCaseAndValidDNA(query_seq.data(), query_seq.length());
+    // Create atomic counter for processed alignment length
+    std::atomic<uint64_t> processed_alignment_length(0);
 
-          // Adjust the reference sequence to start from the original start position
-          char* ref_seq_ptr = &ref_seq[rec->currentRecord.rStartPos - rec->refStartPos];
+    // Start timing
+    auto start_time = std::chrono::high_resolution_clock::now();
 
-          char* queryRegionStrand = new char[query_seq.size() + 1];
+    // Launch single reader thread
+    std::thread single_reader([this, &line_queue, &reader_done]() {
+        this->single_reader_thread(param.mashmapPafFile, line_queue, reader_done);
+    });
 
-          if(rec->currentRecord.strand == skch::strnd::FWD) {
-              strncpy(queryRegionStrand, query_seq.data(), query_seq.size());
-          } else {
-              skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand, query_seq.size());
-          }
+    // Launch processor manager
+    std::thread processor_manager_thread([this, &seq_queue, &line_queue, &total_alignments_queued, &reader_done, &processor_done, max_processors]() {
+        this->processor_manager(seq_queue, line_queue, total_alignments_queued, reader_done, processor_done, max_processors);
+    });
 
-          // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix there is just one alignment for the query)
-          //const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(rec->currentRecord.rankMapping) : "";
+    // Launch worker threads
+    std::vector<std::thread> workers;
+    std::vector<std::atomic<bool>> worker_working(param.threads);
+    for (uint64_t t = 0; t < param.threads; ++t) {
+        workers.emplace_back([this, t, &worker_working, &seq_queue, &paf_queue, &reader_done, &processor_done, &progress, &processed_alignment_length]() {
+            this->worker_thread(t, worker_working[t], seq_queue, paf_queue, reader_done, processor_done, progress, processed_alignment_length);
+        });
+    }
 
-          wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
-              param.wflambda_segment_length,
-              param.min_identity,
-              param.force_biwfa_alignment,
-              param.wfa_mismatch_score,
-              param.wfa_gap_opening_score,
-              param.wfa_gap_extension_score,
-              param.wfa_patching_mismatch_score,
-              param.wfa_patching_gap_opening_score1,
-              param.wfa_patching_gap_extension_score1,
-              param.wfa_patching_gap_opening_score2,
-              param.wfa_patching_gap_extension_score2,
-              rec->currentRecord.mashmap_estimated_identity,
-              param.wflign_mismatch_score,
-              param.wflign_gap_opening_score,
-              param.wflign_gap_extension_score,
-              param.wflign_max_mash_dist,
-              param.wflign_min_wavefront_length,
-              param.wflign_max_distance_threshold,
-              param.wflign_max_len_major,
-              param.wflign_max_len_minor,
-              param.wflign_erode_k,
-              param.chain_gap,
-              param.wflign_min_inv_patch_len,
-              param.wflign_max_patching_score);
-          wflign->set_output(
-              &output,
-#ifdef WFA_PNG_TSV_TIMING
-              !param.tsvOutputPrefix.empty(),
-              &output_tsv,
-              param.prefix_wavefront_plot_in_png,
-              param.wfplot_max_size,
-              !param.path_patching_info_in_tsv.empty(),
-              &patching_output_tsv,
-#endif
-              true, // merge alignments
-              param.emit_md_tag,
-              !param.sam_format,
-              param.no_seq_in_sam);
-          wflign->wflign_affine_wavefront(
-              rec->currentRecord.qId,// + query_name_suffix,
-              queryRegionStrand,
-              rec->queryTotalLength,
-              rec->queryStartPos,
-              rec->queryLen,
-              rec->currentRecord.strand != skch::strnd::FWD,
-              rec->currentRecord.refId,
-              ref_seq_ptr,
-              rec->refTotalLength,
-              rec->currentRecord.rStartPos,
-              rec->currentRecord.rEndPos - rec->currentRecord.rStartPos);
-          delete wflign;
+    // Launch writer thread
+    std::thread writer([this, &paf_queue, &reader_done, &processor_done, &worker_working]() {
+        this->writer_thread(param.pafOutputFile, paf_queue, reader_done, processor_done, worker_working);
+    });
 
-          delete[] queryRegionStrand;
-          // n.b. rec is deleted in calling context
-      }
+    // Wait for all threads to complete
+    single_reader.join();
+    processor_manager_thread.join();
+    for (auto& worker : workers) {
+        worker.join();
+    }
+    writer.join();
+
+    // Stop timing
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+
+    // Finish progress meter
+    progress.finish();
+
+    std::cerr << "[wfmash::align::computeAlignments] "
+              << "total aligned records = " << total_alignments_queued.load() 
+              << ", total aligned bp = " << processed_alignment_length.load()
+              << ", time taken = " << duration.count() << " seconds" << std::endl;
+}
+      
   };
 }
 

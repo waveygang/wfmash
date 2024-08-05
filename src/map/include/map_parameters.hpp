@@ -37,6 +37,7 @@ struct Parameters
                                                       //for noSplit, it represents minimum read length to multimap
     offset_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
     offset_t chain_gap;                                // max distance for 2d range union-find mapping chaining
+    uint64_t max_mapping_length;                      // maximum length of a mapping
     int alphabetSize;                                 //alphabet size
     offset_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
@@ -78,6 +79,7 @@ struct Parameters
     std::vector<ales::spaced_seed> spaced_seeds;      //
     bool world_minimizers;
     uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
+    double overlap_threshold;                         // minimum overlap for a mapping to be considered
 
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //

@@ -41,7 +41,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength) ; }
+        double get_score(const int x) const {return vec[x].blockNucIdentity * log(vec[x].blockLength); }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
@@ -68,13 +68,23 @@ namespace skch
           return x_score > y_score;
         }
 
+        // compute the overlap of the two mappings
+        double get_overlap(const int x, const int y) const {
+            offset_t overlap_start = std::max(vec[x].blockQueryStartPos, vec[y].blockQueryStartPos);
+            offset_t overlap_end = std::min(vec[x].blockQueryEndPos, vec[y].blockQueryEndPos);
+            offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
+            offset_t x_length = vec[x].blockQueryEndPos - vec[x].blockQueryStartPos;
+            offset_t y_length = vec[y].blockQueryEndPos - vec[y].blockQueryStartPos;
+            return static_cast<double>(overlap_length) / std::min(x_length, y_length);
+        }
+
         /*
          * @brief                         mark the mappings with maximum score as good (on query seq)
          * @tparam          Type          std::set type to save mappings (sweep line status container)
          * @param[in/out]   L             container with mappings
          */
         template <typename Type>
-        inline void markGood(Type &L, int secondaryToKeep, bool dropRand)
+        inline void markGood(Type &L, int secondaryToKeep, bool dropRand, double overlapThreshold)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -82,7 +92,8 @@ namespace skch
             // count how many secondary alignments we keep
             int kept = 0;
 
-            for(auto it = L.begin(); it != L.end(); it++)
+            auto it = L.begin();
+            for( ; it != L.end(); it++)
             {
                 if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
                     break;
@@ -90,6 +101,20 @@ namespace skch
 
                 vec[*it].discard = 0;
                 ++kept;
+            }
+            auto kit = it;
+
+            // Check for overlaps and mark bad if necessary
+            for ( ; it != L.end(); it++) {
+                if (it == L.begin()) continue;
+                int idx = *it;
+                for (auto it2 = L.begin(); it2 != kit; it2++) {
+                    if (get_overlap(idx, *it2) > overlapThreshold) {
+                        vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
+                        vec[idx].discard = 1;
+                        break;
+                    }
+                }
             }
 
             // check for the case where there are multiple best mappings > secondaryToKeep
@@ -132,14 +157,14 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap
        */
       template <typename VecIn>
-      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand)
+      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold)
         {
           if(readMappings.size() <= 1)
             return;
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });
+          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; e.overlapped = 0; });
 
           //Initialize object of Helper struct
           Helper obj (readMappings);
@@ -180,18 +205,18 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep, dropRand);
+            obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
             it = it2;
           }
 
           //Remove bad mappings
           readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
+              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1 || e.overlapped == 1; }),
               readMappings.end());
         }
 
-     /**
+      /**
        * @brief                       filter mappings (best for query sequence)
        * @details                     evaluate best N unmerged mappings for each position, assumes non-overlapping mappings in query
        * @param[in/out] readMappings  Mappings computed by Mashmap
@@ -257,10 +282,10 @@ namespace skch
        *                                 until we only have secondaryToKeep secondary mappings
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand)
+      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
       {
           //Apply the main filtering algorithm to ensure the best mappings across complete axis
-          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand);
+          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold);
       }
 
      /**
@@ -289,7 +314,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength) ; }
+        double get_score(const int x) const {return vec[x].blockNucIdentity * log(vec[x].blockLength); }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
@@ -316,13 +341,23 @@ namespace skch
           return x_score > y_score;
         }
 
+        // compute the overlap of the two mappings
+        double get_overlap(const int x, const int y) const {
+            offset_t overlap_start = std::max(vec[x].blockRefStartPos, vec[y].blockRefStartPos);
+            offset_t overlap_end = std::min(vec[x].blockRefEndPos, vec[y].blockRefEndPos);
+            offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
+            offset_t x_length = vec[x].blockRefEndPos - vec[x].blockRefStartPos;
+            offset_t y_length = vec[y].blockRefEndPos - vec[y].blockRefStartPos;
+            return static_cast<double>(overlap_length) / std::min(x_length, y_length);
+        }
+
         /**
          * @brief                         mark the mappings with maximum score as good (on query seq)
          * @tparam          Type          std::set type to save mappings (sweep line status container)
          * @param[in/out]   L             container with mappings
          */
-        template <typename Type>
-          inline void markGood(Type &L, int secondaryToKeep)
+          template <typename Type>
+          inline void markGood(Type &L, int secondaryToKeep, bool dropRand, double overlapThreshold)
           {
             //first segment in the set order
             auto beg = L.begin();
@@ -330,12 +365,61 @@ namespace skch
             // count how many secondary alignments we keep
             int kept = 0;
 
-            for(auto it = L.begin(); it != L.end(); it++)
+            auto it = L.begin();
+            for( ; it != L.end(); it++)
             {
-              if((this->greater_score(*beg, *it) || vec[*it].discard == 0) && ++kept > secondaryToKeep)
-                break;
+                if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
+                    break;
+                }
 
-              vec[*it].discard = 0;
+                vec[*it].discard = 0;
+                ++kept;
+            }
+            auto kit = it;
+
+            // Check for overlaps and mark bad if necessary
+            for ( ; it != L.end(); it++) {
+                if (it == L.begin()) continue;
+                int idx = *it;
+                for (auto it2 = L.begin(); it2 != kit; it2++) {
+                    if (get_overlap(idx, *it2) > overlapThreshold) {
+                        vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
+                        vec[idx].discard = 1;
+                        break;
+                    }
+                }
+            }
+
+            // check for the case where there are multiple best mappings > secondaryToKeep
+            // which have the same score
+            // we will hash the mapping struct and keep the one with the secondaryToKeep with the lowest hash value
+            if (kept > secondaryToKeep && dropRand) 
+            {
+              // we will use hashes of the mapping structs to break ties
+              // first we'll make a vector of the mappings including the hashes
+              std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
+              for(auto it = L.begin(); it != L.end(); it++)
+              {
+                  if(vec[*it].discard == 0)
+                  {
+                      score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
+                  }
+              }
+              // now we'll sort the vector by score and hash
+              std::sort(score_and_hash.begin(), score_and_hash.end(), std::greater{});
+              // reset kept counter
+              kept = 0;
+              for (auto& x : score_and_hash) {
+                  std::get<2>(x)->discard = 1;
+              }
+              // now we mark the best to keep
+              for (auto& x : score_and_hash) {
+                  if (kept > secondaryToKeep) {
+                      break;
+                  }
+                  std::get<2>(x)->discard = 0;
+                  ++kept;
+              }
             }
           }
 
@@ -366,7 +450,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-        void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep)
+      void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
         {
           if(readMappings.size() <= 1)
             return;
@@ -417,7 +501,7 @@ namespace skch
                                     });
 
             //mark mappings as good
-            obj.markGood(bst, secondaryToKeep);
+            obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
             it = it2;
           }
