@@ -41,7 +41,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength); }
+        double get_score(const int x) const {return vec[x].blockNucIdentity * log(vec[x].blockLength); }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
@@ -69,12 +69,12 @@ namespace skch
         }
 
         // compute the overlap of the two mappings
-        double calculate_overlap(const int x, const int y) const {
-            offset_t overlap_start = std::max(vec[x].queryStartPos, vec[y].queryStartPos);
-            offset_t overlap_end = std::min(vec[x].queryEndPos, vec[y].queryEndPos);
+        double get_overlap(const int x, const int y) const {
+            offset_t overlap_start = std::max(vec[x].blockQueryStartPos, vec[y].blockQueryStartPos);
+            offset_t overlap_end = std::min(vec[x].blockQueryEndPos, vec[y].blockQueryEndPos);
             offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
-            offset_t x_length = vec[x].queryEndPos - vec[x].queryStartPos;
-            offset_t y_length = vec[y].queryEndPos - vec[y].queryStartPos;
+            offset_t x_length = vec[x].blockQueryEndPos - vec[x].blockQueryStartPos;
+            offset_t y_length = vec[y].blockQueryEndPos - vec[y].blockQueryStartPos;
             return static_cast<double>(overlap_length) / std::min(x_length, y_length);
         }
 
@@ -109,7 +109,7 @@ namespace skch
                 if (it == L.begin()) continue;
                 int idx = *it;
                 for (auto it2 = L.begin(); it2 != kit; it2++) {
-                    if (calculate_overlap(idx, *it2) > overlapThreshold) {
+                    if (get_overlap(idx, *it2) > overlapThreshold) {
                         vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
                         vec[idx].discard = 1;
                         break;
@@ -314,7 +314,7 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].nucIdentity * log(vec[x].blockLength) ; }
+        double get_score(const int x) const {return vec[x].blockNucIdentity * log(vec[x].blockLength); }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
@@ -342,12 +342,12 @@ namespace skch
         }
 
         // compute the overlap of the two mappings
-        double calculate_overlap(const int x, const int y) const {
-            offset_t overlap_start = std::max(vec[x].refStartPos, vec[y].refStartPos);
-            offset_t overlap_end = std::min(vec[x].refEndPos, vec[y].refEndPos);
+        double get_overlap(const int x, const int y) const {
+            offset_t overlap_start = std::max(vec[x].blockRefStartPos, vec[y].blockRefStartPos);
+            offset_t overlap_end = std::min(vec[x].blockRefEndPos, vec[y].blockRefEndPos);
             offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
-            offset_t x_length = vec[x].refEndPos - vec[x].refStartPos;
-            offset_t y_length = vec[y].refEndPos - vec[y].refStartPos;
+            offset_t x_length = vec[x].blockRefEndPos - vec[x].blockRefStartPos;
+            offset_t y_length = vec[y].blockRefEndPos - vec[y].blockRefStartPos;
             return static_cast<double>(overlap_length) / std::min(x_length, y_length);
         }
 
@@ -382,7 +382,7 @@ namespace skch
                 if (it == L.begin()) continue;
                 int idx = *it;
                 for (auto it2 = L.begin(); it2 != kit; it2++) {
-                    if (calculate_overlap(idx, *it2) > overlapThreshold) {
+                    if (get_overlap(idx, *it2) > overlapThreshold) {
                         vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
                         vec[idx].discard = 1;
                         break;

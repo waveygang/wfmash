@@ -156,7 +156,13 @@ namespace skch
     offset_t queryEndPos;                               //end position of the query for this mapping
     seqno_t refSeqId;                                   //internal sequence id of the reference contig
     seqno_t querySeqId;                                 //internal sequence id of the query sequence
-    int blockLength;                                    //the block length of the mapping
+    offset_t blockLength;                                    //the block length of the mapping
+    offset_t blockRefStartPos;
+    offset_t blockRefEndPos;
+    offset_t blockQueryStartPos;
+    offset_t blockQueryEndPos;
+    float blockNucIdentity;
+          
     float nucIdentity;                                  //calculated identity
     float nucIdentityUpperBound;                        //upper bound on identity (90% C.I.)
     int sketchSize;                                     //sketch size
