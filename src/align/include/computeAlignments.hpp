@@ -442,12 +442,45 @@ void worker_thread(uint64_t tid,
     is_working.store(false);
 }
 
+void write_sam_header(std::ofstream& outstream) {
+    for(const auto &fileName : param.refSequences) {
+        // check if there is a .fai
+        std::string fai_name = fileName + ".fai";
+        if (fs::exists(fai_name)) {
+            // if so, process the .fai to determine our sequence length
+            std::string line;
+            std::ifstream in(fai_name.c_str());
+            while (std::getline(in, line)) {
+                auto line_split = skch::CommonFunc::split(line, '\t');
+                const std::string seq_name = line_split[0];
+                const uint64_t seq_len = std::stoull(line_split[1]);
+                outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
+            }
+        } else {
+            // if not, warn that this is expensive
+            std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
+            seqiter::for_each_seq_in_file(
+                fileName, {}, "",
+                [&](const std::string& seq_name,
+                    const std::string& seq) {
+                    outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
+                });
+        }
+    }
+    outstream << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
+}
+
 void writer_thread(const std::string& output_file,
                    paf_atomic_queue_t& paf_queue,
                    std::atomic<bool>& reader_done,
                    std::atomic<bool>& processor_done,
                    const std::vector<std::atomic<bool>>& worker_working) {
     std::ofstream outstream(output_file);
+    // if the output file is SAM, we write the header
+    if (param.sam_format) {
+        write_sam_header(outstream);
+    }
+
     if (!outstream.is_open()) {
         throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open output file: " + output_file);
     }

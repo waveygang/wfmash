@@ -93,45 +93,6 @@ int main(int argc, char** argv) {
         }
      }
 
-    if (align_parameters.sam_format) {
-        // Prepare SAM header
-        std::ofstream outstrm(align_parameters.pafOutputFile);
-
-        for(const auto &fileName : map_parameters.refSequences)
-        {
-            // check if there is a .fai
-            std::string fai_name = fileName + ".fai";
-            if (fs::exists(fai_name)) {
-                // if so, process the .fai to determine our sequence length
-                std::string line;
-                std::ifstream in(fai_name.c_str());
-                while (std::getline(in, line)) {
-                    auto line_split = skch::CommonFunc::split(line, '\t');
-                    const std::string seq_name = line_split[0];
-                    const uint64_t seq_len = std::stoull(line_split[1]);
-                    outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
-                }
-            } else {
-                // if not, warn that this is expensive
-                std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
-                seqiter::for_each_seq_in_file(
-					    fileName, {}, "",
-                        [&](const std::string& seq_name,
-                                const std::string& seq) {
-                            outstrm << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
-                        });
-            }
-
-
-
-
-
-        }
-        outstrm << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
-
-        outstrm.close();
-    }
-
     align::printCmdOptions(align_parameters);
 
     auto t0 = skch::Time::now();
