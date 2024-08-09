@@ -1542,8 +1542,8 @@ namespace skch
       void adjustConsecutiveMappings(std::vector<MappingResult>& mappings) {
           if (mappings.size() < 2) return;
 
-          // Define threshold for adjustment (e.g., 10 bases)
-          const int threshold = param.segLength;
+          // Define (big!) threshold for adjustment (half of chain_gap)
+          const int threshold = param.chain_gap / 2;
 
           for (size_t i = 1; i < mappings.size(); ++i) {
               auto& prev = mappings[i-1];
