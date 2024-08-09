@@ -1539,15 +1539,18 @@ namespace skch
           std::for_each(std::next(start), end, [](MappingResult& e) { e.discard = 1; });
       }
 
-      void adjustConsecutiveMappings(std::vector<MappingResult>& mappings) {
-          if (mappings.size() < 2) return;
+      void adjustConsecutiveMappings(std::vector<MappingResult>::iterator begin_maping,
+                                     std::vector<MappingResult>::iterator end_mapping) {
 
-          // Define (big!) threshold for adjustment (half of chain_gap)
-          const int threshold = param.chain_gap / 2;
+          if (std::distance(begin_maping, end_mapping) < 2) return;
 
-          for (size_t i = 1; i < mappings.size(); ++i) {
-              auto& prev = mappings[i-1];
-              auto& curr = mappings[i];
+          // Define (big!) threshold for adjustment
+          const int threshold = param.segLength / 2;
+
+          //for (size_t i = 1; i < mappings.size(); ++i) {
+          for (auto it = std::next(begin_maping); it != end_mapping; ++it) {
+              auto& prev = *std::prev(it);
+              auto& curr = *it;
 
               // Check if mappings are on the same reference sequence
               if (prev.refSeqId != curr.refSeqId
@@ -1601,9 +1604,6 @@ namespace skch
                   return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
                       < std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
               });
-
-          // tweak start and end positions of consecutive mappings
-          adjustConsecutiveMappings(readMappings);
 
           //First assign a unique id to each split mapping in the sorted order
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
@@ -1681,6 +1681,9 @@ namespace skch
               std::sort(it, it_end, [](const MappingResult &a, const MappingResult &b) {
                   return std::tie(a.queryStartPos, a.refStartPos) < std::tie(b.queryStartPos, b.refStartPos);
               });
+
+              // tweak start and end positions of consecutive mappings
+              adjustConsecutiveMappings(it, it_end);
 
               // First pass: Mark cuttable positions
               const int consecutive_mappings_window = 4; // Configurable parameter
