@@ -894,7 +894,7 @@ void write_merged_alignment(
             bool got_alignment = false;
 
             // Head patching
-            {
+            if (false) {
                 // how long a gap?
                 while (q != unpatched.end() && *q == 'I') {
                     ++query_delta;
@@ -1451,7 +1451,7 @@ void write_merged_alignment(
             }
 
             // Tail patching
-            {
+            if (false) {
                 // Important: the last patch (in the middle of the traceback)
                 // can generate a tail check backward if there are other Is/Ds
                 // to merge in the current patch
