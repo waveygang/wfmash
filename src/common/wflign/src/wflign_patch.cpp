@@ -197,7 +197,7 @@ void do_wfa_patch_alignment(
 
     if (query_length >= min_inversion_length && target_length >= min_inversion_length) {
         if (aln.ok) {
-            wf_aligner.setMaxAlignmentSteps(std::floor((double)aln.score / 1.61803));
+            wf_aligner.setMaxAlignmentSteps(std::ceil((double)aln.score * 0.9));
         }
         // Try reverse complement alignment
         std::string rev_comp_query = reverse_complement(std::string(query + j, query_length));
