@@ -1681,7 +1681,7 @@ namespace skch
               });
 
               // tweak start and end positions of consecutive mappings
-              adjustConsecutiveMappings(it, it_end, param.segLength / 2);
+              adjustConsecutiveMappings(it, it_end, param.segLength);
 
               // First pass: Mark cuttable positions
               const int consecutive_mappings_window = 4; // Configurable parameter
