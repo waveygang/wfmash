@@ -483,8 +483,8 @@ namespace skch
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
-                                 int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
+                                 int64_t q_l = (int64_t)e.blockQueryEndPos - (int64_t)e.blockQueryStartPos;
+                                 int64_t r_l = (int64_t)e.blockRefEndPos - (int64_t)e.blockRefStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  float len_id_bound = (1.0 - (float)delta/(float)q_l);
                                  return len_id_bound < std::min(0.7, std::pow(param.percentageIdentity,3));
@@ -748,10 +748,12 @@ namespace skch
         this->mappingBoundarySanityCheck(input, output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
+        /*
         if (param.filterLengthMismatches)
         {
           this->filterFalseHighIdentity(output->readMappings);
         }
+        */
 
         // sparsify the mappings, if requested
         this->sparsifyMappings(output->readMappings);
