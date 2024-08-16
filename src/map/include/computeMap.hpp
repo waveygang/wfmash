@@ -486,7 +486,7 @@ namespace skch
                                  int64_t q_l = (int64_t)e.blockQueryEndPos - (int64_t)e.blockQueryStartPos;
                                  int64_t r_l = (int64_t)e.blockRefEndPos - (int64_t)e.blockRefStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
-                                 float len_id_bound = (1.0 - (float)delta/(float)q_l);
+                                 double len_id_bound = (1.0 - (double)delta/(((double)q_l+r_l)/2));
                                  return len_id_bound < std::min(0.7, std::pow(param.percentageIdentity,3));
                              }),
               readMappings.end());
@@ -748,12 +748,10 @@ namespace skch
         this->mappingBoundarySanityCheck(input, output->readMappings);
 
         // remove alignments where the ratio between query and target length is < our identity threshold
-        /*
         if (param.filterLengthMismatches)
         {
           this->filterFalseHighIdentity(output->readMappings);
         }
-        */
 
         // sparsify the mappings, if requested
         this->sparsifyMappings(output->readMappings);
@@ -1728,29 +1726,31 @@ namespace skch
               // Process any remaining fragment
               processMappingFragment(fragment_start, current);
 
-              // Compute chain statistics
+              // Compute chain statistics and coordinates
               offset_t target_len_in_full_chain = 0;
               offset_t query_len_in_full_chain = 0;
               int n_in_full_chain = std::distance(it, it_end);
+              offset_t chain_start_query = std::numeric_limits<offset_t>::max();
+              offset_t chain_end_query = std::numeric_limits<offset_t>::min();
+              offset_t chain_start_ref = std::numeric_limits<offset_t>::max();
+              offset_t chain_end_ref = std::numeric_limits<offset_t>::min();
               for (auto x = it; x != it_end; ++x) {
+                  chain_start_query = std::min(chain_start_query, x->queryStartPos);
+                  chain_end_query = std::max(chain_end_query, x->queryEndPos);
+                  chain_start_ref = std::min(chain_start_ref, x->refStartPos);
+                  chain_end_ref = std::max(chain_end_ref, x->refEndPos);
                   target_len_in_full_chain += x->refEndPos - x->refStartPos;
                   query_len_in_full_chain += x->queryEndPos - x->queryStartPos;
                   accumulate_nuc_identity += current->nucIdentity;
               }
 
               // Assign chain statistics to all mappings in the chain
-              // get start and end of whole chain in query and target
-              auto chain_start_query = it->queryStartPos;
-              auto chain_end_query = std::prev(it_end)->queryEndPos;
-              auto chain_start_ref = it->refStartPos;
-              auto chain_end_ref = std::prev(it_end)->refEndPos;
               auto chain_nuc_identity = accumulate_nuc_identity / n_in_full_chain;
+              auto block_length = std::max(chain_end_query - chain_start_query, chain_end_ref - chain_start_ref);
               for (auto x = it; x != it_end; ++x) {
                   auto& m = *x;
                   m.n_merged = n_in_full_chain;
-                  //m.blockLength = chain_end_query - chain_start_query;
-                  m.blockLength = std::max(chain_end_query - chain_start_query, chain_end_ref - chain_start_ref);
-                  // assign to each mapping
+                  m.blockLength = block_length;
                   m.blockQueryStartPos = chain_start_query;
                   m.blockQueryEndPos = chain_end_query;
                   m.blockRefStartPos = chain_start_ref;
