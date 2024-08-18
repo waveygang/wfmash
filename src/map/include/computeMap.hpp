@@ -462,11 +462,11 @@ namespace skch
 
       void setBlockCoordsToMappingCoords(MappingResultsVector_t &readMappings) {
           for (auto& m : readMappings) {
-              //m.blockLength = m.queryEndPos - m.queryStartPos;
               m.blockRefStartPos = m.refStartPos;
               m.blockRefEndPos = m.refEndPos;
               m.blockQueryStartPos = m.queryStartPos;
               m.blockQueryEndPos = m.queryEndPos;
+              m.blockLength = std::max(m.blockRefEndPos - m.blockRefStartPos, m.blockQueryEndPos - m.blockQueryStartPos);
               m.blockNucIdentity = m.nucIdentity;
           }
       }
