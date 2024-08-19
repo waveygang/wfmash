@@ -203,12 +203,12 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     int64_t ref_len;
     char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
                                       currentRecord.rStartPos - head_padding, 
-                                      currentRecord.rEndPos + tail_padding, &ref_len);
+                                      currentRecord.rEndPos - 1 + tail_padding, &ref_len);
 
     // Extract query sequence
     int64_t query_len;
     char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
-                                        currentRecord.qStartPos, currentRecord.qEndPos, &query_len);
+                                        currentRecord.qStartPos, currentRecord.qEndPos - 1, &query_len);
 
     // Create a new seq_record_t object for the alignment
     seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,

@@ -462,11 +462,11 @@ namespace skch
 
       void setBlockCoordsToMappingCoords(MappingResultsVector_t &readMappings) {
           for (auto& m : readMappings) {
-              //m.blockLength = m.queryEndPos - m.queryStartPos;
               m.blockRefStartPos = m.refStartPos;
               m.blockRefEndPos = m.refEndPos;
               m.blockQueryStartPos = m.queryStartPos;
               m.blockQueryEndPos = m.queryEndPos;
+              m.blockLength = std::max(m.blockRefEndPos - m.blockRefStartPos, m.blockQueryEndPos - m.blockQueryStartPos);
               m.blockNucIdentity = m.nucIdentity;
           }
       }
@@ -483,10 +483,10 @@ namespace skch
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
-                                 int64_t r_l = (int64_t)e.refEndPos + 1 - (int64_t)e.refStartPos;
+                                 int64_t q_l = (int64_t)e.blockQueryEndPos - (int64_t)e.blockQueryStartPos;
+                                 int64_t r_l = (int64_t)e.blockRefEndPos - (int64_t)e.blockRefStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
-                                 float len_id_bound = (1.0 - (float)delta/(float)q_l);
+                                 double len_id_bound = (1.0 - (double)delta/(((double)q_l+r_l)/2));
                                  return len_id_bound < std::min(0.7, std::pow(param.percentageIdentity,3));
                              }),
               readMappings.end());
@@ -1539,15 +1539,16 @@ namespace skch
           std::for_each(std::next(start), end, [](MappingResult& e) { e.discard = 1; });
       }
 
-      void adjustConsecutiveMappings(std::vector<MappingResult>& mappings) {
-          if (mappings.size() < 2) return;
+      void adjustConsecutiveMappings(std::vector<MappingResult>::iterator begin_maping,
+                                     std::vector<MappingResult>::iterator end_mapping,
+                                     const int threshold) {
 
-          // Define threshold for adjustment (e.g., 10 bases)
-          const int threshold = param.segLength;
+          if (std::distance(begin_maping, end_mapping) < 2) return;
 
-          for (size_t i = 1; i < mappings.size(); ++i) {
-              auto& prev = mappings[i-1];
-              auto& curr = mappings[i];
+          //for (size_t i = 1; i < mappings.size(); ++i) {
+          for (auto it = std::next(begin_maping); it != end_mapping; ++it) {
+              auto& prev = *std::prev(it);
+              auto& curr = *it;
 
               // Check if mappings are on the same reference sequence
               if (prev.refSeqId != curr.refSeqId
@@ -1601,9 +1602,6 @@ namespace skch
                   return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
                       < std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
               });
-
-          // tweak start and end positions of consecutive mappings
-          adjustConsecutiveMappings(readMappings);
 
           //First assign a unique id to each split mapping in the sorted order
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
@@ -1682,6 +1680,9 @@ namespace skch
                   return std::tie(a.queryStartPos, a.refStartPos) < std::tie(b.queryStartPos, b.refStartPos);
               });
 
+              // tweak start and end positions of consecutive mappings
+              adjustConsecutiveMappings(it, it_end, param.segLength);
+
               // First pass: Mark cuttable positions
               const int consecutive_mappings_window = 4; // Configurable parameter
               std::vector<bool> is_cuttable(std::distance(it, it_end), false);
@@ -1690,96 +1691,66 @@ namespace skch
               int consecutive_count = 0;
 
               for (auto current = it; current != it_end; ++current) {
-                  if (current == window_start || 
-                      std::prev(current)->queryEndPos == current->queryStartPos) {
-                      ++consecutive_count;
-                      if (consecutive_count == consecutive_mappings_window) {
-                          // Mark the second position as cuttable (if cutting after)
-                          is_cuttable[std::distance(it, std::next(window_start, 1))] = true;
-                          // Mark the third position as cuttable (if cutting before)
-                          is_cuttable[std::distance(it, std::next(window_start, 2))] = true;
-                          ++window_start;
-                          --consecutive_count;
-                      }
-                  } else {
-                      window_start = current;
-                      consecutive_count = 1;
+                  is_cuttable[std::distance(it, current)] = true;
+              }
+
+              // mark anything positions on either side of a discontinuity as non-cuttable
+              for (auto current = it; current != it_end; ++current) {
+                  if (current == it || current == std::prev(it_end)) {
+                      continue;
+                  }
+                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength
+                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength) {
+                      is_cuttable[std::distance(it, current) - 1] = false;
+                      is_cuttable[std::distance(it, current)] = false;
                   }
               }
 
-              // Second pass: Choose cut points and process fragments
               auto fragment_start = it;
               auto current = it;
               offset_t accumulate_length = 0;
               double accumulate_nuc_identity = 0.0;
 
-          // Calculate mean nucleotide identity
-              /*
-          fragment.nucIdentity = std::accumulate(start, end, 0.0,
-                                                 [](double sum, const MappingResult& e) { return sum + e.nucIdentity; }
-              ) / fragment.n_merged;
-              */
-
-              
               while (current != it_end) {
+                  // chunks are made across the query
                   accumulate_length += current->queryEndPos - current->queryStartPos;
-                  //accumulate_nuc_identity += current->nucIdentity * (current->queryEndPos - current->queryStartPos);
-        
-                  if (accumulate_length >= param.max_mapping_length) {
-                      // Find the nearest cuttable position
-                      auto nearest_cut = current;
-                      offset_t min_distance = std::abs((int64_t)accumulate_length - (int64_t)param.max_mapping_length);
-            
-                      for (auto cut_candidate = fragment_start; cut_candidate != std::next(current); ++cut_candidate) {
-                          offset_t candidate_length = cut_candidate->queryEndPos - fragment_start->queryStartPos;
-                          offset_t distance = std::abs((int64_t)candidate_length - (int64_t)param.max_mapping_length);
-                
-                          if (is_cuttable[std::distance(it, cut_candidate)] && distance < min_distance) {
-                              nearest_cut = cut_candidate;
-                              min_distance = distance;
-                          }
-                      }
-
-                      // Process the fragment
-                      processMappingFragment(fragment_start, std::next(nearest_cut));
-            
-                      // Update pointers and reset accumulated length
-                      fragment_start = std::next(nearest_cut);
-                      current = fragment_start;
+                  if (accumulate_length >= param.max_mapping_length
+                      && is_cuttable[std::distance(it, current)]) {
+                      processMappingFragment(fragment_start, current);
+                      fragment_start = current;
                       accumulate_length = 0;
-                  } else {
-                      ++current;
                   }
+                  ++current;
               }
 
               // Process any remaining fragment
-              if (fragment_start != current) {
-                  processMappingFragment(fragment_start, current);
-              }
+              processMappingFragment(fragment_start, current);
 
-              // Compute chain statistics
+              // Compute chain statistics and coordinates
               offset_t target_len_in_full_chain = 0;
               offset_t query_len_in_full_chain = 0;
               int n_in_full_chain = std::distance(it, it_end);
+              offset_t chain_start_query = std::numeric_limits<offset_t>::max();
+              offset_t chain_end_query = std::numeric_limits<offset_t>::min();
+              offset_t chain_start_ref = std::numeric_limits<offset_t>::max();
+              offset_t chain_end_ref = std::numeric_limits<offset_t>::min();
               for (auto x = it; x != it_end; ++x) {
+                  chain_start_query = std::min(chain_start_query, x->queryStartPos);
+                  chain_end_query = std::max(chain_end_query, x->queryEndPos);
+                  chain_start_ref = std::min(chain_start_ref, x->refStartPos);
+                  chain_end_ref = std::max(chain_end_ref, x->refEndPos);
                   target_len_in_full_chain += x->refEndPos - x->refStartPos;
                   query_len_in_full_chain += x->queryEndPos - x->queryStartPos;
                   accumulate_nuc_identity += current->nucIdentity;
               }
 
               // Assign chain statistics to all mappings in the chain
-              // get start and end of whole chain in query and target
-              auto chain_start_query = it->queryStartPos;
-              auto chain_end_query = std::prev(it_end)->queryEndPos;
-              auto chain_start_ref = it->refStartPos;
-              auto chain_end_ref = std::prev(it_end)->refEndPos;
               auto chain_nuc_identity = accumulate_nuc_identity / n_in_full_chain;
+              auto block_length = std::max(chain_end_query - chain_start_query, chain_end_ref - chain_start_ref);
               for (auto x = it; x != it_end; ++x) {
                   auto& m = *x;
                   m.n_merged = n_in_full_chain;
-                  //m.blockLength = chain_end_query - chain_start_query;
-                  m.blockLength = std::max(chain_end_query - chain_start_query, chain_end_ref - chain_start_ref);
-                  // assign to each mapping
+                  m.blockLength = block_length;
                   m.blockQueryStartPos = chain_start_query;
                   m.blockQueryEndPos = chain_end_query;
                   m.blockRefStartPos = chain_start_ref;

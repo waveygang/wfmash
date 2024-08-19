@@ -197,7 +197,7 @@ void do_wfa_patch_alignment(
 
     if (query_length >= min_inversion_length && target_length >= min_inversion_length) {
         if (aln.ok) {
-            wf_aligner.setMaxAlignmentSteps(aln.score);
+            wf_aligner.setMaxAlignmentSteps(std::ceil((double)aln.score * 0.9));
         }
         // Try reverse complement alignment
         std::string rev_comp_query = reverse_complement(std::string(query + j, query_length));
@@ -894,7 +894,7 @@ void write_merged_alignment(
             bool got_alignment = false;
 
             // Head patching
-            {
+            if (false) {
                 // how long a gap?
                 while (q != unpatched.end() && *q == 'I') {
                     ++query_delta;
@@ -1451,7 +1451,7 @@ void write_merged_alignment(
             }
 
             // Tail patching
-            {
+            if (false) {
                 // Important: the last patch (in the middle of the traceback)
                 // can generate a tail check backward if there are other Is/Ds
                 // to merge in the current patch
