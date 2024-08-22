@@ -1582,6 +1582,12 @@ namespace skch
               }
           }
       }
+
+      double axis_weighted_euclidean_distance(int64_t dx, int64_t dy, double w = 0.5) {
+          double euclidean = std::sqrt(dx*dx + dy*dy);
+          double axis_factor = (dx + dy > 0) ? 1.0 - (2.0 * std::min(std::abs(dx), std::abs(dy))) / (std::abs(dx) + std::abs(dy)) : 0.0;
+          return euclidean * (1.0 + w * axis_factor);
+      }
       
       /**
        * @brief                       Merge fragment mappings by convolution of a 2D range over the alignment matrix
@@ -1616,7 +1622,7 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::pair<double, uint64_t>> distances;
+              std::vector<std::tuple<double, double, int64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is for the same segment, ignore
                   if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
@@ -1628,29 +1634,27 @@ namespace skch
                   }
                   //If the next mapping is within range, check if it's in range and
                   if (it2->strand == it->strand) {
-                      int ref_dist = it2->refStartPos - it->refEndPos;
-                      int query_dist = 0;
+                      int64_t ref_dist = it2->refStartPos - it->refEndPos;
+                      int64_t query_dist = std::numeric_limits<int64_t>::max();
                       auto dist = std::numeric_limits<double>::max();
-                      auto score = std::numeric_limits<double>::max();
+                      auto awed = std::numeric_limits<double>::max();
                       if (it->strand == strnd::FWD && it->queryStartPos <= it2->queryStartPos) {
                           query_dist = it2->queryStartPos - it->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                          score = std::pow(query_dist - ref_dist, 2);
+                          awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       } else if (it->strand != strnd::FWD && it->queryEndPos >= it2->queryEndPos) {
                           query_dist = it->queryStartPos - it2->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                          score = std::pow(query_dist - ref_dist, 2);
+                          awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       }
-                      int query_mapping_len = std::min((it->queryEndPos - it->queryStartPos),
-                                                       (it2->queryEndPos - it2->queryStartPos));
-                      if (dist < max_dist) {
-                          distances.push_back(std::make_pair(dist + score, it2->splitMappingId));
+                      if (awed < max_dist) {
+                          distances.push_back(std::make_tuple(awed, dist, it2->splitMappingId));
                       }
                   }
               }
               if (distances.size()) {
                   std::sort(distances.begin(), distances.end());
-                  disjoint_sets.unite(it->splitMappingId, distances.front().second);
+                  disjoint_sets.unite(it->splitMappingId, std::get<2>(distances.front()));
               }
           }
 
@@ -1716,6 +1720,9 @@ namespace skch
                   accumulate_length += current->queryEndPos - current->queryStartPos;
                   if (accumulate_length >= param.max_mapping_length
                       && is_cuttable[std::distance(it, current)]) {
+                      if (current != fragment_start) {
+                          adjustConsecutiveMappings(std::prev(current), current, param.chain_gap);
+                      }
                       processMappingFragment(fragment_start, current);
                       fragment_start = current;
                       accumulate_length = 0;
