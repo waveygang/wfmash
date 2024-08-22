@@ -1585,7 +1585,7 @@ namespace skch
 
       double axis_weighted_euclidean_distance(int64_t dx, int64_t dy, double w = 0.5) {
           double euclidean = std::sqrt(dx*dx + dy*dy);
-          double axis_factor = (dx + dy > 0) ? 1.0 - (2.0 * std::min(std::abs(dx), std::abs(dy))) / (std::abs(dx) + std::abs(dy)) : 0.0;
+          double axis_factor = 1.0 - (2.0 * std::min(std::abs(dx), std::abs(dy))) / (std::abs(dx) + std::abs(dy));
           return euclidean * (1.0 + w * axis_factor);
       }
       
