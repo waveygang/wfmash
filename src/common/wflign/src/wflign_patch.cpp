@@ -1630,7 +1630,6 @@ void write_merged_alignment(
 #endif
         };
 
-        std::vector<char> pre_tracev;
         {
             std::vector<char> erodev;
             {
@@ -1787,13 +1786,13 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, pre_tracev, 4096, 32, 512, false);
+            patching(erodev, tracev, 4096, 8, 512, false);
 
 #ifdef VALIDATE_WFA_WFLIGN
-            if (!validate_trace(pre_tracev, query,
+            if (!validate_trace(tracev, query,
                         target - target_pointer_shift, query_length,
                         target_length_mut, query_start, target_start)) {
-                std::cerr << "cigar failure in pre_tracev "
+                std::cerr << "cigar failure in tracev "
                           << "\t" << query_name << "\t" << query_total_length
                           << "\t"
                           << query_offset + (query_is_rev
@@ -1811,13 +1810,7 @@ void write_merged_alignment(
             }
 #endif
 
-            // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(pre_tracev);
         }
-
-        //std::cerr << "SECOND PATCH ROUND" << std::endl;
-        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-        patching(pre_tracev, tracev, 256, 8, 128, true);
     }
 
     // normalize the indels
