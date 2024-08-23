@@ -585,6 +585,10 @@ void parse_args(int argc,
         map_parameters.threads = 1;
         align_parameters.threads = 1;
     }
+    // disable multi-fasta processing due to the memory inefficiency of samtools faidx readers
+    // which require us to duplicate the in-memory indexes of large files for each thread
+    // if aligner exhaustion is a problem, we could enable this
+    align_parameters.multithread_fasta_input = false;
 
     // Compute optimal window size for sketching
     {
