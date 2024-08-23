@@ -1438,7 +1438,7 @@ void write_merged_alignment(
 
             //std::cerr << "FIRST PATCH ROUND" << std::endl;
             // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
-            patching(erodev, tracev, 4096, 8, 512, false);
+            patching(erodev, tracev, 4096, 8, 512, true);
 
 #ifdef VALIDATE_WFA_WFLIGN
             if (!validate_trace(tracev, query,
