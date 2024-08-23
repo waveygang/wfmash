@@ -726,6 +726,9 @@ namespace skch
 
             // remove short chains that didn't exceed block length
             filterWeakMappings(unfilteredMappings, std::floor(param.block_length / param.segLength));
+
+            // now that filtering has happened, set back the individual mapping coordinates and block length
+            setBlockCoordsToMappingCoords(unfilteredMappings);
           } else {
               // set block coordinates
               setBlockCoordsToMappingCoords(unfilteredMappings);
@@ -1862,6 +1865,8 @@ namespace skch
             if (!param.mergeMappings) 
             {
               outstrm << sep << "jc:f:" << float(e.conservedSketches) / e.sketchSize;
+            } else {
+              outstrm << sep << "chain:i:" << e.splitMappingId;
             }
           } else
           {
