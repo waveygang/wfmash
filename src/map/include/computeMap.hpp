@@ -1558,8 +1558,8 @@ namespace skch
               int query_gap = curr.queryStartPos - prev.queryEndPos;
               int ref_gap = curr.refStartPos - prev.refEndPos;
 
-              // Check if both gaps are within the threshold
-              if (std::abs(query_gap) <= threshold && std::abs(ref_gap) <= threshold) {
+              // Check if both gaps are >0 and within the threshold
+              if (query_gap > 0 && ref_gap > 0 && query_gap <= threshold && ref_gap <= threshold) {
                   // Calculate midpoints
                   int query_mid = (prev.queryEndPos + curr.queryStartPos) / 2;
                   int ref_mid = (prev.refEndPos + curr.refStartPos) / 2;
@@ -1685,6 +1685,8 @@ namespace skch
               });
 
               // tweak start and end positions of consecutive mappings
+              // TODO: XXX double check that the consecutive mappings are not overlapping!!!
+              // extra: force global alignment by patching head and tail to mapping start and end coordinates
               adjustConsecutiveMappings(it, it_end, param.segLength);
 
               // First pass: Mark cuttable positions
