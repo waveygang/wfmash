@@ -1687,6 +1687,14 @@ namespace skch
                   return std::tie(a.queryStartPos, a.refStartPos) < std::tie(b.queryStartPos, b.refStartPos);
               });
 
+              // if we have an infinite max mappinng length, we should just emit the chain here
+              if (param.max_mapping_length == std::numeric_limits<int64_t>::max()) {
+                  // Process any remaining fragment
+                  processMappingFragment(it, it_end);
+                  it = it_end;
+                  continue;
+              }
+
               // tweak start and end positions of consecutive mappings
               // TODO: XXX double check that the consecutive mappings are not overlapping!!!
               // extra: force global alignment by patching head and tail to mapping start and end coordinates
