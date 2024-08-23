@@ -1708,8 +1708,8 @@ namespace skch
                   if (current == it || current == std::prev(it_end)) {
                       continue;
                   }
-                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength
-                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength) {
+                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength / 2
+                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength / 2) {
                       is_cuttable[std::distance(it, current) - 1] = false;
                       is_cuttable[std::distance(it, current)] = false;
                   }
