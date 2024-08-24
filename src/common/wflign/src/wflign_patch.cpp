@@ -1242,6 +1242,16 @@ void write_merged_alignment(
                 }
             }
 
+            // trim Is and Ds from the end of the alignment trace, adjusting the query_pos and target_pos as needed
+            while (!patched.empty() && (patched.back() == 'I' || patched.back() == 'D')) {
+                if (patched.back() == 'I') {
+                    --query_pos;
+                } else {
+                    --target_pos;
+                }
+                patched.pop_back();
+            }
+
             // Tail patching
             if (query_pos < query_length || target_pos < target_length) {
                 alignment_t tail_aln;
