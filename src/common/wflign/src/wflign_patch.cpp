@@ -721,6 +721,68 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
     return alignments;
 }
 
+void erode_head(std::vector<char>& unpatched, uint64_t& query_pos, uint64_t& target_pos, int erode_k) {
+    int match_count = 0;
+    auto it = unpatched.begin();
+    uint64_t query_erased = 0, target_erased = 0;
+
+    while (it != unpatched.end()) {
+        if (*it == 'M' || *it == 'X') {
+            match_count++;
+            if (match_count >= erode_k) {
+                break;
+            }
+            query_pos++;
+            target_pos++;
+            query_erased++;
+            target_erased++;
+        } else {
+            //match_count = 0;
+            if (*it == 'I') {
+                query_pos++;
+                query_erased++;
+            }
+            if (*it == 'D') {
+                target_pos++;
+                target_erased++;
+            }
+        }
+        it++;
+    }
+
+    std::cerr << "erode_head: eroded " << query_erased << " query and " << target_erased << " target" << std::endl;
+    // Erase the eroded part
+    unpatched.erase(unpatched.begin(), it);
+}
+
+void erode_tail(std::vector<char>& unpatched, uint64_t& query_end, uint64_t& target_end, int erode_k) {
+    int match_count = 0;
+    auto it = unpatched.rbegin();
+    uint64_t q_offset = 0, t_offset = 0;
+
+    while (it != unpatched.rend()) {
+        if (*it == 'M' || *it == 'X') {
+            match_count++;
+            if (match_count >= erode_k) {
+                break;
+            }
+            q_offset++;
+            t_offset++;
+        } else {
+            //match_count = 0;
+            if (*it == 'I') q_offset++;
+            if (*it == 'D') t_offset++;
+        }
+        it++;
+    }
+
+    // Erase the eroded part
+    std::cerr << "erode_tail: eroded " << q_offset << " query and " << t_offset << " target" << std::endl;
+    unpatched.erase(it.base(), unpatched.end());
+    query_end -= q_offset;
+    target_end -= t_offset;
+}
+
 void write_merged_alignment(
         std::ostream &out,
         const std::vector<alignment_t *> &trace,
@@ -859,20 +921,20 @@ void write_merged_alignment(
                 };
 
         auto patching = [&query, &query_name, &query_length, &query_start,
-                &query_offset, &target, &target_name,
-                &target_length, &target_start, &target_offset,
-                &target_total_length, &target_end,
-                &target_pointer_shift,
-                &wflign_max_len_major,
-                &wflign_max_len_minor,
-                &distance_close_big_enough_indels, &min_wf_length,
-                &max_dist_threshold, &wf_aligner,
-                &multi_patch_alns,
-                &convex_penalties,
-                &chain_gap, &max_patching_score, &min_inversion_length, &erode_k
+                         &query_offset, &query_end, &target, &target_name,
+                         &target_length, &target_start, &target_offset,
+                         &target_total_length, &target_end,
+                         &target_pointer_shift,
+                         &wflign_max_len_major,
+                         &wflign_max_len_minor,
+                         &distance_close_big_enough_indels, &min_wf_length,
+                         &max_dist_threshold, &wf_aligner,
+                         &multi_patch_alns,
+                         &convex_penalties,
+                         &chain_gap, &max_patching_score, &min_inversion_length, &erode_k
 #ifdef WFA_PNG_TSV_TIMING
-                ,&emit_patching_tsv,
-                &out_patching_tsv
+                         ,&emit_patching_tsv,
+                         &out_patching_tsv
 #endif
             ](std::vector<char> &unpatched,
               std::vector<char> &patched,
@@ -883,13 +945,19 @@ void write_merged_alignment(
 
             auto q = unpatched.begin();
 
-            uint64_t query_pos = query_start;
-            uint64_t target_pos = target_start;
-
             uint64_t query_delta = 0;
             uint64_t target_delta = 0;
 
             bool got_alignment = false;
+
+            // trim back small matches at the start
+            erode_head(unpatched, query_start, target_start, 7);
+
+            uint64_t query_pos = query_start;
+            uint64_t target_pos = target_start;
+
+            // Trim spurious matches off the tail of the alignment
+            erode_tail(unpatched, query_end, target_end, 7);
 
             // Head patching
             if (query_start > 0 || target_start > 0) {
@@ -1262,7 +1330,7 @@ void write_merged_alignment(
                     query_length - query_pos,
                     target,
                     target_pos,
-                    target_length - target_pos,
+                    std::min(target_length, target_length - target_pos + (query_length - query_pos)),
                     wf_aligner,
                     convex_penalties,
                     tail_aln,
@@ -1280,7 +1348,6 @@ void write_merged_alignment(
                     target_pos = target_length;
                 }
             }
-
 
 #ifdef WFLIGN_DEBUG
             std::cerr << "[wflign::wflign_affine_wavefront] got unsorted "
@@ -1486,7 +1553,7 @@ void write_merged_alignment(
     std::cerr << std::endl;
 #endif
 
-#ifdef VALIDATE_WFA_WFLIGN
+//#ifdef VALIDATE_WFA_WFLIGN
 //            std::cerr << "query_length: " << query_length << std::endl;
 //            std::cerr << "target_length: " << target_length <<
 //            std::endl; std::cerr << "query_start: " << query_start <<
@@ -1494,7 +1561,7 @@ void write_merged_alignment(
 //            std::endl;
 
     if (!validate_trace(tracev, query, target - target_pointer_shift,
-                    query_length, target_length, query_start,
+                    query_length, target_length + 2 * wflign_max_len_minor, query_start,
                     target_start)) {
         std::cerr
             << "cigar failure at alignment (before head/tail del trimming) "
@@ -1510,7 +1577,7 @@ void write_merged_alignment(
             << target_offset + target_end << std::endl;
         exit(1);
     }
-#endif
+//#endif
 
     // trim deletions at start and end of tracev
     uint64_t begin_offset;

@@ -1698,7 +1698,7 @@ namespace skch
               // tweak start and end positions of consecutive mappings
               // TODO: XXX double check that the consecutive mappings are not overlapping!!!
               // extra: force global alignment by patching head and tail to mapping start and end coordinates
-              adjustConsecutiveMappings(it, it_end, param.segLength);
+              //adjustConsecutiveMappings(it, it_end, param.segLength);
 
               // First pass: Mark cuttable positions
               const int consecutive_mappings_window = 4; // Configurable parameter
@@ -1716,12 +1716,14 @@ namespace skch
                   if (current == it || current == std::prev(it_end)) {
                       continue;
                   }
-                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength / 2
-                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength / 2) {
+                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength / 5
+                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength / 5) {
                       is_cuttable[std::distance(it, current) - 1] = false;
                       is_cuttable[std::distance(it, current)] = false;
                   }
               }
+
+              adjustConsecutiveMappings(it, it_end, param.segLength);
 
               auto fragment_start = it;
               auto current = it;
