@@ -797,11 +797,11 @@ void write_merged_alignment(
         const uint64_t& query_offset,
         const uint64_t& query_length,
         const bool& query_is_rev,
-        const char* target,
+        const char* _target,
         const std::string& target_name,
         const uint64_t& target_total_length,
-        const uint64_t& target_offset,
-        const uint64_t& target_length,
+        const uint64_t& _target_offset,
+        const uint64_t& _target_length,
         const float& min_identity,
 #ifdef WFA_PNG_TSV_TIMING
         const long& elapsed_time_wflambda_ms,
@@ -847,10 +847,18 @@ void write_merged_alignment(
     uint64_t target_end = 0;
     //uint64_t total_score = 0;
 
+    char* target = (char*)_target;
+    uint64_t target_offset = _target_offset;
+    uint64_t target_length = _target_length;
+
     // double mash_dist_sum = 0;
     uint64_t ok_alns = 0;
 
     auto start_time = std::chrono::steady_clock::now();
+
+    std::cerr << "target_offset: " << target_offset << " query_offset: " << query_offset << std::endl;
+    std::cerr << "target_length: " << target_length << " query_length: " << query_length << std::endl;
+    std::cerr << "target_total_length: " << target_total_length << " query_total_length: " << query_total_length << std::endl;
 
 #ifdef WFLIGN_DEBUG
     std::cerr << "[wflign::wflign_affine_wavefront] processing traceback"
@@ -961,6 +969,24 @@ void write_merged_alignment(
 
             // Head patching
             if (query_start > 0 || target_start > 0) {
+                // Calculate how far we need to shift to cover the query, and how far we can safely shift
+                int64_t needed_shift = std::max(0L, static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
+                int64_t max_safe_shift = std::min(
+                    static_cast<int64_t>(wflign_max_len_minor),
+                    static_cast<int64_t>(target_offset)
+                    );
+    
+                // Take the minimum of what we need and what's safe
+                int64_t actual_shift = std::min(needed_shift, max_safe_shift);
+
+                // Adjust the target pointer, offset, and length
+                target -= actual_shift;
+                target_offset -= actual_shift;
+                target_length += actual_shift;
+                target_end += actual_shift; // hmm
+                target_pos += actual_shift;
+                target_start += actual_shift;
+
                 alignment_t head_aln;
                 alignment_t head_rev_aln;
                 do_wfa_patch_alignment(
@@ -968,7 +994,7 @@ void write_merged_alignment(
                     0,
                     query_start,
                     target,
-                    0,
+                    0,  // Start from the beginning of the adjusted target
                     target_start,
                     wf_aligner,
                     convex_penalties,
@@ -977,15 +1003,26 @@ void write_merged_alignment(
                     chain_gap,
                     max_patching_score,
                     min_inversion_length);
-
+                
                 if (head_aln.ok) {
+                    std::cerr << "head_aln: " << head_aln.score << std::endl;
                     // Prepend the head alignment to the main alignment
                     for (int i = head_aln.edit_cigar.begin_offset; i < head_aln.edit_cigar.end_offset; ++i) {
+                        std::cerr << head_aln.edit_cigar.cigar_ops[i];
                         patched.push_back(head_aln.edit_cigar.cigar_ops[i]);
                     }
-                    query_start = 0;
-                    target_start = 0;
+                    std::cerr << std::endl;
+                } else {
+                    // push back I and D to fill the gap
+                    for (uint64_t i = 0; i < query_start; ++i) {
+                        patched.push_back('I');
+                    }
+                    for (uint64_t i = 0; i < target_start; ++i) {
+                        patched.push_back('D');
+                    }
                 }
+                query_start = 0;
+                target_start = 0;
             }
 
             // Patching in the middle
@@ -1322,6 +1359,18 @@ void write_merged_alignment(
 
             // Tail patching
             if (query_pos < query_length || target_pos < target_length) {
+                // Calculate how much additional target sequence we need
+                int64_t needed_extension = std::max(0L, static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
+    
+                // Calculate how much we can safely extend
+                int64_t max_safe_extension = std::min(
+                    static_cast<int64_t>(wflign_max_len_minor),
+                    static_cast<int64_t>(target_total_length - (target_offset + target_length))
+                    );
+
+                // Take the minimum of what we need and what's safe
+                int64_t actual_extension = std::min(needed_extension, max_safe_extension);
+
                 alignment_t tail_aln;
                 alignment_t tail_rev_aln;
                 do_wfa_patch_alignment(
@@ -1330,7 +1379,7 @@ void write_merged_alignment(
                     query_length - query_pos,
                     target,
                     target_pos,
-                    std::min(target_length, target_length - target_pos + (query_length - query_pos)),
+                    (target_length - target_pos) + actual_extension,
                     wf_aligner,
                     convex_penalties,
                     tail_aln,
@@ -1346,6 +1395,10 @@ void write_merged_alignment(
                     }
                     query_pos = query_length;
                     target_pos = target_length;
+
+                    // Adjust target_length if we used additional sequence
+                    query_end += tail_aln.query_length;
+                    target_end += tail_aln.target_length;
                 }
             }
 
