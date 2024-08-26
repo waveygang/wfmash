@@ -86,7 +86,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 6*segment_length, up to 30k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking [default: 1M]", {'P', "max-mapping-length"});
+    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking [default: inf]", {'P', "max-mapping-length"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "F", "drop mappings overlapping more than fraction F with a higher scoring mapping [default: 0.5]", {'O', "overlap-threshold"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
@@ -439,7 +439,7 @@ void parse_args(int argc,
         }
         map_parameters.max_mapping_length = l;
     } else {
-        map_parameters.max_mapping_length = 1000000; // 1 Mbp default
+        map_parameters.max_mapping_length = std::numeric_limits<int64_t>::max();
     }
 
     if (drop_low_map_pct_identity) {
@@ -585,6 +585,10 @@ void parse_args(int argc,
         map_parameters.threads = 1;
         align_parameters.threads = 1;
     }
+    // disable multi-fasta processing due to the memory inefficiency of samtools faidx readers
+    // which require us to duplicate the in-memory indexes of large files for each thread
+    // if aligner exhaustion is a problem, we could enable this
+    align_parameters.multithread_fasta_input = false;
 
     // Compute optimal window size for sketching
     {

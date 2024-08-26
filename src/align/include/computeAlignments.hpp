@@ -370,7 +370,7 @@ void processor_manager(seq_atomic_queue_t& seq_queue,
     std::vector<std::atomic<bool>> thread_should_exit(max_processors);
 
     const size_t queue_capacity = seq_queue.capacity();
-    const size_t low_threshold = queue_capacity * 0.2;
+    const size_t low_threshold = 1;
     const size_t high_threshold = queue_capacity * 0.8;
 
     auto spawn_processor = [&](size_t id) {
@@ -383,14 +383,22 @@ void processor_manager(seq_atomic_queue_t& seq_queue,
     // Start with one processor
     spawn_processor(0);
     size_t current_processors = 1;
+    uint64_t exhausted = 0;
 
     while (!reader_done.load() || !line_queue.was_empty() || !seq_queue.was_empty()) {
         size_t queue_size = seq_queue.was_size();
 
-        if (queue_size < low_threshold && current_processors < max_processors) {
-            spawn_processor(current_processors++);
-        } else if (queue_size > high_threshold && current_processors > 1) {
-            thread_should_exit[--current_processors].store(true);
+        if (param.multithread_fasta_input) {
+            if (queue_size < low_threshold && current_processors < max_processors) {
+                ++exhausted;
+            } else if (queue_size > high_threshold && current_processors > 1) {
+                thread_should_exit[--current_processors].store(true);
+            }
+
+            if (exhausted > 20 && queue_size < low_threshold) {
+                spawn_processor(current_processors++);
+                exhausted = 0;
+            }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

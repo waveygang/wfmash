@@ -726,6 +726,9 @@ namespace skch
 
             // remove short chains that didn't exceed block length
             filterWeakMappings(unfilteredMappings, std::floor(param.block_length / param.segLength));
+
+            // now that filtering has happened, set back the individual mapping coordinates and block length
+            setBlockCoordsToMappingCoords(unfilteredMappings);
           } else {
               // set block coordinates
               setBlockCoordsToMappingCoords(unfilteredMappings);
@@ -1558,8 +1561,8 @@ namespace skch
               int query_gap = curr.queryStartPos - prev.queryEndPos;
               int ref_gap = curr.refStartPos - prev.refEndPos;
 
-              // Check if both gaps are within the threshold
-              if (std::abs(query_gap) <= threshold && std::abs(ref_gap) <= threshold) {
+              // Check if both gaps are >0 and within the threshold
+              if (query_gap > 0 && ref_gap > 0 && query_gap <= threshold && ref_gap <= threshold) {
                   // Calculate midpoints
                   int query_mid = (prev.queryEndPos + curr.queryStartPos) / 2;
                   int ref_mid = (prev.refEndPos + curr.refStartPos) / 2;
@@ -1581,6 +1584,12 @@ namespace skch
                   curr.approxMatches = std::round(curr.nucIdentity * curr.blockLength / 100.0);
               }
           }
+      }
+
+      double axis_weighted_euclidean_distance(int64_t dx, int64_t dy, double w = 0.5) {
+          double euclidean = std::sqrt(dx*dx + dy*dy);
+          double axis_factor = 1.0 - (2.0 * std::min(std::abs(dx), std::abs(dy))) / (std::abs(dx) + std::abs(dy));
+          return euclidean * (1.0 + w * axis_factor);
       }
       
       /**
@@ -1616,7 +1625,7 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::pair<double, uint64_t>> distances;
+              std::vector<std::tuple<double, double, int64_t>> distances;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is for the same segment, ignore
                   if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
@@ -1628,29 +1637,27 @@ namespace skch
                   }
                   //If the next mapping is within range, check if it's in range and
                   if (it2->strand == it->strand) {
-                      int ref_dist = it2->refStartPos - it->refEndPos;
-                      int query_dist = 0;
+                      int64_t ref_dist = it2->refStartPos - it->refEndPos;
+                      int64_t query_dist = std::numeric_limits<int64_t>::max();
                       auto dist = std::numeric_limits<double>::max();
-                      auto score = std::numeric_limits<double>::max();
+                      auto awed = std::numeric_limits<double>::max();
                       if (it->strand == strnd::FWD && it->queryStartPos <= it2->queryStartPos) {
                           query_dist = it2->queryStartPos - it->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                          score = std::pow(query_dist - ref_dist, 2);
+                          awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       } else if (it->strand != strnd::FWD && it->queryEndPos >= it2->queryEndPos) {
                           query_dist = it->queryStartPos - it2->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                          score = std::pow(query_dist - ref_dist, 2);
+                          awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       }
-                      int query_mapping_len = std::min((it->queryEndPos - it->queryStartPos),
-                                                       (it2->queryEndPos - it2->queryStartPos));
-                      if (dist < max_dist) {
-                          distances.push_back(std::make_pair(dist + score, it2->splitMappingId));
+                      if (awed < max_dist) {
+                          distances.push_back(std::make_tuple(awed, dist, it2->splitMappingId));
                       }
                   }
               }
               if (distances.size()) {
                   std::sort(distances.begin(), distances.end());
-                  disjoint_sets.unite(it->splitMappingId, distances.front().second);
+                  disjoint_sets.unite(it->splitMappingId, std::get<2>(distances.front()));
               }
           }
 
@@ -1680,8 +1687,18 @@ namespace skch
                   return std::tie(a.queryStartPos, a.refStartPos) < std::tie(b.queryStartPos, b.refStartPos);
               });
 
+              // if we have an infinite max mappinng length, we should just emit the chain here
+              if (param.max_mapping_length == std::numeric_limits<int64_t>::max()) {
+                  // Process any remaining fragment
+                  processMappingFragment(it, it_end);
+                  it = it_end;
+                  continue;
+              }
+
               // tweak start and end positions of consecutive mappings
-              adjustConsecutiveMappings(it, it_end, param.segLength);
+              // TODO: XXX double check that the consecutive mappings are not overlapping!!!
+              // extra: force global alignment by patching head and tail to mapping start and end coordinates
+              //adjustConsecutiveMappings(it, it_end, param.segLength);
 
               // First pass: Mark cuttable positions
               const int consecutive_mappings_window = 4; // Configurable parameter
@@ -1699,12 +1716,14 @@ namespace skch
                   if (current == it || current == std::prev(it_end)) {
                       continue;
                   }
-                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength
-                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength) {
+                  if (current->queryStartPos - std::prev(current)->queryEndPos > param.segLength / 5
+                      || current->refStartPos - std::prev(current)->refEndPos > param.segLength / 5) {
                       is_cuttable[std::distance(it, current) - 1] = false;
                       is_cuttable[std::distance(it, current)] = false;
                   }
               }
+
+              adjustConsecutiveMappings(it, it_end, param.segLength);
 
               auto fragment_start = it;
               auto current = it;
@@ -1716,6 +1735,9 @@ namespace skch
                   accumulate_length += current->queryEndPos - current->queryStartPos;
                   if (accumulate_length >= param.max_mapping_length
                       && is_cuttable[std::distance(it, current)]) {
+                      if (current != fragment_start) {
+                          adjustConsecutiveMappings(std::prev(current), current, param.chain_gap);
+                      }
                       processMappingFragment(fragment_start, current);
                       fragment_start = current;
                       accumulate_length = 0;
@@ -1853,6 +1875,8 @@ namespace skch
             if (!param.mergeMappings) 
             {
               outstrm << sep << "jc:f:" << float(e.conservedSketches) / e.sketchSize;
+            } else {
+              outstrm << sep << "chain:i:" << e.splitMappingId;
             }
           } else
           {

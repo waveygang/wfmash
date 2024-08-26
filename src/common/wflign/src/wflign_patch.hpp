@@ -59,7 +59,8 @@ namespace wflign {
             alignment_t& rev_aln,
             const int64_t& chain_gap,
             const int& max_patching_score,
-            const uint64_t& min_inversion_length);
+            const uint64_t& min_inversion_length,
+            bool ends_free);
         void trim_alignment(alignment_t& aln);
         std::vector<alignment_t> do_progressive_wfa_patch_alignment(
             const char* query,
