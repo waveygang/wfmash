@@ -1397,7 +1397,6 @@ void write_merged_alignment(
                     target_pos = target_length;
 
                     // Adjust target_length if we used additional sequence
-                    query_end += tail_aln.query_length;
                     target_end += tail_aln.target_length;
                 }
             }
