@@ -750,7 +750,7 @@ void erode_head(std::vector<char>& unpatched, uint64_t& query_pos, uint64_t& tar
         it++;
     }
 
-    std::cerr << "erode_head: eroded " << query_erased << " query and " << target_erased << " target" << std::endl;
+    //std::cerr << "erode_head: eroded " << query_erased << " query and " << target_erased << " target" << std::endl;
     // Erase the eroded part
     unpatched.erase(unpatched.begin(), it);
 }
@@ -777,7 +777,7 @@ void erode_tail(std::vector<char>& unpatched, uint64_t& query_end, uint64_t& tar
     }
 
     // Erase the eroded part
-    std::cerr << "erode_tail: eroded " << q_offset << " query and " << t_offset << " target" << std::endl;
+    //std::cerr << "erode_tail: eroded " << q_offset << " query and " << t_offset << " target" << std::endl;
     unpatched.erase(it.base(), unpatched.end());
     query_end -= q_offset;
     target_end -= t_offset;
@@ -856,9 +856,9 @@ void write_merged_alignment(
 
     auto start_time = std::chrono::steady_clock::now();
 
-    std::cerr << "target_offset: " << target_offset << " query_offset: " << query_offset << std::endl;
-    std::cerr << "target_length: " << target_length << " query_length: " << query_length << std::endl;
-    std::cerr << "target_total_length: " << target_total_length << " query_total_length: " << query_total_length << std::endl;
+    //std::cerr << "target_offset: " << target_offset << " query_offset: " << query_offset << std::endl;
+    //std::cerr << "target_length: " << target_length << " query_length: " << query_length << std::endl;
+    //std::cerr << "target_total_length: " << target_total_length << " query_total_length: " << query_total_length << std::endl;
 
 #ifdef WFLIGN_DEBUG
     std::cerr << "[wflign::wflign_affine_wavefront] processing traceback"
@@ -1005,13 +1005,13 @@ void write_merged_alignment(
                     min_inversion_length);
                 
                 if (head_aln.ok) {
-                    std::cerr << "head_aln: " << head_aln.score << std::endl;
+                    //std::cerr << "head_aln: " << head_aln.score << std::endl;
                     // Prepend the head alignment to the main alignment
                     for (int i = head_aln.edit_cigar.begin_offset; i < head_aln.edit_cigar.end_offset; ++i) {
-                        std::cerr << head_aln.edit_cigar.cigar_ops[i];
+                        //std::cerr << head_aln.edit_cigar.cigar_ops[i];
                         patched.push_back(head_aln.edit_cigar.cigar_ops[i]);
                     }
-                    std::cerr << std::endl;
+                    //std::cerr << std::endl;
                 } else {
                     // push back I and D to fill the gap
                     for (uint64_t i = 0; i < query_start; ++i) {
