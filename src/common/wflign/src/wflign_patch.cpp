@@ -1606,7 +1606,7 @@ void write_merged_alignment(
     std::cerr << std::endl;
 #endif
 
-//#ifdef VALIDATE_WFA_WFLIGN
+#ifdef VALIDATE_WFA_WFLIGN
 //            std::cerr << "query_length: " << query_length << std::endl;
 //            std::cerr << "target_length: " << target_length <<
 //            std::endl; std::cerr << "query_start: " << query_start <<
@@ -1630,7 +1630,7 @@ void write_merged_alignment(
             << target_offset + target_end << std::endl;
         exit(1);
     }
-//#endif
+#endif
 
     // trim deletions at start and end of tracev
     uint64_t begin_offset;
