@@ -2269,17 +2269,15 @@ void write_alignment_paf(
                 << "\t" << std::round(float2phred(1.0 - block_identity)) << "\t"
                 //<< "as:i:" << aln.score << "\t"
                 << "gi:f:" << gap_compressed_identity << "\t"
-                << "bi:f:"
-                << block_identity
+                << "bi:f:" << block_identity << "\t"
+                << "md:f:" << mashmap_estimated_identity << "\t"
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
                 //<< "\t" << "ni:i:" << insertions
                 //<< "\t" << "bi:i:" << inserted_bp
                 //<< "\t" << "nd:i:" << deletions
                 //<< "\t" << "bd:i:" << deleted_bp
-                << "\t"
-                << "cg:Z:" << cigar << "\t"
-                << "md:f:" << mashmap_estimated_identity;
+                << "cg:Z:" << cigar << "\t";
             if (with_endline) {
                 out << std::endl;
             }
