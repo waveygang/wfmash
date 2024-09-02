@@ -54,6 +54,7 @@ Specifying `-m, --approx-map` lets us stop before alignment and obtain the appro
 
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
+When working with large sequence collections we frequently use [PanSN](https://github.com/pangenome/PanSN-spec) naming convention and `-Y'#'` to specify that we want to group mappings by prefix, which in this context means genome or haplotype groupings.
 
 
 ## input indexing

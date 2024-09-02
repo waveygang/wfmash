@@ -1650,7 +1650,7 @@ namespace skch
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       }
-                      if (awed < max_dist) {
+                      if (dist < max_dist) {
                           distances.push_back(std::make_tuple(awed, dist, it2->splitMappingId));
                       }
                   }

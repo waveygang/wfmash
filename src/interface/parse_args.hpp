@@ -68,12 +68,12 @@ void parse_args(int argc,
     args::Positional<std::string> query_sequence_file(io_opts, "query", "query sequence file (optional)");
 
     args::Group mapping_opts(parser, "[ Mapping Options ]");
-    args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
-    args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 5k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
+    args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 70]", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 1k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 3*segment-length]", {'l', "block-length"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each query/reference pair [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
-    args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 19]", {'k', "kmer"});
+    args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 15]", {'k', "kmer"});
     args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
@@ -85,8 +85,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
-    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 6*segment_length, up to 30k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking [default: inf]", {'P', "max-mapping-length"});
+    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 30k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking (inf to unset) [default: 50k]", {'P', "max-mapping-length"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "F", "drop mappings overlapping more than fraction F with a higher scoring mapping [default: 0.5]", {'O', "overlap-threshold"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
@@ -390,7 +390,7 @@ void parse_args(int argc,
         }
         map_parameters.segLength = s;
     } else {
-        map_parameters.segLength = 5000;
+        map_parameters.segLength = 1000;
     }
 
     if (map_pct_identity) {
@@ -413,9 +413,7 @@ void parse_args(int argc,
 
         map_parameters.block_length = l;
     } else {
-        // n.b. we map-merge across gaps up to 3x segment length
-        // and then filter for things that are at least block_length long
-        map_parameters.block_length = 5 * map_parameters.segLength;
+        map_parameters.block_length = 3 * map_parameters.segLength;
     }
 
     if (chain_gap) {
@@ -427,19 +425,20 @@ void parse_args(int argc,
         map_parameters.chain_gap = l;
         align_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = std::min((int64_t)30000, 6*map_parameters.segLength);
-        align_parameters.chain_gap = std::min((int64_t)30000, 6*map_parameters.segLength);
+        map_parameters.chain_gap = 30000;
+        align_parameters.chain_gap = 30000;
     }
 
     if (max_mapping_length) {
-        const int64_t l = wfmash::handy_parameter(args::get(max_mapping_length));
+        const int64_t l = args::get(max_mapping_length) == "inf" ? std::numeric_limits<int64_t>::max()
+            : wfmash::handy_parameter(args::get(max_mapping_length));
         if (l <= 0) {
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
         map_parameters.max_mapping_length = l;
     } else {
-        map_parameters.max_mapping_length = std::numeric_limits<int64_t>::max();
+        map_parameters.max_mapping_length = 50000;
     }
 
     if (drop_low_map_pct_identity) {
@@ -464,7 +463,7 @@ void parse_args(int argc,
         map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
         */
-        map_parameters.kmerSize = 19;
+        map_parameters.kmerSize = 15;
     }
 
     if (kmer_pct_threshold) {
