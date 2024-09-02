@@ -70,7 +70,7 @@ void parse_args(int argc,
     args::Group mapping_opts(parser, "[ Mapping Options ]");
     args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 1k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
+    args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 3*segment-length]", {'l', "block-length"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each query/reference pair [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 15]", {'k', "kmer"});
@@ -413,9 +413,7 @@ void parse_args(int argc,
 
         map_parameters.block_length = l;
     } else {
-        // n.b. we map-merge across gaps up to 3x segment length
-        // and then filter for things that are at least block_length long
-        map_parameters.block_length = 5 * map_parameters.segLength;
+        map_parameters.block_length = 3 * map_parameters.segLength;
     }
 
     if (chain_gap) {
