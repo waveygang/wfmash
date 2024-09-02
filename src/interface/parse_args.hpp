@@ -86,7 +86,7 @@ void parse_args(int argc,
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 30k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking [default: inf]", {'P', "max-mapping-length"});
+    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking (inf to unset) [default: 50k]", {'P', "max-mapping-length"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "F", "drop mappings overlapping more than fraction F with a higher scoring mapping [default: 0.5]", {'O', "overlap-threshold"});
     args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
@@ -430,14 +430,15 @@ void parse_args(int argc,
     }
 
     if (max_mapping_length) {
-        const int64_t l = wfmash::handy_parameter(args::get(max_mapping_length));
+        const int64_t l = args::get(max_mapping_length) == "inf" ? std::numeric_limits<int64_t>::max()
+            : wfmash::handy_parameter(args::get(max_mapping_length));
         if (l <= 0) {
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
         map_parameters.max_mapping_length = l;
     } else {
-        map_parameters.max_mapping_length = std::numeric_limits<int64_t>::max();
+        map_parameters.max_mapping_length = 50000;
     }
 
     if (drop_low_map_pct_identity) {
