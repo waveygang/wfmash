@@ -69,7 +69,7 @@ void parse_args(int argc,
 
     args::Group mapping_opts(parser, "[ Mapping Options ]");
     args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 90]", {'p', "map-pct-id"});
-    args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 5k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 1k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 5*segment-length]", {'l', "block-length"});
     args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each query/reference pair [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
@@ -390,7 +390,7 @@ void parse_args(int argc,
         }
         map_parameters.segLength = s;
     } else {
-        map_parameters.segLength = 5000;
+        map_parameters.segLength = 1000;
     }
 
     if (map_pct_identity) {
