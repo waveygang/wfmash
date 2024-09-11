@@ -939,7 +939,8 @@ void write_merged_alignment(
                          &max_dist_threshold, &wf_aligner,
                          &multi_patch_alns,
                          &convex_penalties,
-                         &chain_gap, &max_patching_score, &min_inversion_length, &erode_k
+                         &chain_gap, &max_patching_score, &min_inversion_length, &erode_k,
+                         &query_total_length  // Add this line to capture query_total_length
 #ifdef WFA_PNG_TSV_TIMING
                          ,&emit_patching_tsv,
                          &out_patching_tsv
