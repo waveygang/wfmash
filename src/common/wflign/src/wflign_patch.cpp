@@ -1397,13 +1397,8 @@ void write_merged_alignment(
                     target_pos = target_length;
 
                     // Adjust query_end and target_end if we used additional sequence
-                    query_end = query_length;
+                    query_end += tail_aln.query_length;
                     target_end += tail_aln.target_length;
-
-                    std::cerr << "After tail patching: query_end=" << query_end 
-                              << ", query_length=" << query_length 
-                              << ", target_end=" << target_end 
-                              << ", target_length=" << target_length << std::endl;
                 }
             }
 
