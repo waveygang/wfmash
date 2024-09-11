@@ -1397,8 +1397,19 @@ void write_merged_alignment(
                     target_pos = target_length;
 
                     // Adjust query_end and target_end if we used additional sequence
-                    query_end += tail_aln.query_length;
-                    target_end += tail_aln.target_length;
+                    uint64_t new_query_end = query_offset + query_length;
+                    uint64_t new_target_end = target_offset + target_length + actual_extension;
+
+                    // Ensure we don't exceed the total lengths
+                    query_end = std::min(new_query_end, query_total_length);
+                    target_end = std::min(new_target_end, target_total_length);
+
+                    // Add safety checks
+                    if (query_end > query_total_length || target_end > target_total_length) {
+                        std::cerr << "Warning: Alignment extends beyond sequence bounds. Truncating." << std::endl;
+                        query_end = std::min(query_end, query_total_length);
+                        target_end = std::min(target_end, target_total_length);
+                    }
                 }
             }
 
