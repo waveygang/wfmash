@@ -35,3 +35,4 @@ test/
 .idea/
 cmake-build-debug/
 result
+.aider*
