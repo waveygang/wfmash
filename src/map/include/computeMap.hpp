@@ -1684,7 +1684,7 @@ namespace skch
 
               // Sort the chain by query, then reference, start position
               std::sort(it, it_end, [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.queryStartPos, a.refStartPos) < std::tie(b.queryStartPos, b.refStartPos);
+                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
               });
 
               // if we have an infinite max mappinng length, we should just emit the chain here
