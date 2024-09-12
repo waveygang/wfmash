@@ -1641,11 +1641,11 @@ namespace skch
                       int64_t query_dist = std::numeric_limits<int64_t>::max();
                       auto dist = std::numeric_limits<double>::max();
                       auto awed = std::numeric_limits<double>::max();
-                      if (it->strand == strnd::FWD && it->queryStartPos <= it2->queryStartPos) {
+                      if (it->strand == strnd::FWD && it->queryEndPos <= it2->queryStartPos) {
                           query_dist = it2->queryStartPos - it->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
-                      } else if (it->strand != strnd::FWD && it->queryEndPos >= it2->queryEndPos) {
+                      } else if (it->strand != strnd::FWD && it->queryStartPos >= it2->queryEndPos) {
                           query_dist = it->queryStartPos - it2->queryEndPos;
                           dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                           awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
