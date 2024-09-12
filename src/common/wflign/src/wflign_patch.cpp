@@ -1397,20 +1397,17 @@ void write_merged_alignment(
                     query_pos = query_length;
                     target_pos = target_length;
 
-                    // Adjust query_end and target_end if we used additional sequence
+                    // Add safety checks first
                     uint64_t new_query_end = query_offset + query_length;
                     uint64_t new_target_end = target_offset + target_length + actual_extension;
 
-                    // Ensure we don't exceed the total lengths
+                    if (new_query_end > query_total_length || new_target_end > target_total_length) {
+                        std::cerr << "[wfmash::patch] Warning: Alignment extends beyond sequence bounds. Truncating." << std::endl;
+                    }
+
+                    // Adjust query_end and target_end, ensuring we don't exceed the total lengths
                     query_end = std::min(new_query_end, query_total_length);
                     target_end = std::min(new_target_end, target_total_length);
-
-                    // Add safety checks
-                    if (query_end > query_total_length || target_end > target_total_length) {
-                        std::cerr << "Warning: Alignment extends beyond sequence bounds. Truncating." << std::endl;
-                        query_end = std::min(query_end, query_total_length);
-                        target_end = std::min(target_end, target_total_length);
-                    }
                 }
             }
 
