@@ -1651,10 +1651,10 @@ namespace skch
                           continue;
                       }
                       auto dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                      auto awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
-                      if (dist < max_dist && it2->chainPairScore > awed) {
+                      //auto awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
+                      if (dist < max_dist && it2->chainPairScore > dist) {
                           it2->chainPairId = it->splitMappingId;
-                          it2->chainPairScore = awed;
+                          it2->chainPairScore = dist;
                       }
                   }
               }
