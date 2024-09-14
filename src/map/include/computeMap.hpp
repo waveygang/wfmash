@@ -1651,19 +1651,16 @@ namespace skch
                           awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       }
                       if (dist < max_dist) {
-                          chainPairs.push_back(std::make_pair(awed, it2->splitMappingId));
+                          it2->chainPairs.push_back(std::make_pair(awed, it->splitMappingId));
                       }
                   }
               }
-              if (!chainPairs.empty()) {
-                  std::sort(chainPairs.begin(), chainPairs.end());
-                  it->chainPairs = std::move(chainPairs);
-              }
           }
 
-          // Second pass: Apply disjoint sets union operation
+          // Second pass: Sort chain pairs and apply disjoint sets union operation
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
               if (!it->chainPairs.empty()) {
+                  std::sort(it->chainPairs.begin(), it->chainPairs.end());
                   disjoint_sets.unite(it->splitMappingId, it->chainPairs.front().second);
               }
           }
