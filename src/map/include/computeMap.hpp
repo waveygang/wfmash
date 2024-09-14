@@ -1627,6 +1627,8 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
+              double best_score = std::numeric_limits<double>::max();
+              auto best_it2 = readMappings.end();
               // we we merge only with the best-scored previous mapping in query space
               if (it->chainPairScore != std::numeric_limits<double>::max()) {
                   disjoint_sets.unite(it->splitMappingId, it->chainPairId);
@@ -1647,7 +1649,8 @@ namespace skch
                   //If the next mapping is within range, we can potentially merge
                   if (it2->strand == it->strand) {
                       int64_t ref_dist = it2->refStartPos - it->refEndPos;
-                      if (ref_dist < 0) {
+                      // If we jitter backwards in reference position too far, don't merge
+                      if (ref_dist < -param.segLength/5) {
                           continue;
                       }
                       int64_t query_dist = it2->queryStartPos - it->queryEndPos;
@@ -1655,11 +1658,15 @@ namespace skch
                           continue;
                       }
                       auto dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                      if (dist < max_dist && it2->chainPairScore > dist) {
-                          it2->chainPairId = it->splitMappingId;
-                          it2->chainPairScore = dist;
+                      if (dist < max_dist && best_score > dist && it2->chainPairScore > dist) {
+                          best_it2 = it2;
+                          best_score = dist;
                       }
                   }
+              }
+              if (best_it2 != readMappings.end()) {
+                  best_it2->chainPairScore = best_score;
+                  best_it2->chainPairId = it->splitMappingId;
               }
           }
 
