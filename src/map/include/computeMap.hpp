@@ -1617,7 +1617,7 @@ namespace skch
               it->splitMappingId = std::distance(readMappings.begin(), it);
               it->discard = 0;
               it->chainPairScore = std::numeric_limits<double>::max();
-              it->chainPairId = std::numeric_limits<int64_t>::max();
+              it->chainPairId = std::numeric_limits<int64_t>::min();
           }
 
           // set up our union find data structure to track merges
@@ -1632,8 +1632,12 @@ namespace skch
                   disjoint_sets.unite(it->splitMappingId, it->chainPairId);
               }
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
-                  //If this mapping is for the same segment, ignore
-                  if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
+                  // If this mapping is for a different reference sequence, ignore
+                  if (it2->refSeqId != it->refSeqId) {
+                      continue;
+                  }
+                  //If this mapping is for exactly the same segment, ignore
+                  if (it2->queryStartPos == it->queryStartPos) {
                       continue;
                   }
                   //If this mapping is too far from current mapping being evaluated in the query, stop finding a merge
