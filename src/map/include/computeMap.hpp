@@ -1625,7 +1625,7 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::tuple<double, double, int64_t>> distances;
+              std::vector<std::pair<double, int64_t>> chainPairs;
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is for the same segment, ignore
                   if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
@@ -1651,18 +1651,25 @@ namespace skch
                           awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       }
                       if (dist < max_dist) {
-                          distances.push_back(std::make_tuple(awed, dist, it2->splitMappingId));
+                          chainPairs.push_back(std::make_pair(awed, it2->splitMappingId));
                       }
                   }
               }
-              if (distances.size()) {
-                  std::sort(distances.begin(), distances.end());
-                  disjoint_sets.unite(it->splitMappingId, std::get<2>(distances.front()));
+              if (!chainPairs.empty()) {
+                  std::sort(chainPairs.begin(), chainPairs.end());
+                  it->chainPairs = std::move(chainPairs);
               }
           }
 
-          //Assign the merged mapping ids
-          for (auto it =  readMappings.begin(); it != readMappings.end(); it++) {
+          // Second pass: Apply disjoint sets union operation
+          for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
+              if (!it->chainPairs.empty()) {
+                  disjoint_sets.unite(it->splitMappingId, it->chainPairs.front().second);
+              }
+          }
+
+          // Assign the merged mapping ids
+          for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
               it->splitMappingId = disjoint_sets.find(it->splitMappingId);
           }
 
