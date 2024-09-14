@@ -178,6 +178,8 @@ namespace skch
     uint8_t discard;                                    // set to 1 for deletion
     bool overlapped;                                    // set to true if this mapping is overlapped with another mapping
     bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
+    double chainPairScore;                              // best score for potential chain pair
+    int64_t chainPairId;                                // best partner mapping for potential chain pair
 
     offset_t qlen() {                                   //length of this mapping on query axis
       return queryEndPos - queryStartPos + 1;

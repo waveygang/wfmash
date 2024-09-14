@@ -1616,6 +1616,8 @@ namespace skch
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
               it->splitMappingId = std::distance(readMappings.begin(), it);
               it->discard = 0;
+              it->chainPairScore = std::numeric_limits<double>::max();
+              it->chainPairId = std::numeric_limits<int64_t>::max();
           }
 
           // set up our union find data structure to track merges
@@ -1625,7 +1627,10 @@ namespace skch
 
           //Start the procedure to identify the chains
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::pair<double, int64_t>> chainPairs;
+              // we we merge only with the best-scored previous mapping in query space
+              if (it->chainPairScore != std::numeric_limits<double>::max()) {
+                  disjoint_sets.unite(it->splitMappingId, it->chainPairId);
+              }
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is for the same segment, ignore
                   if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
@@ -1638,21 +1643,20 @@ namespace skch
                   //If the next mapping is within range, check if it's in range and
                   if (it2->strand == it->strand) {
                       int64_t ref_dist = it2->refStartPos - it->refEndPos;
+                      if (ref_dist < 0) {
+                          continue;
+                      }
                       int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+                      if (query_dist < 0) {
+                          continue;
+                      }
                       auto dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
                       auto awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
-                      if (dist < max_dist) {
-                          it2->chainPairs.push_back(std::make_pair(awed, it->splitMappingId));
+                      if (dist < max_dist && it2->chainPairScore > awed) {
+                          it2->chainPairId = it->splitMappingId;
+                          it2->chainPairScore = awed;
                       }
                   }
-              }
-          }
-
-          // Second pass: Sort chain pairs and apply disjoint sets union operation
-          for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              if (!it->chainPairs.empty()) {
-                  std::sort(it->chainPairs.begin(), it->chainPairs.end());
-                  disjoint_sets.unite(it->splitMappingId, it->chainPairs.front().second);
               }
           }
 
@@ -1666,21 +1670,13 @@ namespace skch
               readMappings.begin(),
               readMappings.end(),
               [](const MappingResult &a, const MappingResult &b) {
-                  return a.splitMappingId < b.splitMappingId
-                      || (a.splitMappingId == b.splitMappingId
-                          && (a.queryStartPos < b.queryStartPos
-                              || (a.queryStartPos == b.queryStartPos
-                                  && a.refStartPos < b.refStartPos)));
+                  return std::tie(a.splitMappingId, a.queryStartPos, a.refSeqId, a.refStartPos)
+                      < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos);
               });
 
           for(auto it = readMappings.begin(); it != readMappings.end();) {
               //Bucket by each chain
               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
-
-              // Sort the chain by query, then reference, start position
-              std::sort(it, it_end, [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
-              });
 
               // if we have an infinite max mappinng length, we should just emit the chain here
               if (param.max_mapping_length == std::numeric_limits<int64_t>::max()) {
