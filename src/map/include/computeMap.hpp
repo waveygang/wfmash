@@ -1640,7 +1640,7 @@ namespace skch
                   if (it2->queryStartPos > it->queryEndPos + max_dist) {
                       break;
                   }
-                  //If the next mapping is within range, check if it's in range and
+                  //If the next mapping is within range, we can potentially merge
                   if (it2->strand == it->strand) {
                       int64_t ref_dist = it2->refStartPos - it->refEndPos;
                       if (ref_dist < 0) {
@@ -1651,7 +1651,6 @@ namespace skch
                           continue;
                       }
                       auto dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                      //auto awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       if (dist < max_dist && it2->chainPairScore > dist) {
                           it2->chainPairId = it->splitMappingId;
                           it2->chainPairScore = dist;
