@@ -1604,12 +1604,12 @@ namespace skch
 
           if(readMappings.size() < 2) return;
 
-          //Sort the mappings by reference (then query) position
+          //Sort the mappings by query position, then reference sequence id, then reference position
           std::sort(
               readMappings.begin(), readMappings.end(),
               [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
-                      < std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
+                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos)
+                      < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
               });
 
           //First assign a unique id to each split mapping in the sorted order
@@ -1631,25 +1631,16 @@ namespace skch
                   if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
                       continue;
                   }
-                  //If this mapping is too far from current mapping being evaluated, stop finding a merge
-                  if (it2->refSeqId != it->refSeqId || it2->refStartPos > it->refEndPos + max_dist) {
+                  //If this mapping is too far from current mapping being evaluated in the query, stop finding a merge
+                  if (it2->queryStartPos > it->queryEndPos + max_dist) {
                       break;
                   }
                   //If the next mapping is within range, check if it's in range and
                   if (it2->strand == it->strand) {
                       int64_t ref_dist = it2->refStartPos - it->refEndPos;
-                      int64_t query_dist = std::numeric_limits<int64_t>::max();
-                      auto dist = std::numeric_limits<double>::max();
-                      auto awed = std::numeric_limits<double>::max();
-                      if (it->strand == strnd::FWD && it->queryEndPos <= it2->queryStartPos) {
-                          query_dist = it2->queryStartPos - it->queryEndPos;
-                          dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                          awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
-                      } else if (it->strand != strnd::FWD && it->queryStartPos >= it2->queryEndPos) {
-                          query_dist = it->queryStartPos - it2->queryEndPos;
-                          dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                          awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
-                      }
+                      int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+                      auto dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
+                      auto awed = axis_weighted_euclidean_distance(query_dist, ref_dist, 0.9);
                       if (dist < max_dist) {
                           it2->chainPairs.push_back(std::make_pair(awed, it->splitMappingId));
                       }
