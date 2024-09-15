@@ -1684,6 +1684,43 @@ namespace skch
                       < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos);
               });
 
+          // Create maximallyMergedMappings
+          MappingResultsVector_t maximallyMergedMappings;
+          for(auto it = readMappings.begin(); it != readMappings.end();) {
+              auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
+              MappingResult mergedMapping = *it;
+              mergedMapping.queryStartPos = it->queryStartPos;
+              mergedMapping.queryEndPos = std::prev(it_end)->queryEndPos;
+              mergedMapping.refStartPos = it->refStartPos;
+              mergedMapping.refEndPos = std::prev(it_end)->refEndPos;
+              mergedMapping.blockLength = std::max(mergedMapping.refEndPos - mergedMapping.refStartPos,
+                                                   mergedMapping.queryEndPos - mergedMapping.queryStartPos);
+              mergedMapping.n_merged = std::distance(it, it_end);
+              maximallyMergedMappings.push_back(mergedMapping);
+              it = it_end;
+          }
+
+          // Apply filtering to maximallyMergedMappings
+          filterWeakMappings(maximallyMergedMappings, std::floor(param.block_length / param.segLength));
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t filteredMappings;
+              filterByGroup(maximallyMergedMappings, filteredMappings, param.numMappingsForSegment - 1, false);
+              maximallyMergedMappings = std::move(filteredMappings);
+          }
+
+          // Create a set of splitMappingIds that survived filtering
+          std::unordered_set<offset_t> keptChains;
+          for (const auto& mapping : maximallyMergedMappings) {
+              keptChains.insert(mapping.splitMappingId);
+          }
+
+          // Final filtering of original mappings
+          readMappings.erase(
+              std::remove_if(readMappings.begin(), readMappings.end(),
+                             [&keptChains](const MappingResult& e) { return keptChains.count(e.splitMappingId) == 0; }),
+              readMappings.end()
+          );
+
           for(auto it = readMappings.begin(); it != readMappings.end();) {
               //Bucket by each chain
               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
@@ -1705,7 +1742,7 @@ namespace skch
               std::remove_if(readMappings.begin(), readMappings.end(), 
                              [](const MappingResult& e) { return e.discard == 1; }),
               readMappings.end()
-              );
+          );
       }
 
       /**
