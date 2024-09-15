@@ -908,10 +908,12 @@ namespace skch
           {
             const IP_const_iterator ip_it = pq.front().it;
             const auto& ref = this->refSketch.metadata[ip_it->seqId];
-            if ((!param.skip_self || Q.seqName != ref.name)
-                && (!param.skip_prefix || this->refIdGroup[ip_it->seqId] != Q.refGroup)
-                && (!param.lower_triangular || Q.seqCounter > ip_it->seqId)
-            ) {
+            bool skip_mapping = false;
+            if (param.skip_self && Q.seqName == ref.name) skip_mapping = true;
+            if (param.skip_prefix && this->refIdGroup[ip_it->seqId] == Q.refGroup) skip_mapping = true;
+            if (param.lower_triangular && Q.seqCounter <= ip_it->seqId) skip_mapping = true;
+    
+            if (!skip_mapping) {
               intervalPoints.push_back(*ip_it);
             }
             std::pop_heap(pq.begin(), pq.end(), heap_cmp);
