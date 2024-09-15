@@ -764,6 +764,22 @@ namespace skch
         }
 
       /**
+       * @brief                       Filter non-merged mappings
+       * @param[in/out] readMappings  Mappings computed by Mashmap
+       * @param[in]     param         Algorithm parameters
+       */
+      void filterNonMergedMappings(MappingResultsVector_t &readMappings, const Parameters& param)
+      {
+          setBlockCoordsToMappingCoords(readMappings);
+    
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t filteredMappings;
+              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false);
+              readMappings = std::move(filteredMappings);
+          }
+      }
+
+      /**
        * @brief                   map the parsed query sequence (L1 and L2 mapping)
        * @param[in]   Q           metadata about query sequence
        * @param[in]   outstrm     outstream stream where mappings will be reported
