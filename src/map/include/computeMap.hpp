@@ -462,17 +462,6 @@ namespace skch
               readMappings.end());
       }
 
-      void setBlockCoordsToMappingCoords(MappingResultsVector_t &readMappings) {
-          for (auto& m : readMappings) {
-              m.blockRefStartPos = m.refStartPos;
-              m.blockRefEndPos = m.refEndPos;
-              m.blockQueryStartPos = m.queryStartPos;
-              m.blockQueryEndPos = m.queryEndPos;
-              m.blockLength = std::max(m.blockRefEndPos - m.blockRefStartPos, m.blockQueryEndPos - m.blockQueryStartPos);
-              m.blockNucIdentity = m.nucIdentity;
-          }
-      }
-
       /**
        * @brief               helper to main mapping function
        * @details             filters mappings whose identity and query/ref length don't agree
@@ -485,8 +474,8 @@ namespace skch
               std::remove_if(readMappings.begin(),
                              readMappings.end(),
                              [&](MappingResult &e){
-                                 int64_t q_l = (int64_t)e.blockQueryEndPos - (int64_t)e.blockQueryStartPos;
-                                 int64_t r_l = (int64_t)e.blockRefEndPos - (int64_t)e.blockRefStartPos;
+                                 int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
+                                 int64_t r_l = (int64_t)e.refEndPos - (int64_t)e.refStartPos;
                                  uint64_t delta = std::abs(r_l - q_l);
                                  double len_id_bound = (1.0 - (double)delta/(((double)q_l+r_l)/2));
                                  return len_id_bound < std::min(0.7, std::pow(param.percentageIdentity,3));
@@ -770,8 +759,6 @@ namespace skch
        */
       void filterNonMergedMappings(MappingResultsVector_t &readMappings, const Parameters& param)
       {
-          setBlockCoordsToMappingCoords(readMappings);
-    
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
               filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false);
@@ -1800,10 +1787,6 @@ namespace skch
           for (auto it = begin; it != end; ++it) {
               it->n_merged = n_in_full_chain;
               it->blockLength = block_length;
-              it->blockQueryStartPos = chain_start_query;
-              it->blockQueryEndPos = chain_end_query;
-              it->blockRefStartPos = chain_start_ref;
-              it->blockRefEndPos = chain_end_ref;
               it->blockNucIdentity = chain_nuc_identity;
           }
       }

@@ -157,10 +157,6 @@ namespace skch
     seqno_t refSeqId;                                   //internal sequence id of the reference contig
     seqno_t querySeqId;                                 //internal sequence id of the query sequence
     offset_t blockLength;                                    //the block length of the mapping
-    offset_t blockRefStartPos;
-    offset_t blockRefEndPos;
-    offset_t blockQueryStartPos;
-    offset_t blockQueryEndPos;
     float blockNucIdentity;
           
     float nucIdentity;                                  //calculated identity
