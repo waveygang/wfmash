@@ -1711,14 +1711,9 @@ namespace skch
               //Bucket by each chain
               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
 
-              if (param.max_mapping_length == std::numeric_limits<int64_t>::max()) {
-                  // Process the entire chain as one fragment
-                  processMappingFragment(it, it_end);
-              } else {
-                  // Process the chain with potential splits
-                  processChainWithSplits(it, it_end);
-              }
-              
+              // Process the chain into chunks defined by max_mapping_length
+              processChainWithSplits(it, it_end);
+
               // Move the iterator to the end of the processed chain
               it = it_end;
           }
