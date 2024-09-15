@@ -695,9 +695,26 @@ namespace skch
 
             if (param.mergeMappings) 
             {
-                mergeMappingsInRange(unfilteredMappings, param.chain_gap);
-                filterMaximallyMerged(unfilteredMappings, param);
-            } 
+                // the maximally merged mappings are top-level chains
+                // while the unfiltered mappings now contain splits at max_mapping_length
+                auto maximallyMergedMappings =
+                    mergeMappingsInRange(unfilteredMappings, param.chain_gap);
+                // we filter on the top level chains
+                filterMaximallyMerged(maximallyMergedMappings, param);
+                // collect splitMappingIds in the maximally merged mappings
+                robin_hood::unordered_set<offset_t> kept_chains;
+                for (auto &mapping : maximallyMergedMappings) {
+                    kept_chains.insert(mapping.splitMappingId);
+                }
+                // and use them to filter mappings to discard
+                unfilteredMappings.erase(
+                    std::remove_if(unfilteredMappings.begin(), unfilteredMappings.end(),
+                                   [&kept_chains](const MappingResult &mapping) {
+                                       return !kept_chains.count(mapping.splitMappingId);
+                                   }),
+                    unfilteredMappings.end()
+                    );
+            }
             else 
             {
                 filterNonMergedMappings(unfilteredMappings, param);
@@ -1591,11 +1608,11 @@ namespace skch
        * @param[in]     max_dist      Distance to look in target and query
        */
       template <typename VecIn>
-      void mergeMappingsInRange(VecIn &readMappings,
+      VecIn mergeMappingsInRange(VecIn &readMappings,
                                 int max_dist) {
           assert(param.split == true);
 
-          if(readMappings.size() < 2) return;
+          if(readMappings.size() < 2) return readMappings;
 
           //Sort the mappings by query position, then reference sequence id, then reference position
           std::sort(
@@ -1710,6 +1727,8 @@ namespace skch
                              [](const MappingResult& e) { return e.discard == 1; }),
               readMappings.end()
           );
+
+          return maximallyMergedMappings;
       }
 
       /**
