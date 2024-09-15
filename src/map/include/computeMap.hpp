@@ -696,7 +696,7 @@ namespace skch
             if (param.mergeMappings) 
             {
                 mergeMappingsInRange(unfilteredMappings, param.chain_gap);
-                unfilteredMappings = filterMaximallyMerged(unfilteredMappings, param);
+                filterMaximallyMerged(unfilteredMappings, param);
             } 
             else 
             {
@@ -1569,21 +1569,18 @@ namespace skch
        * @param[in]   param           Algorithm parameters
        * @return                      Filtered mappings
        */
-      MappingResultsVector_t filterMaximallyMerged(const MappingResultsVector_t& readMappings, const Parameters& param)
+      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param)
       {
-          MappingResultsVector_t filteredMappings = readMappings;
-
           // Filter weak mappings
-          filterWeakMappings(filteredMappings, std::floor(param.block_length / param.segLength));
+          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
 
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t groupFilteredMappings;
-              filterByGroup(filteredMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false);
-              filteredMappings = std::move(groupFilteredMappings);
+              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false);
+              readMappings = std::move(groupFilteredMappings);
           }
 
-          return filteredMappings;
       }
 
       /**
