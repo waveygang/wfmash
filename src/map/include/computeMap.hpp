@@ -20,6 +20,8 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 #include <queue>
+#include <algorithm>
+#include <unordered_set>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -625,139 +627,105 @@ namespace skch
         MappingResultsVector_t unfilteredMappings;
         int refGroup = this->getRefGroup(input->seqName);
 
-        if(! param.split || input->len <= param.segLength)
+        if (!param.split || input->len <= param.segLength)
         {
-          QueryMetaData <MinVec_Type> Q;
-          Q.seq = &(input->seq)[0u];
-          Q.len = input->len;
-          Q.fullLen = input->len;
-          Q.seqCounter = input->seqCounter;
-          Q.seqName = input->seqName;
-          Q.refGroup = refGroup;
-
-          //Map this sequence
-          mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-          // save the output
-          unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-
-          // indicate that we mapped full length
-          split_mapping = false;
-
-          input->progress.increment(input->len);
-        }
-        else  //Split read mapping
-        {
-          int noOverlapFragmentCount = input->len / param.segLength;
-
-          //Map individual non-overlapping fragments in the read
-          for (int i = 0; i < noOverlapFragmentCount; i++)
-          {
-            //Prepare fragment sequence object
             QueryMetaData <MinVec_Type> Q;
-            Q.seq = &(input->seq)[0u] + i * param.segLength;
-            Q.len = param.segLength;
+            Q.seq = &(input->seq)[0u];
+            Q.len = input->len;
             Q.fullLen = input->len;
             Q.seqCounter = input->seqCounter;
             Q.seqName = input->seqName;
             Q.refGroup = refGroup;
 
-            intervalPoints.clear();
-            l1Mappings.clear();
-            l2Mappings.clear();
-
-            //Map this fragment
+            // Map this sequence
             mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-            //Adjust query coordinates and length in the reported mapping
-            std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                e.queryLen = input->len;
-                e.queryStartPos = i * param.segLength;
-                e.queryEndPos = i * param.segLength + Q.len;
-                });
-
-            // save the output
             unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-            input->progress.increment(param.segLength);
-          }
+        
+            // Apply non-merged filtering
+            filterNonMergedMappings(unfilteredMappings, param);
 
-          //Map last overlapping fragment to cover the whole read
-          if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0)
-          {
-            //Prepare fragment sequence object
-            QueryMetaData <MinVec_Type> Q;
-            Q.seq = &(input->seq)[0u] + input->len - param.segLength;
-            Q.len = param.segLength;
-            Q.seqCounter = input->seqCounter;
-            Q.seqName = input->seqName;
-            Q.refGroup = refGroup;
-
-            intervalPoints.clear();
-            l1Mappings.clear();
-            l2Mappings.clear();
-
-            //Map this fragment
-            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-            //Adjust query coordinates and length in the reported mapping
-            std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                e.queryLen = input->len;
-                e.queryStartPos = input->len - param.segLength;
-                e.queryEndPos = input->len;
-                });
-
-            unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-
-            input->progress.increment(input->len % param.segLength);
-          }
+            split_mapping = false;
+            input->progress.increment(input->len);
         }
-
-        // how many mappings to keep
-        int n_mappings = (input->len < param.segLength ?
-                          param.numMappingsForShortSequence
-                          : param.numMappingsForSegment) - 1;
-
-        if (split_mapping) 
+        else // Split read mapping
         {
-          if (param.mergeMappings) 
-          {
-            // hardcore merge using the chain gap
-            mergeMappingsInRange(unfilteredMappings, param.chain_gap);
+            int noOverlapFragmentCount = input->len / param.segLength;
 
-            // remove short chains that didn't exceed block length
-            filterWeakMappings(unfilteredMappings, std::floor(param.block_length / param.segLength));
+            // Map individual non-overlapping fragments in the read
+            for (int i = 0; i < noOverlapFragmentCount; i++)
+            {
+                QueryMetaData <MinVec_Type> Q;
+                Q.seq = &(input->seq)[0u] + i * param.segLength;
+                Q.len = param.segLength;
+                Q.fullLen = input->len;
+                Q.seqCounter = input->seqCounter;
+                Q.seqName = input->seqName;
+                Q.refGroup = refGroup;
 
-            // now that filtering has happened, set back the individual mapping coordinates and block length
-            setBlockCoordsToMappingCoords(unfilteredMappings);
-          } else {
-              // set block coordinates
-              setBlockCoordsToMappingCoords(unfilteredMappings);
-          }
-        } else {
-          // set block coordinates
-          setBlockCoordsToMappingCoords(unfilteredMappings);
+                intervalPoints.clear();
+                l1Mappings.clear();
+                l2Mappings.clear();
+
+                mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+
+                std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
+                    e.queryLen = input->len;
+                    e.queryStartPos = i * param.segLength;
+                    e.queryEndPos = i * param.segLength + Q.len;
+                });
+
+                unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
+                input->progress.increment(param.segLength);
+            }
+
+            // Map last overlapping fragment to cover the whole read
+            if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0)
+            {
+                QueryMetaData <MinVec_Type> Q;
+                Q.seq = &(input->seq)[0u] + input->len - param.segLength;
+                Q.len = param.segLength;
+                Q.seqCounter = input->seqCounter;
+                Q.seqName = input->seqName;
+                Q.refGroup = refGroup;
+
+                intervalPoints.clear();
+                l1Mappings.clear();
+                l2Mappings.clear();
+
+                mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+
+                std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
+                    e.queryLen = input->len;
+                    e.queryStartPos = input->len - param.segLength;
+                    e.queryEndPos = input->len;
+                });
+
+                unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
+                input->progress.increment(input->len % param.segLength);
+            }
+
+            if (param.mergeMappings) 
+            {
+                mergeMappingsInRange(unfilteredMappings, param.chain_gap);
+                unfilteredMappings = filterMaximallyMerged(unfilteredMappings, param);
+            } 
+            else 
+            {
+                filterNonMergedMappings(unfilteredMappings, param);
+            }
         }
 
-        if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-          MappingResultsVector_t tmpMappings;
-          tmpMappings.reserve(output->readMappings.size());
-          filterByGroup(unfilteredMappings, tmpMappings, n_mappings, false);
-          unfilteredMappings = std::move(tmpMappings);
-        }
-
-        output->readMappings = std::move(unfilteredMappings);
-
-        //Make sure mapping boundary don't exceed sequence lengths
-        this->mappingBoundarySanityCheck(input, output->readMappings);
-
-        // remove alignments where the ratio between query and target length is < our identity threshold
+        // Common post-processing for both merged and non-merged mappings
+        mappingBoundarySanityCheck(input, unfilteredMappings);
+    
         if (param.filterLengthMismatches)
         {
-          this->filterFalseHighIdentity(output->readMappings);
+            filterFalseHighIdentity(unfilteredMappings);
         }
+    
+        sparsifyMappings(unfilteredMappings);
 
-        // sparsify the mappings, if requested
-        this->sparsifyMappings(output->readMappings);
+        output->readMappings = std::move(unfilteredMappings);
 
         return output;
       }
@@ -1591,7 +1559,30 @@ namespace skch
           double axis_factor = 1.0 - (2.0 * std::min(std::abs(dx), std::abs(dy))) / (std::abs(dx) + std::abs(dy));
           return euclidean * (1.0 + w * axis_factor);
       }
-      
+
+      /**
+       * @brief                       Filter maximally merged mappings
+       * @param[in]   readMappings    Merged mappings computed by Mashmap
+       * @param[in]   param           Algorithm parameters
+       * @return                      Filtered mappings
+       */
+      MappingResultsVector_t filterMaximallyMerged(const MappingResultsVector_t& readMappings, const Parameters& param)
+      {
+          MappingResultsVector_t filteredMappings = readMappings;
+
+          // Filter weak mappings
+          filterWeakMappings(filteredMappings, std::floor(param.block_length / param.segLength));
+
+          // Apply group filtering if necessary
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t groupFilteredMappings;
+              filterByGroup(filteredMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false);
+              filteredMappings = std::move(groupFilteredMappings);
+          }
+
+          return filteredMappings;
+      }
+
       /**
        * @brief                       Merge fragment mappings by convolution of a 2D range over the alignment matrix
        * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
@@ -1699,27 +1690,6 @@ namespace skch
               maximallyMergedMappings.push_back(mergedMapping);
               it = it_end;
           }
-
-          // Apply filtering to maximallyMergedMappings
-          filterWeakMappings(maximallyMergedMappings, std::floor(param.block_length / param.segLength));
-          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-              MappingResultsVector_t filteredMappings;
-              filterByGroup(maximallyMergedMappings, filteredMappings, param.numMappingsForSegment - 1, false);
-              maximallyMergedMappings = std::move(filteredMappings);
-          }
-
-          // Create a set of splitMappingIds that survived filtering
-          std::unordered_set<offset_t> keptChains;
-          for (const auto& mapping : maximallyMergedMappings) {
-              keptChains.insert(mapping.splitMappingId);
-          }
-
-          // Final filtering of original mappings
-          readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(),
-                             [&keptChains](const MappingResult& e) { return keptChains.count(e.splitMappingId) == 0; }),
-              readMappings.end()
-          );
 
           for(auto it = readMappings.begin(); it != readMappings.end();) {
               //Bucket by each chain
