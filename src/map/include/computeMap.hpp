@@ -1658,24 +1658,25 @@ namespace skch
                   }
                   //If the next mapping is within range, we can potentially merge
                   if (it2->strand == it->strand) {
+                      // Always calculate query distance the same way, as query always moves forward
+                      int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+
+                      // Reference distance calculation depends on strand
                       int64_t ref_dist;
                       if (it->strand == strnd::FWD) {
                           ref_dist = it2->refStartPos - it->refEndPos;
                       } else {
+                          // For reverse complement, we need to invert the order
                           ref_dist = it->refStartPos - it2->refEndPos;
                       }
-                      // If we jitter backwards in reference position too far, don't merge
-                      if (ref_dist < -param.segLength/5) {
-                          continue;
-                      }
-                      int64_t query_dist = it2->queryStartPos - it->queryEndPos;
-                      if (query_dist < 0) {
-                          continue;
-                      }
-                      auto dist = std::sqrt(std::pow(query_dist,2) + std::pow(ref_dist,2));
-                      if (dist < max_dist && best_score > dist && it2->chainPairScore > dist) {
-                          best_it2 = it2;
-                          best_score = dist;
+
+                      // Check if the distance is within acceptable range
+                      if (query_dist >= 0 && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                          double dist = std::sqrt(std::pow(query_dist, 2) + std::pow(ref_dist, 2));
+                          if (dist < max_dist && best_score > dist && it2->chainPairScore > dist) {
+                              best_it2 = it2;
+                              best_score = dist;
+                          }
                       }
                   }
               }
