@@ -1704,7 +1704,7 @@ namespace skch
           MappingResultsVector_t maximallyMergedMappings;
           for(auto it = readMappings.begin(); it != readMappings.end();) {
               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
-              MappingResult mergedMapping = *it;
+              MappingResult mergedMapping = *it;  // Copy all fields from the first mapping in the chain
               mergedMapping.queryStartPos = it->queryStartPos;
               mergedMapping.queryEndPos = std::prev(it_end)->queryEndPos;
               mergedMapping.refStartPos = it->refStartPos;
@@ -1712,6 +1712,30 @@ namespace skch
               mergedMapping.blockLength = std::max(mergedMapping.refEndPos - mergedMapping.refStartPos,
                                                    mergedMapping.queryEndPos - mergedMapping.queryStartPos);
               mergedMapping.n_merged = std::distance(it, it_end);
+              
+              // Recalculate average values for the merged mapping
+              double totalNucIdentity = 0.0;
+              double totalKmerComplexity = 0.0;
+              int totalConservedSketches = 0;
+              int totalSketchSize = 0;
+              for (auto subIt = it; subIt != it_end; ++subIt) {
+                  totalNucIdentity += subIt->nucIdentity;
+                  totalKmerComplexity += subIt->kmerComplexity;
+                  totalConservedSketches += subIt->conservedSketches;
+                  totalSketchSize += subIt->sketchSize;
+              }
+              mergedMapping.nucIdentity = totalNucIdentity / mergedMapping.n_merged;
+              mergedMapping.kmerComplexity = totalKmerComplexity / mergedMapping.n_merged;
+              mergedMapping.conservedSketches = totalConservedSketches;
+              mergedMapping.sketchSize = totalSketchSize;
+              
+              // Ensure other fields are properly set
+              mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
+              mergedMapping.discard = 0;
+              mergedMapping.overlapped = false;
+              mergedMapping.chainPairScore = std::numeric_limits<double>::max();
+              mergedMapping.chainPairId = std::numeric_limits<int64_t>::min();
+
               maximallyMergedMappings.push_back(mergedMapping);
               it = it_end;
           }
