@@ -1658,7 +1658,12 @@ namespace skch
                   }
                   //If the next mapping is within range, we can potentially merge
                   if (it2->strand == it->strand) {
-                      int64_t ref_dist = it2->refStartPos - it->refEndPos;
+                      int64_t ref_dist;
+                      if (it->strand == strnd::FWD) {
+                          ref_dist = it2->refStartPos - it->refEndPos;
+                      } else {
+                          ref_dist = it->refStartPos - it2->refEndPos;
+                      }
                       // If we jitter backwards in reference position too far, don't merge
                       if (ref_dist < -param.segLength/5) {
                           continue;
