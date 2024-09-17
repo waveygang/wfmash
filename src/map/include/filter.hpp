@@ -93,9 +93,6 @@ namespace skch
         template <typename Type>
         inline void markGood(Type &L, int secondaryToKeep, bool dropRand, double overlapThreshold)
           {
-            std::cerr << "DEBUG: Entering markGood" << std::endl;
-            std::cerr << "DEBUG: L size: " << L.size() << ", secondaryToKeep: " << secondaryToKeep << ", dropRand: " << dropRand << ", overlapThreshold: " << overlapThreshold << std::endl;
-
             //first segment in the set order
             auto beg = L.begin();
 
@@ -105,15 +102,12 @@ namespace skch
             auto it = L.begin();
             for( ; it != L.end(); it++)
             {
-                std::cerr << "DEBUG: Checking mapping " << *it << ", score: " << get_score(*it) << std::endl;
                 if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
-                    std::cerr << "DEBUG: Breaking loop, kept: " << kept << std::endl;
                     break;
                 }
 
                 vec[*it].discard = 0;
                 ++kept;
-                std::cerr << "DEBUG: Marked mapping " << *it << " as good, kept: " << kept << std::endl;
             }
             auto kit = it;
 
@@ -123,11 +117,9 @@ namespace skch
                 int idx = *it;
                 for (auto it2 = L.begin(); it2 != kit; it2++) {
                     double overlap = get_overlap(idx, *it2);
-                    std::cerr << "DEBUG: Checking overlap between " << idx << " and " << *it2 << ": " << overlap << std::endl;
                     if (overlap > overlapThreshold) {
                         vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
                         vec[idx].discard = 1;
-                        std::cerr << "DEBUG: Marked mapping " << idx << " as overlapped and discarded" << std::endl;
                         break;
                     }
                 }
@@ -138,7 +130,6 @@ namespace skch
             // we will hash the mapping struct and keep the one with the secondaryToKeep with the lowest hash value
             if (kept > secondaryToKeep && dropRand) 
             {
-              std::cerr << "DEBUG: Entering dropRand section, kept: " << kept << std::endl;
               // we will use hashes of the mapping structs to break ties
               // first we'll make a vector of the mappings including the hashes
               std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
@@ -147,30 +138,24 @@ namespace skch
                   if(vec[*it].discard == 0)
                   {
                       score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
-                      std::cerr << "DEBUG: Added mapping " << *it << " to score_and_hash, score: " << get_score(*it) << ", hash: " << vec[*it].hash() << std::endl;
                   }
               }
               // now we'll sort the vector by score and hash
               std::sort(score_and_hash.begin(), score_and_hash.end(), std::greater{});
-              std::cerr << "DEBUG: Sorted score_and_hash, size: " << score_and_hash.size() << std::endl;
               // reset kept counter
               kept = 0;
               for (auto& x : score_and_hash) {
                   std::get<2>(x)->discard = 1;
-                  std::cerr << "DEBUG: Initially marked mapping as discarded, score: " << std::get<0>(x) << ", hash: " << std::get<1>(x) << std::endl;
               }
               // now we mark the best to keep
               for (auto& x : score_and_hash) {
                   if (kept > secondaryToKeep) {
-                      std::cerr << "DEBUG: Reached secondaryToKeep limit, breaking" << std::endl;
                       break;
                   }
                   std::get<2>(x)->discard = 0;
                   ++kept;
-                  std::cerr << "DEBUG: Marked mapping as kept, score: " << std::get<0>(x) << ", hash: " << std::get<1>(x) << ", kept: " << kept << std::endl;
               }
             }
-            std::cerr << "DEBUG: Exiting markGood, final kept: " << kept << std::endl;
           }
       };
 
