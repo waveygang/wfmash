@@ -182,27 +182,14 @@ namespace skch
       template <typename VecIn>
       void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold)
         {
-          std::cerr << "DEBUG: Entering liFilterAlgorithm" << std::endl;
-          std::cerr << "DEBUG: Initial readMappings size: " << readMappings.size() << std::endl;
-
           if(readMappings.size() <= 1)
-          {
-            std::cerr << "DEBUG: readMappings size <= 1, returning" << std::endl;
             return;
-          }
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
           std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
             e.discard = 1; 
             e.overlapped = 0; 
-            std::cerr << "DEBUG: Marking mapping as bad: QueryID=" << e.querySeqId 
-                      << ", QueryStart=" << e.queryStartPos 
-                      << ", QueryEnd=" << e.queryEndPos 
-                      << ", RefID=" << e.refSeqId 
-                      << ", RefStart=" << e.refStartPos 
-                      << ", RefEnd=" << e.refEndPos 
-                      << ", Strand=" << (e.strand == strnd::FWD ? "+" : "-") << std::endl;
           });
 
           //Initialize object of Helper struct
@@ -221,24 +208,13 @@ namespace skch
           {
             eventSchedule.emplace_back (readMappings[i].queryStartPos, event::BEGIN, i);
             eventSchedule.emplace_back (readMappings[i].queryEndPos, event::END, i);
-            std::cerr << "DEBUG: Added events for mapping " << i << ": " 
-                      << "QueryID=" << readMappings[i].querySeqId 
-                      << ", QueryStart=" << readMappings[i].queryStartPos 
-                      << " (BEGIN), QueryEnd=" << readMappings[i].queryEndPos 
-                      << " (END), RefID=" << readMappings[i].refSeqId 
-                      << ", RefStart=" << readMappings[i].refStartPos 
-                      << ", RefEnd=" << readMappings[i].refEndPos 
-                      << ", Strand=" << (readMappings[i].strand == strnd::FWD ? "+" : "-") << std::endl;
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
-          std::cerr << "DEBUG: Sorted event schedule" << std::endl;
 
           //Execute the plane sweep algorithm
           for(auto it = eventSchedule.begin(); it!= eventSchedule.end();)
           {
-            std::cerr << "DEBUG: Processing event at position " << std::get<0>(*it) << std::endl;
-
             //Find events that correspond to current position
             auto it2 = std::find_if(it, eventSchedule.end(), [&](const eventRecord_t &e)
                                     {
@@ -250,59 +226,23 @@ namespace skch
                                     {
                                       int idx = std::get<2>(e);
                                       if (std::get<1>(e) == event::BEGIN)
-                                      {
                                         bst.insert (idx);
-                                        std::cerr << "DEBUG: Inserted segment " << idx << " into BST: "
-                                                  << "QueryID=" << readMappings[idx].querySeqId 
-                                                  << ", QueryStart=" << readMappings[idx].queryStartPos 
-                                                  << ", QueryEnd=" << readMappings[idx].queryEndPos 
-                                                  << ", RefID=" << readMappings[idx].refSeqId 
-                                                  << ", RefStart=" << readMappings[idx].refStartPos 
-                                                  << ", RefEnd=" << readMappings[idx].refEndPos 
-                                                  << ", Strand=" << (readMappings[idx].strand == strnd::FWD ? "+" : "-") << std::endl;
-                                      }
                                       else
-                                      {
                                         bst.erase (idx);
-                                        std::cerr << "DEBUG: Erased segment " << idx << " from BST: "
-                                                  << "QueryID=" << readMappings[idx].querySeqId 
-                                                  << ", QueryStart=" << readMappings[idx].queryStartPos 
-                                                  << ", QueryEnd=" << readMappings[idx].queryEndPos 
-                                                  << ", RefID=" << readMappings[idx].refSeqId 
-                                                  << ", RefStart=" << readMappings[idx].refStartPos 
-                                                  << ", RefEnd=" << readMappings[idx].refEndPos 
-                                                  << ", Strand=" << (readMappings[idx].strand == strnd::FWD ? "+" : "-") << std::endl;
-                                      }
                                     });
 
-            std::cerr << "DEBUG: Calling markGood" << std::endl;
             //mark mappings as good
             obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
             it = it2;
           }
 
-          std::cerr << "DEBUG: Removing bad mappings" << std::endl;
           //Remove bad mappings
-          auto initialSize = readMappings.size();
           readMappings.erase(
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
-                if (e.discard == 1 || e.overlapped == 1) {
-                  std::cerr << "DEBUG: Removing mapping: QueryID=" << e.querySeqId 
-                            << ", QueryStart=" << e.queryStartPos 
-                            << ", QueryEnd=" << e.queryEndPos 
-                            << ", RefID=" << e.refSeqId 
-                            << ", RefStart=" << e.refStartPos 
-                            << ", RefEnd=" << e.refEndPos 
-                            << ", Strand=" << (e.strand == strnd::FWD ? "+" : "-") << std::endl;
-                  return true;
-                }
-                return false;
+                return e.discard == 1 || e.overlapped == 1;
               }),
               readMappings.end());
-
-          std::cerr << "DEBUG: Removed " << (initialSize - readMappings.size()) << " mappings" << std::endl;
-          std::cerr << "DEBUG: Final readMappings size: " << readMappings.size() << std::endl;
         }
 
       /**
