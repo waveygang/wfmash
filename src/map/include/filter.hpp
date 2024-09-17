@@ -12,6 +12,8 @@
 #include <set>
 #include <fstream>
 #include <zlib.h>
+#include <iostream>
+#include <sstream>
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -86,6 +88,9 @@ namespace skch
         template <typename Type>
         inline void markGood(Type &L, int secondaryToKeep, bool dropRand, double overlapThreshold)
           {
+            std::cerr << "DEBUG: Entering markGood" << std::endl;
+            std::cerr << "DEBUG: L size: " << L.size() << ", secondaryToKeep: " << secondaryToKeep << ", dropRand: " << dropRand << ", overlapThreshold: " << overlapThreshold << std::endl;
+
             //first segment in the set order
             auto beg = L.begin();
 
@@ -95,12 +100,15 @@ namespace skch
             auto it = L.begin();
             for( ; it != L.end(); it++)
             {
+                std::cerr << "DEBUG: Checking mapping " << *it << ", score: " << get_score(*it) << std::endl;
                 if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
+                    std::cerr << "DEBUG: Breaking loop, kept: " << kept << std::endl;
                     break;
                 }
 
                 vec[*it].discard = 0;
                 ++kept;
+                std::cerr << "DEBUG: Marked mapping " << *it << " as good, kept: " << kept << std::endl;
             }
             auto kit = it;
 
@@ -109,9 +117,12 @@ namespace skch
                 if (it == L.begin()) continue;
                 int idx = *it;
                 for (auto it2 = L.begin(); it2 != kit; it2++) {
-                    if (get_overlap(idx, *it2) > overlapThreshold) {
+                    double overlap = get_overlap(idx, *it2);
+                    std::cerr << "DEBUG: Checking overlap between " << idx << " and " << *it2 << ": " << overlap << std::endl;
+                    if (overlap > overlapThreshold) {
                         vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
                         vec[idx].discard = 1;
+                        std::cerr << "DEBUG: Marked mapping " << idx << " as overlapped and discarded" << std::endl;
                         break;
                     }
                 }
@@ -122,6 +133,7 @@ namespace skch
             // we will hash the mapping struct and keep the one with the secondaryToKeep with the lowest hash value
             if (kept > secondaryToKeep && dropRand) 
             {
+              std::cerr << "DEBUG: Entering dropRand section, kept: " << kept << std::endl;
               // we will use hashes of the mapping structs to break ties
               // first we'll make a vector of the mappings including the hashes
               std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
@@ -130,24 +142,30 @@ namespace skch
                   if(vec[*it].discard == 0)
                   {
                       score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
+                      std::cerr << "DEBUG: Added mapping " << *it << " to score_and_hash, score: " << get_score(*it) << ", hash: " << vec[*it].hash() << std::endl;
                   }
               }
               // now we'll sort the vector by score and hash
               std::sort(score_and_hash.begin(), score_and_hash.end(), std::greater{});
+              std::cerr << "DEBUG: Sorted score_and_hash, size: " << score_and_hash.size() << std::endl;
               // reset kept counter
               kept = 0;
               for (auto& x : score_and_hash) {
                   std::get<2>(x)->discard = 1;
+                  std::cerr << "DEBUG: Initially marked mapping as discarded, score: " << std::get<0>(x) << ", hash: " << std::get<1>(x) << std::endl;
               }
               // now we mark the best to keep
               for (auto& x : score_and_hash) {
                   if (kept > secondaryToKeep) {
+                      std::cerr << "DEBUG: Reached secondaryToKeep limit, breaking" << std::endl;
                       break;
                   }
                   std::get<2>(x)->discard = 0;
                   ++kept;
+                  std::cerr << "DEBUG: Marked mapping as kept, score: " << std::get<0>(x) << ", hash: " << std::get<1>(x) << ", kept: " << kept << std::endl;
               }
             }
+            std::cerr << "DEBUG: Exiting markGood, final kept: " << kept << std::endl;
           }
       };
 
@@ -159,12 +177,22 @@ namespace skch
       template <typename VecIn>
       void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold)
         {
+          std::cerr << "DEBUG: Entering liFilterAlgorithm" << std::endl;
+          std::cerr << "DEBUG: Initial readMappings size: " << readMappings.size() << std::endl;
+
           if(readMappings.size() <= 1)
+          {
+            std::cerr << "DEBUG: readMappings size <= 1, returning" << std::endl;
             return;
+          }
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; e.overlapped = 0; });
+          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
+            e.discard = 1; 
+            e.overlapped = 0; 
+            std::cerr << "DEBUG: Marking mapping as bad: " << e.queryStartPos << "-" << e.queryEndPos << std::endl;
+          });
 
           //Initialize object of Helper struct
           Helper obj (readMappings);
@@ -182,13 +210,19 @@ namespace skch
           {
             eventSchedule.emplace_back (readMappings[i].queryStartPos, event::BEGIN, i);
             eventSchedule.emplace_back (readMappings[i].queryEndPos, event::END, i);
+            std::cerr << "DEBUG: Added events for mapping " << i << ": " 
+                      << readMappings[i].queryStartPos << " (BEGIN), " 
+                      << readMappings[i].queryEndPos << " (END)" << std::endl;
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
+          std::cerr << "DEBUG: Sorted event schedule" << std::endl;
 
           //Execute the plane sweep algorithm
           for(auto it = eventSchedule.begin(); it!= eventSchedule.end();)
           {
+            std::cerr << "DEBUG: Processing event at position " << std::get<0>(*it) << std::endl;
+
             //Find events that correspond to current position
             auto it2 = std::find_if(it, eventSchedule.end(), [&](const eventRecord_t &e)
                                     {
@@ -199,21 +233,39 @@ namespace skch
             std::for_each(it, it2, [&](const eventRecord_t &e)
                                     {
                                       if (std::get<1>(e) == event::BEGIN)
+                                      {
                                         bst.insert (std::get<2>(e));
+                                        std::cerr << "DEBUG: Inserted segment " << std::get<2>(e) << " into BST" << std::endl;
+                                      }
                                       else
+                                      {
                                         bst.erase (std::get<2>(e));
+                                        std::cerr << "DEBUG: Erased segment " << std::get<2>(e) << " from BST" << std::endl;
+                                      }
                                     });
 
+            std::cerr << "DEBUG: Calling markGood" << std::endl;
             //mark mappings as good
             obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
             it = it2;
           }
 
+          std::cerr << "DEBUG: Removing bad mappings" << std::endl;
           //Remove bad mappings
+          auto initialSize = readMappings.size();
           readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1 || e.overlapped == 1; }),
+              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
+                if (e.discard == 1 || e.overlapped == 1) {
+                  std::cerr << "DEBUG: Removing mapping: " << e.queryStartPos << "-" << e.queryEndPos << std::endl;
+                  return true;
+                }
+                return false;
+              }),
               readMappings.end());
+
+          std::cerr << "DEBUG: Removed " << (initialSize - readMappings.size()) << " mappings" << std::endl;
+          std::cerr << "DEBUG: Final readMappings size: " << readMappings.size() << std::endl;
         }
 
       /**
