@@ -43,7 +43,12 @@ namespace skch
 
         Helper(MappingResultsVector_t &v) : vec(v) {}
 
-        double get_score(const int x) const {return vec[x].blockNucIdentity * log(vec[x].blockLength); }
+        double get_score(const int x) const {
+            if (vec[x].blockLength <= 0 || vec[x].blockNucIdentity <= 0) {
+                return std::numeric_limits<double>::lowest();
+            }
+            return vec[x].blockNucIdentity * std::log(static_cast<double>(vec[x].blockLength));
+        }
 
         //Greater than comparison by score and begin position
         //used to define order in BST

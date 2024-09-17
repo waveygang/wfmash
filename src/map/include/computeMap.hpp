@@ -1729,6 +1729,9 @@ namespace skch
               mergedMapping.conservedSketches = totalConservedSketches;
               mergedMapping.sketchSize = totalSketchSize;
               
+              // Calculate blockNucIdentity
+              mergedMapping.blockNucIdentity = mergedMapping.nucIdentity;
+              
               // Ensure other fields are properly set
               mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
               mergedMapping.discard = 0;
