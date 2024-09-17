@@ -191,7 +191,13 @@ namespace skch
           std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
             e.discard = 1; 
             e.overlapped = 0; 
-            std::cerr << "DEBUG: Marking mapping as bad: " << e.queryStartPos << "-" << e.queryEndPos << std::endl;
+            std::cerr << "DEBUG: Marking mapping as bad: QueryID=" << e.querySeqId 
+                      << ", QueryStart=" << e.queryStartPos 
+                      << ", QueryEnd=" << e.queryEndPos 
+                      << ", RefID=" << e.refSeqId 
+                      << ", RefStart=" << e.refStartPos 
+                      << ", RefEnd=" << e.refEndPos 
+                      << ", Strand=" << (e.strand == strnd::FWD ? "+" : "-") << std::endl;
           });
 
           //Initialize object of Helper struct
@@ -211,8 +217,13 @@ namespace skch
             eventSchedule.emplace_back (readMappings[i].queryStartPos, event::BEGIN, i);
             eventSchedule.emplace_back (readMappings[i].queryEndPos, event::END, i);
             std::cerr << "DEBUG: Added events for mapping " << i << ": " 
-                      << readMappings[i].queryStartPos << " (BEGIN), " 
-                      << readMappings[i].queryEndPos << " (END)" << std::endl;
+                      << "QueryID=" << readMappings[i].querySeqId 
+                      << ", QueryStart=" << readMappings[i].queryStartPos 
+                      << " (BEGIN), QueryEnd=" << readMappings[i].queryEndPos 
+                      << " (END), RefID=" << readMappings[i].refSeqId 
+                      << ", RefStart=" << readMappings[i].refStartPos 
+                      << ", RefEnd=" << readMappings[i].refEndPos 
+                      << ", Strand=" << (readMappings[i].strand == strnd::FWD ? "+" : "-") << std::endl;
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
@@ -232,15 +243,30 @@ namespace skch
             //update sweep line status by adding/removing segments
             std::for_each(it, it2, [&](const eventRecord_t &e)
                                     {
+                                      int idx = std::get<2>(e);
                                       if (std::get<1>(e) == event::BEGIN)
                                       {
-                                        bst.insert (std::get<2>(e));
-                                        std::cerr << "DEBUG: Inserted segment " << std::get<2>(e) << " into BST" << std::endl;
+                                        bst.insert (idx);
+                                        std::cerr << "DEBUG: Inserted segment " << idx << " into BST: "
+                                                  << "QueryID=" << readMappings[idx].querySeqId 
+                                                  << ", QueryStart=" << readMappings[idx].queryStartPos 
+                                                  << ", QueryEnd=" << readMappings[idx].queryEndPos 
+                                                  << ", RefID=" << readMappings[idx].refSeqId 
+                                                  << ", RefStart=" << readMappings[idx].refStartPos 
+                                                  << ", RefEnd=" << readMappings[idx].refEndPos 
+                                                  << ", Strand=" << (readMappings[idx].strand == strnd::FWD ? "+" : "-") << std::endl;
                                       }
                                       else
                                       {
-                                        bst.erase (std::get<2>(e));
-                                        std::cerr << "DEBUG: Erased segment " << std::get<2>(e) << " from BST" << std::endl;
+                                        bst.erase (idx);
+                                        std::cerr << "DEBUG: Erased segment " << idx << " from BST: "
+                                                  << "QueryID=" << readMappings[idx].querySeqId 
+                                                  << ", QueryStart=" << readMappings[idx].queryStartPos 
+                                                  << ", QueryEnd=" << readMappings[idx].queryEndPos 
+                                                  << ", RefID=" << readMappings[idx].refSeqId 
+                                                  << ", RefStart=" << readMappings[idx].refStartPos 
+                                                  << ", RefEnd=" << readMappings[idx].refEndPos 
+                                                  << ", Strand=" << (readMappings[idx].strand == strnd::FWD ? "+" : "-") << std::endl;
                                       }
                                     });
 
@@ -257,7 +283,13 @@ namespace skch
           readMappings.erase(
               std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
                 if (e.discard == 1 || e.overlapped == 1) {
-                  std::cerr << "DEBUG: Removing mapping: " << e.queryStartPos << "-" << e.queryEndPos << std::endl;
+                  std::cerr << "DEBUG: Removing mapping: QueryID=" << e.querySeqId 
+                            << ", QueryStart=" << e.queryStartPos 
+                            << ", QueryEnd=" << e.queryEndPos 
+                            << ", RefID=" << e.refSeqId 
+                            << ", RefStart=" << e.refStartPos 
+                            << ", RefEnd=" << e.refEndPos 
+                            << ", Strand=" << (e.strand == strnd::FWD ? "+" : "-") << std::endl;
                   return true;
                 }
                 return false;
