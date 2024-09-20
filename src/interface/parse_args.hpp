@@ -440,6 +440,11 @@ void parse_args(int argc,
         map_parameters.max_mapping_length = 50000;
     }
 
+    if (map_parameters.segLength >= map_parameters.max_mapping_length) {
+        std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length should not be larger than max mapping length." << std::endl;
+        exit(1);
+    }
+
     if (drop_low_map_pct_identity) {
         map_parameters.keep_low_pct_id = false;
     } else {

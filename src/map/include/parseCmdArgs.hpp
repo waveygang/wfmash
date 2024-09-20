@@ -223,6 +223,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
 
     }
     std::cerr << "[mashmap] Chaining gap max = " << parameters.chain_gap << std::endl;
+    std::cerr << "[mashmap] Max mapping length = " << parameters.max_mapping_length << std::endl;
     std::cerr << "[mashmap] Mappings per segment = " << parameters.numMappingsForSegment << std::endl;
     std::cerr << "[mashmap] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
 
