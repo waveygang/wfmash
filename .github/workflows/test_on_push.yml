@@ -53,8 +53,12 @@ jobs:
           override: true
       - name: Install wgatools
         run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+      - name: Install wgatools
+        run: cargo install --git https://github.com/ekg/pafcheck.git
       - name: Run wfmash and generate PAF
-        run: build/bin/wfmash -t 8 -n 1 -k 19 -s 5000 -p 90 -c 30k -P 50k -T SGDref -Q S288C -Y '#' data/scerevisiae8.fa.gz data/scerevisiae8.fa.gz > test.paf
+        run: build/bin/wfmash -t 8 -T SGDref -Q S288C -Y '#' data/scerevisiae8.fa.gz > test.paf
+      - name: check PAF coordinates and extended CIGAR validity
+        run: pafcheck --query-fasta data/scerevisiae8.fa.gz --paf test.paf
       - name: Convert PAF to MAF using wgatools
         run: wgatools paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz test.paf > test.maf
       - name: Check if MAF file is not empty
