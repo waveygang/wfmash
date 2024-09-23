@@ -45,6 +45,7 @@ namespace fs = std::filesystem;
 #include "common/dset64.hpp"
 //#include "assert.hpp"
 #include "gsl/gsl_randist.h"
+#include "common/atomic_queue/atomic_queue.h"
 
 namespace skch
 {
@@ -329,11 +330,8 @@ namespace skch
           std::atomic<uint64_t> totalReadsProcessed(0);
 
           // Create queues
-          typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> seq_atomic_queue_t;
-          typedef atomic_queue::AtomicQueue<MapModuleOutput*, 1024, nullptr, true, true, false, false> output_atomic_queue_t;
-
-          seq_atomic_queue_t seq_queue;
-          output_atomic_queue_t output_queue;
+          atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024> seq_queue;
+          atomic_queue::AtomicQueue<MapModuleOutput*, 1024> output_queue;
 
           // Mutex for qmetadata
           std::mutex qmetadata_mutex;
@@ -382,7 +380,7 @@ namespace skch
                     << ", total input bp = " << total_seq_length << std::endl;
       }
 
-      void readerFunction(seq_atomic_queue_t& seq_queue, std::atomic<bool>& reader_done, std::atomic<seqno_t>& totalReadsPickedForMapping, std::atomic<seqno_t>& seqCounter, progress_meter::ProgressMeter& progress, std::mutex& qmetadata_mutex) {
+      void readerFunction(atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024>& seq_queue, std::atomic<bool>& reader_done, std::atomic<seqno_t>& totalReadsPickedForMapping, std::atomic<seqno_t>& seqCounter, progress_meter::ProgressMeter& progress, std::mutex& qmetadata_mutex) {
           for (const auto& fileName : param.querySequences) {
 
 #ifdef DEBUG
@@ -431,7 +429,7 @@ namespace skch
           reader_done.store(true);
       }
 
-      void workerFunction(seq_atomic_queue_t& seq_queue, output_atomic_queue_t& output_queue, std::atomic<bool>& reader_done, std::atomic<bool>& is_working, progress_meter::ProgressMeter& progress) {
+      void workerFunction(atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024>& seq_queue, atomic_queue::AtomicQueue<MapModuleOutput*, 1024>& output_queue, std::atomic<bool>& reader_done, std::atomic<bool>& is_working, progress_meter::ProgressMeter& progress) {
           is_working.store(true);
           while (true) {
               InputSeqProgContainer* input = nullptr;
@@ -459,7 +457,7 @@ namespace skch
           is_working.store(false);
       }
 
-      void writerFunction(output_atomic_queue_t& output_queue, std::ofstream& outstrm, progress_meter::ProgressMeter& progress, std::atomic<bool>& writer_done, std::atomic<seqno_t>& totalReadsMapped, std::vector<std::atomic<bool>>& worker_working, std::mutex& qmetadata_mutex) {
+      void writerFunction(atomic_queue::AtomicQueue<MapModuleOutput*, 1024>& output_queue, std::ofstream& outstrm, progress_meter::ProgressMeter& progress, std::atomic<bool>& writer_done, std::atomic<seqno_t>& totalReadsMapped, std::vector<std::atomic<bool>>& worker_working, std::mutex& qmetadata_mutex) {
           auto all_workers_done = [&]() {
               return std::all_of(worker_working.begin(), worker_working.end(),
                                  [](const std::atomic<bool>& w) { return !w.load(); });
