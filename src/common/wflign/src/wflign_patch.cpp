@@ -2032,26 +2032,29 @@ query_start : query_end)
         // write how many reverse complement alignments were found
         //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
         for (auto& patch_aln : multi_patch_alns) {
-            write_alignment_paf(
-                out,
-                patch_aln,
-                query_name,
-                query_total_length,
-                query_offset,
-                query_length,
-                query_is_rev,
-                target_name,
-                target_total_length,
-                target_offset,
-                target_length,
-                min_identity,
-                mashmap_estimated_identity,
-                false,  // Don't add an endline after each alignment
-                true);  // This is a reverse complement alignment
-            // write tag indicating that this is a multipatch alignment
-            out << "\t" << "pt:Z:true" << "\t"
-                // and if the patch is inverted as well
-                << "\t" << "iv:Z:" << (patch_aln.is_rev ? "true" : "false") << "\n";
+            if (patch_aln.ok) {
+                // write_alignment_paf only writes anything if aln.ok. We need to guard the manual tag writing below with the same conditional to avoid writing an invalid PAF.
+                write_alignment_paf(
+                    out,
+                    patch_aln,
+                    query_name,
+                    query_total_length,
+                    query_offset,
+                    query_length,
+                    query_is_rev,
+                    target_name,
+                    target_total_length,
+                    target_offset,
+                    target_length,
+                    min_identity,
+                    mashmap_estimated_identity,
+                    false,  // Don't add an endline after each alignment
+                    true);  // This is a reverse complement alignment
+                // write tag indicating that this is a multipatch alignment
+                out << "\t" << "pt:Z:true" << "\t"
+                    // and if the patch is inverted as well
+                    << "iv:Z:" << (patch_aln.is_rev ? "true" : "false") << "\n";
+            }
         }
     }
     out << std::flush;
