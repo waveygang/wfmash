@@ -521,8 +521,8 @@ void computeAlignments() {
 
     // Create queues
     atomic_queue::AtomicQueue<std::string*, 1024> line_queue;
-    atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024> seq_queue;
-    atomic_queue::AtomicQueue<MapModuleOutput*, 1024> output_queue;
+    atomic_queue::AtomicQueue<skch::InputSeqProgContainer*, 1024> seq_queue;
+    atomic_queue::AtomicQueue<skch::MapModuleOutput*, 1024> output_queue;
 
     // Calculate max_processors based on the number of worker threads
     size_t max_processors = std::max(1UL, static_cast<unsigned long>(param.threads));
@@ -565,14 +565,14 @@ void computeAlignments() {
     std::vector<std::thread> workers;
     std::vector<std::atomic<bool>> worker_working(param.threads);
     for (uint64_t t = 0; t < param.threads; ++t) {
-        workers.emplace_back([this, t, &worker_working, &seq_queue, &paf_queue, &reader_done, &processor_done, &progress, &processed_alignment_length]() {
-            this->worker_thread(t, worker_working[t], seq_queue, paf_queue, reader_done, processor_done, progress, processed_alignment_length);
+        workers.emplace_back([this, t, &worker_working, &seq_queue, &output_queue, &reader_done, &processor_done, &progress, &processed_alignment_length]() {
+            this->worker_thread(t, worker_working[t], seq_queue, output_queue, reader_done, processor_done, progress, processed_alignment_length);
         });
     }
 
     // Launch writer thread
-    std::thread writer([this, &paf_queue, &reader_done, &processor_done, &worker_working]() {
-        this->writer_thread(param.pafOutputFile, paf_queue, reader_done, processor_done, worker_working);
+    std::thread writer([this, &output_queue, &reader_done, &processor_done, &worker_working]() {
+        this->writer_thread(param.pafOutputFile, output_queue, reader_done, processor_done, worker_working);
     });
 
     // Wait for all threads to complete

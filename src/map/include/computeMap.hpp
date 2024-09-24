@@ -390,7 +390,7 @@ namespace skch
               seqiter::for_each_seq_in_file_filtered(
                   fileName,
                   param.query_prefix,
-                  allowed_query_names,
+                  param.allowed_query_names,
                   [&](const std::string& seq_name,
                       const std::string& seq) {
                       offset_t len = seq.length();
@@ -473,7 +473,7 @@ namespace skch
                   if (param.filterMode == filter::ONETOONE) {
                       // Save for another filtering round
                       std::lock_guard<std::mutex> guard(qmetadata_mutex);
-                      allReadMappings.insert(allReadMappings.end(), output->readMappings.begin(), output->readMappings.end());
+                      this->allReadMappings.insert(this->allReadMappings.end(), output->readMappings.begin(), output->readMappings.end());
                   } else {
                       // Report mapping
                       reportReadMappings(output->readMappings, output->qseqName, outstrm);
@@ -494,7 +494,7 @@ namespace skch
               int n_mappings = param.numMappingsForSegment - 1;
 
               // Group sequences by query prefix, then pass to ref filter
-              auto subrange_begin = allReadMappings.begin();
+              auto subrange_begin = this->allReadMappings.begin();
               auto subrange_end = allReadMappings.begin();
               MappingResultsVector_t tmpMappings;
               MappingResultsVector_t filteredMappings;
