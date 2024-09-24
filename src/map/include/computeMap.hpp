@@ -115,6 +115,15 @@ namespace skch
       //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
       std::vector<int> refIdGroup; 
 
+      // Allowed set of queries
+      std::unordered_set<std::string> allowed_query_names;
+
+      // Vector to store all read mappings
+      MappingResultsVector_t allReadMappings;
+
+      // Mutex for allReadMappings
+      std::mutex allReadMappings_mutex;
+
     public:
 
       /**
@@ -273,10 +282,6 @@ namespace skch
           MappingResultsVector_t allReadMappings;  // Aggregate mapping results for the complete run
 
           // Allowed set of queries
-          std::unordered_set<std::string> allowed_query_names;
-          
-          // Mutex for allReadMappings
-          std::mutex allReadMappings_mutex;
           if (!param.query_list.empty()) {
               std::ifstream filter_list(param.query_list);
               std::string name;
@@ -475,8 +480,8 @@ namespace skch
 
                   if (param.filterMode == filter::ONETOONE) {
                       // Save for another filtering round
-                      std::lock_guard<std::mutex> guard(allReadMappings_mutex);
-                      allReadMappings.insert(allReadMappings.end(), output->readMappings.begin(), output->readMappings.end());
+                      std::lock_guard<std::mutex> guard(this->allReadMappings_mutex);
+                      this->allReadMappings.insert(this->allReadMappings.end(), output->readMappings.begin(), output->readMappings.end());
                   } else {
                       // Report mapping
                       reportReadMappings(output->readMappings, output->qseqName, outstrm);
@@ -497,12 +502,12 @@ namespace skch
               int n_mappings = param.numMappingsForSegment - 1;
 
               // Group sequences by query prefix, then pass to ref filter
-              auto subrange_begin = allReadMappings.begin();
-              auto subrange_end = allReadMappings.begin();
+              auto subrange_begin = this->allReadMappings.begin();
+              auto subrange_end = this->allReadMappings.begin();
               MappingResultsVector_t tmpMappings;
               MappingResultsVector_t filteredMappings;
 
-              while (subrange_end != allReadMappings.end()) {
+              while (subrange_end != this->allReadMappings.end()) {
                   if (param.skip_prefix) {
                       int currGroup = this->getRefGroup(qmetadata[subrange_begin->querySeqId].name);
                       subrange_end = std::find_if_not(subrange_begin, allReadMappings.end(), [this, currGroup](const auto& allReadMappings_candidate) {
