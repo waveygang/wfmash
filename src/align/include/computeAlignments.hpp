@@ -521,8 +521,8 @@ void computeAlignments() {
 
     // Create queues
     atomic_queue::AtomicQueue<std::string*, 1024> line_queue;
-    seq_atomic_queue_t seq_queue;
-    paf_atomic_queue_t paf_queue;  // Add this line
+    atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024> seq_queue;
+    atomic_queue::AtomicQueue<MapModuleOutput*, 1024> output_queue;
 
     // Calculate max_processors based on the number of worker threads
     size_t max_processors = std::max(1UL, static_cast<unsigned long>(param.threads));
