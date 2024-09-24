@@ -2032,9 +2032,8 @@ query_start : query_end)
         // write how many reverse complement alignments were found
         //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
         for (auto& patch_aln : multi_patch_alns) {
-            if (patch_aln.ok) {
-                // write_alignment_paf only writes anything if aln.ok. We need to guard the manual tag writing below with the same conditional to avoid writing an invalid PAF.
-                write_alignment_paf(
+            // write_alignment_paf only writes anything if aln.ok. We need to guard the manual tag writing below with the same conditional to avoid writing an invalid PAF.
+            bool wrote = write_alignment_paf(
                     out,
                     patch_aln,
                     query_name,
@@ -2050,6 +2049,7 @@ query_start : query_end)
                     mashmap_estimated_identity,
                     false,  // Don't add an endline after each alignment
                     true);  // This is a reverse complement alignment
+            if (wrote) {
                 // write tag indicating that this is a multipatch alignment
                 out << "\t" << "pt:Z:true" << "\t"
                     // and if the patch is inverted as well
@@ -2224,7 +2224,7 @@ void write_alignment_sam(
     free(patch_cigar);
 }
 
-void write_alignment_paf(
+bool write_alignment_paf(
         std::ostream& out,
         const alignment_t& aln,
         const std::string& query_name,
@@ -2240,6 +2240,7 @@ void write_alignment_paf(
         const float& mashmap_estimated_identity,
         const bool& with_endline,
         const bool& is_rev_patch) {
+    bool ret = false;  // return true if we wrote the alignment
 
     if (aln.ok) {
         uint64_t matches = 0;
@@ -2294,9 +2295,11 @@ void write_alignment_paf(
             if (with_endline) {
                 out << std::endl;
             }
+            ret = true;
         }
         free(cigar);
     }
+    return ret;
 }
 
 double float2phred(const double& prob) {

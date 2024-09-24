@@ -144,7 +144,7 @@ namespace wflign {
             const char* query,
             const char* target,
             const int64_t& target_pointer_shift);
-        void write_alignment_paf(
+        bool write_alignment_paf(
                 std::ostream& out,
                 const alignment_t& aln,
                 const std::string& query_name,
