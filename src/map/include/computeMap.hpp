@@ -274,6 +274,9 @@ namespace skch
 
           // Allowed set of queries
           std::unordered_set<std::string> allowed_query_names;
+          
+          // Mutex for allReadMappings
+          std::mutex allReadMappings_mutex;
           if (!param.query_list.empty()) {
               std::ifstream filter_list(param.query_list);
               std::string name;
@@ -390,7 +393,7 @@ namespace skch
               seqiter::for_each_seq_in_file_filtered(
                   fileName,
                   param.query_prefix,
-                  param.query_list,
+                  allowed_query_names,
                   [&](const std::string& seq_name,
                       const std::string& seq) {
                       offset_t len = seq.length();
@@ -472,7 +475,7 @@ namespace skch
 
                   if (param.filterMode == filter::ONETOONE) {
                       // Save for another filtering round
-                      std::lock_guard<std::mutex> guard(qmetadata_mutex);
+                      std::lock_guard<std::mutex> guard(allReadMappings_mutex);
                       allReadMappings.insert(allReadMappings.end(), output->readMappings.begin(), output->readMappings.end());
                   } else {
                       // Report mapping
