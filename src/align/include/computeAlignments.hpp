@@ -558,7 +558,7 @@ void computeAlignments() {
 
     // Launch processor manager
     std::thread processor_manager_thread([this, &seq_queue, &line_queue, &total_alignments_queued, &reader_done, &processor_done, max_processors]() {
-        this->processor_manager(seq_queue, line_queue, total_alignments_queued, reader_done, processor_done, max_processors);
+        this->processor_manager(reinterpret_cast<seq_atomic_queue_t&>(seq_queue), line_queue, total_alignments_queued, reader_done, processor_done, max_processors);
     });
 
     // Launch worker threads
@@ -566,13 +566,13 @@ void computeAlignments() {
     std::vector<std::atomic<bool>> worker_working(param.threads);
     for (uint64_t t = 0; t < param.threads; ++t) {
         workers.emplace_back([this, t, &worker_working, &seq_queue, &output_queue, &reader_done, &processor_done, &progress, &processed_alignment_length]() {
-            this->worker_thread(t, worker_working[t], seq_queue, output_queue, reader_done, processor_done, progress, processed_alignment_length);
+            this->worker_thread(t, worker_working[t], reinterpret_cast<seq_atomic_queue_t&>(seq_queue), reinterpret_cast<paf_atomic_queue_t&>(output_queue), reader_done, processor_done, progress, processed_alignment_length);
         });
     }
 
     // Launch writer thread
     std::thread writer([this, &output_queue, &reader_done, &processor_done, &worker_working]() {
-        this->writer_thread(param.pafOutputFile, output_queue, reader_done, processor_done, worker_working);
+        this->writer_thread(param.pafOutputFile, reinterpret_cast<paf_atomic_queue_t&>(output_queue), reader_done, processor_done, worker_working);
     });
 
     // Wait for all threads to complete
