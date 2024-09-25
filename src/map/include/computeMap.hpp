@@ -79,8 +79,6 @@ namespace skch
       std::condition_variable fragment_cv;
       std::atomic<bool> fragment_workers_done{false};
       std::atomic<int> fragments_processed{0};
-      typedef atomic_queue::AtomicQueue<FragmentData*, 1024, nullptr, true, true, false, false> fragment_atomic_queue_t;
-      fragment_atomic_queue_t fragment_queue;
       QueryMappingOutput* output;  // Consider using std::unique_ptr<QueryMappingOutput>
 
       //Type for Stage L1's predicted candidate location
