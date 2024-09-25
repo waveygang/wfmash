@@ -50,6 +50,10 @@ namespace fs = std::filesystem;
 
 namespace skch
 {
+  struct QueryMappingOutput {
+      std::string queryName;
+      std::vector<MappingResult> results;
+  };
   /**
    * @class     skch::Map
    * @brief     L1 and L2 mapping stages
@@ -298,8 +302,10 @@ namespace skch
           reader_done.store(true);
       }
 
+      typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
+
       void worker_thread(input_atomic_queue_t& input_queue,
-                         output_atomic_queue_t& output_queue,
+                         query_output_atomic_queue_t& output_queue,
                          std::atomic<bool>& reader_done,
                          std::atomic<bool>& workers_done) {
           while (true) {
@@ -319,16 +325,23 @@ namespace skch
           workers_done.store(true);
       }
 
-      void writer_thread(output_atomic_queue_t& output_queue,
+      void writer_thread(query_output_atomic_queue_t& output_queue,
                          std::atomic<bool>& workers_done,
                          seqno_t& totalReadsMapped,
                          std::ofstream& outstrm,
                          progress_meter::ProgressMeter& progress,
                          MappingResultsVector_t& allReadMappings) {
           while (true) {
-              MapModuleOutput* output = nullptr;
+              QueryMappingOutput* output = nullptr;
               if (output_queue.try_pop(output)) {
-                  mapModuleHandleOutput(output, allReadMappings, totalReadsMapped, outstrm, progress);
+                  if(output->results.size() > 0)
+                      totalReadsMapped++;
+                  if (param.filterMode == filter::ONETOONE) {
+                      allReadMappings.insert(allReadMappings.end(), output->results.begin(), output->results.end());
+                  } else {
+                      reportReadMappings(output->results, output->queryName, outstrm);
+                  }
+                  delete output;
               } else if (workers_done.load() && output_queue.was_empty()) {
                   break;
               } else {
@@ -646,7 +659,7 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      MapModuleOutput* mapModule (InputSeqProgContainer* input)
+      QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
         MapModuleOutput* output = new MapModuleOutput();
 
@@ -780,7 +793,7 @@ namespace skch
 
         output->readMappings = std::move(unfilteredMappings);
 
-        return output;
+        return new QueryMappingOutput{input->seqName, std::move(output->readMappings)};
       }
 
       /**
