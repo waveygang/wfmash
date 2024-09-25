@@ -22,6 +22,9 @@ namespace fs = std::filesystem;
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
+#include <atomic>
+#include <thread>
+#include "common/atomic_queue/atomic_queue.h"
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -31,7 +34,6 @@ namespace fs = std::filesystem;
 #include "map/include/map_stats.hpp"
 #include "map/include/slidingMap.hpp"
 #include "map/include/MIIteratorL2.hpp"
-#include "map/include/ThreadPool.hpp"
 #include "map/include/filter.hpp"
 
 //External includes
@@ -113,6 +115,10 @@ namespace skch
       //Vector for obtaining group from refId
       //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
       std::vector<int> refIdGroup; 
+
+      // Atomic queues for input and output
+      typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
+      typedef atomic_queue::AtomicQueue<MapModuleOutput*, 1024, nullptr, true, true, false, false> output_atomic_queue_t;
 
     public:
 
@@ -262,6 +268,65 @@ namespace skch
       /**
        * @brief   parse over sequences in query file and map each on the reference
        */
+      void reader_thread(const std::vector<std::string>& querySequences,
+                         input_atomic_queue_t& input_queue,
+                         std::atomic<bool>& reader_done,
+                         progress_meter::ProgressMeter& progress,
+                         seqno_t& seqCounter) {
+          for (const auto& fileName : querySequences) {
+              seqiter::for_each_seq_in_file_filtered(
+                  fileName,
+                  param.query_prefix,
+                  allowed_query_names,
+                  [&](const std::string& seq_name, const std::string& seq) {
+                      auto input = new InputSeqProgContainer(seq, seq_name, seqCounter++, progress);
+                      while (!input_queue.try_push(input)) {
+                          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                      }
+                  });
+          }
+          reader_done.store(true);
+      }
+
+      void worker_thread(input_atomic_queue_t& input_queue,
+                         output_atomic_queue_t& output_queue,
+                         std::atomic<bool>& reader_done,
+                         std::atomic<bool>& workers_done) {
+          while (true) {
+              InputSeqProgContainer* input = nullptr;
+              if (input_queue.try_pop(input)) {
+                  auto output = mapModule(input);
+                  while (!output_queue.try_push(output)) {
+                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  }
+                  delete input;
+              } else if (reader_done.load() && input_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+          workers_done.store(true);
+      }
+
+      void writer_thread(output_atomic_queue_t& output_queue,
+                         std::atomic<bool>& workers_done,
+                         seqno_t& totalReadsMapped,
+                         std::ofstream& outstrm,
+                         progress_meter::ProgressMeter& progress,
+                         MappingResultsVector_t& allReadMappings) {
+          while (true) {
+              MapModuleOutput* output = nullptr;
+              if (output_queue.try_pop(output)) {
+                  mapModuleHandleOutput(output, allReadMappings, totalReadsMapped, outstrm, progress);
+              } else if (workers_done.load() && output_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
+
       void mapQuery()
       {
         //Count of reads mapped by us
@@ -273,116 +338,88 @@ namespace skch
         std::ofstream outstrm(param.outFileName);
         MappingResultsVector_t allReadMappings;  //Aggregate mapping results for the complete run
 
-        //Create the thread pool
-        ThreadPool<InputSeqProgContainer, MapModuleOutput> threadPool( [this](InputSeqProgContainer* e){return mapModule(e);}, param.threads);
+        // Initialize atomic queues and flags
+        input_atomic_queue_t input_queue;
+        output_atomic_queue_t output_queue;
+        std::atomic<bool> reader_done(false);
+        std::atomic<bool> workers_done(false);
 
-		// allowed set of queries
-		std::unordered_set<std::string> allowed_query_names;
-		if (!param.query_list.empty()) {
-			std::ifstream filter_list(param.query_list);
-			std::string name;
-			while (getline(filter_list, name)) {
-				allowed_query_names.insert(name); 
-			}
-		}
-
-		// Count the total number of sequences and sequence length
-		uint64_t total_seqs = 0;
-		uint64_t total_seq_length = 0;
-		for (const auto& fileName : param.querySequences) {
-			// Check if there is a .fai file
-			std::string fai_name = fileName + ".fai";
-			if (fs::exists(fai_name)) {
-				std::string line;
-				std::ifstream in(fai_name.c_str());
-                while (std::getline(in, line)) {
-                    auto line_split = CommonFunc::split(line, '\t');
-					// if we have a param.target_prefix and the sequence name matches, skip it
-					auto seq_name = line_split[0];
-					bool prefix_skip = true;
-					for (const auto& prefix : param.query_prefix) {
-						if (seq_name.substr(0, prefix.size()) == prefix) {
-							prefix_skip = false;
-							break;
-						}
-					}
-					if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
-						|| !param.query_prefix.empty() && !prefix_skip) {
-						total_seqs++;
-						total_seq_length += std::stoul(line_split[1]);
-					}
-				}
-			} else {
-				// If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
-				std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to filter query sequences (slow)" << std::endl;
-				seqiter::for_each_seq_in_file_filtered(
-					fileName,
-					param.query_prefix,
-					allowed_query_names,
-					[&](const std::string& seq_name, const std::string& seq) {
-						++total_seqs;
-						total_seq_length += seq.size();
-					});
-			}
-		}
-		
-        progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
-
-        for(const auto &fileName : param.querySequences)
-        {
-
-#ifdef DEBUG
-            std::cerr << "[mashmap::skch::Map::mapQuery] mapping reads in " << fileName << std::endl;
-#endif
-
-			seqiter::for_each_seq_in_file_filtered(
-				fileName,
-				param.query_prefix,
-				allowed_query_names,
-                [&](const std::string& seq_name,
-                    const std::string& seq) {
-                    // todo: offset_t is an 32-bit integer, which could cause problems
-                    offset_t len = seq.length();
-					if (param.skip_self
-						&& param.target_prefix != ""
-						&& seq_name.substr(0, param.target_prefix.size()) == param.target_prefix) {
-						// skip
-					} else {
-						if (param.filterMode == filter::ONETOONE)
-							qmetadata.push_back( ContigInfo{seq_name, len} );
-						//Is the read too short?
-						if(len < param.kmerSize)
-						{
-//#ifdef DEBUG
-							// TODO Should we somehow revert to < windowSize?
-							std::cerr << std::endl
-									  << "WARNING, skch::Map::mapQuery, read "
-									  << seq_name << " of " << len << "bp "
-									  << " is not long enough for mapping at segment length "
-									  << param.segLength << std::endl;
-//#endif
-						}
-						else
-						{
-							totalReadsPickedForMapping++;
-							//Dispatch input to thread
-							threadPool.runWhenThreadAvailable(new InputSeqProgContainer(seq, seq_name, seqCounter, progress));
-
-							//Collect output if available
-							while ( threadPool.outputAvailable() ) {
-								mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
-							}
-						}
-						//progress.increment(seq.size()/2);
-						seqCounter++;
-					}
-                }); //Finish reading query input file
-
+        // allowed set of queries
+        std::unordered_set<std::string> allowed_query_names;
+        if (!param.query_list.empty()) {
+            std::ifstream filter_list(param.query_list);
+            std::string name;
+            while (getline(filter_list, name)) {
+                allowed_query_names.insert(name); 
+            }
         }
 
-        //Collect remaining output objects
-        while ( threadPool.running() )
-            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
+        // Count the total number of sequences and sequence length
+        uint64_t total_seqs = 0;
+        uint64_t total_seq_length = 0;
+        for (const auto& fileName : param.querySequences) {
+            // Check if there is a .fai file
+            std::string fai_name = fileName + ".fai";
+            if (fs::exists(fai_name)) {
+                std::string line;
+                std::ifstream in(fai_name.c_str());
+                while (std::getline(in, line)) {
+                    auto line_split = CommonFunc::split(line, '\t');
+                    // if we have a param.target_prefix and the sequence name matches, skip it
+                    auto seq_name = line_split[0];
+                    bool prefix_skip = true;
+                    for (const auto& prefix : param.query_prefix) {
+                        if (seq_name.substr(0, prefix.size()) == prefix) {
+                            prefix_skip = false;
+                            break;
+                        }
+                    }
+                    if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
+                        || !param.query_prefix.empty() && !prefix_skip) {
+                        total_seqs++;
+                        total_seq_length += std::stoul(line_split[1]);
+                    }
+                }
+            } else {
+                // If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
+                std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to filter query sequences (slow)" << std::endl;
+                seqiter::for_each_seq_in_file_filtered(
+                    fileName,
+                    param.query_prefix,
+                    allowed_query_names,
+                    [&](const std::string& seq_name, const std::string& seq) {
+                        ++total_seqs;
+                        total_seq_length += seq.size();
+                    });
+            }
+        }
+        
+        progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
+
+        // Launch reader thread
+        std::thread reader([&]() {
+            reader_thread(param.querySequences, input_queue, reader_done, progress, seqCounter);
+        });
+
+        // Launch worker threads
+        std::vector<std::thread> workers;
+        for (int i = 0; i < param.threads; ++i) {
+            workers.emplace_back([&]() {
+                worker_thread(input_queue, output_queue, reader_done, workers_done);
+            });
+        }
+
+        // Launch writer thread
+        std::thread writer([&]() {
+            writer_thread(output_queue, workers_done, totalReadsMapped, outstrm, progress, allReadMappings);
+        });
+
+        // Wait for all threads to complete
+        reader.join();
+        for (auto& worker : workers) {
+            worker.join();
+        }
+        writer.join();
 
         //Filter over reference axis and report the mappings
         if (param.filterMode == filter::ONETOONE)
