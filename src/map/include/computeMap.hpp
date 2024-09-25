@@ -79,6 +79,7 @@ namespace skch
       std::condition_variable fragment_cv;
       std::atomic<bool> fragment_workers_done{false};
       std::atomic<int> fragments_processed{0};
+      typedef atomic_queue::AtomicQueue<FragmentData*, 1024, nullptr, true, true, false, false> fragment_atomic_queue_t;
       fragment_atomic_queue_t fragment_queue;
       QueryMappingOutput* output;  // Consider using std::unique_ptr<QueryMappingOutput>
 
@@ -790,7 +791,9 @@ namespace skch
         {
             std::lock_guard<std::mutex> lock(fragment_mutex);
             for (auto& fragment : fragments) {
-                fragment_queue.push(fragment);
+                while (!fragment_queue.try_push(fragment)) {
+                    std::this_thread::yield();
+                }
             }
         }
         fragment_cv.notify_all();
