@@ -748,8 +748,8 @@ namespace skch
             {
                 auto fragment = new FragmentData{
                     &(input->seq)[0u] + input->len - param.segLength,
-                    param.segLength,
-                    input->len,
+                    static_cast<int>(param.segLength),
+                    static_cast<int>(input->len),
                     input->seqCounter,
                     input->seqName,
                     refGroup,
