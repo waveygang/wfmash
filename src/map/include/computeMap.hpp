@@ -661,11 +661,7 @@ namespace skch
        */
       QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
-        MapModuleOutput* output = new MapModuleOutput();
-
         //save query sequence name and length
-        output->qseqName = input->seqName;
-        output->qseqLen = input->len;
         bool split_mapping = true;
         std::vector<IntervalPoint> intervalPoints;
         // Reserve the "expected" number of interval points
@@ -791,9 +787,7 @@ namespace skch
     
         sparsifyMappings(unfilteredMappings);
 
-        output->readMappings = std::move(unfilteredMappings);
-
-        return new QueryMappingOutput{input->seqName, std::move(output->readMappings)};
+        return new QueryMappingOutput{input->seqName, std::move(unfilteredMappings)};
       }
 
       /**
