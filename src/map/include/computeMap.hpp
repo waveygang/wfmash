@@ -734,8 +734,8 @@ namespace skch
             {
                 auto fragment = new FragmentData{
                     &(input->seq)[0u] + i * param.segLength,
-                    param.segLength,
-                    input->len,
+                    static_cast<int>(param.segLength),
+                    static_cast<int>(input->len),
                     input->seqCounter,
                     input->seqName,
                     refGroup,
@@ -819,7 +819,7 @@ namespace skch
               MappingResultsVector_t l2Mappings;
 
               QueryMetaData<MinVec_Type> Q;
-              Q.seq = fragment->seq;
+              Q.seq = const_cast<char*>(fragment->seq);
               Q.len = fragment->len;
               Q.fullLen = fragment->fullLen;
               Q.seqCounter = fragment->seqCounter;
