@@ -322,7 +322,6 @@ namespace skch
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
-          workers_done.store(true);
       }
 
       void writer_thread(query_output_atomic_queue_t& output_queue,
@@ -331,9 +330,11 @@ namespace skch
                          std::ofstream& outstrm,
                          progress_meter::ProgressMeter& progress,
                          MappingResultsVector_t& allReadMappings) {
+          int wait_count = 0;
           while (true) {
               QueryMappingOutput* output = nullptr;
               if (output_queue.try_pop(output)) {
+                  wait_count = 0;
                   if(output->results.size() > 0)
                       totalReadsMapped++;
                   if (param.filterMode == filter::ONETOONE) {
@@ -343,7 +344,12 @@ namespace skch
                   }
                   delete output;
               } else if (workers_done.load() && output_queue.was_empty()) {
-                  break;
+                  ++wait_count;
+                  if (wait_count < 5) {
+                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  } else {
+                      break;
+                  }
               } else {
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
@@ -442,7 +448,16 @@ namespace skch
         for (auto& worker : workers) {
             worker.join();
         }
+
+        workers_done.store(true);
+
         writer.join();
+
+        // Check if the writer queue was empty at the end of the run, if not, something bad has happened
+        if (!output_queue.was_empty()) {
+            std::cerr << "[mashmap::skch::Map::mapQuery] ERROR, writer queue was not empty at the end of the run" << std::endl;
+            exit(1);
+        }
 
         //Filter over reference axis and report the mappings
         if (param.filterMode == filter::ONETOONE)
@@ -661,6 +676,8 @@ namespace skch
        */
       QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
+        //ok
+        auto output = new QueryMappingOutput{input->seqName};
         //save query sequence name and length
         bool split_mapping = true;
         std::vector<IntervalPoint> intervalPoints;
@@ -669,7 +686,7 @@ namespace skch
             2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
         std::vector<L1_candidateLocus_t> l1Mappings;
         MappingResultsVector_t l2Mappings;
-        MappingResultsVector_t unfilteredMappings;
+        auto& unfilteredMappings = output->results;
         int refGroup = this->getRefGroup(input->seqName);
 
         if (!param.split || input->len <= param.segLength)
@@ -787,7 +804,7 @@ namespace skch
     
         sparsifyMappings(unfilteredMappings);
 
-        return new QueryMappingOutput{input->seqName, std::move(unfilteredMappings)};
+        return output;
       }
 
       /**
