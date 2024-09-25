@@ -24,6 +24,7 @@ namespace fs = std::filesystem;
 #include <unordered_set>
 #include <atomic>
 #include <thread>
+#include <mutex>
 #include "common/atomic_queue/atomic_queue.h"
 
 //Own includes
@@ -53,6 +54,17 @@ namespace skch
   struct QueryMappingOutput {
       std::string queryName;
       std::vector<MappingResult> results;
+      std::mutex mutex;
+  };
+
+  struct FragmentData {
+      const char* seq;
+      int len;
+      int fullLen;
+      seqno_t seqCounter;
+      std::string seqName;
+      int refGroup;
+      int fragmentIndex;
   };
   /**
    * @class     skch::Map
@@ -303,6 +315,7 @@ namespace skch
       }
 
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
+      typedef atomic_queue::AtomicQueue<FragmentData*, 1024, nullptr, true, true, false, false> fragment_atomic_queue_t;
 
       void worker_thread(input_atomic_queue_t& input_queue,
                          query_output_atomic_queue_t& output_queue,
@@ -676,21 +689,17 @@ namespace skch
        */
       QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
-        //ok
         auto output = new QueryMappingOutput{input->seqName};
-        //save query sequence name and length
         bool split_mapping = true;
-        std::vector<IntervalPoint> intervalPoints;
-        // Reserve the "expected" number of interval points
-        intervalPoints.reserve(
-            2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
-        std::vector<L1_candidateLocus_t> l1Mappings;
-        MappingResultsVector_t l2Mappings;
-        auto& unfilteredMappings = output->results;
         int refGroup = this->getRefGroup(input->seqName);
 
         if (!param.split || input->len <= param.segLength)
         {
+            std::vector<IntervalPoint> intervalPoints;
+            intervalPoints.reserve(2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
+            std::vector<L1_candidateLocus_t> l1Mappings;
+            MappingResultsVector_t l2Mappings;
+
             QueryMetaData <MinVec_Type> Q;
             Q.seq = &(input->seq)[0u];
             Q.len = input->len;
@@ -699,12 +708,10 @@ namespace skch
             Q.seqName = input->seqName;
             Q.refGroup = refGroup;
 
-            // Map this sequence
             mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-            unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
+            output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
         
-            // Apply non-merged filtering
-            filterNonMergedMappings(unfilteredMappings, param);
+            filterNonMergedMappings(output->results, param);
 
             split_mapping = false;
             input->progress.increment(input->len);
@@ -712,99 +719,129 @@ namespace skch
         else // Split read mapping
         {
             int noOverlapFragmentCount = input->len / param.segLength;
+            
+            fragment_atomic_queue_t fragment_queue;
+            std::atomic<int> fragments_processed(0);
+            std::vector<std::thread> fragment_workers;
+            
+            for (int i = 0; i < param.threads; ++i) {
+                fragment_workers.emplace_back([&]() {
+                    fragmentWorkerThread(fragment_queue, output, fragments_processed, noOverlapFragmentCount);
+                });
+            }
 
-            // Map individual non-overlapping fragments in the read
             for (int i = 0; i < noOverlapFragmentCount; i++)
             {
-                QueryMetaData <MinVec_Type> Q;
-                Q.seq = &(input->seq)[0u] + i * param.segLength;
-                Q.len = param.segLength;
-                Q.fullLen = input->len;
-                Q.seqCounter = input->seqCounter;
-                Q.seqName = input->seqName;
-                Q.refGroup = refGroup;
-
-                intervalPoints.clear();
-                l1Mappings.clear();
-                l2Mappings.clear();
-
-                mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-                std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                    e.queryLen = input->len;
-                    e.queryStartPos = i * param.segLength;
-                    e.queryEndPos = i * param.segLength + Q.len;
-                });
-
-                unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-                input->progress.increment(param.segLength);
+                auto fragment = new FragmentData{
+                    &(input->seq)[0u] + i * param.segLength,
+                    param.segLength,
+                    input->len,
+                    input->seqCounter,
+                    input->seqName,
+                    refGroup,
+                    i
+                };
+                fragment_queue.push(fragment);
             }
 
-            // Map last overlapping fragment to cover the whole read
             if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0)
             {
-                QueryMetaData <MinVec_Type> Q;
-                Q.seq = &(input->seq)[0u] + input->len - param.segLength;
-                Q.len = param.segLength;
-                Q.seqCounter = input->seqCounter;
-                Q.seqName = input->seqName;
-                Q.refGroup = refGroup;
-
-                intervalPoints.clear();
-                l1Mappings.clear();
-                l2Mappings.clear();
-
-                mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-                std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                    e.queryLen = input->len;
-                    e.queryStartPos = input->len - param.segLength;
-                    e.queryEndPos = input->len;
-                });
-
-                unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-                input->progress.increment(input->len % param.segLength);
+                auto fragment = new FragmentData{
+                    &(input->seq)[0u] + input->len - param.segLength,
+                    param.segLength,
+                    input->len,
+                    input->seqCounter,
+                    input->seqName,
+                    refGroup,
+                    noOverlapFragmentCount
+                };
+                fragment_queue.push(fragment);
+                noOverlapFragmentCount++;
             }
+
+            while (fragments_processed.load() < noOverlapFragmentCount) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            for (int i = 0; i < param.threads; ++i) {
+                fragment_queue.push(nullptr);
+            }
+            for (auto& worker : fragment_workers) {
+                worker.join();
+            }
+
+            input->progress.increment(input->len);
 
             if (param.mergeMappings) 
             {
-                // the maximally merged mappings are top-level chains
-                // while the unfiltered mappings now contain splits at max_mapping_length
-                auto maximallyMergedMappings =
-                    mergeMappingsInRange(unfilteredMappings, param.chain_gap);
-                // we filter on the top level chains
+                auto maximallyMergedMappings = mergeMappingsInRange(output->results, param.chain_gap);
                 filterMaximallyMerged(maximallyMergedMappings, param);
-                // collect splitMappingIds in the maximally merged mappings
                 robin_hood::unordered_set<offset_t> kept_chains;
                 for (auto &mapping : maximallyMergedMappings) {
                     kept_chains.insert(mapping.splitMappingId);
                 }
-                // and use them to filter mappings to discard
-                unfilteredMappings.erase(
-                    std::remove_if(unfilteredMappings.begin(), unfilteredMappings.end(),
+                output->results.erase(
+                    std::remove_if(output->results.begin(), output->results.end(),
                                    [&kept_chains](const MappingResult &mapping) {
                                        return !kept_chains.count(mapping.splitMappingId);
                                    }),
-                    unfilteredMappings.end()
-                    );
+                    output->results.end()
+                );
             }
             else 
             {
-                filterNonMergedMappings(unfilteredMappings, param);
+                filterNonMergedMappings(output->results, param);
             }
         }
 
-        // Common post-processing for both merged and non-merged mappings
-        mappingBoundarySanityCheck(input, unfilteredMappings);
+        mappingBoundarySanityCheck(input, output->results);
     
         if (param.filterLengthMismatches)
         {
-            filterFalseHighIdentity(unfilteredMappings);
+            filterFalseHighIdentity(output->results);
         }
     
-        sparsifyMappings(unfilteredMappings);
+        sparsifyMappings(output->results);
 
         return output;
+      }
+
+      void fragmentWorkerThread(fragment_atomic_queue_t& fragment_queue, 
+                                QueryMappingOutput* output,
+                                std::atomic<int>& fragments_processed,
+                                int total_fragments) {
+          while (true) {
+              FragmentData* fragment = fragment_queue.pop();
+              if (fragment == nullptr) break;
+
+              std::vector<IntervalPoint> intervalPoints;
+              std::vector<L1_candidateLocus_t> l1Mappings;
+              MappingResultsVector_t l2Mappings;
+
+              QueryMetaData<MinVec_Type> Q;
+              Q.seq = fragment->seq;
+              Q.len = fragment->len;
+              Q.fullLen = fragment->fullLen;
+              Q.seqCounter = fragment->seqCounter;
+              Q.seqName = fragment->seqName;
+              Q.refGroup = fragment->refGroup;
+
+              mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+
+              std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
+                  e.queryLen = fragment->fullLen;
+                  e.queryStartPos = fragment->fragmentIndex * param.segLength;
+                  e.queryEndPos = e.queryStartPos + fragment->len;
+              });
+
+              {
+                  std::lock_guard<std::mutex> lock(output->mutex);
+                  output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
+              }
+
+              delete fragment;
+              fragments_processed++;
+          }
       }
 
       /**
