@@ -759,13 +759,12 @@ namespace skch
                 noOverlapFragmentCount++;
             }
 
-            while (fragments_processed.load() < noOverlapFragmentCount) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-
+            // Add null pointers to signal the end of work for each thread
             for (int i = 0; i < param.threads; ++i) {
                 fragment_queue.push(nullptr);
             }
+
+            // Join all worker threads
             for (auto& worker : fragment_workers) {
                 worker.join();
             }
@@ -812,7 +811,10 @@ namespace skch
                                 int total_fragments) {
           while (true) {
               FragmentData* fragment = fragment_queue.pop();
-              if (fragment == nullptr) break;
+              if (fragment == nullptr) {
+                  std::cerr << "Worker thread exiting" << std::endl;
+                  break;
+              }
 
               std::vector<IntervalPoint> intervalPoints;
               std::vector<L1_candidateLocus_t> l1Mappings;
@@ -841,6 +843,7 @@ namespace skch
 
               delete fragment;
               fragments_processed++;
+              std::cerr << "Processed fragment " << fragment->fragmentIndex << " of " << total_fragments << std::endl;
           }
       }
 
