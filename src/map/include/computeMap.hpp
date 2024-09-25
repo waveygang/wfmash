@@ -379,6 +379,7 @@ namespace skch
 
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<FragmentData*, 1024, nullptr, true, true, false, false> fragment_atomic_queue_t;
+      fragment_atomic_queue_t fragment_queue;
 
       void worker_thread(input_atomic_queue_t& input_queue,
                          query_output_atomic_queue_t& output_queue,
