@@ -141,6 +141,37 @@ namespace skch
       typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<MapModuleOutput*, 1024, nullptr, true, true, false, false> output_atomic_queue_t;
 
+    void processFragment(FragmentData* fragment) {
+          std::vector<IntervalPoint> intervalPoints;
+          std::vector<L1_candidateLocus_t> l1Mappings;
+          MappingResultsVector_t l2Mappings;
+
+          QueryMetaData<MinVec_Type> Q;
+          Q.seq = const_cast<char*>(fragment->seq);
+          Q.len = fragment->len;
+          Q.fullLen = fragment->fullLen;
+          Q.seqCounter = fragment->seqCounter;
+          Q.seqName = fragment->seqName;
+          Q.refGroup = fragment->refGroup;
+
+          mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+
+          std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
+              e.queryLen = fragment->fullLen;
+              e.queryStartPos = fragment->fragmentIndex * param.segLength;
+              e.queryEndPos = e.queryStartPos + fragment->len;
+          });
+
+          {
+              std::lock_guard<std::mutex> lock(output->mutex);
+              output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
+          }
+
+          delete fragment;
+          fragments_processed++;
+          std::cerr << "Processed fragment " << fragment->fragmentIndex << std::endl;
+      }
+      
     public:
 
       /**
@@ -2041,33 +2072,3 @@ namespace skch
 }
 
 #endif
-      void processFragment(FragmentData* fragment) {
-          std::vector<IntervalPoint> intervalPoints;
-          std::vector<L1_candidateLocus_t> l1Mappings;
-          MappingResultsVector_t l2Mappings;
-
-          QueryMetaData<MinVec_Type> Q;
-          Q.seq = const_cast<char*>(fragment->seq);
-          Q.len = fragment->len;
-          Q.fullLen = fragment->fullLen;
-          Q.seqCounter = fragment->seqCounter;
-          Q.seqName = fragment->seqName;
-          Q.refGroup = fragment->refGroup;
-
-          mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-          std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-              e.queryLen = fragment->fullLen;
-              e.queryStartPos = fragment->fragmentIndex * param.segLength;
-              e.queryEndPos = e.queryStartPos + fragment->len;
-          });
-
-          {
-              std::lock_guard<std::mutex> lock(output->mutex);
-              output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
-          }
-
-          delete fragment;
-          fragments_processed++;
-          std::cerr << "Processed fragment " << fragment->fragmentIndex << std::endl;
-      }
