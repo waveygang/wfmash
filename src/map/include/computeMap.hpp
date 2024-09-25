@@ -78,6 +78,9 @@ namespace skch
       std::mutex fragment_mutex;
       std::condition_variable fragment_cv;
       std::atomic<bool> fragment_workers_done{false};
+      std::atomic<int> fragments_processed{0};
+      fragment_atomic_queue_t fragment_queue;
+      QueryMappingOutput* output;  // Consider using std::unique_ptr<QueryMappingOutput>
 
       //Type for Stage L1's predicted candidate location
       struct L1_candidateLocus_t
