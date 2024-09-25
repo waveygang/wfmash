@@ -363,7 +363,7 @@ namespace skch
 
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
-        output_atomic_queue_t output_queue;
+        query_output_atomic_queue_t output_queue;
         std::atomic<bool> reader_done(false);
         std::atomic<bool> workers_done(false);
 
