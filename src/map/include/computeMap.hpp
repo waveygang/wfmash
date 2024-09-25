@@ -273,6 +273,16 @@ namespace skch
                          std::atomic<bool>& reader_done,
                          progress_meter::ProgressMeter& progress,
                          seqno_t& seqCounter) {
+          // Define allowed_query_names here
+          std::unordered_set<std::string> allowed_query_names;
+          if (!param.query_list.empty()) {
+              std::ifstream filter_list(param.query_list);
+              std::string name;
+              while (getline(filter_list, name)) {
+                  allowed_query_names.insert(name);
+              }
+          }
+
           for (const auto& fileName : querySequences) {
               seqiter::for_each_seq_in_file_filtered(
                   fileName,
