@@ -168,7 +168,7 @@ namespace skch
           }
 
           delete fragment;
-          fragments_processed++;
+          fragments_processed.fetch_add(1, std::memory_order_relaxed);
           std::cerr << "Processed fragment " << fragment->fragmentIndex << std::endl;
       }
       
@@ -750,7 +750,7 @@ namespace skch
        */
       QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
-        auto output = new QueryMappingOutput{input->seqName};
+        output = new QueryMappingOutput{input->seqName};
         bool split_mapping = true;
         int refGroup = this->getRefGroup(input->seqName);
 
@@ -792,8 +792,10 @@ namespace skch
         }
         fragment_cv.notify_all();
 
+        fragments_processed.store(0, std::memory_order_relaxed);
+
         // Wait for all fragments to be processed
-        while (fragments_processed.load() < noOverlapFragmentCount) {
+        while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
