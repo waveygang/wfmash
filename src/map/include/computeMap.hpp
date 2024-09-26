@@ -66,6 +66,8 @@ namespace skch
       std::string seqName;
       int refGroup;
       int fragmentIndex;
+      QueryMappingOutput* output;
+      std::atomic<int>* fragments_processed;
   };
   /**
    * @class     skch::Map
@@ -75,11 +77,7 @@ namespace skch
   {
     private:
       std::vector<std::thread> fragment_workers;
-      std::mutex fragment_mutex;
-      std::condition_variable fragment_cv;
       std::atomic<bool> fragment_workers_done{false};
-      std::atomic<int> fragments_processed{0};
-      QueryMappingOutput* output;  // Consider using std::unique_ptr<QueryMappingOutput>
 
       //Type for Stage L1's predicted candidate location
       struct L1_candidateLocus_t
@@ -165,14 +163,13 @@ namespace skch
         });
 
         {
-            std::lock_guard<std::mutex> lock(output->mutex);
-            output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
+            std::lock_guard<std::mutex> lock(fragment->output->mutex);
+            fragment->output->results.insert(fragment->output->results.end(), l2Mappings.begin(), l2Mappings.end());
         }
 
-        fragments_processed.fetch_add(1, std::memory_order_relaxed);
+        fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
         std::cerr << "Processed fragment " << fragment->fragmentIndex << std::endl;
 
-        // Move the delete statement to the end of the function
         delete fragment;
     }
       
@@ -202,18 +199,7 @@ namespace skch
       // Initialize fragment worker threads
       for (int i = 0; i < param.threads; ++i) {
           fragment_workers.emplace_back([this]() {
-              while (!fragment_workers_done.load()) {
-                  FragmentData* fragment = nullptr;
-                  {
-                      std::unique_lock<std::mutex> lock(fragment_mutex);
-                      fragment_cv.wait_for(lock, std::chrono::milliseconds(10), [&]() {
-                          return fragment_queue.try_pop(fragment) || fragment_workers_done.load();
-                      });
-                  }
-                  if (fragment) {
-                      processFragment(fragment);
-                  }
-              }
+              this->fragmentWorkerThread();
           });
       }
 
@@ -221,7 +207,6 @@ namespace skch
 
       // Signal fragment workers to stop and join them
       fragment_workers_done.store(true);
-      fragment_cv.notify_all();
       for (auto& worker : fragment_workers) {
           worker.join();
       }
@@ -755,7 +740,8 @@ namespace skch
        */
       QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
-        output = new QueryMappingOutput{input->seqName};
+        QueryMappingOutput* output = new QueryMappingOutput{input->seqName};
+        std::atomic<int> fragments_processed{0};
         bool split_mapping = true;
         int refGroup = this->getRefGroup(input->seqName);
 
@@ -770,7 +756,9 @@ namespace skch
                 input->seqCounter,
                 input->seqName,
                 refGroup,
-                i
+                i,
+                output,
+                &fragments_processed
             };
             fragments.push_back(fragment);
         }
@@ -783,23 +771,19 @@ namespace skch
                 input->seqCounter,
                 input->seqName,
                 refGroup,
-                noOverlapFragmentCount
+                noOverlapFragmentCount,
+                output,
+                &fragments_processed
             };
             fragments.push_back(fragment);
             noOverlapFragmentCount++;
         }
 
-        {
-            std::lock_guard<std::mutex> lock(fragment_mutex);
-            for (auto& fragment : fragments) {
-                while (!fragment_queue.try_push(fragment)) {
-                    std::this_thread::yield();
-                }
+        for (auto& fragment : fragments) {
+            while (!fragment_queue.try_push(fragment)) {
+                std::this_thread::yield();
             }
         }
-        fragment_cv.notify_all();
-
-        fragments_processed.store(0, std::memory_order_relaxed);
 
         // Wait for all fragments to be processed
         while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
@@ -838,20 +822,15 @@ namespace skch
         return output;
       }
 
-      void fragmentWorkerThread(fragment_atomic_queue_t& fragment_queue, 
-                                QueryMappingOutput* output,
-                                std::atomic<int>& fragments_processed,
-                                int total_fragments) {
+      void fragmentWorkerThread() {
           while (!fragment_workers_done.load()) {
               FragmentData* fragment = nullptr;
-              {
-                  std::unique_lock<std::mutex> lock(fragment_mutex);
-                  fragment_cv.wait_for(lock, std::chrono::milliseconds(10), [&]() {
-                      return fragment_queue.try_pop(fragment) || fragment_workers_done.load();
-                  });
-              }
-              if (fragment) {
-                  processFragment(fragment);
+              if (fragment_queue.try_pop(fragment)) {
+                  if (fragment) {
+                      processFragment(fragment);
+                  }
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
       }
