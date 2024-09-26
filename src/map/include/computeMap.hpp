@@ -788,7 +788,7 @@ namespace skch
         for (auto& fragment : fragments) {
             while (!fragment_queue.try_push(fragment)) {
                 //std::this_thread::yield(); // too fast
-                std::this_thread::sleep_for(std::chrono::microseconds(100));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
 
