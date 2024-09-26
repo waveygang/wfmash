@@ -78,9 +78,6 @@ namespace skch
   class Map
   {
     private:
-      std::vector<std::thread> fragment_workers;
-      std::atomic<bool> fragment_workers_done{false};
-
       //Type for Stage L1's predicted candidate location
       struct L1_candidateLocus_t
       {
@@ -170,7 +167,7 @@ namespace skch
         }
 
         // Update progress after processing the fragment
-        fragment->output->progress.increment(fragment->len / 2);
+        fragment->output->progress.increment(fragment->len);
 
         fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
         delete fragment;
@@ -199,20 +196,9 @@ namespace skch
       {
         this->setRefGroups();
       }
-      // Initialize fragment worker threads
-      for (int i = 0; i < param.threads; ++i) {
-          fragment_workers.emplace_back([this]() {
-              this->fragmentWorkerThread();
-          });
-      }
 
       this->mapQuery();
 
-      // Signal fragment workers to stop and join them
-      fragment_workers_done.store(true);
-      for (auto& worker : fragment_workers) {
-          worker.join();
-      }
     }
 
     private:
@@ -368,18 +354,19 @@ namespace skch
       }
 
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
-      typedef atomic_queue::AtomicQueue<FragmentData*, 1024, nullptr, true, true, false, false> fragment_atomic_queue_t;
-      fragment_atomic_queue_t fragment_queue;
-      std::mutex progress_mutex;
+      typedef atomic_queue::AtomicQueue<FragmentData*, 8192, nullptr, true, true, false, false> fragment_atomic_queue_t;
 
       void worker_thread(input_atomic_queue_t& input_queue,
+                         fragment_atomic_queue_t& fragment_queue,
                          query_output_atomic_queue_t& output_queue,
+                         progress_meter::ProgressMeter& progress,
                          std::atomic<bool>& reader_done,
                          std::atomic<bool>& workers_done) {
           while (true) {
               InputSeqProgContainer* input = nullptr;
               if (input_queue.try_pop(input)) {
-                  auto output = mapModule(input);
+                  auto output = mapModule(input, fragment_queue);
+                  //progress.increment(input->len / 4);
                   while (!output_queue.try_push(output)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
@@ -438,8 +425,10 @@ namespace skch
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
         query_output_atomic_queue_t output_queue;
+        fragment_atomic_queue_t fragment_queue;
         std::atomic<bool> reader_done(false);
         std::atomic<bool> workers_done(false);
+        std::atomic<bool> fragments_done(false);
 
         // allowed set of queries
         std::unordered_set<std::string> allowed_query_names;
@@ -498,11 +487,18 @@ namespace skch
             reader_thread(param.querySequences, input_queue, reader_done, progress, seqCounter);
         });
 
+        std::vector<std::thread> fragment_workers;
+        for (int i = 0; i < param.threads; ++i) {
+            fragment_workers.emplace_back([&]() {
+                fragment_thread(fragment_queue, fragments_done);
+            });
+        }
+
         // Launch worker threads
         std::vector<std::thread> workers;
         for (int i = 0; i < param.threads; ++i) {
             workers.emplace_back([&]() {
-                worker_thread(input_queue, output_queue, reader_done, workers_done);
+                worker_thread(input_queue, fragment_queue, output_queue, progress, reader_done, workers_done);
             });
         }
 
@@ -513,11 +509,16 @@ namespace skch
 
         // Wait for all threads to complete
         reader.join();
+
         for (auto& worker : workers) {
             worker.join();
         }
-
         workers_done.store(true);
+        fragments_done.store(true);
+
+        for (auto& worker : fragment_workers) {
+            worker.join();
+        }
 
         writer.join();
 
@@ -742,8 +743,9 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      QueryMappingOutput* mapModule (InputSeqProgContainer* input)
-      {
+      QueryMappingOutput* mapModule(InputSeqProgContainer* input,
+                                    fragment_atomic_queue_t& fragment_queue) {
+
         QueryMappingOutput* output = new QueryMappingOutput{input->seqName, {}, {}, input->progress};
         std::atomic<int> fragments_processed{0};
         bool split_mapping = true;
@@ -787,19 +789,11 @@ namespace skch
             while (!fragment_queue.try_push(fragment)) {
                 std::this_thread::yield();
             }
-            // Update progress after pushing each fragment
-            input->progress.increment(fragment->len / 2);
         }
 
         // Wait for all fragments to be processed
         while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        // Update progress for any remaining length
-        offset_t remaining_length = input->len - (noOverlapFragmentCount * param.segLength);
-        if (remaining_length > 0) {
-            input->progress.increment(remaining_length / 2);
         }
 
         if (param.mergeMappings) {
@@ -832,8 +826,9 @@ namespace skch
         return output;
       }
 
-      void fragmentWorkerThread() {
-          while (!fragment_workers_done.load()) {
+      void fragment_thread(fragment_atomic_queue_t& fragment_queue,
+                           std::atomic<bool>& fragments_done) {
+          while (!fragments_done.load()) {
               FragmentData* fragment = nullptr;
               if (fragment_queue.try_pop(fragment)) {
                   if (fragment) {
@@ -856,9 +851,8 @@ namespace skch
       void mapModuleHandleOutput(MapModuleOutput* output,
                                  Vec &allReadMappings,
                                  seqno_t &totalReadsMapped,
-                                 std::ofstream &outstrm,
-                                 progress_meter::ProgressMeter& progress)
-        {
+                                 std::ofstream &outstrm) {
+
           if(output->readMappings.size() > 0)
             totalReadsMapped++;
 
@@ -872,8 +866,6 @@ namespace skch
             //Report mapping
             reportReadMappings(output->readMappings, output->qseqName, outstrm);
           }
-
-          //progress.increment(output->qseqLen/2 + (output->qseqLen % 2 != 0));
 
           delete output;
         }
@@ -1718,7 +1710,7 @@ namespace skch
        */
       template <typename VecIn>
       VecIn mergeMappingsInRange(VecIn &readMappings,
-                                int max_dist) {
+                                 int max_dist) {
           assert(param.split == true);
 
           if(readMappings.size() < 2) return readMappings;
