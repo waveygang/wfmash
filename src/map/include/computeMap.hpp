@@ -56,6 +56,7 @@ namespace skch
       std::string queryName;
       std::vector<MappingResult> results;
       std::mutex mutex;
+      progress_meter::ProgressMeter& progress;
   };
 
   struct FragmentData {
@@ -68,6 +69,17 @@ namespace skch
       int fragmentIndex;
       QueryMappingOutput* output;
       std::atomic<int>* fragments_processed;
+  };
+
+  struct InputSeqProgContainer {
+      std::string seq;
+      std::string seqName;
+      seqno_t seqCounter;
+      int len;
+      progress_meter::ProgressMeter& progress;
+
+      InputSeqProgContainer(const std::string& s, const std::string& n, seqno_t c, progress_meter::ProgressMeter& p)
+          : seq(s), seqName(n), seqCounter(c), len(s.length()), progress(p) {}
   };
   /**
    * @class     skch::Map
@@ -166,6 +178,9 @@ namespace skch
             std::lock_guard<std::mutex> lock(fragment->output->mutex);
             fragment->output->results.insert(fragment->output->results.end(), l2Mappings.begin(), l2Mappings.end());
         }
+
+        // Update progress after processing the fragment
+        fragment->output->progress.increment(fragment->len / 2);
 
         fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
         delete fragment;
@@ -739,7 +754,7 @@ namespace skch
        */
       QueryMappingOutput* mapModule (InputSeqProgContainer* input)
       {
-        QueryMappingOutput* output = new QueryMappingOutput{input->seqName};
+        QueryMappingOutput* output = new QueryMappingOutput{input->seqName, {}, {}, input->progress};
         std::atomic<int> fragments_processed{0};
         bool split_mapping = true;
         int refGroup = this->getRefGroup(input->seqName);
@@ -782,6 +797,8 @@ namespace skch
             while (!fragment_queue.try_push(fragment)) {
                 std::this_thread::yield();
             }
+            // Update progress after pushing each fragment
+            input->progress.increment(fragment->len / 2);
         }
 
         // Wait for all fragments to be processed
@@ -789,7 +806,11 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        input->progress.increment(input->len);
+        // Update progress for any remaining length
+        offset_t remaining_length = input->len - (noOverlapFragmentCount * param.segLength);
+        if (remaining_length > 0) {
+            input->progress.increment(remaining_length / 2);
+        }
 
         if (param.mergeMappings) {
             auto maximallyMergedMappings = mergeMappingsInRange(output->results, param.chain_gap);
