@@ -789,10 +789,7 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        {
-            std::lock_guard<std::mutex> lock(progress_mutex);
-            input->progress.increment(input->len);
-        }
+        input->progress.increment(input->len);
 
         if (param.mergeMappings) {
             auto maximallyMergedMappings = mergeMappingsInRange(output->results, param.chain_gap);
