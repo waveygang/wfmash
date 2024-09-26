@@ -71,16 +71,6 @@ namespace skch
       std::atomic<int>* fragments_processed;
   };
 
-  struct InputSeqProgContainer {
-      std::string seq;
-      std::string seqName;
-      seqno_t seqCounter;
-      int len;
-      progress_meter::ProgressMeter& progress;
-
-      InputSeqProgContainer(const std::string& s, const std::string& n, seqno_t c, progress_meter::ProgressMeter& p)
-          : seq(s), seqName(n), seqCounter(c), len(s.length()), progress(p) {}
-  };
   /**
    * @class     skch::Map
    * @brief     L1 and L2 mapping stages
