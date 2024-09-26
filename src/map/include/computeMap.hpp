@@ -168,8 +168,6 @@ namespace skch
         }
 
         fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
-        std::cerr << "Processed fragment " << fragment->fragmentIndex << std::endl;
-
         delete fragment;
     }
       
