@@ -140,12 +140,15 @@ namespace skch
       typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<MapModuleOutput*, 1024, nullptr, true, true, false, false> output_atomic_queue_t;
 
-    void processFragment(FragmentData* fragment) {
-        std::vector<IntervalPoint> intervalPoints;
-        std::vector<L1_candidateLocus_t> l1Mappings;
-        MappingResultsVector_t l2Mappings;
+    void processFragment(FragmentData* fragment, 
+                         std::vector<IntervalPoint>& intervalPoints,
+                         std::vector<L1_candidateLocus_t>& l1Mappings,
+                         MappingResultsVector_t& l2Mappings,
+                         QueryMetaData<MinVec_Type>& Q) {
+        intervalPoints.clear();
+        l1Mappings.clear();
+        l2Mappings.clear();
 
-        QueryMetaData<MinVec_Type> Q;
         Q.seq = const_cast<char*>(fragment->seq);
         Q.len = fragment->len;
         Q.fullLen = fragment->fullLen;
@@ -829,11 +832,16 @@ namespace skch
 
       void fragment_thread(fragment_atomic_queue_t& fragment_queue,
                            std::atomic<bool>& fragments_done) {
+          std::vector<IntervalPoint> intervalPoints;
+          std::vector<L1_candidateLocus_t> l1Mappings;
+          MappingResultsVector_t l2Mappings;
+          QueryMetaData<MinVec_Type> Q;
+
           while (!fragments_done.load()) {
               FragmentData* fragment = nullptr;
               if (fragment_queue.try_pop(fragment)) {
                   if (fragment) {
-                      processFragment(fragment);
+                      processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                   }
               } else {
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
