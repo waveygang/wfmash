@@ -797,7 +797,7 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        if (param.mergeMappings) {
+        if (param.mergeMappings && param.split) {
             auto maximallyMergedMappings = mergeMappingsInRange(output->results, param.chain_gap);
             filterMaximallyMerged(maximallyMergedMappings, param);
             robin_hood::unordered_set<offset_t> kept_chains;
@@ -1712,9 +1712,7 @@ namespace skch
       template <typename VecIn>
       VecIn mergeMappingsInRange(VecIn &readMappings,
                                  int max_dist) {
-          assert(param.split == true);
-
-          if(readMappings.size() < 2) return readMappings;
+          if (!param.split || readMappings.size() < 2) return readMappings;
 
           //Sort the mappings by query position, then reference sequence id, then reference position
           std::sort(
