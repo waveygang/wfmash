@@ -365,6 +365,7 @@ namespace skch
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<FragmentData*, 1024, nullptr, true, true, false, false> fragment_atomic_queue_t;
       fragment_atomic_queue_t fragment_queue;
+      std::mutex progress_mutex;
 
       void worker_thread(input_atomic_queue_t& input_queue,
                          query_output_atomic_queue_t& output_queue,
@@ -788,7 +789,10 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        input->progress.increment(input->len);
+        {
+            std::lock_guard<std::mutex> lock(progress_mutex);
+            input->progress.increment(input->len);
+        }
 
         if (param.mergeMappings) {
             auto maximallyMergedMappings = mergeMappingsInRange(output->results, param.chain_gap);
