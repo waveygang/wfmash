@@ -126,6 +126,7 @@ namespace skch
       Sketch(skch::Parameters p, const std::unordered_set<seqno_t>& target_ids = {}) 
         :
           param(std::move(p)) {
+            std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
             if (param.indexFilename.empty() 
                 || !stdfs::exists(param.indexFilename)
                 || param.overwrite_index)
@@ -150,6 +151,9 @@ namespace skch
             }
             std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
             std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
+            std::cerr << "[mashmap::skch::Sketch] Metadata size = " << metadata.size() << std::endl;
+            isInitialized = true;
+            std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
           }
 
       private:

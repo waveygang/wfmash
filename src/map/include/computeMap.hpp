@@ -208,9 +208,18 @@ namespace skch
       // Sets the groups of reference contigs based on prefix
       void setRefGroups()
       {
-        if (this->refSketch->metadata.empty()) {
-          return;  // Nothing to do if metadata is empty
+        if (!this->refSketch->isInitialized) {
+          std::cerr << "ERROR: Sketch is not fully initialized in setRefGroups()" << std::endl;
+          return;
         }
+
+        if (this->refSketch->metadata.empty()) {
+          std::cerr << "ERROR: metadata vector is empty in setRefGroups()" << std::endl;
+          return;
+        }
+
+        std::cerr << "[mashmap::skch::Map::setRefGroups] Starting to set reference groups..." << std::endl;
+        std::cerr << "[mashmap::skch::Map::setRefGroups] Metadata size: " << this->refSketch->metadata.size() << std::endl;
 
         int group = 0;
         int start_idx = 0;
@@ -226,7 +235,8 @@ namespace skch
               this->refIdGroup[idx] = group;
             } else {
               // Handle the case where refIdGroup is smaller than expected
-              std::cerr << "Warning: refIdGroup size mismatch in setRefGroups()" << std::endl;
+              std::cerr << "ERROR: refIdGroup size mismatch in setRefGroups()" << std::endl;
+              std::cerr << "refIdGroup size: " << this->refIdGroup.size() << ", current index: " << idx << std::endl;
               return;
             }
             idx++;
@@ -234,6 +244,8 @@ namespace skch
           group++;
           start_idx = idx;
         }
+
+        std::cerr << "[mashmap::skch::Map::setRefGroups] Finished setting reference groups. Total groups: " << group << std::endl;
       }
 
       // Gets the ref group of a query based on the prefix
