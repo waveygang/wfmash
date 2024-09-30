@@ -67,8 +67,9 @@ namespace skch
       //Set of frequent seeds to be ignored
       ankerl::unordered_dense::set<hash_t> frequentSeeds;
 
-      //Make the default constructor private, non-accessible
-      Sketch();
+      //Make the default constructor protected, non-accessible
+      protected:
+      Sketch() {}
 
       public:
 
@@ -93,6 +94,9 @@ namespace skch
        *  file 2 contains b .. c-1
        */
       std::vector<int> sequencesByFileInfo;
+
+      //algorithm parameters
+      skch::Parameters param;
 
       private:
       /**
@@ -160,8 +164,6 @@ namespace skch
        * @brief   constructor
        *          also builds, indexes the minmer table
        */
-      Sketch() {}
-
       Sketch(skch::Parameters p) : param(std::move(p)) {}
 
       void initialize(const std::unordered_set<seqno_t>& target_ids = {}) {

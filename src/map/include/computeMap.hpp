@@ -543,8 +543,7 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch();
-            refSketch->param = param;
+            refSketch = new skch::Sketch(param);
             refSketch->copyMetadataFrom(fullRefSketch);
             refSketch->initialize(std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
