@@ -59,7 +59,7 @@ namespace skch
       //private members
     
       //algorithm parameters
-      const skch::Parameters &param;
+      skch::Parameters param;
 
       //Minmers that occur this or more times will be ignored (computed based on percentageThreshold)
       uint64_t freqThreshold = std::numeric_limits<uint64_t>::max();
