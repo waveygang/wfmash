@@ -423,7 +423,7 @@ namespace skch
         seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
-        std::vector<MappingResultsVector_t> allReadMappings;  //Aggregate mapping results for each query
+        MappingResultsVector_t allReadMappings;  //Aggregate mapping results for all queries
 
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
@@ -558,39 +558,19 @@ namespace skch
             }
         }
 
-        // Perform plane sweep filtering for each query
-        #pragma omp parallel for
-        for (size_t i = 0; i < allReadMappings.size(); ++i) {
-            MappingResultsVector_t filteredMappings;
-            filterByGroup(allReadMappings[i], filteredMappings, param.numMappingsForSegment - 1, false);
-            allReadMappings[i] = std::move(filteredMappings);
-        }
+        // Perform plane sweep filtering
+        MappingResultsVector_t filteredMappings;
+        filterByGroup(allReadMappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE);
 
-        // If one-to-one mapping is required, perform filtering over target space
-        if (param.filterMode == filter::ONETOONE) {
-            MappingResultsVector_t allMappings;
-            for (const auto& queryMappings : allReadMappings) {
-                allMappings.insert(allMappings.end(), queryMappings.begin(), queryMappings.end());
-            }
+        // Sort the filtered mappings
+        std::sort(
+            filteredMappings.begin(), filteredMappings.end(),
+            [](const MappingResult &a, const MappingResult &b) {
+                return std::tie(a.querySeqId, a.queryStartPos, a.refSeqId, a.refStartPos) 
+                  < std::tie(b.querySeqId, b.queryStartPos, b.refSeqId, b.refStartPos);
+            });
 
-            MappingResultsVector_t filteredMappings;
-            filterByGroup(allMappings, filteredMappings, param.numMappingsForSegment - 1, true);
-
-            // Sort the filtered mappings
-            std::sort(
-                filteredMappings.begin(), filteredMappings.end(),
-                [](const MappingResult &a, const MappingResult &b) {
-                    return std::tie(a.querySeqId, a.queryStartPos, a.refSeqId, a.refStartPos) 
-                      < std::tie(b.querySeqId, b.queryStartPos, b.refSeqId, b.refStartPos);
-                });
-
-            reportReadMappings(filteredMappings, "", outstrm);
-        } else {
-            // Report all mappings
-            for (const auto& queryMappings : allReadMappings) {
-                reportReadMappings(queryMappings, "", outstrm);
-            }
-        }
+        reportReadMappings(filteredMappings, "", outstrm);
 
         progress.finish();
 
