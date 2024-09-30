@@ -594,6 +594,18 @@ namespace skch
         return frequentSeeds.find(h) != frequentSeeds.end();
       }
 
+      void clear()
+      {
+        hashFreq.clear();
+        metadata.clear();
+        sequencesByFileInfo.clear();
+        minmerPosLookupIndex.clear();
+        minmerIndex.clear();
+        minmerFreqHistogram.clear();
+        frequentSeeds.clear();
+        freqThreshold = std::numeric_limits<uint64_t>::max();
+      }
+
     }; //End of class Sketch
 } //End of namespace skch
 

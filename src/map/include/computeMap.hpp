@@ -519,8 +519,9 @@ namespace skch
             skch::Sketch subsetSketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
             // Temporarily replace the main refSketch with the subset sketch
-            auto originalRefSketch = std::move(refSketch);
-            refSketch = std::move(subsetSketch);
+            auto originalRefSketch = refSketch;
+            refSketch.clear();
+            refSketch = subsetSketch;
 
             // Launch reader thread
             std::thread reader([&]() {
@@ -574,7 +575,8 @@ namespace skch
             }
 
             // Restore the original refSketch
-            refSketch = std::move(originalRefSketch);
+            refSketch.clear();
+            refSketch = originalRefSketch;
         }
 
         // Perform plane sweep filtering
