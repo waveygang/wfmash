@@ -113,7 +113,7 @@ namespace skch
       const skch::Parameters &param;
 
       //reference sketch
-      const skch::Sketch &refSketch;
+      skch::Sketch &refSketch;
 
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
