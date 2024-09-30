@@ -123,9 +123,9 @@ namespace skch
        * @brief   constructor
        *          also builds, indexes the minmer table
        */
-      Sketch(const skch::Parameters &p, const std::unordered_set<seqno_t>& target_ids = {}) 
+      Sketch(skch::Parameters p, const std::unordered_set<seqno_t>& target_ids = {}) 
         :
-          param(p) {
+          param(std::move(p)) {
             if (param.indexFilename.empty() 
                 || !stdfs::exists(param.indexFilename)
                 || param.overwrite_index)

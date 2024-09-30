@@ -110,10 +110,10 @@ namespace skch
     private:
 
       //algorithm parameters
-      const skch::Parameters &param;
+      skch::Parameters param;
 
       //reference sketch
-      skch::Sketch &refSketch;
+      skch::Sketch refSketch;
 
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
@@ -184,10 +184,10 @@ namespace skch
        * @param[in] refSketch   reference sketch
        * @param[in] f           optional user defined custom function to post process the reported mapping results
        */
-      Map(const skch::Parameters &p, const skch::Sketch &refsketch,
+      Map(skch::Parameters p, skch::Sketch refsketch,
           PostProcessResultsFn_t f = nullptr) :
-        param(p),
-        refSketch(refsketch),
+        param(std::move(p)),
+        refSketch(std::move(refsketch)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
         refIdGroup(refsketch.metadata.size())
@@ -416,6 +416,9 @@ namespace skch
 
       void mapQuery()
       {
+        // Clear the index before using it
+        refSketch.clear();
+
         //Count of reads mapped by us
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
