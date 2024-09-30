@@ -658,7 +658,7 @@ void parse_args(int argc,
         }
         map_parameters.index_by_size = index_size;
     } else {
-        map_parameters.index_by_size = 0; // 0 means no subsetting
+        map_parameters.index_by_size = std::numeric_limits<size_t>::max(); // Default to indexing all sequences
     }
 
     if (approx_mapping) {
