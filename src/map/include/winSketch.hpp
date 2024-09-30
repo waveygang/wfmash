@@ -83,7 +83,7 @@ namespace skch
       HF_Map_t hashFreq;
 
       //Keep sequence length, name that appear in the sequence (for printing the mappings later)
-      std::vector< ContigInfo > metadata;
+      std::vector<ContigInfo> metadata;
 
       /*
        * Keep the information of what sequences come from what file#
@@ -92,7 +92,41 @@ namespace skch
        *  file 1 contains a .. b-1 
        *  file 2 contains b .. c-1
        */
-      std::vector< int > sequencesByFileInfo;
+      std::vector<int> sequencesByFileInfo;
+
+      private:
+      /**
+       * @brief     Build metadata for reference sequences
+       * @details   Iterate through ref sequences to get metadata
+       */
+      void buildMetadata()
+      {
+        seqno_t seqCounter = 0;
+
+        for(const auto &fileName : param.refSequences)
+        {
+          seqiter::for_each_seq_in_file(
+              fileName,
+              {},
+              param.target_prefix,
+              [&](const std::string& seq_name,
+                  const std::string& seq) {
+                  // We only need the name and length, not the sequence itself
+                  metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq.length())});
+                  seqCounter++;
+              });
+
+          sequencesByFileInfo.push_back(seqCounter);
+        }
+
+        if (seqCounter == 0)
+        {
+          std::cerr << "[mashmap::skch::Sketch::buildMetadata] ERROR: No sequences indexed!" << std::endl;
+          exit(1);
+        }
+      }
+
+      public:
 
       //Index for fast seed lookup (unordered_map)
       /*
@@ -172,77 +206,59 @@ namespace skch
        */
       void build(bool compute_seeds, const std::unordered_set<seqno_t>& target_ids = {})
       {
-
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
-        // allowed set of targets
-        std::unordered_set<std::string> allowed_target_names;
-        if (!param.target_list.empty()) {
-                std::ifstream filter_list(param.target_list);
-                std::string name;
-                while (getline(filter_list, name)) {
-                        allowed_target_names.insert(name); 
-                }
-        }
-
-        //sequence counter while parsing file
-        seqno_t seqCounter = 0;
-
-        //Create the thread pool 
-        ThreadPool<InputSeqContainer, MI_Type> threadPool( [this](InputSeqContainer* e) {return buildHelper(e);}, param.threads);
-
-        for(const auto &fileName : param.refSequences)
-        {
-
-#ifdef DEBUG
-        std::cerr << "[mashmap::skch::Sketch::build] building minmer index for " << fileName << std::endl;
-#endif
-
-        seqiter::for_each_seq_in_file(
-            fileName,
-            allowed_target_names,
-            param.target_prefix,
-            [&](const std::string& seq_name,
-                const std::string& seq) {
-                // todo: offset_t is an 32-bit integer, which could cause problems
-                offset_t len = seq.length();
-
-                //Save the sequence name
-                metadata.push_back( ContigInfo{seq_name, len} );
-
-                //Is the sequence too short?
-                if(len < param.kmerSize)
-                {
-#ifdef DEBUG
-                    std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer" << std::endl;
-#endif
-                }
-                else
-                {
-                  if (compute_seeds && (target_ids.empty() || target_ids.count(seqCounter) > 0)) {
-                    threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
-                    
-                    //Collect output if available
-                    while ( threadPool.outputAvailable() )
-                        this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
-                  }
-                }
-                seqCounter++;
-            });
-
-          sequencesByFileInfo.push_back(seqCounter);
-        }
-
-        if (seqCounter == 0)
-        {
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: No sequences indexed!" << std::endl;
-          exit(1);
+        if (metadata.empty()) {
+          buildMetadata();
         }
 
         if (compute_seeds) {
+          // allowed set of targets
+          std::unordered_set<std::string> allowed_target_names;
+          if (!param.target_list.empty()) {
+            std::ifstream filter_list(param.target_list);
+            std::string name;
+            while (getline(filter_list, name)) {
+              allowed_target_names.insert(name);
+            }
+          }
+
+          //Create the thread pool 
+          ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
+
+          seqno_t seqCounter = 0;
+          for (const auto& fileName : param.refSequences) {
+#ifdef DEBUG
+            std::cerr << "[mashmap::skch::Sketch::build] building minmer index for " << fileName << std::endl;
+#endif
+
+            seqiter::for_each_seq_in_file_filtered(
+              fileName,
+              {param.target_prefix},
+              allowed_target_names,
+              [&](const std::string& seq_name, const std::string& seq) {
+                if (target_ids.empty() || target_ids.count(seqCounter) > 0) {
+                  if (seq.length() >= param.kmerSize) {
+                    threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
+
+                    //Collect output if available
+                    while (threadPool.outputAvailable())
+                      this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                  }
+#ifdef DEBUG
+                  else {
+                    std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer" << std::endl;
+                  }
+#endif
+                }
+                seqCounter++;
+              });
+          }
+
           //Collect remaining output objects
-          while ( threadPool.running() )
+          while (threadPool.running())
             this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+
           std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
           std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
         }
@@ -252,10 +268,9 @@ namespace skch
 
         if (this->minmerIndex.size() == 0)
         {
-            std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the segment length are not indexed" << std::endl;
-            exit(1);
+          std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the segment length are not indexed" << std::endl;
+          exit(1);
         }
-
       }
 
       /**
