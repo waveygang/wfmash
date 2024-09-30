@@ -113,7 +113,7 @@ namespace skch
       skch::Parameters param;
 
       //reference sketch
-      skch::Sketch refSketch;
+      skch::Sketch* refSketch;
 
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
@@ -184,13 +184,12 @@ namespace skch
        * @param[in] refSketch   reference sketch
        * @param[in] f           optional user defined custom function to post process the reported mapping results
        */
-      Map(skch::Parameters p, skch::Sketch refsketch,
+      Map(skch::Parameters p,
           PostProcessResultsFn_t f = nullptr) :
         param(std::move(p)),
-        refSketch(std::move(refsketch)),
+        //refSketch(std::move(refsketch)),
         processMappingResults(f),
-        sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        refIdGroup(refsketch.metadata.size(), 0)  // Initialize with 0
+        sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1)
     {
       if (p.stage1_topANI_filter) {
         this->setProbs();
@@ -209,19 +208,19 @@ namespace skch
       // Sets the groups of reference contigs based on prefix
       void setRefGroups()
       {
-        if (this->refSketch.metadata.empty()) {
+        if (this->refSketch->metadata.empty()) {
           return;  // Nothing to do if metadata is empty
         }
 
         int group = 0;
         int start_idx = 0;
         int idx = 0;
-        while (start_idx < this->refSketch.metadata.size())
+        while (start_idx < this->refSketch->metadata.size())
         {
-          const auto currPrefix = prefix(this->refSketch.metadata[start_idx].name, param.prefix_delim);
+          const auto currPrefix = prefix(this->refSketch->metadata[start_idx].name, param.prefix_delim);
           idx = start_idx;
-          while (idx < this->refSketch.metadata.size()
-              && currPrefix == prefix(this->refSketch.metadata[idx].name, param.prefix_delim))
+          while (idx < this->refSketch->metadata.size()
+              && currPrefix == prefix(this->refSketch->metadata[idx].name, param.prefix_delim))
           {
             if (idx < this->refIdGroup.size()) {
               this->refIdGroup[idx] = group;
@@ -241,9 +240,9 @@ namespace skch
       int getRefGroup(const std::string& seqName)
       {
         const auto queryPrefix = prefix(seqName, param.prefix_delim);
-        for (int i = 0; i < this->refSketch.metadata.size(); i++)
+        for (int i = 0; i < this->refSketch->metadata.size(); i++)
         {
-          const auto currPrefix = prefix(this->refSketch.metadata[i].name, param.prefix_delim);
+          const auto currPrefix = prefix(this->refSketch->metadata[i].name, param.prefix_delim);
           if (queryPrefix == currPrefix)
           {
             return this->refIdGroup[i];
@@ -428,7 +427,7 @@ namespace skch
       void mapQuery()
       {
         // Clear the index before using it
-        refSketch.clear();
+        //refSketch->clear();
 
         //Count of reads mapped by us
         //Some reads are dropped because of short length
@@ -504,14 +503,15 @@ namespace skch
         uint64_t current_subset_size = 0;
         std::vector<seqno_t> current_subset;
 
-        for (seqno_t i = 0; i < refSketch.metadata.size(); ++i) {
-            if (!param.target_prefix.empty()
-                && (refSketch.metadata[i].name.substr(0, param.target_prefix.size())
+        for (seqno_t i = 0; i < refSketch->metadata.size(); ++i) {
+            if (param.target_prefix.empty()
+                || !param.target_prefix.empty()
+                && (refSketch->metadata[i].name.substr(0, param.target_prefix.size())
                     == param.target_prefix)) {
                 current_subset.push_back(i);
-                current_subset_size += refSketch.metadata[i].len;
+                current_subset_size += refSketch->metadata[i].len;
 
-                if (current_subset_size >= param.index_by_size || i == refSketch.metadata.size() - 1) {
+                if (current_subset_size >= param.index_by_size || i == refSketch->metadata.size() - 1) {
                     if (!current_subset.empty()) {
                         target_subsets.push_back(current_subset);
                     }
@@ -530,12 +530,7 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            skch::Sketch subsetSketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
-
-            // Temporarily replace the main refSketch with the subset sketch
-            auto originalRefSketch = refSketch;
-            refSketch.clear();
-            refSketch = subsetSketch;
+            refSketch = new skch::Sketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
             // Launch reader thread
             std::thread reader([&]() {
@@ -589,8 +584,8 @@ namespace skch
             }
 
             // Restore the original refSketch
-            refSketch.clear();
-            refSketch = originalRefSketch;
+            delete refSketch;
+            refSketch = nullptr;
         }
 
         // Perform plane sweep filtering
@@ -739,7 +734,7 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, this->refSketch, n_mappings, param.dropRand, param.overlap_threshold);
+                skch::Filter::ref::filterMappings(tmpMappings, *this->refSketch, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
@@ -1004,7 +999,7 @@ namespace skch
 
           // TODO remove them from the original sketch instead of removing for each read
           auto new_end = std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(), [&](auto& mi) {
-            return refSketch.isFreqSeed(mi.hash);
+            return refSketch->isFreqSeed(mi.hash);
           });
           Q.minmerTableQuery.erase(new_end, Q.minmerTableQuery.end());
 
@@ -1047,9 +1042,9 @@ namespace skch
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
-            const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
+            const auto seedFind = refSketch->minmerPosLookupIndex.find(it->hash);
 
-            if(seedFind != refSketch.minmerPosLookupIndex.end())
+            if(seedFind != refSketch->minmerPosLookupIndex.end())
             {
               pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
             }
@@ -1059,7 +1054,7 @@ namespace skch
           while(!pq.empty())
           {
             const IP_const_iterator ip_it = pq.front().it;
-            const auto& ref = this->refSketch.metadata[ip_it->seqId];
+            const auto& ref = this->refSketch->metadata[ip_it->seqId];
             bool skip_mapping = false;
             if (param.skip_self && Q.seqName == ref.name) skip_mapping = true;
             if (param.skip_prefix && this->refIdGroup[ip_it->seqId] == Q.refGroup) skip_mapping = true;
@@ -1391,7 +1386,7 @@ namespace skch
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
               // and if we are self-mapping, the query is shorter than the target
-              const auto& ref = this->refSketch.metadata[l2.seqId];
+              const auto& ref = this->refSketch->metadata[l2.seqId];
               if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity)
                   || nucIdentity >= param.percentageIdentity)
               {
@@ -1455,7 +1450,7 @@ namespace skch
           //std::cerr << "INFO, skch::Map:computeL2MappedRegions, read id " << Q.seqName << "_" << Q.startPos << std::endl; 
 #endif
            
-          auto& minmerIndex = refSketch.minmerIndex;
+          auto& minmerIndex = refSketch->minmerIndex;
 
           //candidateLocus.rangeStartPos -= param.segLength;
           //candidateLocus.rangeEndPos += param.segLength;
@@ -1991,16 +1986,16 @@ namespace skch
             {
               if(e.refStartPos < 0)
                 e.refStartPos = 0;
-              if(e.refStartPos >= this->refSketch.metadata[e.refSeqId].len)
-                e.refStartPos = this->refSketch.metadata[e.refSeqId].len - 1;
+              if(e.refStartPos >= this->refSketch->metadata[e.refSeqId].len)
+                e.refStartPos = this->refSketch->metadata[e.refSeqId].len - 1;
             }
 
             //reference end pos
             {
               if(e.refEndPos < e.refStartPos)
                 e.refEndPos = e.refStartPos;
-              if(e.refEndPos >= this->refSketch.metadata[e.refSeqId].len)
-                e.refEndPos = this->refSketch.metadata[e.refSeqId].len - 1;
+              if(e.refEndPos >= this->refSketch->metadata[e.refSeqId].len)
+                e.refEndPos = this->refSketch->metadata[e.refSeqId].len - 1;
             }
 
             //query start pos
@@ -2033,7 +2028,7 @@ namespace skch
         //Print the results
         for(auto &e : readMappings)
         {
-          assert(e.refSeqId < this->refSketch.metadata.size());
+          assert(e.refSeqId < this->refSketch->metadata.size());
 
           float fakeMapQ = e.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(e.nucIdentity)));
           std::string sep = param.legacy_output ? " " : "\t";
@@ -2043,8 +2038,8 @@ namespace skch
                    << sep << e.queryStartPos
                    << sep << e.queryEndPos - (param.legacy_output ? 1 : 0)
                    << sep << (e.strand == strnd::FWD ? "+" : "-")
-                   << sep << this->refSketch.metadata[e.refSeqId].name
-                   << sep << this->refSketch.metadata[e.refSeqId].len
+                   << sep << this->refSketch->metadata[e.refSeqId].name
+                   << sep << this->refSketch->metadata[e.refSeqId].len
                    << sep << e.refStartPos
                    << sep << e.refEndPos - (param.legacy_output ? 1 : 0);
 
