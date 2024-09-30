@@ -83,6 +83,7 @@ struct Parameters
 
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //
+    int64_t index_by_size;                            // Target total size of sequences for each index subset
 };
 
 
