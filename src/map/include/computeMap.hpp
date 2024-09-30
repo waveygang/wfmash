@@ -491,17 +491,9 @@ namespace skch
         std::vector<seqno_t> current_subset;
 
         for (seqno_t i = 0; i < refSketch.metadata.size(); ++i) {
-            bool include_target = true;
-            if (!param.target_prefix.empty()) {
-                include_target = false;
-                for (const auto& prefix : param.target_prefix) {
-                    if (refSketch.metadata[i].name.substr(0, prefix.size()) == prefix) {
-                        include_target = true;
-                        break;
-                    }
-                }
-            }
-            if (include_target) {
+            if (!param.target_prefix.empty()
+                && (refSketch.metadata[i].name.substr(0, param.target_prefix.size())
+                    == param.target_prefix)) {
                 current_subset.push_back(i);
                 current_subset_size += refSketch.metadata[i].len;
 
