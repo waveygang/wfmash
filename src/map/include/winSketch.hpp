@@ -160,38 +160,45 @@ namespace skch
        * @brief   constructor
        *          also builds, indexes the minmer table
        */
-      Sketch(skch::Parameters p, const std::unordered_set<seqno_t>& target_ids = {}) 
-        :
-          param(std::move(p)) {
-            std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
-            if (param.indexFilename.empty() 
-                || !stdfs::exists(param.indexFilename)
-                || param.overwrite_index)
-            {
-              this->build(true, target_ids);
-              this->computeFreqHist();
-              this->computeFreqSeedSet();
-              this->dropFreqSeedSet();
-              this->hashFreq.clear();
-              if (!param.indexFilename.empty())
-              {
-                this->writeIndex();
-              }
-              if (param.create_index_only)
-              {
-                std::cerr << "[mashmap::skch::Sketch] Index created successfully. Exiting." << std::endl;
-                exit(0);
-              }
-            } else {
-              this->build(false);
-              this->readIndex();
-            }
-            std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
-            std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-            std::cerr << "[mashmap::skch::Sketch] Metadata size = " << metadata.size() << std::endl;
-            isInitialized = true;
-            std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
+      Sketch() {}
+
+      Sketch(skch::Parameters p) : param(std::move(p)) {}
+
+      void initialize(const std::unordered_set<seqno_t>& target_ids = {}) {
+        std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
+        if (param.indexFilename.empty() 
+            || !stdfs::exists(param.indexFilename)
+            || param.overwrite_index)
+        {
+          this->build(true, target_ids);
+          this->computeFreqHist();
+          this->computeFreqSeedSet();
+          this->dropFreqSeedSet();
+          this->hashFreq.clear();
+          if (!param.indexFilename.empty())
+          {
+            this->writeIndex();
           }
+          if (param.create_index_only)
+          {
+            std::cerr << "[mashmap::skch::Sketch] Index created successfully. Exiting." << std::endl;
+            exit(0);
+          }
+        } else {
+          this->build(false);
+          this->readIndex();
+        }
+        std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] Metadata size = " << metadata.size() << std::endl;
+        isInitialized = true;
+        std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
+      }
+
+      void copyMetadataFrom(const Sketch& other) {
+        this->metadata = other.metadata;
+        this->sequencesByFileInfo = other.sequencesByFileInfo;
+      }
 
       private:
 

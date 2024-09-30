@@ -440,6 +440,7 @@ namespace skch
       {
         // Build metadata once at the beginning
         skch::Sketch fullRefSketch(param);
+        fullRefSketch.initialize();
         
         //Count of reads mapped by us
         //Some reads are dropped because of short length
@@ -542,10 +543,10 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
-            
-            // Side-load the metadata from the full sketch
-            refSketch->metadata = fullRefSketch.metadata;
+            refSketch = new skch::Sketch();
+            refSketch->param = param;
+            refSketch->copyMetadataFrom(fullRefSketch);
+            refSketch->initialize(std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
             // Launch reader thread
             std::thread reader([&]() {
