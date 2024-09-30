@@ -115,6 +115,10 @@ namespace skch
       //reference sketch
       skch::Sketch* refSketch;
 
+      //refmetadata
+      std::vector<ContigInfo> sketch_metadata;
+      std::vector<int> sketch_sequencesByFileInfo;
+
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
 
@@ -187,49 +191,48 @@ namespace skch
       Map(skch::Parameters p,
           PostProcessResultsFn_t f = nullptr) :
         param(std::move(p)),
-        //refSketch(std::move(refsketch)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1)
-    {
-      if (p.stage1_topANI_filter) {
-        this->setProbs();
-      }
-      if (p.skip_prefix)
-      {
-        this->setRefGroups();
-      }
-
-      this->mapQuery();
-
-    }
+          {
+              // Build metadata once at the beginning
+              {
+                  skch::Sketch fullRefSketch(param);
+                  fullRefSketch.buildMetadata();
+                  this->sketch_metadata = fullRefSketch.metadata;
+                  this->sketch_sequencesByFileInfo = fullRefSketch.sequencesByFileInfo;
+              }
+              if (p.stage1_topANI_filter) {
+                  this->setProbs();
+              }
+              if (p.skip_prefix)
+              {
+                  this->setRefGroups();
+              }
+              this->mapQuery();
+          }
 
     private:
 
       // Sets the groups of reference contigs based on prefix
       void setRefGroups()
       {
-        if (!this->refSketch->isInitialized) {
-          std::cerr << "ERROR: Sketch is not fully initialized in setRefGroups()" << std::endl;
-          return;
-        }
-
-        if (this->refSketch->metadata.empty()) {
+        if (this->sketch_metadata.empty()) {
           std::cerr << "ERROR: metadata vector is empty in setRefGroups()" << std::endl;
           return;
         }
 
         std::cerr << "[mashmap::skch::Map::setRefGroups] Starting to set reference groups..." << std::endl;
-        std::cerr << "[mashmap::skch::Map::setRefGroups] Metadata size: " << this->refSketch->metadata.size() << std::endl;
+        std::cerr << "[mashmap::skch::Map::setRefGroups] Metadata size: " << this->sketch_metadata.size() << std::endl;
 
         int group = 0;
         int start_idx = 0;
         int idx = 0;
-        while (start_idx < this->refSketch->metadata.size())
+        while (start_idx < this->sketch_metadata.size())
         {
-          const auto currPrefix = prefix(this->refSketch->metadata[start_idx].name, param.prefix_delim);
+          const auto currPrefix = prefix(this->sketch_metadata[start_idx].name, param.prefix_delim);
           idx = start_idx;
-          while (idx < this->refSketch->metadata.size()
-              && currPrefix == prefix(this->refSketch->metadata[idx].name, param.prefix_delim))
+          while (idx < this->sketch_metadata.size()
+              && currPrefix == prefix(this->sketch_metadata[idx].name, param.prefix_delim))
           {
             if (idx < this->refIdGroup.size()) {
               this->refIdGroup[idx] = group;
@@ -249,12 +252,14 @@ namespace skch
       }
 
       // Gets the ref group of a query based on the prefix
+
       int getRefGroup(const std::string& seqName)
       {
         const auto queryPrefix = prefix(seqName, param.prefix_delim);
-        for (int i = 0; i < this->refSketch->metadata.size(); i++)
+        for (int i = 0; i < this->sketch_metadata.size(); i++)
         {
-          const auto currPrefix = prefix(this->refSketch->metadata[i].name, param.prefix_delim);
+          std::cerr << "sketch_metadata[i].name: " << this->sketch_metadata[i].name << std::endl;
+          const auto currPrefix = prefix(this->sketch_metadata[i].name, param.prefix_delim);
           if (queryPrefix == currPrefix)
           {
             return this->refIdGroup[i];
@@ -438,10 +443,6 @@ namespace skch
 
       void mapQuery()
       {
-        // Build metadata once at the beginning
-        skch::Sketch fullRefSketch(param);
-        fullRefSketch.initialize();
-        
         //Count of reads mapped by us
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
@@ -516,15 +517,15 @@ namespace skch
         uint64_t current_subset_size = 0;
         std::vector<seqno_t> current_subset;
 
-        for (seqno_t i = 0; i < fullRefSketch.metadata.size(); ++i) {
+        for (seqno_t i = 0; i < this->sketch_metadata.size(); ++i) {
             if (param.target_prefix.empty()
                 || !param.target_prefix.empty()
-                && (fullRefSketch.metadata[i].name.substr(0, param.target_prefix.size())
+                && (this->sketch_metadata[i].name.substr(0, param.target_prefix.size())
                     == param.target_prefix)) {
                 current_subset.push_back(i);
-                current_subset_size += fullRefSketch.metadata[i].len;
+                current_subset_size += this->sketch_metadata[i].len;
 
-                if (current_subset_size >= param.index_by_size || i == fullRefSketch.metadata.size() - 1) {
+                if (current_subset_size >= param.index_by_size || i == this->sketch_metadata.size() - 1) {
                     if (!current_subset.empty()) {
                         target_subsets.push_back(current_subset);
                     }
@@ -544,8 +545,9 @@ namespace skch
             }
             // Build index for the current subset
             refSketch = new skch::Sketch(param);
-            refSketch->copyMetadataFrom(fullRefSketch);
-            refSketch->initialize(std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
+            refSketch->metadata = this->sketch_metadata;
+            refSketch->sequencesByFileInfo = this->sketch_sequencesByFileInfo;
+            refSketch->setup(std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
             // Launch reader thread
             std::thread reader([&]() {
