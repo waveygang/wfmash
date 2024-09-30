@@ -190,7 +190,7 @@ namespace skch
         refSketch(std::move(refsketch)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        refIdGroup(refsketch.metadata.size())
+        refIdGroup(refsketch.metadata.size(), 0)  // Initialize with 0
     {
       if (p.stage1_topANI_filter) {
         this->setProbs();
@@ -209,6 +209,10 @@ namespace skch
       // Sets the groups of reference contigs based on prefix
       void setRefGroups()
       {
+        if (this->refSketch.metadata.empty()) {
+          return;  // Nothing to do if metadata is empty
+        }
+
         int group = 0;
         int start_idx = 0;
         int idx = 0;
@@ -219,7 +223,14 @@ namespace skch
           while (idx < this->refSketch.metadata.size()
               && currPrefix == prefix(this->refSketch.metadata[idx].name, param.prefix_delim))
           {
-            this->refIdGroup[idx++] = group;
+            if (idx < this->refIdGroup.size()) {
+              this->refIdGroup[idx] = group;
+            } else {
+              // Handle the case where refIdGroup is smaller than expected
+              std::cerr << "Warning: refIdGroup size mismatch in setRefGroups()" << std::endl;
+              return;
+            }
+            idx++;
           }
           group++;
           start_idx = idx;
