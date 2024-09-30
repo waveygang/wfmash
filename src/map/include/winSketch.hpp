@@ -123,14 +123,14 @@ namespace skch
        * @brief   constructor
        *          also builds, indexes the minmer table
        */
-      Sketch(const skch::Parameters &p) 
+      Sketch(const skch::Parameters &p, const std::unordered_set<seqno_t>& target_ids = {}) 
         :
           param(p) {
             if (param.indexFilename.empty() 
                 || !stdfs::exists(param.indexFilename)
                 || param.overwrite_index)
             {
-              this->build(true);
+              this->build(true, target_ids);
               this->computeFreqHist();
               this->computeFreqSeedSet();
               this->dropFreqSeedSet();
@@ -160,10 +160,11 @@ namespace skch
        * @details   Iterate through ref sequences to get metadata and
        *            optionally compute and save minmers from the reference sequence(s)
        *            assuming a fixed window size
+       * @param     compute_seeds   Whether to compute seeds or just collect metadata
+       * @param     target_ids      Set of target sequence IDs to sketch over
        */
-      void build(bool compute_seeds)
+      void build(bool compute_seeds, const std::unordered_set<seqno_t>& target_ids = {})
       {
-
         // allowed set of targets
         std::unordered_set<std::string> allowed_target_names;
         if (!param.target_list.empty()) {
@@ -173,7 +174,6 @@ namespace skch
                         allowed_target_names.insert(name); 
                 }
         }
-		
 
         //sequence counter while parsing file
         seqno_t seqCounter = 0;
@@ -209,7 +209,7 @@ namespace skch
                 }
                 else
                 {
-                  if (compute_seeds) {
+                  if (compute_seeds && (target_ids.empty() || target_ids.count(seqCounter) > 0)) {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
                     
                     //Collect output if available
