@@ -70,6 +70,9 @@ namespace skch
       //Make the default constructor private, non-accessible
       Sketch();
 
+      //Flag to indicate if the Sketch is fully initialized
+      bool isInitialized = false;
+
       public:
 
       using MI_Type = std::vector< MinmerInfo >;
