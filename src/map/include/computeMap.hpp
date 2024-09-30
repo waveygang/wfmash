@@ -194,13 +194,9 @@ namespace skch
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1)
           {
-              // Build metadata once at the beginning
-              {
-                  skch::Sketch fullRefSketch(param);
-                  fullRefSketch.buildMetadata();
-                  this->sketch_metadata = fullRefSketch.metadata;
-                  this->sketch_sequencesByFileInfo = fullRefSketch.sequencesByFileInfo;
-              }
+              // Build metadata once at the beginning using indexed FASTA
+              this->buildMetadataFromIndex();
+              
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
@@ -210,6 +206,33 @@ namespace skch
               }
               this->mapQuery();
           }
+
+      private:
+      void buildMetadataFromIndex() {
+          for (const auto& fileName : param.refSequences) {
+              faidx_t* fai = fai_load(fileName.c_str());
+              if (fai == nullptr) {
+                  std::cerr << "Error: Failed to load FASTA index for file " << fileName << std::endl;
+                  exit(1);
+              }
+
+              int nseq = faidx_nseq(fai);
+              for (int i = 0; i < nseq; ++i) {
+                  const char* seq_name = faidx_iseq(fai, i);
+                  int seq_len = faidx_seq_len(fai, seq_name);
+                  if (seq_len == -1) {
+                      std::cerr << "Error: Failed to get length for sequence " << seq_name << std::endl;
+                      continue;
+                  }
+                  this->sketch_metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq_len)});
+              }
+
+              this->sketch_sequencesByFileInfo.push_back(this->sketch_metadata.size());
+              fai_destroy(fai);
+          }
+      }
+
+      public:
 
     private:
 
@@ -225,27 +248,16 @@ namespace skch
         std::cerr << "[mashmap::skch::Map::setRefGroups] Metadata size: " << this->sketch_metadata.size() << std::endl;
 
         int group = 0;
-        int start_idx = 0;
-        int idx = 0;
-        while (start_idx < this->sketch_metadata.size())
-        {
-          const auto currPrefix = prefix(this->sketch_metadata[start_idx].name, param.prefix_delim);
-          idx = start_idx;
-          while (idx < this->sketch_metadata.size()
-              && currPrefix == prefix(this->sketch_metadata[idx].name, param.prefix_delim))
-          {
-            if (idx < this->refIdGroup.size()) {
-              this->refIdGroup[idx] = group;
-            } else {
-              // Handle the case where refIdGroup is smaller than expected
-              std::cerr << "ERROR: refIdGroup size mismatch in setRefGroups()" << std::endl;
-              std::cerr << "refIdGroup size: " << this->refIdGroup.size() << ", current index: " << idx << std::endl;
-              return;
-            }
-            idx++;
+        this->refIdGroup.resize(this->sketch_metadata.size());
+
+        for (size_t idx = 0; idx < this->sketch_metadata.size(); ++idx) {
+          const auto currPrefix = prefix(this->sketch_metadata[idx].name, param.prefix_delim);
+          
+          if (idx == 0 || currPrefix != prefix(this->sketch_metadata[idx-1].name, param.prefix_delim)) {
+            group++;
           }
-          group++;
-          start_idx = idx;
+          
+          this->refIdGroup[idx] = group;
         }
 
         std::cerr << "[mashmap::skch::Map::setRefGroups] Finished setting reference groups. Total groups: " << group << std::endl;
