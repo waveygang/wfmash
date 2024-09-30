@@ -438,9 +438,9 @@ namespace skch
 
       void mapQuery()
       {
-        // Clear the index before using it
-        //refSketch->clear();
-
+        // Build metadata once at the beginning
+        skch::Sketch fullRefSketch(param);
+        
         //Count of reads mapped by us
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
@@ -515,15 +515,15 @@ namespace skch
         uint64_t current_subset_size = 0;
         std::vector<seqno_t> current_subset;
 
-        for (seqno_t i = 0; i < refSketch->metadata.size(); ++i) {
+        for (seqno_t i = 0; i < fullRefSketch.metadata.size(); ++i) {
             if (param.target_prefix.empty()
                 || !param.target_prefix.empty()
-                && (refSketch->metadata[i].name.substr(0, param.target_prefix.size())
+                && (fullRefSketch.metadata[i].name.substr(0, param.target_prefix.size())
                     == param.target_prefix)) {
                 current_subset.push_back(i);
-                current_subset_size += refSketch->metadata[i].len;
+                current_subset_size += fullRefSketch.metadata[i].len;
 
-                if (current_subset_size >= param.index_by_size || i == refSketch->metadata.size() - 1) {
+                if (current_subset_size >= param.index_by_size || i == fullRefSketch.metadata.size() - 1) {
                     if (!current_subset.empty()) {
                         target_subsets.push_back(current_subset);
                     }
@@ -543,6 +543,9 @@ namespace skch
             }
             // Build index for the current subset
             refSketch = new skch::Sketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
+            
+            // Side-load the metadata from the full sketch
+            refSketch->metadata = fullRefSketch.metadata;
 
             // Launch reader thread
             std::thread reader([&]() {
@@ -595,7 +598,7 @@ namespace skch
                 exit(1);
             }
 
-            // Restore the original refSketch
+            // Clean up the current refSketch
             delete refSketch;
             refSketch = nullptr;
         }
