@@ -423,7 +423,7 @@ namespace skch
         seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
-        MappingResultsVector_t allReadMappings;  //Aggregate mapping results for the complete run
+        std::vector<MappingResultsVector_t> allReadMappings;  //Aggregate mapping results for each query
 
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
@@ -485,100 +485,111 @@ namespace skch
         
         progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
-        // Launch reader thread
-        std::thread reader([&]() {
-            reader_thread(param.querySequences, input_queue, reader_done, progress, seqCounter);
-        });
+        // Create subsets of target sequences
+        std::vector<std::vector<seqno_t>> target_subsets;
+        uint64_t current_subset_size = 0;
+        std::vector<seqno_t> current_subset;
 
-        std::vector<std::thread> fragment_workers;
-        for (int i = 0; i < param.threads; ++i) {
-            fragment_workers.emplace_back([&]() {
-                fragment_thread(fragment_queue, fragments_done);
-            });
-        }
+        for (seqno_t i = 0; i < refSketch.metadata.size(); ++i) {
+            current_subset.push_back(i);
+            current_subset_size += refSketch.metadata[i].len;
 
-        // Launch worker threads
-        std::vector<std::thread> workers;
-        for (int i = 0; i < param.threads; ++i) {
-            workers.emplace_back([&]() {
-                worker_thread(input_queue, fragment_queue, output_queue, progress, reader_done, workers_done);
-            });
-        }
-
-        // Launch writer thread
-        std::thread writer([&]() {
-            writer_thread(output_queue, workers_done, totalReadsMapped, outstrm, progress, allReadMappings);
-        });
-
-        // Wait for all threads to complete
-        reader.join();
-
-        for (auto& worker : workers) {
-            worker.join();
-        }
-        workers_done.store(true);
-        fragments_done.store(true);
-
-        for (auto& worker : fragment_workers) {
-            worker.join();
-        }
-
-        writer.join();
-
-        // Check if the writer queue was empty at the end of the run, if not, something bad has happened
-        if (!output_queue.was_empty()) {
-            std::cerr << "[mashmap::skch::Map::mapQuery] ERROR, writer queue was not empty at the end of the run" << std::endl;
-            exit(1);
-        }
-
-        //Filter over reference axis and report the mappings
-        if (param.filterMode == filter::ONETOONE)
-        {
-          // how many secondary mappings to keep
-          int n_mappings = param.numMappingsForSegment - 1;
-
-          // Group sequences by query prefix, then pass to ref filter
-          auto subrange_begin = allReadMappings.begin();
-          auto subrange_end = allReadMappings.begin();
-          MappingResultsVector_t tmpMappings;
-          MappingResultsVector_t filteredMappings;
-
-          while (subrange_end != allReadMappings.end())
-          {
-            if (param.skip_prefix)
-            {
-              int currGroup = this->getRefGroup(qmetadata[subrange_begin->querySeqId].name);
-              subrange_end = std::find_if_not(subrange_begin, allReadMappings.end(), [this, currGroup] (const auto& allReadMappings_candidate) {
-                  return currGroup == this->getRefGroup(this->qmetadata[allReadMappings_candidate.querySeqId].name);
-              });
+            if (current_subset_size >= param.index_by_size || i == refSketch.metadata.size() - 1) {
+                target_subsets.push_back(current_subset);
+                current_subset.clear();
+                current_subset_size = 0;
             }
-            else
-            {
-              subrange_end = allReadMappings.end();
+        }
+
+        // For each subset of target sequences
+        for (const auto& target_subset : target_subsets) {
+            // Build index for the current subset
+            skch::Sketch subsetSketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
+
+            // Launch reader thread
+            std::thread reader([&]() {
+                reader_thread(param.querySequences, input_queue, reader_done, progress, seqCounter);
+            });
+
+            std::vector<std::thread> fragment_workers;
+            for (int i = 0; i < param.threads; ++i) {
+                fragment_workers.emplace_back([&]() {
+                    fragment_thread(fragment_queue, fragments_done);
+                });
             }
-            tmpMappings.insert(
-                tmpMappings.end(), 
-                std::make_move_iterator(subrange_begin), 
-                std::make_move_iterator(subrange_end));
 
-            // tmpMappings now contains mappings from one group of query sequences to all reference groups
-            // we now run filterByGroup, which filters based on the reference group.
-            filterByGroup(tmpMappings, filteredMappings, n_mappings, true);
-            tmpMappings.clear();
-            subrange_begin = subrange_end;
-          }
-          allReadMappings = std::move(filteredMappings);
+            // Launch worker threads
+            std::vector<std::thread> workers;
+            for (int i = 0; i < param.threads; ++i) {
+                workers.emplace_back([&]() {
+                    worker_thread(input_queue, fragment_queue, output_queue, progress, reader_done, workers_done);
+                });
+            }
 
-          //Re-sort mappings by input order of query sequences
-          //This order may be needed for any post analysis of output
-          std::sort(
-              allReadMappings.begin(), allReadMappings.end(),
-              [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.querySeqId, a.queryStartPos, a.refSeqId, a.refStartPos) 
-                    < std::tie(b.querySeqId, b.queryStartPos, b.refSeqId, b.refStartPos);
-              });
+            // Launch writer thread
+            std::thread writer([&]() {
+                writer_thread(output_queue, workers_done, totalReadsMapped, outstrm, progress, allReadMappings);
+            });
 
-          reportReadMappings(allReadMappings, "", outstrm);
+            // Wait for all threads to complete
+            reader.join();
+
+            for (auto& worker : workers) {
+                worker.join();
+            }
+            workers_done.store(true);
+            fragments_done.store(true);
+
+            for (auto& worker : fragment_workers) {
+                worker.join();
+            }
+
+            writer.join();
+
+            // Reset flags for next iteration
+            reader_done.store(false);
+            workers_done.store(false);
+            fragments_done.store(false);
+
+            // Check if the writer queue was empty at the end of the run, if not, something bad has happened
+            if (!output_queue.was_empty()) {
+                std::cerr << "[mashmap::skch::Map::mapQuery] ERROR, writer queue was not empty at the end of the run" << std::endl;
+                exit(1);
+            }
+        }
+
+        // Perform plane sweep filtering for each query
+        #pragma omp parallel for
+        for (size_t i = 0; i < allReadMappings.size(); ++i) {
+            MappingResultsVector_t filteredMappings;
+            filterByGroup(allReadMappings[i], filteredMappings, param.numMappingsForSegment - 1, false);
+            allReadMappings[i] = std::move(filteredMappings);
+        }
+
+        // If one-to-one mapping is required, perform filtering over target space
+        if (param.filterMode == filter::ONETOONE) {
+            MappingResultsVector_t allMappings;
+            for (const auto& queryMappings : allReadMappings) {
+                allMappings.insert(allMappings.end(), queryMappings.begin(), queryMappings.end());
+            }
+
+            MappingResultsVector_t filteredMappings;
+            filterByGroup(allMappings, filteredMappings, param.numMappingsForSegment - 1, true);
+
+            // Sort the filtered mappings
+            std::sort(
+                filteredMappings.begin(), filteredMappings.end(),
+                [](const MappingResult &a, const MappingResult &b) {
+                    return std::tie(a.querySeqId, a.queryStartPos, a.refSeqId, a.refStartPos) 
+                      < std::tie(b.querySeqId, b.queryStartPos, b.refSeqId, b.refStartPos);
+                });
+
+            reportReadMappings(filteredMappings, "", outstrm);
+        } else {
+            // Report all mappings
+            for (const auto& queryMappings : allReadMappings) {
+                reportReadMappings(queryMappings, "", outstrm);
+            }
         }
 
         progress.finish();
@@ -588,7 +599,6 @@ namespace skch
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
                   << ", total input reads = " << seqCounter
                   << ", total input bp = " << total_seq_length << std::endl;
-
       }
 
       /**
