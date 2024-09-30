@@ -491,18 +491,38 @@ namespace skch
         std::vector<seqno_t> current_subset;
 
         for (seqno_t i = 0; i < refSketch.metadata.size(); ++i) {
-            current_subset.push_back(i);
-            current_subset_size += refSketch.metadata[i].len;
-
-            if (current_subset_size >= param.index_by_size || i == refSketch.metadata.size() - 1) {
-                target_subsets.push_back(current_subset);
-                current_subset.clear();
-                current_subset_size = 0;
+            bool include_target = true;
+            if (!param.target_prefix.empty()) {
+                include_target = false;
+                for (const auto& prefix : param.target_prefix) {
+                    if (refSketch.metadata[i].name.substr(0, prefix.size()) == prefix) {
+                        include_target = true;
+                        break;
+                    }
+                }
             }
+            if (include_target) {
+                current_subset.push_back(i);
+                current_subset_size += refSketch.metadata[i].len;
+
+                if (current_subset_size >= param.index_by_size || i == refSketch.metadata.size() - 1) {
+                    if (!current_subset.empty()) {
+                        target_subsets.push_back(current_subset);
+                    }
+                    current_subset.clear();
+                    current_subset_size = 0;
+                }
+            }
+        }
+        if (!current_subset.empty()) {
+            target_subsets.push_back(current_subset);
         }
 
         // For each subset of target sequences
         for (const auto& target_subset : target_subsets) {
+            if (target_subset.empty()) {
+                continue;  // Skip empty subsets
+            }
             // Build index for the current subset
             skch::Sketch subsetSketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
