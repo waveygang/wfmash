@@ -518,6 +518,10 @@ namespace skch
             // Build index for the current subset
             skch::Sketch subsetSketch(param, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
+            // Temporarily replace the main refSketch with the subset sketch
+            auto originalRefSketch = std::move(refSketch);
+            refSketch = std::move(subsetSketch);
+
             // Launch reader thread
             std::thread reader([&]() {
                 reader_thread(param.querySequences, input_queue, reader_done, progress, seqCounter);
@@ -568,6 +572,9 @@ namespace skch
                 std::cerr << "[mashmap::skch::Map::mapQuery] ERROR, writer queue was not empty at the end of the run" << std::endl;
                 exit(1);
             }
+
+            // Restore the original refSketch
+            refSketch = std::move(originalRefSketch);
         }
 
         // Perform plane sweep filtering
