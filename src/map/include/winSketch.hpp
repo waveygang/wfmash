@@ -165,6 +165,9 @@ namespace skch
        */
       void build(bool compute_seeds, const std::unordered_set<seqno_t>& target_ids = {})
       {
+
+        std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
+
         // allowed set of targets
         std::unordered_set<std::string> allowed_target_names;
         if (!param.target_list.empty()) {
@@ -236,6 +239,16 @@ namespace skch
           std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
           std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
         }
+
+        std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
+        std::cerr << "[mashmap::skch::Sketch::build] time spent computing the reference index: " << timeRefSketch.count() << " sec" << std::endl;
+
+        if (this->minmerIndex.size() == 0)
+        {
+            std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the segment length are not indexed" << std::endl;
+            exit(1);
+        }
+
       }
 
       /**
