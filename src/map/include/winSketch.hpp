@@ -95,9 +95,6 @@ namespace skch
        */
       std::vector<int> sequencesByFileInfo;
 
-      //algorithm parameters
-      skch::Parameters param;
-
       private:
       /**
        * @brief     Build metadata for reference sequences
