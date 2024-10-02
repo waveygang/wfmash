@@ -161,7 +161,14 @@ namespace skch
        * @brief   constructor
        *          also builds, indexes the minmer table
        */
-      Sketch(skch::Parameters p) : param(std::move(p)) {}
+      Sketch(skch::Parameters p,
+             const std::vector<ContigInfo>& metadata,
+             const std::vector<int>& sequencesByFileInfo,
+             const std::unordered_set<seqno_t>& target_subset = {})
+        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo)
+      {
+        initialize(target_subset);
+      }
 
       void initialize(const std::unordered_set<seqno_t>& target_ids = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
