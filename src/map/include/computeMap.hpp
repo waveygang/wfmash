@@ -270,7 +270,6 @@ namespace skch
         const auto queryPrefix = prefix(seqName, param.prefix_delim);
         for (int i = 0; i < this->sketch_metadata.size(); i++)
         {
-          std::cerr << "sketch_metadata[i].name: " << this->sketch_metadata[i].name << std::endl;
           const auto currPrefix = prefix(this->sketch_metadata[i].name, param.prefix_delim);
           if (queryPrefix == currPrefix)
           {
