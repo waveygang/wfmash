@@ -2060,10 +2060,18 @@ namespace skch
       void reportReadMappings(MappingResultsVector_t &readMappings, const std::string &queryName,
           std::ofstream &outstrm)
       {
+        if (this->refSketch == nullptr || this->refSketch->metadata.empty()) {
+          std::cerr << "Error: refSketch or its metadata is invalid." << std::endl;
+          return;
+        }
+
         //Print the results
         for(auto &e : readMappings)
         {
-          assert(e.refSeqId < this->refSketch->metadata.size());
+          if (e.refSeqId >= this->refSketch->metadata.size()) {
+            std::cerr << "Error: Invalid refSeqId " << e.refSeqId << std::endl;
+            continue;
+          }
 
           float fakeMapQ = e.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(e.nucIdentity)));
           std::string sep = param.legacy_output ? " " : "\t";
