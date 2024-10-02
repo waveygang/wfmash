@@ -866,6 +866,43 @@ namespace skch
           }
       }
 
+      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
+          if (param.mergeMappings && param.split) {
+              filterMaximallyMerged(mappings, param);
+          } else {
+              filterNonMergedMappings(mappings, param);
+          }
+
+          // Apply group filtering if necessary
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t filteredMappings;
+              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE);
+              mappings = std::move(filteredMappings);
+          }
+
+          reportReadMappings(mappings, queryName, outstrm);
+      }
+
+      void aggregator_thread(merged_mappings_queue_t& merged_queue,
+                             std::atomic<bool>& workers_done,
+                             std::unordered_map<std::string, MappingResultsVector_t>& aggregatedMappings) {
+          while (true) {
+              QueryMappingOutput* output = nullptr;
+              if (merged_queue.try_pop(output)) {
+                  aggregatedMappings[output->queryName].insert(
+                      aggregatedMappings[output->queryName].end(),
+                      output->results.begin(),
+                      output->results.end()
+                  );
+                  delete output;
+              } else if (workers_done.load() && merged_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
+
       /**
        * @brief                       routine to handle mapModule's output of mappings
        * @param[in] output            mapping output object
@@ -2086,38 +2123,3 @@ namespace skch
 }
 
 #endif
-      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
-          if (param.mergeMappings && param.split) {
-              filterMaximallyMerged(mappings, param);
-          } else {
-              filterNonMergedMappings(mappings, param);
-          }
-
-          // Apply group filtering if necessary
-          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-              MappingResultsVector_t filteredMappings;
-              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE);
-              mappings = std::move(filteredMappings);
-          }
-
-          reportReadMappings(mappings, queryName, outstrm);
-      }
-      void aggregator_thread(merged_mappings_queue_t& merged_queue,
-                             std::atomic<bool>& workers_done,
-                             std::unordered_map<std::string, MappingResultsVector_t>& aggregatedMappings) {
-          while (true) {
-              QueryMappingOutput* output = nullptr;
-              if (merged_queue.try_pop(output)) {
-                  aggregatedMappings[output->queryName].insert(
-                      aggregatedMappings[output->queryName].end(),
-                      output->results.begin(),
-                      output->results.end()
-                  );
-                  delete output;
-              } else if (workers_done.load() && merged_queue.was_empty()) {
-                  break;
-              } else {
-                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
-              }
-          }
-      }
