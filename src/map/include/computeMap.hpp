@@ -399,7 +399,7 @@ namespace skch
 
       void worker_thread(input_atomic_queue_t& input_queue,
                          fragment_atomic_queue_t& fragment_queue,
-                         query_output_atomic_queue_t& output_queue,
+                         merged_mappings_queue_t& merged_queue,
                          progress_meter::ProgressMeter& progress,
                          std::atomic<bool>& reader_done,
                          std::atomic<bool>& workers_done) {
@@ -408,7 +408,7 @@ namespace skch
               if (input_queue.try_pop(input)) {
                   auto output = mapModule(input, fragment_queue);
                   //progress.increment(input->len / 4);
-                  while (!output_queue.try_push(output)) {
+                  while (!merged_queue.try_push(output)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
                   delete input;
@@ -461,11 +461,11 @@ namespace skch
         seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
-        MappingResultsVector_t allReadMappings;  //Aggregate mapping results for all queries
+        std::unordered_map<std::string, MappingResultsVector_t> aggregatedMappings;
 
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
-        query_output_atomic_queue_t output_queue;
+        merged_mappings_queue_t merged_queue;
         fragment_atomic_queue_t fragment_queue;
         std::atomic<bool> reader_done(false);
         std::atomic<bool> workers_done(false);
@@ -573,13 +573,13 @@ namespace skch
             std::vector<std::thread> workers;
             for (int i = 0; i < param.threads; ++i) {
                 workers.emplace_back([&]() {
-                    worker_thread(input_queue, fragment_queue, output_queue, progress, reader_done, workers_done);
+                    worker_thread(input_queue, fragment_queue, merged_queue, progress, reader_done, workers_done);
                 });
             }
 
-            // Launch writer thread
-            std::thread writer([&]() {
-                writer_thread(output_queue, workers_done, totalReadsMapped, outstrm, progress, allReadMappings);
+            // Launch aggregator thread
+            std::thread aggregator([&]() {
+                aggregator_thread(merged_queue, workers_done, aggregatedMappings);
             });
 
             // Wait for all threads to complete
@@ -595,37 +595,23 @@ namespace skch
                 worker.join();
             }
 
-            writer.join();
+            aggregator.join();
 
             // Reset flags for next iteration
             reader_done.store(false);
             workers_done.store(false);
             fragments_done.store(false);
 
-            // Check if the writer queue was empty at the end of the run, if not, something bad has happened
-            if (!output_queue.was_empty()) {
-                std::cerr << "[mashmap::skch::Map::mapQuery] ERROR, writer queue was not empty at the end of the run" << std::endl;
-                exit(1);
-            }
-
             // Clean up the current refSketch
             delete refSketch;
             refSketch = nullptr;
         }
 
-        // Perform plane sweep filtering
-        MappingResultsVector_t filteredMappings;
-        filterByGroup(allReadMappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE);
-
-        // Sort the filtered mappings
-        std::sort(
-            filteredMappings.begin(), filteredMappings.end(),
-            [](const MappingResult &a, const MappingResult &b) {
-                return std::tie(a.querySeqId, a.queryStartPos, a.refSeqId, a.refStartPos) 
-                  < std::tie(b.querySeqId, b.queryStartPos, b.refSeqId, b.refStartPos);
-            });
-
-        reportReadMappings(filteredMappings, "", outstrm);
+        // Process aggregated mappings
+        for (auto& [queryName, mappings] : aggregatedMappings) {
+            processAggregatedMappings(queryName, mappings, outstrm);
+            totalReadsMapped += !mappings.empty();
+        }
 
         progress.finish();
 
@@ -846,21 +832,7 @@ namespace skch
         }
 
         if (param.mergeMappings && param.split) {
-            auto maximallyMergedMappings = mergeMappingsInRange(output->results, param.chain_gap);
-            filterMaximallyMerged(maximallyMergedMappings, param);
-            robin_hood::unordered_set<offset_t> kept_chains;
-            for (auto &mapping : maximallyMergedMappings) {
-                kept_chains.insert(mapping.splitMappingId);
-            }
-            output->results.erase(
-                std::remove_if(output->results.begin(), output->results.end(),
-                               [&kept_chains](const MappingResult &mapping) {
-                                   return !kept_chains.count(mapping.splitMappingId);
-                               }),
-                output->results.end()
-            );
-        } else {
-            filterNonMergedMappings(output->results, param);
+            output->results = mergeMappingsInRange(output->results, param.chain_gap);
         }
 
         mappingBoundarySanityCheck(input, output->results);
@@ -2114,3 +2086,38 @@ namespace skch
 }
 
 #endif
+      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
+          if (param.mergeMappings && param.split) {
+              filterMaximallyMerged(mappings, param);
+          } else {
+              filterNonMergedMappings(mappings, param);
+          }
+
+          // Apply group filtering if necessary
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t filteredMappings;
+              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE);
+              mappings = std::move(filteredMappings);
+          }
+
+          reportReadMappings(mappings, queryName, outstrm);
+      }
+      void aggregator_thread(merged_mappings_queue_t& merged_queue,
+                             std::atomic<bool>& workers_done,
+                             std::unordered_map<std::string, MappingResultsVector_t>& aggregatedMappings) {
+          while (true) {
+              QueryMappingOutput* output = nullptr;
+              if (merged_queue.try_pop(output)) {
+                  aggregatedMappings[output->queryName].insert(
+                      aggregatedMappings[output->queryName].end(),
+                      output->results.begin(),
+                      output->results.end()
+                  );
+                  delete output;
+              } else if (workers_done.load() && merged_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
