@@ -556,10 +556,7 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param);
-            refSketch->metadata = this->sketch_metadata;
-            refSketch->sequencesByFileInfo = this->sketch_sequencesByFileInfo;
-            refSketch->setup(std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
+            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
 
             // Launch reader thread
             std::thread reader([&]() {
