@@ -192,8 +192,6 @@ namespace skch
       {
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
-        buildRefGroups();
-
         if (compute_seeds) {
           // allowed set of targets
           std::unordered_set<std::string> allowed_target_names;
