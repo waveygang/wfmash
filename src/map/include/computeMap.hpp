@@ -1340,8 +1340,66 @@ namespace skch
 
       // helper to get the prefix of a string
       std::string prefix(const std::string& s, const char c) {
-          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find_last_of(c)) << std::endl;
-          return s.substr(0, s.find_last_of(c));
+          size_t pos = s.find_last_of(c);
+          return (pos != std::string::npos) ? s.substr(0, pos) : s;
+      }
+
+      /**
+       * @brief     Build metadata and reference groups for sequences
+       * @details   Read FAI files, sort sequences, and assign groups
+       */
+      void buildRefGroups() {
+          std::vector<std::tuple<std::string, size_t, offset_t>> seqInfoWithIndex;
+          size_t totalSeqs = 0;
+
+          for (const auto& fileName : param.refSequences) {
+              std::string faiName = fileName + ".fai";
+              std::ifstream faiFile(faiName);
+              
+              if (!faiFile.is_open()) {
+                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
+                  exit(1);
+              }
+
+              std::string line;
+              while (std::getline(faiFile, line)) {
+                  std::istringstream iss(line);
+                  std::string seqName;
+                  offset_t seqLength;
+                  iss >> seqName >> seqLength;
+
+                  seqInfoWithIndex.emplace_back(seqName, totalSeqs++, seqLength);
+              }
+          }
+
+          std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
+
+          std::vector<int> refGroups(totalSeqs);
+          this->sketch_metadata.clear();
+          this->sketch_metadata.reserve(totalSeqs);
+          int currentGroup = 0;
+          std::string prevPrefix;
+
+          for (const auto& [seqName, originalIndex, seqLength] : seqInfoWithIndex) {
+              std::string currPrefix = this->prefix(seqName, param.prefix_delim);
+              
+              if (currPrefix != prevPrefix) {
+                  currentGroup++;
+                  prevPrefix = currPrefix;
+              }
+
+              refGroups[originalIndex] = currentGroup;
+              this->sketch_metadata.push_back(ContigInfo{seqName, seqLength});
+          }
+
+          this->refIdGroup.swap(refGroups);
+          this->sketch_sequencesByFileInfo.clear();
+          this->sketch_sequencesByFileInfo.push_back(totalSeqs);
+
+          if (totalSeqs == 0) {
+              std::cerr << "[mashmap::skch::Map::buildRefGroups] ERROR: No sequences indexed!" << std::endl;
+              exit(1);
+          }
       }
 
       /**
