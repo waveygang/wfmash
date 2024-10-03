@@ -209,6 +209,7 @@ namespace skch
           seqno_t seqCounter = 0;
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
+          size_t shortestSeqLength = std::numeric_limits<size_t>::max();
           for (const auto& fileName : param.refSequences) {
             std::cerr << "[mashmap::skch::Sketch::build] Processing file: " << fileName << std::endl;
 
@@ -221,6 +222,8 @@ namespace skch
                   if (seq.length() >= param.kmerSize) {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
                     totalSeqProcessed++;
+                    shortestSeqLength = std::min(shortestSeqLength, seq.length());
+                    std::cerr << "DEBUG: Processing sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
 
                     //Collect output if available
                     while (threadPool.outputAvailable())
@@ -235,6 +238,7 @@ namespace skch
                 seqCounter++;
               });
           }
+          std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects
           while (threadPool.running())
