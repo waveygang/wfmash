@@ -207,10 +207,10 @@ namespace skch
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
 
           seqno_t seqCounter = 0;
+          size_t totalSeqProcessed = 0;
+          size_t totalSeqSkipped = 0;
           for (const auto& fileName : param.refSequences) {
-#ifdef DEBUG
-            std::cerr << "[mashmap::skch::Sketch::build] building minmer index for " << fileName << std::endl;
-#endif
+            std::cerr << "[mashmap::skch::Sketch::build] Processing file: " << fileName << std::endl;
 
             seqiter::for_each_seq_in_file_filtered(
               fileName,
@@ -220,16 +220,17 @@ namespace skch
                 if (target_ids.empty() || target_ids.count(seqCounter) > 0) {
                   if (seq.length() >= param.kmerSize) {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
+                    totalSeqProcessed++;
 
                     //Collect output if available
                     while (threadPool.outputAvailable())
                       this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                  } else {
+                    totalSeqSkipped++;
+                    std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
                   }
-#ifdef DEBUG
-                  else {
-                    std::cerr << "WARNING, skch::Sketch::build, found an unusually short sequence relative to kmer" << std::endl;
-                  }
-#endif
+                } else {
+                  totalSeqSkipped++;
                 }
                 seqCounter++;
               });
@@ -239,6 +240,8 @@ namespace skch
           while (threadPool.running())
             this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
 
+          std::cerr << "[mashmap::skch::Sketch::build] Total sequences processed: " << totalSeqProcessed << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] Total sequences skipped: " << totalSeqSkipped << std::endl;
           std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
           std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
         }
