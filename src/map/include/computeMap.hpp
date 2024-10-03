@@ -237,48 +237,21 @@ namespace skch
 
     private:
 
-      // Sets the groups of reference contigs based on prefix
-      void setRefGroups()
-      {
-        if (this->sketch_metadata.empty()) {
-          std::cerr << "ERROR: metadata vector is empty in setRefGroups()" << std::endl;
-          return;
-        }
-
-        std::cerr << "[mashmap::skch::Map::setRefGroups] Starting to set reference groups..." << std::endl;
-        std::cerr << "[mashmap::skch::Map::setRefGroups] Metadata size: " << this->sketch_metadata.size() << std::endl;
-
-        int group = 0;
-        this->refIdGroup.resize(this->sketch_metadata.size());
-
-        for (size_t idx = 0; idx < this->sketch_metadata.size(); ++idx) {
-          const auto currPrefix = prefix(this->sketch_metadata[idx].name, param.prefix_delim);
-          
-          if (idx == 0 || currPrefix != prefix(this->sketch_metadata[idx-1].name, param.prefix_delim)) {
-            group++;
+      // Gets the ref group of a query based on the prefix
+      int getRefGroup(const std::string& seqName) {
+          auto it = std::find_if(metadata.begin(), metadata.end(),
+                                 [&seqName](const ContigInfo& info) { return info.name == seqName; });
+          if (it != metadata.end()) {
+              size_t index = std::distance(metadata.begin(), it);
+              return refIdGroup[index];
           }
-          
-          this->refIdGroup[idx] = group;
-        }
-
-        std::cerr << "[mashmap::skch::Map::setRefGroups] Finished setting reference groups. Total groups: " << group << std::endl;
+          return -1; // Not found
       }
 
-      // Gets the ref group of a query based on the prefix
-
-      int getRefGroup(const std::string& seqName)
-      {
-        const auto queryPrefix = prefix(seqName, param.prefix_delim);
-        for (int i = 0; i < this->sketch_metadata.size(); i++)
-        {
-          const auto currPrefix = prefix(this->sketch_metadata[i].name, param.prefix_delim);
-          if (queryPrefix == currPrefix)
-          {
-            return this->refIdGroup[i];
-          }
-        }
-        // Doesn't belong to any ref group
-        return -1;
+      // Helper function to get the prefix of a string
+      std::string prefix(const std::string& s, const char c) {
+          size_t pos = s.find_last_of(c);
+          return (pos != std::string::npos) ? s.substr(0, pos) : s;
       }
       void setProbs() 
       {
