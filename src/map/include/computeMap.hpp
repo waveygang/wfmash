@@ -1338,12 +1338,6 @@ namespace skch
         }
 
 
-      // helper to get the prefix of a string
-      std::string prefix(const std::string& s, const char c) {
-          size_t pos = s.find_last_of(c);
-          return (pos != std::string::npos) ? s.substr(0, pos) : s;
-      }
-
       /**
        * @brief     Build metadata and reference groups for sequences
        * @details   Read FAI files, sort sequences, and assign groups
