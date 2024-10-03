@@ -133,7 +133,7 @@ namespace skch
           std::string prevPrefix;
 
           for (const auto& [seqName, originalIndex, seqLength] : seqInfoWithIndex) {
-              std::string currPrefix = prefix(seqName, param.prefix_delim);
+              std::string currPrefix = this->prefix(seqName, param.prefix_delim);
               
               if (currPrefix != prevPrefix) {
                   currentGroup++;
@@ -144,7 +144,7 @@ namespace skch
               this->metadata.push_back(ContigInfo{seqName, seqLength});
           }
 
-          this->refIdGroup = std::move(refGroups);
+          this->refIdGroup.swap(refGroups);
           this->sequencesByFileInfo.clear();
           this->sequencesByFileInfo.push_back(totalSeqs);
 
@@ -683,3 +683,10 @@ namespace skch
 } //End of namespace skch
 
 #endif
+      std::vector<int> refIdGroup;
+
+      // Helper function to get the prefix of a string
+      std::string prefix(const std::string& s, const char c) {
+          size_t pos = s.find_last_of(c);
+          return (pos != std::string::npos) ? s.substr(0, pos) : s;
+      }

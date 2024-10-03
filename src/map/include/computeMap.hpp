@@ -203,7 +203,7 @@ namespace skch
               }
               if (p.skip_prefix)
               {
-                  this->setRefGroups();
+                  this->buildRefGroups();
               }
               this->mapQuery();
           }
@@ -239,7 +239,7 @@ namespace skch
 
       // Gets the ref group of a query based on the prefix
       int getRefGroup(const std::string& seqName) {
-          auto it = std::find_if(metadata.begin(), metadata.end(),
+          auto it = std::find_if(this->sketch_metadata.begin(), this->sketch_metadata.end(),
                                  [&seqName](const ContigInfo& info) { return info.name == seqName; });
           if (it != metadata.end()) {
               size_t index = std::distance(metadata.begin(), it);
@@ -1344,7 +1344,7 @@ namespace skch
 
 
       // helper to get the prefix of a string
-      const std::string prefix(const std::string& s, const char c) {
+      std::string prefix(const std::string& s, const char c) {
           //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find_last_of(c)) << std::endl;
           return s.substr(0, s.find_last_of(c));
       }
