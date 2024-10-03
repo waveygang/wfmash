@@ -97,34 +97,61 @@ namespace skch
 
       private:
       /**
-       * @brief     Build metadata for reference sequences
-       * @details   Iterate through ref sequences to get metadata
+       * @brief     Build metadata and reference groups for sequences
+       * @details   Read FAI files, sort sequences, and assign groups
        */
-      void buildMetadata()
-      {
-        seqno_t seqCounter = 0;
+      void buildRefGroups() {
+          std::vector<std::tuple<std::string, size_t, offset_t>> seqInfoWithIndex;
+          size_t totalSeqs = 0;
 
-        for(const auto &fileName : param.refSequences)
-        {
-          seqiter::for_each_seq_in_file(
-              fileName,
-              {},
-              param.target_prefix,
-              [&](const std::string& seq_name,
-                  const std::string& seq) {
-                  // We only need the name and length, not the sequence itself
-                  metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq.length())});
-                  seqCounter++;
-              });
+          for (const auto& fileName : param.refSequences) {
+              std::string faiName = fileName + ".fai";
+              std::ifstream faiFile(faiName);
+              
+              if (!faiFile.is_open()) {
+                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
+                  exit(1);
+              }
 
-          sequencesByFileInfo.push_back(seqCounter);
-        }
+              std::string line;
+              while (std::getline(faiFile, line)) {
+                  std::istringstream iss(line);
+                  std::string seqName;
+                  offset_t seqLength;
+                  iss >> seqName >> seqLength;
 
-        if (seqCounter == 0)
-        {
-          std::cerr << "[mashmap::skch::Sketch::buildMetadata] ERROR: No sequences indexed!" << std::endl;
-          exit(1);
-        }
+                  seqInfoWithIndex.emplace_back(seqName, totalSeqs++, seqLength);
+              }
+          }
+
+          std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
+
+          std::vector<int> refGroups(totalSeqs);
+          this->metadata.clear();
+          this->metadata.reserve(totalSeqs);
+          int currentGroup = 0;
+          std::string prevPrefix;
+
+          for (const auto& [seqName, originalIndex, seqLength] : seqInfoWithIndex) {
+              std::string currPrefix = prefix(seqName, param.prefix_delim);
+              
+              if (currPrefix != prevPrefix) {
+                  currentGroup++;
+                  prevPrefix = currPrefix;
+              }
+
+              refGroups[originalIndex] = currentGroup;
+              this->metadata.push_back(ContigInfo{seqName, seqLength});
+          }
+
+          this->refIdGroup = std::move(refGroups);
+          this->sequencesByFileInfo.clear();
+          this->sequencesByFileInfo.push_back(totalSeqs);
+
+          if (totalSeqs == 0) {
+              std::cerr << "[mashmap::skch::Sketch::buildRefGroups] ERROR: No sequences indexed!" << std::endl;
+              exit(1);
+          }
       }
 
       public:
@@ -221,9 +248,7 @@ namespace skch
       {
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
-        if (metadata.empty()) {
-          buildMetadata();
-        }
+        buildRefGroups();
 
         if (compute_seeds) {
           // allowed set of targets
