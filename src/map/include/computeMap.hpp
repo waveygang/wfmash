@@ -195,15 +195,10 @@ namespace skch
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1)
           {
-              // Build metadata once at the beginning using indexed FASTA
-              this->buildMetadataFromIndex();
+              this->buildRefGroups();
               
               if (p.stage1_topANI_filter) {
                   this->setProbs();
-              }
-              if (p.skip_prefix)
-              {
-                  this->buildRefGroups();
               }
               this->mapQuery();
           }
@@ -241,8 +236,8 @@ namespace skch
       int getRefGroup(const std::string& seqName) {
           auto it = std::find_if(this->sketch_metadata.begin(), this->sketch_metadata.end(),
                                  [&seqName](const ContigInfo& info) { return info.name == seqName; });
-          if (it != metadata.end()) {
-              size_t index = std::distance(metadata.begin(), it);
+          if (it != sketch_metadata.end()) {
+              size_t index = std::distance(sketch_metadata.begin(), it);
               return refIdGroup[index];
           }
           return -1; // Not found
