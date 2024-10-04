@@ -128,7 +128,7 @@ namespace skch
       std::map<uint64_t, uint64_t> minmerFreqHistogram;
 
       // Instance of the SequenceIdManager
-      SequenceIdManager idManager;
+      SequenceIdManager& idManager;
 
       public:
 
@@ -139,9 +139,9 @@ namespace skch
       Sketch(skch::Parameters p,
              const std::vector<ContigInfo>& metadata,
              const std::vector<int>& sequencesByFileInfo,
-             SequenceIdManager* idMgr,
+             SequenceIdManager& idMgr,
              const std::vector<std::string>& targets = {})
-        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager(*idMgr)
+        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager(idMgr)
       {
         initialize(targets);
       }
@@ -636,19 +636,6 @@ namespace skch
         minmerFreqHistogram.clear();
         frequentSeeds.clear();
         freqThreshold = std::numeric_limits<uint64_t>::max();
-      }
-
-      public:
-      seqno_t addSequence(const std::string& sequenceName) {
-          return idManager->addSequence(sequenceName);
-      }
-
-      seqno_t getSequenceId(const std::string& sequenceName) const {
-          return idManager->getSequenceId(sequenceName);
-      }
-
-      std::string getSequenceName(seqno_t id) const {
-          return idManager->getSequenceName(id);
       }
 
     }; //End of class Sketch

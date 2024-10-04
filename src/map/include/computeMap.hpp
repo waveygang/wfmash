@@ -193,7 +193,8 @@ namespace skch
           PostProcessResultsFn_t f = nullptr) :
         param(std::move(p)),
         processMappingResults(f),
-        sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1)
+        sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
+        idManager()
           {
               this->buildRefGroups();
               
