@@ -194,7 +194,7 @@ namespace skch
         param(std::move(p)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        idManager(new SequenceIdManager())
+        idManager()
           {
               this->buildRefGroups();
               
@@ -203,10 +203,6 @@ namespace skch
               }
               this->mapQuery();
           }
-
-      ~Map() {
-          delete idManager;
-      }
 
       private:
       void buildMetadataFromIndex() {
@@ -533,7 +529,7 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, &idManager, target_subset);
+            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, idManager, target_subset);
 
             progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
