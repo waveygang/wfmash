@@ -128,7 +128,7 @@ namespace skch
       std::map<uint64_t, uint64_t> minmerFreqHistogram;
 
       // Pointer to the shared SequenceIdManager
-      SequenceIdManager* idManager;
+      SequenceIdManager idManager;
 
       public:
 
@@ -139,9 +139,8 @@ namespace skch
       Sketch(skch::Parameters p,
              const std::vector<ContigInfo>& metadata,
              const std::vector<int>& sequencesByFileInfo,
-             SequenceIdManager* idMgr,
              const std::vector<std::string>& targets = {})
-        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager(idMgr)
+        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager()
       {
         initialize(targets);
       }
@@ -213,7 +212,7 @@ namespace skch
               target_names,
               [&](const std::string& seq_name, const std::string& seq) {
                   if (seq.length() >= param.segLength) {
-                      seqno_t seqId = idManager->addSequence(seq_name);
+                      seqno_t seqId = idManager.addSequence(seq_name);
                       threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
                       totalSeqProcessed++;
                       shortestSeqLength = std::min(shortestSeqLength, seq.length());
@@ -259,15 +258,15 @@ namespace skch
 
       public:
       seqno_t addSequence(const std::string& sequenceName) {
-          return idManager->addSequence(sequenceName);
+          return idManager.addSequence(sequenceName);
       }
 
       seqno_t getSequenceId(const std::string& sequenceName) const {
-          return idManager->getSequenceId(sequenceName);
+          return idManager.getSequenceId(sequenceName);
       }
 
       std::string getSequenceName(seqno_t id) const {
-          return idManager->getSequenceName(id);
+          return idManager.getSequenceName(id);
       }
 
       /**
