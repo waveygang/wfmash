@@ -11,22 +11,22 @@ namespace skch {
 
 class SequenceIdManager {
 private:
-    std::unordered_map<std::string, skch::seqno_t> sequenceNameToId;
+    std::unordered_map<std::string, seqno_t> sequenceNameToId;
     std::vector<std::string> idToSequenceName;
 
 public:
-    skch::seqno_t addSequence(const std::string& sequenceName) {
+    seqno_t addSequence(const std::string& sequenceName) {
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
             return it->second;
         }
-        skch::seqno_t newId = static_cast<skch::seqno_t>(idToSequenceName.size());
+        seqno_t newId = static_cast<seqno_t>(idToSequenceName.size());
         sequenceNameToId[sequenceName] = newId;
         idToSequenceName.push_back(sequenceName);
         return newId;
     }
 
-    skch::seqno_t getSequenceId(const std::string& sequenceName) const {
+    seqno_t getSequenceId(const std::string& sequenceName) const {
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
             return it->second;
@@ -34,8 +34,8 @@ public:
         throw std::runtime_error("Sequence name not found: " + sequenceName);
     }
 
-    std::string getSequenceName(skch::seqno_t id) const {
-        if (id < static_cast<skch::seqno_t>(idToSequenceName.size())) {
+    std::string getSequenceName(seqno_t id) const {
+        if (id < static_cast<seqno_t>(idToSequenceName.size())) {
             return idToSequenceName[id];
         }
         throw std::runtime_error("Invalid sequence ID: " + std::to_string(id));
