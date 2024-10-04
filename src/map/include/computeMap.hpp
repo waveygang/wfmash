@@ -211,16 +211,52 @@ namespace skch
 
       void populateIdManager()
       {
-          std::vector<std::string> empty_filter;
           for (const auto& fileName : param.refSequences) {
-              seqiter::for_each_seq_in_file(fileName, empty_filter, [&](const std::string& seq_name, const std::string& seq) {
-                  idManager->addSequence(seq_name);
-              });
+              std::string faiName = fileName + ".fai";
+              std::ifstream faiFile(faiName);
+              if (!faiFile.is_open()) {
+                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
+                  exit(1);
+              }
+              
+              std::string line;
+              while (std::getline(faiFile, line)) {
+                  std::istringstream iss(line);
+                  std::string seqName;
+                  iss >> seqName;
+                  
+                  if (param.target_prefix.empty() || 
+                      std::any_of(param.target_prefix.begin(), param.target_prefix.end(),
+                                  [&seqName](const std::string& prefix) { 
+                                      return seqName.substr(0, prefix.size()) == prefix; 
+                                  })) {
+                      idManager->addSequence(seqName);
+                  }
+              }
           }
+          
           for (const auto& fileName : param.querySequences) {
-              seqiter::for_each_seq_in_file(fileName, empty_filter, [&](const std::string& seq_name, const std::string& seq) {
-                  idManager->addSequence(seq_name);
-              });
+              std::string faiName = fileName + ".fai";
+              std::ifstream faiFile(faiName);
+              if (!faiFile.is_open()) {
+                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
+                  exit(1);
+              }
+              
+              std::string line;
+              while (std::getline(faiFile, line)) {
+                  std::istringstream iss(line);
+                  std::string seqName;
+                  iss >> seqName;
+                  
+                  if (param.query_prefix.empty() || 
+                      std::any_of(param.query_prefix.begin(), param.query_prefix.end(),
+                                  [&seqName](const std::string& prefix) { 
+                                      return seqName.substr(0, prefix.size()) == prefix; 
+                                  })) {
+                      idManager->addSequence(seqName);
+                  }
+              }
           }
       }
 
