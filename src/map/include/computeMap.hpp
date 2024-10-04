@@ -144,8 +144,6 @@ namespace skch
       std::vector<int> refIdGroup; 
 
       // Sequence ID manager
-      std::unique_ptr<SequenceIdManager> idManager;
-
       // Atomic queues for input and output
       typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> merged_mappings_queue_t;
@@ -213,13 +211,14 @@ namespace skch
 
       void populateIdManager()
       {
+          std::vector<std::string> empty_filter;
           for (const auto& fileName : param.refSequences) {
-              seqiter::for_each_seq_in_file(fileName, [&](const std::string& seq_name, const std::string& seq) {
+              seqiter::for_each_seq_in_file(fileName, empty_filter, [&](const std::string& seq_name, const std::string& seq) {
                   idManager->addSequence(seq_name);
               });
           }
           for (const auto& fileName : param.querySequences) {
-              seqiter::for_each_seq_in_file(fileName, [&](const std::string& seq_name, const std::string& seq) {
+              seqiter::for_each_seq_in_file(fileName, empty_filter, [&](const std::string& seq_name, const std::string& seq) {
                   idManager->addSequence(seq_name);
               });
           }
