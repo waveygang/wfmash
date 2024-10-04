@@ -140,6 +140,9 @@ namespace skch
       //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
       std::vector<int> refIdGroup; 
 
+      // Sequence ID manager
+      std::unique_ptr<SequenceIdManager> idManager;
+
       // Atomic queues for input and output
       typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> merged_mappings_queue_t;
@@ -194,7 +197,7 @@ namespace skch
         param(std::move(p)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        idManager(new SequenceIdManager())
+        idManager(std::make_unique<SequenceIdManager>())
           {
               this->buildRefGroups();
               
@@ -204,9 +207,7 @@ namespace skch
               this->mapQuery();
           }
 
-      ~Map() {
-          delete idManager;
-      }
+      ~Map() = default;
 
       private:
       void buildMetadataFromIndex() {
