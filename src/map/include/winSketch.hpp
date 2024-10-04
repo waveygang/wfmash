@@ -70,7 +70,7 @@ namespace skch
 
       //Make the default constructor protected, non-accessible
       protected:
-      Sketch() {}
+      Sketch() : idManager(*new SequenceIdManager()) {}
 
       public:
 

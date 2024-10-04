@@ -6,7 +6,6 @@
 #include <string>
 #include <stdexcept>
 #include "base_types.hpp"
-#include "base_types.hpp"
 
 namespace skch {
 
