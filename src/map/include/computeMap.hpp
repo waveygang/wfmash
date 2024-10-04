@@ -122,6 +122,10 @@ namespace skch
       // Sequence ID manager
       std::unique_ptr<SequenceIdManager> idManager;
 
+      // Vectors to store query and target sequences
+      std::vector<std::string> querySequences;
+      std::vector<std::string> targetSequences;
+
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
 
@@ -228,6 +232,7 @@ namespace skch
                   if (param.target_prefix.empty() || 
                       seqName.compare(0, param.target_prefix.size(), param.target_prefix) == 0) {
                       idManager->addSequence(seqName);
+                      targetSequences.push_back(seqName);
                   }
               }
           }
@@ -250,11 +255,13 @@ namespace skch
                       for (auto& prefix : param.query_prefix) {
                           if (seqName.compare(0, prefix.size(), prefix) == 0) {
                               idManager->addSequence(seqName);
+                              querySequences.push_back(seqName);
                               break;
                           }
                       }
                   } else {
                       idManager->addSequence(seqName);
+                      querySequences.push_back(seqName);
                   }
               }
           }
