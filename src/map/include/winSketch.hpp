@@ -219,7 +219,7 @@ namespace skch
               allowed_target_names,
               [&](const std::string& seq_name, const std::string& seq) {
                 if (target_ids.empty() || target_ids.count(seqCounter) > 0) {
-                  if (seq.length() >= param.segLength) {
+                  if (seq.length() >= param.kmerSize) {  // Changed from param.segLength to param.kmerSize
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
                     totalSeqProcessed++;
                     shortestSeqLength = std::min(shortestSeqLength, seq.length());
@@ -261,7 +261,7 @@ namespace skch
 
         if (this->minmerIndex.size() == 0)
         {
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the segment length are not indexed" << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the kmer size are not indexed" << std::endl;
           exit(1);
         }
       }
