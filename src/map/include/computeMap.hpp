@@ -414,11 +414,11 @@ namespace skch
               }
           }
 
-          for (const auto& fileName : querySequences) {
-              seqiter::for_each_seq_in_file_filtered(
+          if (!querySequences.empty()) {
+              const auto& fileName = querySequences[0]; // Assume single query input file
+              seqiter::for_each_seq_in_file(
                   fileName,
-                  param.query_prefix,
-                  allowed_query_names,
+                  querySequences,
                   [&](const std::string& seq_name, const std::string& seq) {
                       seqno_t seqId = idManager.getSequenceId(seq_name);
                       auto input = new InputSeqProgContainer(seq, seq_name, seqId, progress);
