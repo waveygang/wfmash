@@ -70,7 +70,7 @@ namespace skch
 
       //Make the default constructor protected, non-accessible
       protected:
-      Sketch() : idManager(*new SequenceIdManager()) {}
+      Sketch(SequenceIdManager& idMgr) : idManager(idMgr) {}
 
       public:
 
@@ -141,8 +141,11 @@ namespace skch
              const std::vector<int>& sequencesByFileInfo,
              SequenceIdManager& idMgr,
              const std::vector<std::string>& targets = {})
-        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager(idMgr)
+        : Sketch(idMgr)
       {
+        this->param = std::move(p);
+        this->metadata = metadata;
+        this->sequencesByFileInfo = sequencesByFileInfo;
         initialize(targets);
       }
 
@@ -258,17 +261,6 @@ namespace skch
       }
 
       public:
-      seqno_t addSequence(const std::string& sequenceName) {
-          return idManager.addSequence(sequenceName);
-      }
-
-      seqno_t getSequenceId(const std::string& sequenceName) const {
-          return idManager.getSequenceId(sequenceName);
-      }
-
-      std::string getSequenceName(seqno_t id) const {
-          return idManager.getSequenceName(id);
-      }
 
       /**
        * @brief               function to compute minmers given input sequence object

@@ -194,7 +194,7 @@ namespace skch
         param(std::move(p)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        idManager()
+        idManager(new SequenceIdManager())
           {
               this->buildRefGroups();
               
@@ -203,6 +203,10 @@ namespace skch
               }
               this->mapQuery();
           }
+
+      ~Map() {
+          delete idManager;
+      }
 
       private:
       void buildMetadataFromIndex() {
