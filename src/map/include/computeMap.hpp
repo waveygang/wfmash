@@ -228,7 +228,7 @@ namespace skch
                   if (param.target_prefix.empty() || 
                       std::any_of(param.target_prefix.begin(), param.target_prefix.end(),
                                   [&seqName](const std::string& prefix) { 
-                                      return seqName.substr(0, prefix.size()) == prefix; 
+                                      return seqName.compare(0, prefix.size(), prefix) == 0; 
                                   })) {
                       idManager->addSequence(seqName);
                   }
@@ -252,7 +252,7 @@ namespace skch
                   if (param.query_prefix.empty() || 
                       std::any_of(param.query_prefix.begin(), param.query_prefix.end(),
                                   [&seqName](const std::string& prefix) { 
-                                      return seqName.substr(0, prefix.size()) == prefix; 
+                                      return seqName.compare(0, prefix.size(), prefix) == 0; 
                                   })) {
                       idManager->addSequence(seqName);
                   }
