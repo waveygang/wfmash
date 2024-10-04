@@ -226,10 +226,8 @@ namespace skch
                   iss >> seqName;
                   
                   if (param.target_prefix.empty() || 
-                      std::any_of(param.target_prefix.begin(), param.target_prefix.end(),
-                                  [&seqName](const std::string& prefix) { 
-                                      return seqName.compare(0, prefix.size(), prefix) == 0; 
-                                  })) {
+                      (seqName.compare(0, param.target_prefix[0].size(), param.target_prefix[0]) == 0) ||
+                      (param.target_prefix.size() > 1 && seqName.compare(0, param.target_prefix[1].size(), param.target_prefix[1]) == 0)) {
                       idManager->addSequence(seqName);
                   }
               }
@@ -250,10 +248,8 @@ namespace skch
                   iss >> seqName;
                   
                   if (param.query_prefix.empty() || 
-                      std::any_of(param.query_prefix.begin(), param.query_prefix.end(),
-                                  [&seqName](const std::string& prefix) { 
-                                      return seqName.compare(0, prefix.size(), prefix) == 0; 
-                                  })) {
+                      (seqName.compare(0, param.query_prefix[0].size(), param.query_prefix[0]) == 0) ||
+                      (param.query_prefix.size() > 1 && seqName.compare(0, param.query_prefix[1].size(), param.query_prefix[1]) == 0)) {
                       idManager->addSequence(seqName);
                   }
               }
