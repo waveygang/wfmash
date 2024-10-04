@@ -11,6 +11,7 @@
 #include <vector>
 #include <chrono>
 #include "common/progress.hpp"
+#include "SequenceIdManager.hpp"
 
 namespace skch
 {

@@ -638,6 +638,19 @@ namespace skch
         freqThreshold = std::numeric_limits<uint64_t>::max();
       }
 
+      public:
+      seqno_t addSequence(const std::string& sequenceName) {
+          return idManager->addSequence(sequenceName);
+      }
+
+      seqno_t getSequenceId(const std::string& sequenceName) const {
+          return idManager->getSequenceId(sequenceName);
+      }
+
+      std::string getSequenceName(seqno_t id) const {
+          return idManager->getSequenceName(id);
+      }
+
     }; //End of class Sketch
 } //End of namespace skch
 
