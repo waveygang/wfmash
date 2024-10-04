@@ -127,7 +127,7 @@ namespace skch
       //[... ,x -> y, ...] implies y number of minmers occur x times
       std::map<uint64_t, uint64_t> minmerFreqHistogram;
 
-      // Pointer to the shared SequenceIdManager
+      // Instance of the SequenceIdManager
       SequenceIdManager idManager;
 
       public:
@@ -139,8 +139,9 @@ namespace skch
       Sketch(skch::Parameters p,
              const std::vector<ContigInfo>& metadata,
              const std::vector<int>& sequencesByFileInfo,
+             SequenceIdManager* idMgr,
              const std::vector<std::string>& targets = {})
-        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager()
+        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager(*idMgr)
       {
         initialize(targets);
       }
@@ -233,7 +234,7 @@ namespace skch
           }
           
           // Update sequencesByFileInfo
-          this->sequencesByFileInfo.push_back(idManager->size());
+          this->sequencesByFileInfo.push_back(idManager.size());
           std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects

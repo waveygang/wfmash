@@ -20,7 +20,7 @@ public:
         if (it != sequenceNameToId.end()) {
             return it->second;
         }
-        seqno_t newId = idToSequenceName.size();
+        seqno_t newId = static_cast<seqno_t>(idToSequenceName.size());
         sequenceNameToId[sequenceName] = newId;
         idToSequenceName.push_back(sequenceName);
         return newId;
@@ -35,7 +35,7 @@ public:
     }
 
     std::string getSequenceName(seqno_t id) const {
-        if (id < idToSequenceName.size()) {
+        if (id < static_cast<seqno_t>(idToSequenceName.size())) {
             return idToSequenceName[id];
         }
         throw std::runtime_error("Invalid sequence ID: " + std::to_string(id));
