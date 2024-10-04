@@ -219,7 +219,7 @@ namespace skch
               allowed_target_names,
               [&](const std::string& seq_name, const std::string& seq) {
                 if (target_ids.empty() || target_ids.count(seqCounter) > 0) {
-                  if (seq.length() >= param.kmerSize) {
+                  if (seq.length() >= param.segLength) {
                     threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
                     totalSeqProcessed++;
                     shortestSeqLength = std::min(shortestSeqLength, seq.length());
@@ -228,6 +228,9 @@ namespace skch
                     //Collect output if available
                     while (threadPool.outputAvailable())
                       this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                    
+                    // Update metadata
+                    this->metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq.length())});
                   } else {
                     totalSeqSkipped++;
                     std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
@@ -238,6 +241,9 @@ namespace skch
                 seqCounter++;
               });
           }
+          
+          // Update sequencesByFileInfo
+          this->sequencesByFileInfo.push_back(seqCounter);
           std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects
