@@ -528,6 +528,8 @@ namespace skch
         
         SequenceIdManager idManager;
 
+        std::unordered_map<std::string, MappingResultsVector_t> combinedMappings;
+
         // For each subset of target sequences
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
@@ -578,10 +580,20 @@ namespace skch
 
             aggregator.join();
 
-            // Reset flags for next iteration
+            // Combine mappings from this subset with previous subsets
+            for (auto& [queryName, mappings] : aggregatedMappings) {
+                combinedMappings[queryName].insert(
+                    combinedMappings[queryName].end(),
+                    mappings.begin(),
+                    mappings.end()
+                );
+            }
+
+            // Reset flags and clear aggregatedMappings for next iteration
             reader_done.store(false);
             workers_done.store(false);
             fragments_done.store(false);
+            aggregatedMappings.clear();
 
             // Clean up the current refSketch
             delete refSketch;
@@ -589,8 +601,17 @@ namespace skch
             progress.finish();
         }
 
-        // Process aggregated mappings
-        for (auto& [queryName, mappings] : aggregatedMappings) {
+        // Process combined mappings
+        for (auto& [queryName, mappings] : combinedMappings) {
+            // Sort mappings by query position, then reference sequence id, then reference position
+            std::sort(
+                mappings.begin(), mappings.end(),
+                [](const MappingResult &a, const MappingResult &b) {
+                    return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos)
+                        < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
+                }
+            );
+
             processAggregatedMappings(queryName, mappings, outstrm);
             totalReadsMapped += !mappings.empty();
         }
