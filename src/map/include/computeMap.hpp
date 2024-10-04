@@ -587,13 +587,13 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, idManager, target_subset);
+            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, *idManager, target_subset);
 
             progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
             // Launch reader thread
             std::thread reader([&]() {
-                reader_thread(param.querySequences, input_queue, reader_done, progress, idManager);
+                reader_thread(param.querySequences, input_queue, reader_done, progress, *idManager);
             });
 
             std::vector<std::thread> fragment_workers;
