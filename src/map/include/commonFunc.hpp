@@ -9,7 +9,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
-#include <deque>
+#include <queue>
 #include <cmath>
 #include <fstream>
 #include <limits>
@@ -213,6 +213,7 @@ namespace skch {
 
           // Maps hash value of kmer to its frequency in the current window
           std::unordered_map<hash_t, unsigned int> hashToFreq;
+          ankerl::unordered_dense::map<hash_t, unsigned int> hashToFred;
           std::vector<hash_t> sketched_heap;
           sketched_heap.reserve(sketchSize+1);
             
@@ -326,11 +327,10 @@ namespace skch {
               seqno_t seqCounter)
           {
             /**
-             * Double-ended queue (saves minimum at front end)
              * Saves pair of the minimizer and the position of hashed kmer in the sequence
              * Position of kmer is required to discard kmers that fall out of current window
              */
-            std::deque< std::tuple<hash_t, strand_t, offset_t> > Q;
+            std::queue< std::tuple<hash_t, strand_t, offset_t> > Q;
 
             using windowMap_t = std::map<hash_t, std::pair<hash_t, MinmerInfo>>;
             windowMap_t sortedWindow;
@@ -339,7 +339,7 @@ namespace skch {
             std::set<std::pair<hash_t, hash_t>> unsketchedHashes;
 
             // Maps hash value of kmer to its frequency and strandedness in the current window
-            std::unordered_map<hash_t, std::pair<unsigned int, strand_t>> hashToFreqStrand;
+            ankerl::unordered_dense::map<hash_t, std::pair<unsigned int, strand_t>> hashToFreqStrand;
 
             std::vector<KmerInfo> heapWindow;
 
@@ -411,7 +411,7 @@ namespace skch {
                 else {
                   unsketchedHashes.erase(unsketchedHashes.find({leaving_hash, leaving_kmer}));
                 }
-                Q.pop_front();
+                Q.pop();
               }
 
               if (seq[i+kmerSize-1] == 'N')
@@ -423,7 +423,7 @@ namespace skch {
               if(hashBwd != hashFwd && ambig_kmer_count == 0)
               {
                 // Add current hash to window
-                Q.push_back(std::make_tuple(currentKmer, currentStrand, i)); 
+                Q.push(std::make_tuple(currentKmer, currentStrand, i)); 
 
                 hashToFreqStrand[currentKmer].first++;
                 hashToFreqStrand[currentKmer].second += currentStrand;
