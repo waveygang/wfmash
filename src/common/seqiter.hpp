@@ -106,7 +106,7 @@ void for_each_seq_in_file(
     }
 }
 
-void for_each_seq_in_file(
+void for_each_seq_in_faidx_t(
     faidx_t* fai,
     const std::vector<std::string>& seq_names,
     const std::function<void(const std::string&, const std::string&)>& func) {
@@ -118,6 +118,15 @@ void for_each_seq_in_file(
             free(seq);
         }
     }
+}
+
+void for_each_seq_in_file(
+    const std::string& filename,
+    const std::vector<std::string>& seq_names,
+    const std::function<void(const std::string&, const std::string&)>& func) {
+    faidx_t* fai = fai_load(filename.c_str());
+    for_each_seq_in_faidx_t(fai, seq_names, func);
+    fai_destroy(fai);
 }
 	
 void for_each_seq_in_file_filtered(
@@ -151,7 +160,7 @@ void for_each_seq_in_file_filtered(
         query_seq_names.push_back(seq_name);
     }
 
-    for_each_seq_in_file(
+    for_each_seq_in_faidx_t(
         fai,
         query_seq_names,
         func);

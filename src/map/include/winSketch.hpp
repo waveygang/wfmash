@@ -135,19 +135,19 @@ namespace skch
       Sketch(skch::Parameters p,
              const std::vector<ContigInfo>& metadata,
              const std::vector<int>& sequencesByFileInfo,
-             const std::unordered_set<seqno_t>& target_subset = {})
+             const std::vector<std::string>& targets = {})
         : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo)
       {
-        initialize(target_subset);
+        initialize(targets);
       }
 
-      void initialize(const std::unordered_set<seqno_t>& target_ids = {}) {
+      void initialize(const std::vector<std::string>& targets = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         if (param.indexFilename.empty() 
             || !stdfs::exists(param.indexFilename)
             || param.overwrite_index)
         {
-          this->build(true, target_ids);
+          this->build(true, targets);
           this->computeFreqHist();
           this->computeFreqSeedSet();
           this->dropFreqSeedSet();
@@ -188,20 +188,11 @@ namespace skch
        * @param     compute_seeds   Whether to compute seeds or just collect metadata
        * @param     target_ids      Set of target sequence IDs to sketch over
        */
-      void build(bool compute_seeds, const std::unordered_set<seqno_t>& target_ids = {})
+      void build(bool compute_seeds, const std::vector<std::string>& target_names = {})
       {
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
         if (compute_seeds) {
-          // allowed set of targets
-          std::unordered_set<std::string> allowed_target_names;
-          if (!param.target_list.empty()) {
-            std::ifstream filter_list(param.target_list);
-            std::string name;
-            while (getline(filter_list, name)) {
-              allowed_target_names.insert(name);
-            }
-          }
 
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
@@ -213,32 +204,28 @@ namespace skch
           for (const auto& fileName : param.refSequences) {
             std::cerr << "[mashmap::skch::Sketch::build] Processing file: " << fileName << std::endl;
 
-            seqiter::for_each_seq_in_file_filtered(
+            seqiter::for_each_seq_in_file(
               fileName,
-              {param.target_prefix},
-              allowed_target_names,
+              target_names,
               [&](const std::string& seq_name, const std::string& seq) {
-                if (target_ids.empty() || target_ids.count(seqCounter) > 0) {
-                  if (seq.length() >= param.kmerSize) {  // Changed from param.segLength to param.kmerSize
-                    threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
-                    totalSeqProcessed++;
-                    shortestSeqLength = std::min(shortestSeqLength, seq.length());
-                    std::cerr << "DEBUG: Processing sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
+                  if (seq.length() >= param.segLength) {
+                      threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
+                      totalSeqProcessed++;
+                      shortestSeqLength = std::min(shortestSeqLength, seq.length());
+                      std::cerr << "DEBUG: Processing sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
 
-                    //Collect output if available
-                    while (threadPool.outputAvailable())
-                      this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                      //Collect output if available
+                      while (threadPool.outputAvailable()) {
+                          this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                      }
                     
-                    // Update metadata
-                    this->metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq.length())});
+                      // Update metadata
+                      this->metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq.length())});
                   } else {
-                    totalSeqSkipped++;
-                    std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
+                      totalSeqSkipped++;
+                      std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
                   }
-                } else {
-                  totalSeqSkipped++;
-                }
-                seqCounter++;
+                  seqCounter++;
               });
           }
           

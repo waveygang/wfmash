@@ -489,23 +489,25 @@ namespace skch
                     });
             }
         }
-        
-        progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
         // Create subsets of target sequences
-        std::vector<std::vector<seqno_t>> target_subsets;
+        std::vector<std::vector<std::string>> target_subsets;
         uint64_t current_subset_size = 0;
-        std::vector<seqno_t> current_subset;
+        std::vector<std::string> current_subset;
 
-        for (seqno_t i = 0; i < this->sketch_metadata.size(); ++i) {
+        // Create subsets of target sequences
+        const auto& seqcount = this->sketch_metadata.size();
+        for (seqno_t i = 0; i < seqcount; ++i) {
+            const auto& seqname = this->sketch_metadata[i].name;
+            const auto& seqlen = this->sketch_metadata[i].len;
             if (param.target_prefix.empty()
                 || !param.target_prefix.empty()
-                && (this->sketch_metadata[i].name.substr(0, param.target_prefix.size())
+                && (seqname.substr(0, param.target_prefix.size())
                     == param.target_prefix)) {
-                current_subset.push_back(i);
-                current_subset_size += this->sketch_metadata[i].len;
+                current_subset.push_back(seqname);
+                current_subset_size += seqlen;
 
-                if (current_subset_size >= param.index_by_size || i == this->sketch_metadata.size() - 1) {
+                if (current_subset_size >= param.index_by_size || i == seqcount - 1) {
                     if (!current_subset.empty()) {
                         target_subsets.push_back(current_subset);
                     }
@@ -517,14 +519,16 @@ namespace skch
         if (!current_subset.empty()) {
             target_subsets.push_back(current_subset);
         }
-
+        
         // For each subset of target sequences
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, std::unordered_set<seqno_t>(target_subset.begin(), target_subset.end()));
+            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, target_subset);
+
+            progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
             // Launch reader thread
             std::thread reader([&]() {
@@ -574,6 +578,7 @@ namespace skch
             // Clean up the current refSketch
             delete refSketch;
             refSketch = nullptr;
+            progress.finish();
         }
 
         // Process aggregated mappings
@@ -581,8 +586,6 @@ namespace skch
             processAggregatedMappings(queryName, mappings, outstrm);
             totalReadsMapped += !mappings.empty();
         }
-
-        progress.finish();
 
         std::cerr << "[mashmap::skch::Map::mapQuery] "
                   << "count of mapped reads = " << totalReadsMapped
