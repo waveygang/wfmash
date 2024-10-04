@@ -141,11 +141,11 @@ namespace skch
              const std::vector<int>& sequencesByFileInfo,
              SequenceIdManager& idMgr,
              const std::vector<std::string>& targets = {})
-        : Sketch(idMgr)
+        : param(std::move(p)),
+          metadata(metadata),
+          sequencesByFileInfo(sequencesByFileInfo),
+          idManager(idMgr)
       {
-        this->param = std::move(p);
-        this->metadata = metadata;
-        this->sequencesByFileInfo = sequencesByFileInfo;
         initialize(targets);
       }
 
@@ -216,7 +216,7 @@ namespace skch
               target_names,
               [&](const std::string& seq_name, const std::string& seq) {
                   if (seq.length() >= param.segLength) {
-                      seqno_t seqId = idManager.addSequence(seq_name);
+                      seqno_t seqId = idManager.getSequenceId(seq_name);
                       threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
                       totalSeqProcessed++;
                       shortestSeqLength = std::min(shortestSeqLength, seq.length());

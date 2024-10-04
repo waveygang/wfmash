@@ -119,6 +119,9 @@ namespace skch
       std::vector<ContigInfo> sketch_metadata;
       std::vector<int> sketch_sequencesByFileInfo;
 
+      // Sequence ID manager
+      std::unique_ptr<SequenceIdManager> idManager;
+
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
 
