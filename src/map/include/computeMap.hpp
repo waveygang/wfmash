@@ -226,8 +226,7 @@ namespace skch
                   iss >> seqName;
                   
                   if (param.target_prefix.empty() || 
-                      (seqName.compare(0, param.target_prefix[0].size(), param.target_prefix[0]) == 0) ||
-                      (param.target_prefix.size() > 1 && seqName.compare(0, param.target_prefix[1].size(), param.target_prefix[1]) == 0)) {
+                      seqName.compare(0, param.target_prefix.size(), param.target_prefix) == 0) {
                       idManager->addSequence(seqName);
                   }
               }
@@ -248,8 +247,7 @@ namespace skch
                   iss >> seqName;
                   
                   if (param.query_prefix.empty() || 
-                      (seqName.compare(0, param.query_prefix[0].size(), param.query_prefix[0]) == 0) ||
-                      (param.query_prefix.size() > 1 && seqName.compare(0, param.query_prefix[1].size(), param.query_prefix[1]) == 0)) {
+                      seqName.compare(0, param.query_prefix.size(), param.query_prefix) == 0) {
                       idManager->addSequence(seqName);
                   }
               }
