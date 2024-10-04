@@ -1816,9 +1816,6 @@ namespace skch
               filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false);
               readMappings = std::move(groupFilteredMappings);
           }
-
-          // Apply plane sweep filter
-          skch::Filter::planeSweep::filterMappings(readMappings, param.numMappingsForSegment, param.dropRand);
       }
 
       /**
