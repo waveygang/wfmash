@@ -37,6 +37,7 @@ namespace fs = std::filesystem;
 #include "common/ankerl/unordered_dense.hpp"
 
 #include "common/seqiter.hpp"
+#include "SequenceIdManager.hpp"
 
 //#include "assert.hpp"
 
@@ -126,6 +127,9 @@ namespace skch
       //[... ,x -> y, ...] implies y number of minmers occur x times
       std::map<uint64_t, uint64_t> minmerFreqHistogram;
 
+      // Pointer to the shared SequenceIdManager
+      SequenceIdManager* idManager;
+
       public:
 
       /**
@@ -135,8 +139,9 @@ namespace skch
       Sketch(skch::Parameters p,
              const std::vector<ContigInfo>& metadata,
              const std::vector<int>& sequencesByFileInfo,
+             SequenceIdManager* idMgr,
              const std::vector<std::string>& targets = {})
-        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo)
+        : param(std::move(p)), metadata(metadata), sequencesByFileInfo(sequencesByFileInfo), idManager(idMgr)
       {
         initialize(targets);
       }
@@ -197,7 +202,6 @@ namespace skch
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
 
-          seqno_t seqCounter = 0;
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
           size_t shortestSeqLength = std::numeric_limits<size_t>::max();
@@ -209,7 +213,8 @@ namespace skch
               target_names,
               [&](const std::string& seq_name, const std::string& seq) {
                   if (seq.length() >= param.segLength) {
-                      threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
+                      seqno_t seqId = idManager->addSequence(seq_name);
+                      threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
                       totalSeqProcessed++;
                       shortestSeqLength = std::min(shortestSeqLength, seq.length());
                       std::cerr << "DEBUG: Processing sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
@@ -225,12 +230,11 @@ namespace skch
                       totalSeqSkipped++;
                       std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
                   }
-                  seqCounter++;
               });
           }
           
           // Update sequencesByFileInfo
-          this->sequencesByFileInfo.push_back(seqCounter);
+          this->sequencesByFileInfo.push_back(idManager->size());
           std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects
@@ -251,6 +255,19 @@ namespace skch
           std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the kmer size are not indexed" << std::endl;
           exit(1);
         }
+      }
+
+      public:
+      seqno_t addSequence(const std::string& sequenceName) {
+          return idManager->addSequence(sequenceName);
+      }
+
+      seqno_t getSequenceId(const std::string& sequenceName) const {
+          return idManager->getSequenceId(sequenceName);
+      }
+
+      std::string getSequenceName(seqno_t id) const {
+          return idManager->getSequenceName(id);
       }
 
       /**

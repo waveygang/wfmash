@@ -337,7 +337,7 @@ namespace skch
                          input_atomic_queue_t& input_queue,
                          std::atomic<bool>& reader_done,
                          progress_meter::ProgressMeter& progress,
-                         seqno_t& seqCounter) {
+                         SequenceIdManager& idManager) {
           // Define allowed_query_names here
           std::unordered_set<std::string> allowed_query_names;
           if (!param.query_list.empty()) {
@@ -354,7 +354,8 @@ namespace skch
                   param.query_prefix,
                   allowed_query_names,
                   [&](const std::string& seq_name, const std::string& seq) {
-                      auto input = new InputSeqProgContainer(seq, seq_name, seqCounter++, progress);
+                      seqno_t seqId = idManager.addSequence(seq_name);
+                      auto input = new InputSeqProgContainer(seq, seq_name, seqId, progress);
                       while (!input_queue.try_push(input)) {
                           std::this_thread::sleep_for(std::chrono::milliseconds(10));
                       }
@@ -427,7 +428,6 @@ namespace skch
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
         seqno_t totalReadsMapped = 0;
-        seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
         std::unordered_map<std::string, MappingResultsVector_t> aggregatedMappings;
@@ -520,19 +520,21 @@ namespace skch
             target_subsets.push_back(current_subset);
         }
         
+        SequenceIdManager idManager;
+
         // For each subset of target sequences
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, target_subset);
+            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, &idManager, target_subset);
 
             progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
             // Launch reader thread
             std::thread reader([&]() {
-                reader_thread(param.querySequences, input_queue, reader_done, progress, seqCounter);
+                reader_thread(param.querySequences, input_queue, reader_done, progress, idManager);
             });
 
             std::vector<std::thread> fragment_workers;
@@ -590,7 +592,7 @@ namespace skch
         std::cerr << "[mashmap::skch::Map::mapQuery] "
                   << "count of mapped reads = " << totalReadsMapped
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
-                  << ", total input reads = " << seqCounter
+                  << ", total input reads = " << idManager.size()
                   << ", total input bp = " << total_seq_length << std::endl;
       }
 
