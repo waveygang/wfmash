@@ -246,8 +246,14 @@ namespace skch
                   std::string seqName;
                   iss >> seqName;
                   
-                  if (param.query_prefix.empty() || 
-                      seqName.compare(0, param.query_prefix.size(), param.query_prefix) == 0) {
+                  if (!param.query_prefix.empty()) {
+                      for (auto& prefix : param.query_prefix) {
+                          if (seqName.compare(0, prefix.size(), prefix) == 0) {
+                              idManager->addSequence(seqName);
+                              break;
+                          }
+                      }
+                  } else {
                       idManager->addSequence(seqName);
                   }
               }
@@ -407,7 +413,7 @@ namespace skch
                   param.query_prefix,
                   allowed_query_names,
                   [&](const std::string& seq_name, const std::string& seq) {
-                      seqno_t seqId = idManager.addSequence(seq_name);
+                      seqno_t seqId = idManager.getSequenceId(seq_name);
                       auto input = new InputSeqProgContainer(seq, seq_name, seqId, progress);
                       while (!input_queue.try_push(input)) {
                           std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -573,8 +579,6 @@ namespace skch
             target_subsets.push_back(current_subset);
         }
         
-        SequenceIdManager idManager;
-
         std::unordered_map<std::string, MappingResultsVector_t> combinedMappings;
 
         // For each subset of target sequences
@@ -666,7 +670,7 @@ namespace skch
         std::cerr << "[mashmap::skch::Map::mapQuery] "
                   << "count of mapped reads = " << totalReadsMapped
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
-                  << ", total input reads = " << idManager.size()
+            //<< ", total input reads = " << idManager.size()
                   << ", total input bp = " << total_seq_length << std::endl;
       }
 
