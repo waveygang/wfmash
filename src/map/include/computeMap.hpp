@@ -203,12 +203,27 @@ namespace skch
         idManager(std::make_unique<SequenceIdManager>())
           {
               this->buildRefGroups();
+              this->populateIdManager();
               
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
               this->mapQuery();
           }
+
+      void populateIdManager()
+      {
+          for (const auto& fileName : param.refSequences) {
+              seqiter::for_each_seq_in_file(fileName, [&](const std::string& seq_name, const std::string& seq) {
+                  idManager->addSequence(seq_name);
+              });
+          }
+          for (const auto& fileName : param.querySequences) {
+              seqiter::for_each_seq_in_file(fileName, [&](const std::string& seq_name, const std::string& seq) {
+                  idManager->addSequence(seq_name);
+              });
+          }
+      }
 
       ~Map() = default;
 
