@@ -199,7 +199,7 @@ namespace skch
        */
       Map(skch::Parameters p,
           PostProcessResultsFn_t f = nullptr) :
-        param(std::move(p)),
+        param(p),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
         idManager(std::make_unique<SequenceIdManager>(p.querySequences, p.refSequences, p.query_prefix, p.target_prefix, p.prefix_delim, p.query_list, p.target_list))
