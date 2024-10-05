@@ -1146,7 +1146,7 @@ namespace skch
           while(!pq.empty())
           {
             const IP_const_iterator ip_it = pq.front().it;
-            const auto& ref = this->refSketch->metadata[ip_it->seqId];
+            const auto& ref = this->sketch_metadata[ip_it->seqId];
             bool skip_mapping = false;
             if (param.skip_self && Q.seqName == ref.name) skip_mapping = true;
             if (param.skip_prefix && this->refIdGroup[ip_it->seqId] == Q.refGroup) skip_mapping = true;
@@ -1530,7 +1530,7 @@ namespace skch
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
               // and if we are self-mapping, the query is shorter than the target
-              const auto& ref = this->refSketch->metadata[l2.seqId];
+              const auto& ref = this->sketch_metadata[l2.seqId];
               if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity)
                   || nucIdentity >= param.percentageIdentity)
               {
@@ -2129,16 +2129,16 @@ namespace skch
             {
               if(e.refStartPos < 0)
                 e.refStartPos = 0;
-              if(e.refStartPos >= this->refSketch->metadata[e.refSeqId].len)
-                e.refStartPos = this->refSketch->metadata[e.refSeqId].len - 1;
+              if(e.refStartPos >= this->sketch_metadata[e.refSeqId].len)
+                e.refStartPos = this->sketch_metadata[e.refSeqId].len - 1;
             }
 
             //reference end pos
             {
               if(e.refEndPos < e.refStartPos)
                 e.refEndPos = e.refStartPos;
-              if(e.refEndPos >= this->refSketch->metadata[e.refSeqId].len)
-                e.refEndPos = this->refSketch->metadata[e.refSeqId].len - 1;
+              if(e.refEndPos >= this->sketch_metadata[e.refSeqId].len)
+                e.refEndPos = this->sketch_metadata[e.refSeqId].len - 1;
             }
 
             //query start pos
