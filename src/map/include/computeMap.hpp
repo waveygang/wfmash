@@ -2174,12 +2174,12 @@ namespace skch
           float fakeMapQ = e.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(e.nucIdentity)));
           std::string sep = param.legacy_output ? " " : "\t";
 
-          outstrm  << (param.filterMode == filter::ONETOONE ? qmetadata[e.querySeqId].name : queryName)
+          outstrm  << (param.filterMode == filter::ONETOONE ? idManager->getSequenceName(e.querySeqId) : queryName)
                    << sep << e.queryLen
                    << sep << e.queryStartPos
                    << sep << e.queryEndPos - (param.legacy_output ? 1 : 0)
                    << sep << (e.strand == strnd::FWD ? "+" : "-")
-                   << sep << this->sketch_metadata[e.refSeqId].name
+                   << sep << idManager->getSequenceName(e.refSeqId)
                    << sep << this->sketch_metadata[e.refSeqId].len
                    << sep << e.refStartPos
                    << sep << e.refEndPos - (param.legacy_output ? 1 : 0);
