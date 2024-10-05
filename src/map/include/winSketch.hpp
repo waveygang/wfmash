@@ -137,13 +137,9 @@ namespace skch
        *          also builds, indexes the minmer table
        */
       Sketch(skch::Parameters p,
-             const std::vector<ContigInfo>& metadata,
-             const std::vector<int>& sequencesByFileInfo,
              SequenceIdManager& idMgr,
              const std::vector<std::string>& targets = {})
         : param(std::move(p)),
-          metadata(metadata),
-          sequencesByFileInfo(sequencesByFileInfo),
           idManager(idMgr)
       {
         initialize(targets);

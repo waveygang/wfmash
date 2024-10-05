@@ -202,70 +202,15 @@ namespace skch
         param(std::move(p)),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        idManager(std::make_unique<SequenceIdManager>())
+        idManager(std::make_unique<SequenceIdManager>(p.querySequences, p.refSequences, p.query_prefix, p.target_prefix, p.prefix_delim, p.query_list, p.target_list))
           {
-              this->buildRefGroups();
-              this->populateIdManager();
-              
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
               this->mapQuery();
           }
 
-      void populateIdManager()
-      {
-          for (const auto& fileName : param.refSequences) {
-              std::string faiName = fileName + ".fai";
-              std::ifstream faiFile(faiName);
-              if (!faiFile.is_open()) {
-                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
-                  exit(1);
-              }
-              
-              std::string line;
-              while (std::getline(faiFile, line)) {
-                  std::istringstream iss(line);
-                  std::string seqName;
-                  iss >> seqName;
-                  
-                  if (param.target_prefix.empty() || 
-                      seqName.compare(0, param.target_prefix.size(), param.target_prefix) == 0) {
-                      idManager->addSequence(seqName);
-                      targetSequenceNames.push_back(seqName);
-                  }
-              }
-          }
-          
-          for (const auto& fileName : param.querySequences) {
-              std::string faiName = fileName + ".fai";
-              std::ifstream faiFile(faiName);
-              if (!faiFile.is_open()) {
-                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
-                  exit(1);
-              }
-              
-              std::string line;
-              while (std::getline(faiFile, line)) {
-                  std::istringstream iss(line);
-                  std::string seqName;
-                  iss >> seqName;
-                  
-                  if (!param.query_prefix.empty()) {
-                      for (auto& prefix : param.query_prefix) {
-                          if (seqName.compare(0, prefix.size(), prefix) == 0) {
-                              idManager->addSequence(seqName);
-                              querySequenceNames.push_back(seqName);
-                              break;
-                          }
-                      }
-                  } else {
-                      idManager->addSequence(seqName);
-                      querySequenceNames.push_back(seqName);
-                  }
-              }
-          }
-      }
+      // Removed populateIdManager() function
 
       ~Map() = default;
 
@@ -505,54 +450,14 @@ namespace skch
         std::atomic<bool> workers_done(false);
         std::atomic<bool> fragments_done(false);
 
-        // allowed set of queries
-        std::unordered_set<std::string> allowed_query_names;
-        if (!param.query_list.empty()) {
-            std::ifstream filter_list(param.query_list);
-            std::string name;
-            while (getline(filter_list, name)) {
-                allowed_query_names.insert(name); 
-            }
-        }
+        const auto& querySequenceNames = idManager->getQuerySequenceNames();
+        const auto& targetSequenceNames = idManager->getTargetSequenceNames();
 
         // Count the total number of sequences and sequence length
-        uint64_t total_seqs = 0;
+        uint64_t total_seqs = querySequenceNames.size();
         uint64_t total_seq_length = 0;
-        for (const auto& fileName : param.querySequences) {
-            // Check if there is a .fai file
-            std::string fai_name = fileName + ".fai";
-            if (fs::exists(fai_name)) {
-                std::string line;
-                std::ifstream in(fai_name.c_str());
-                while (std::getline(in, line)) {
-                    auto line_split = CommonFunc::split(line, '\t');
-                    // if we have a param.target_prefix and the sequence name matches, skip it
-                    auto seq_name = line_split[0];
-                    bool prefix_skip = true;
-                    for (const auto& prefix : param.query_prefix) {
-                        if (seq_name.substr(0, prefix.size()) == prefix) {
-                            prefix_skip = false;
-                            break;
-                        }
-                    }
-                    if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
-                        || !param.query_prefix.empty() && !prefix_skip) {
-                        total_seqs++;
-                        total_seq_length += std::stoul(line_split[1]);
-                    }
-                }
-            } else {
-                // If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
-                std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to filter query sequences (slow)" << std::endl;
-                seqiter::for_each_seq_in_file_filtered(
-                    fileName,
-                    param.query_prefix,
-                    allowed_query_names,
-                    [&](const std::string& seq_name, const std::string& seq) {
-                        ++total_seqs;
-                        total_seq_length += seq.size();
-                    });
-            }
+        for (const auto& seqName : querySequenceNames) {
+            total_seq_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
         }
 
         // Create subsets of target sequences
@@ -560,25 +465,18 @@ namespace skch
         uint64_t current_subset_size = 0;
         std::vector<std::string> current_subset;
 
-        // Create subsets of target sequences
-        const auto& seqcount = this->sketch_metadata.size();
-        for (seqno_t i = 0; i < seqcount; ++i) {
-            const auto& seqname = this->sketch_metadata[i].name;
-            const auto& seqlen = this->sketch_metadata[i].len;
-            if (param.target_prefix.empty()
-                || !param.target_prefix.empty()
-                && (seqname.substr(0, param.target_prefix.size())
-                    == param.target_prefix)) {
-                current_subset.push_back(seqname);
-                current_subset_size += seqlen;
+        for (const auto& seqName : targetSequenceNames) {
+            seqno_t seqId = idManager->getSequenceId(seqName);
+            offset_t seqLen = idManager->getSequenceLength(seqId);
+            current_subset.push_back(seqName);
+            current_subset_size += seqLen;
 
-                if (current_subset_size >= param.index_by_size || i == seqcount - 1) {
-                    if (!current_subset.empty()) {
-                        target_subsets.push_back(current_subset);
-                    }
-                    current_subset.clear();
-                    current_subset_size = 0;
+            if (current_subset_size >= param.index_by_size || &seqName == &targetSequenceNames.back()) {
+                if (!current_subset.empty()) {
+                    target_subsets.push_back(current_subset);
                 }
+                current_subset.clear();
+                current_subset_size = 0;
             }
         }
         if (!current_subset.empty()) {
@@ -593,7 +491,7 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, this->sketch_metadata, this->sketch_sequencesByFileInfo, *idManager, target_subset);
+            refSketch = new skch::Sketch(param, *idManager, target_subset);
 
             progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
 
@@ -676,7 +574,7 @@ namespace skch
         std::cerr << "[mashmap::skch::Map::mapQuery] "
                   << "count of mapped reads = " << totalReadsMapped
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
-            //<< ", total input reads = " << idManager.size()
+                  << ", total input reads = " << idManager->size()
                   << ", total input bp = " << total_seq_length << std::endl;
       }
 
