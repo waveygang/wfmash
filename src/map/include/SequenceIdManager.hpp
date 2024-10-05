@@ -16,6 +16,7 @@ private:
 
 public:
     seqno_t addSequence(const std::string& sequenceName) {
+        std::cerr << "adding sequence " << sequenceName << std::endl;
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
             return it->second;

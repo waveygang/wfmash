@@ -123,8 +123,8 @@ namespace skch
       std::unique_ptr<SequenceIdManager> idManager;
 
       // Vectors to store query and target sequences
-      std::vector<std::string> querySequences;
-      std::vector<std::string> targetSequences;
+      std::vector<std::string> querySequenceNames;
+      std::vector<std::string> targetSequenceNames;
 
       //Container type for saving read sketches during L1 and L2 both
       typedef Sketch::MI_Type MinVec_Type;
@@ -232,7 +232,7 @@ namespace skch
                   if (param.target_prefix.empty() || 
                       seqName.compare(0, param.target_prefix.size(), param.target_prefix) == 0) {
                       idManager->addSequence(seqName);
-                      targetSequences.push_back(seqName);
+                      targetSequenceNames.push_back(seqName);
                   }
               }
           }
@@ -255,13 +255,13 @@ namespace skch
                       for (auto& prefix : param.query_prefix) {
                           if (seqName.compare(0, prefix.size(), prefix) == 0) {
                               idManager->addSequence(seqName);
-                              querySequences.push_back(seqName);
+                              querySequenceNames.push_back(seqName);
                               break;
                           }
                       }
                   } else {
                       idManager->addSequence(seqName);
-                      querySequences.push_back(seqName);
+                      querySequenceNames.push_back(seqName);
                   }
               }
           }
@@ -399,8 +399,7 @@ namespace skch
       /**
        * @brief   parse over sequences in query file and map each on the reference
        */
-      void reader_thread(const std::vector<std::string>& querySequences,
-                         input_atomic_queue_t& input_queue,
+      void reader_thread(input_atomic_queue_t& input_queue,
                          std::atomic<bool>& reader_done,
                          progress_meter::ProgressMeter& progress,
                          SequenceIdManager& idManager) {
@@ -414,11 +413,11 @@ namespace skch
               }
           }
 
-          if (!querySequences.empty()) {
-              const auto& fileName = querySequences[0]; // Assume single query input file
+          if (!param.querySequences.empty()) {
+              const auto& fileName = param.querySequences[0]; // Assume single query input file
               seqiter::for_each_seq_in_file(
                   fileName,
-                  querySequences,
+                  querySequenceNames,
                   [&](const std::string& seq_name, const std::string& seq) {
                       seqno_t seqId = idManager.getSequenceId(seq_name);
                       auto input = new InputSeqProgContainer(seq, seq_name, seqId, progress);
@@ -600,7 +599,7 @@ namespace skch
 
             // Launch reader thread
             std::thread reader([&]() {
-                reader_thread(param.querySequences, input_queue, reader_done, progress, *idManager);
+                reader_thread(input_queue, reader_done, progress, *idManager);
             });
 
             std::vector<std::thread> fragment_workers;
