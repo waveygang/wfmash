@@ -20,6 +20,7 @@ private:
     std::vector<std::string> querySequenceNames;
     std::vector<std::string> targetSequenceNames;
     char prefixDelim;
+    std::vector<int> sequencesByFileInfo;
 
 public:
     SequenceIdManager(const std::vector<std::string>& queryFiles,
@@ -33,6 +34,8 @@ public:
         populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, prefixDelim, queryList, targetList);
         buildRefGroups();
     }
+
+    const std::vector<int>& getSequencesByFileInfo() const { return sequencesByFileInfo; }
 
     seqno_t getSequenceId(const std::string& sequenceName) const {
         auto it = sequenceNameToId.find(sequenceName);
@@ -124,11 +127,14 @@ private:
         if (!queryList.empty()) readAllowedNames(queryList, allowedQueryNames);
         if (!targetList.empty()) readAllowedNames(targetList, allowedTargetNames);
 
+        sequencesByFileInfo.push_back(0);
         for (const auto& file : queryFiles) {
             readFAI(file, queryPrefixes, prefixDelim, allowedQueryNames, true);
+            sequencesByFileInfo.push_back(metadata.size());
         }
         for (const auto& file : targetFiles) {
             readFAI(file, {targetPrefix}, prefixDelim, allowedTargetNames, false);
+            sequencesByFileInfo.push_back(metadata.size());
         }
     }
 

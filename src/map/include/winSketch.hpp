@@ -87,20 +87,7 @@ namespace skch
       // Frequency of each hash
       HF_Map_t hashFreq;
 
-      //Keep sequence length, name that appear in the sequence (for printing the mappings later)
-      std::vector<ContigInfo> metadata;
-
-      /*
-       * Keep the information of what sequences come from what file#
-       * Example [a, b, c] implies 
-       *  file 0 contains 0 .. a-1 sequences
-       *  file 1 contains a .. b-1 
-       *  file 2 contains b .. c-1
-       */
-      std::vector<int> sequencesByFileInfo;
-
       private:
-      // Removed buildRefGroups() function
 
       public:
 
@@ -197,15 +184,15 @@ namespace skch
         }
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch::Sketch] Metadata size = " << metadata.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << idManager.size() << std::endl;
         isInitialized = true;
         std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
       }
 
-      void copyMetadataFrom(const Sketch& other) {
-        this->metadata = other.metadata;
-        this->sequencesByFileInfo = other.sequencesByFileInfo;
-      }
+      // This method is no longer needed as metadata is managed by SequenceIdManager
+      // void copyMetadataFrom(const Sketch& other) {
+      //   // Removed
+      // }
 
       private:
       void reader_thread(const std::vector<std::string>& targets, std::atomic<bool>& reader_done) {
