@@ -37,6 +37,7 @@ namespace fs = std::filesystem;
 #include "common/ankerl/unordered_dense.hpp"
 
 #include "common/seqiter.hpp"
+#include "common/atomic_queue/atomic_queue.h"
 #include "SequenceIdManager.hpp"
 #include "common/atomic_queue/atomic_queue.h"
 #include <thread>
@@ -691,8 +692,6 @@ namespace skch
       void clear()
       {
         hashFreq.clear();
-        metadata.clear();
-        sequencesByFileInfo.clear();
         minmerPosLookupIndex.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();
