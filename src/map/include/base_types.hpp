@@ -93,6 +93,7 @@ namespace skch
   {
     std::string name;       //Name of the sequence
     offset_t len;           //Length of the sequence
+    int groupId;            //Group ID for the sequence
   };
 
   //Label tags for strand information
