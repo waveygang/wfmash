@@ -89,10 +89,8 @@ namespace skch
       // Frequency of each hash
       HF_Map_t hashFreq;
 
-      private:
-        progress_meter::ProgressMeter progress;
-
       public:
+        uint64_t total_seq_length = 0;
 
       //Index for fast seed lookup (unordered_map)
       /*
@@ -110,7 +108,7 @@ namespace skch
 
       // Atomic queues for input and output
       using input_queue_t = atomic_queue::AtomicQueue<InputSeqContainer*, 1024>;
-      using output_queue_t = atomic_queue::AtomicQueue<std::pair<uint64_t, MI_Type*>, 1024>;
+      using output_queue_t = atomic_queue::AtomicQueue<std::pair<uint64_t, MI_Type*>*, 1024>;
       input_queue_t input_queue;
       output_queue_t output_queue;
 
@@ -148,7 +146,6 @@ namespace skch
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
         // Calculate total sequence length
-        uint64_t total_seq_length = 0;
         for (const auto& fileName : param.refSequences) {
             seqiter::for_each_seq_in_file(
                 fileName,
@@ -158,15 +155,13 @@ namespace skch
                 });
         }
         
-        // Initialize progress meter
-        progress = progress_meter::ProgressMeter(total_seq_length, "[mashmap::skch::Sketch::initialize] indexed");
-
         if (param.indexFilename.empty() 
             || !stdfs::exists(param.indexFilename)
             || param.overwrite_index)
         {
           std::atomic<bool> reader_done(false);
           std::atomic<bool> workers_done(false);
+          progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Sketch::initialize] indexed");
 
           std::thread reader([&]() {
               reader_thread(targets, reader_done);
@@ -175,12 +170,12 @@ namespace skch
           std::vector<std::thread> workers;
           for (int i = 0; i < param.threads; ++i) {
               workers.emplace_back([&]() {
-                  worker_thread(reader_done);
+                  worker_thread(reader_done, progress);
               });
           }
 
           std::thread writer([&]() {
-              writer_thread(workers_done);
+              writer_thread(workers_done, progress);
           });
 
           reader.join();
@@ -233,7 +228,7 @@ namespace skch
           reader_done.store(true);
       }
 
-      void worker_thread(std::atomic<bool>& reader_done) {
+      void worker_thread(std::atomic<bool>& reader_done, progress_meter::ProgressMeter& progress) {
           while (true) {
               InputSeqContainer* record = nullptr;
               if (input_queue.try_pop(record)) {
@@ -241,7 +236,8 @@ namespace skch
                   CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->len, 
                                          param.kmerSize, param.segLength, param.alphabetSize, 
                                          param.sketchSize, record->seqCounter);
-                  while (!output_queue.try_push(std::make_pair(record->len, minmers))) {
+                  auto output_pair = new std::pair<uint64_t, MI_Type*>(record->len, minmers);
+                  while (!output_queue.try_push(output_pair)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
                   delete record;
@@ -253,12 +249,12 @@ namespace skch
           }
       }
 
-      void writer_thread(std::atomic<bool>& workers_done) {
+      void writer_thread(std::atomic<bool>& workers_done, progress_meter::ProgressMeter& progress) {
           while (true) {
-              std::pair<uint64_t, MI_Type*> output;
+              std::pair<uint64_t, MI_Type*>* output;
               if (output_queue.try_pop(output)) {
-                  uint64_t seq_length = output.first;
-                  MI_Type* minmers = output.second;
+                  uint64_t seq_length = output->first;
+                  MI_Type* minmers = output->second;
                   for (const auto& mi : *minmers) {
                       this->hashFreq[mi.hash]++;
                       if (minmerPosLookupIndex[mi.hash].size() == 0 
@@ -276,7 +272,8 @@ namespace skch
                   // Update progress meter
                   progress.increment(seq_length);
                   
-                  delete minmers;
+                  delete output->second;
+                  delete output;
               } else if (workers_done.load() && output_queue.was_empty()) {
                   break;
               } else {
