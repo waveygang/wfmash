@@ -106,6 +106,12 @@ namespace skch
       MI_Map_t minmerPosLookupIndex;
       MI_Type minmerIndex;
 
+      // Atomic queues for input and output
+      using input_queue_t = atomic_queue::AtomicQueue<seqiter::SeqRecord*, 1024>;
+      using output_queue_t = atomic_queue::AtomicQueue<MI_Type*, 1024>;
+      input_queue_t input_queue;
+      output_queue_t output_queue;
+
       private:
 
       /**
