@@ -236,8 +236,8 @@ namespace skch
     private:
 
       // Gets the ref group of a query based on the sequence ID
-      int getRefGroup(seqno_t seqId) {
-          return idManager->getRefGroup(seqId);
+      int getRefGroup(const std::string& seqName) {
+          return idManager->getRefGroup(idManager->getSequenceId(seqName));
       }
       void setProbs() 
       {
@@ -664,9 +664,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->refIdGroup[subrange_begin->refSeqId];
+              int currGroup = this->getRefGroup(idManager->getSequenceName(subrange_begin->refSeqId));
               subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup] (const auto& unfilteredMappings_candidate) {
-                  return currGroup == this->refIdGroup[unfilteredMappings_candidate.refSeqId];
+                  return currGroup == this->getRefGroup(idManager->getSequenceName(unfilteredMappings_candidate.refSeqId));
               });
             }
             else
@@ -912,9 +912,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->refIdGroup[l1_begin->seqId];
+              int currGroup = this->getRefGroup(idManager->getSequenceName(l1_begin->seqId));
               l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, currGroup] (const auto& candidate) {
-                  return currGroup == this->refIdGroup[candidate.seqId];
+                  return currGroup == this->getRefGroup(idManager->getSequenceName(candidate.seqId));
               });
             }
             else
@@ -1029,7 +1029,7 @@ namespace skch
             //const auto& ref_len = this->idManager.getSeqLen(ip_it->seqId);
             bool skip_mapping = false;
             if (param.skip_self && Q.seqName == ref_name) skip_mapping = true;
-            if (param.skip_prefix && this->refIdGroup[ip_it->seqId] == Q.refGroup) skip_mapping = true;
+            if (param.skip_prefix && this->getRefGroup(idManager->getSequenceName(ip_it->seqId)) == Q.refGroup) skip_mapping = true;
             if (param.lower_triangular && Q.seqCounter <= ip_it->seqId) skip_mapping = true;
     
             if (!skip_mapping) {
@@ -1291,9 +1291,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->refIdGroup[ip_begin->seqId];
+              int currGroup = this->getRefGroup(idManager->getSequenceName(ip_begin->seqId));
               ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, currGroup] (const auto& ip) {
-                  return currGroup == this->refIdGroup[ip.seqId];
+                  return currGroup == this->getRefGroup(idManager->getSequenceName(ip.seqId));
               });
             }
             else
@@ -1343,7 +1343,7 @@ namespace skch
           std::string prevPrefix;
 
           for (const auto& [seqName, originalIndex, seqLength] : seqInfoWithIndex) {
-              std::string currPrefix = this->prefix(seqName, param.prefix_delim);
+              std::string currPrefix = seqName.substr(0, seqName.find_last_of(param.prefix_delim));
               
               if (currPrefix != prevPrefix) {
                   currentGroup++;
@@ -1354,7 +1354,7 @@ namespace skch
               // Metadata is now handled by idManager, no need to push_back here
           }
 
-          this->refIdGroup.swap(refGroups);
+          // Removed refIdGroup swap as it's no longer needed
 
           if (totalSeqs == 0) {
               std::cerr << "[mashmap::skch::Map::buildRefGroups] ERROR: No sequences indexed!" << std::endl;

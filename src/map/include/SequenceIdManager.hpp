@@ -30,7 +30,7 @@ public:
                       const std::string& queryList = "",
                       const std::string& targetList = "") 
         : prefixDelim(prefixDelim) {
-        populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, queryList, targetList);
+        populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, prefixDelim, queryList, targetList);
         buildRefGroups();
     }
 
