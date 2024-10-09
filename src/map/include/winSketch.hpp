@@ -225,7 +225,7 @@ namespace skch
                   auto minmers = new MinVec_Type();
                   CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->len, 
                                          param.kmerSize, param.segLength, param.alphabetSize, 
-                                         param.sketchSize, record->seqId);
+                                         param.sketchSize, record->seqCounter);
                   while (!output_queue.try_push(minmers)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
@@ -305,7 +305,7 @@ namespace skch
                       }
                     
                       // Update metadata
-                      this->metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq.length())});
+                      // Metadata is now handled by idManager, no need to push_back here
                   } else {
                       totalSeqSkipped++;
                       std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
@@ -314,7 +314,7 @@ namespace skch
           }
           
           // Update sequencesByFileInfo
-          this->sequencesByFileInfo.push_back(idManager.size());
+          // Removed as sequencesByFileInfo is no longer used
           std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects
