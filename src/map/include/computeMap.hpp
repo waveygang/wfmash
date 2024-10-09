@@ -139,9 +139,6 @@ namespace skch
       //for an L1 candidate if the best intersection size is i;
       std::vector<int> sketchCutoffs; 
 
-      //Vector for obtaining group from refId
-      //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
-      std::vector<int> refIdGroup; 
 
       // Sequence ID manager
       // Atomic queues for input and output
@@ -238,21 +235,9 @@ namespace skch
 
     private:
 
-      // Gets the ref group of a query based on the prefix
-      int getRefGroup(const std::string& seqName) {
-          auto it = std::find_if(this->sketch_metadata.begin(), this->sketch_metadata.end(),
-                                 [&seqName](const ContigInfo& info) { return info.name == seqName; });
-          if (it != idManager->getMetadata().end()) {
-              size_t index = std::distance(idManager->getMetadata().begin(), it);
-              return refIdGroup[index];
-          }
-          return -1; // Not found
-      }
-
-      // Helper function to get the prefix of a string
-      std::string prefix(const std::string& s, const char c) {
-          size_t pos = s.find_last_of(c);
-          return (pos != std::string::npos) ? s.substr(0, pos) : s;
+      // Gets the ref group of a query based on the sequence ID
+      int getRefGroup(seqno_t seqId) {
+          return idManager->getRefGroup(seqId);
       }
       void setProbs() 
       {

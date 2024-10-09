@@ -19,6 +19,7 @@ private:
     std::vector<ContigInfo> metadata;
     std::vector<std::string> querySequenceNames;
     std::vector<std::string> targetSequenceNames;
+    char prefixDelim;
 
 public:
     SequenceIdManager(const std::vector<std::string>& queryFiles,
@@ -27,8 +28,10 @@ public:
                       const std::string& targetPrefix,
                       char prefixDelim,
                       const std::string& queryList = "",
-                      const std::string& targetList = "") {
-        populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, prefixDelim, queryList, targetList);
+                      const std::string& targetList = "") 
+        : prefixDelim(prefixDelim) {
+        populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, queryList, targetList);
+        buildRefGroups();
     }
 
     seqno_t getSequenceId(const std::string& sequenceName) const {
@@ -65,7 +68,49 @@ public:
     const std::vector<std::string>& getQuerySequenceNames() const { return querySequenceNames; }
     const std::vector<std::string>& getTargetSequenceNames() const { return targetSequenceNames; }
 
+    int getRefGroup(seqno_t seqId) const {
+        if (seqId < metadata.size()) {
+            return metadata[seqId].groupId;
+        }
+        throw std::runtime_error("Invalid sequence ID: " + std::to_string(seqId));
+    }
+
 private:
+    void buildRefGroups() {
+        std::vector<std::tuple<std::string, size_t>> seqInfoWithIndex;
+        size_t totalSeqs = metadata.size();
+
+        for (size_t i = 0; i < totalSeqs; ++i) {
+            seqInfoWithIndex.emplace_back(metadata[i].name, i);
+        }
+
+        std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
+
+        int currentGroup = 0;
+        std::string prevPrefix;
+
+        for (const auto& [seqName, originalIndex] : seqInfoWithIndex) {
+            std::string currPrefix = prefix(seqName);
+            
+            if (currPrefix != prevPrefix) {
+                currentGroup++;
+                prevPrefix = currPrefix;
+            }
+
+            metadata[originalIndex].groupId = currentGroup;
+        }
+
+        if (totalSeqs == 0) {
+            std::cerr << "[SequenceIdManager::buildRefGroups] ERROR: No sequences indexed!" << std::endl;
+            exit(1);
+        }
+    }
+
+    std::string prefix(const std::string& s) const {
+        size_t pos = s.find_last_of(prefixDelim);
+        return (pos != std::string::npos) ? s.substr(0, pos) : s;
+    }
+
     void populateFromFiles(const std::vector<std::string>& queryFiles,
                            const std::vector<std::string>& targetFiles,
                            const std::vector<std::string>& queryPrefixes,
