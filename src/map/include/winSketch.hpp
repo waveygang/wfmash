@@ -38,6 +38,9 @@ namespace fs = std::filesystem;
 
 #include "common/seqiter.hpp"
 #include "SequenceIdManager.hpp"
+#include "common/atomic_queue/atomic_queue.h"
+#include <thread>
+#include <atomic>
 
 //#include "assert.hpp"
 
@@ -151,7 +154,31 @@ namespace skch
             || !stdfs::exists(param.indexFilename)
             || param.overwrite_index)
         {
-          this->build(true, targets);
+          std::atomic<bool> reader_done(false);
+          std::atomic<bool> workers_done(false);
+
+          std::thread reader([&]() {
+              reader_thread(targets, reader_done);
+          });
+
+          std::vector<std::thread> workers;
+          for (int i = 0; i < param.threads; ++i) {
+              workers.emplace_back([&]() {
+                  worker_thread(reader_done);
+              });
+          }
+
+          std::thread writer([&]() {
+              writer_thread(workers_done);
+          });
+
+          reader.join();
+          for (auto& worker : workers) {
+              worker.join();
+          }
+          workers_done.store(true);
+          writer.join();
+
           this->computeFreqHist();
           this->computeFreqSeedSet();
           this->dropFreqSeedSet();
@@ -166,7 +193,6 @@ namespace skch
             exit(0);
           }
         } else {
-          this->build(false);
           this->readIndex();
         }
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
@@ -182,6 +208,67 @@ namespace skch
       }
 
       private:
+      void reader_thread(const std::vector<std::string>& targets, std::atomic<bool>& reader_done) {
+          for (const auto& fileName : param.refSequences) {
+              seqiter::for_each_seq_in_file(
+                  fileName,
+                  targets,
+                  [&](const std::string& seq_name, const std::string& seq) {
+                      seqno_t seqId = idManager.getSequenceId(seq_name);
+                      auto record = new seqiter::SeqRecord{seq, seq_name, seqId};
+                      while (!input_queue.try_push(record)) {
+                          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                      }
+                  });
+          }
+          reader_done.store(true);
+      }
+
+      void worker_thread(std::atomic<bool>& reader_done) {
+          while (true) {
+              seqiter::SeqRecord* record = nullptr;
+              if (input_queue.try_pop(record)) {
+                  auto minmers = new MinVec_Type();
+                  CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->seq.length(), 
+                                         param.kmerSize, param.segLength, param.alphabetSize, 
+                                         param.sketchSize, record->seqId);
+                  while (!output_queue.try_push(minmers)) {
+                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  }
+                  delete record;
+              } else if (reader_done.load() && input_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
+
+      void writer_thread(std::atomic<bool>& workers_done) {
+          while (true) {
+              MinVec_Type* minmers = nullptr;
+              if (output_queue.try_pop(minmers)) {
+                  for (const auto& mi : *minmers) {
+                      this->hashFreq[mi.hash]++;
+                      if (minmerPosLookupIndex[mi.hash].size() == 0 
+                              || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                              || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+                      {
+                          minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                          minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+                      } else {
+                          minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+                      }
+                  }
+                  this->minmerIndex.insert(this->minmerIndex.end(), minmers->begin(), minmers->end());
+                  delete minmers;
+              } else if (workers_done.load() && output_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
 
       /**
        * @brief     Get sequence metadata and optionally build the sketch table
