@@ -230,7 +230,7 @@ namespace skch
                       std::cerr << "Error: Failed to get length for sequence " << seq_name << std::endl;
                       continue;
                   }
-                  this->sketch_metadata.push_back(ContigInfo{seq_name, static_cast<offset_t>(seq_len)});
+                  // Metadata is now handled by idManager, no need to push_back here
               }
 
               this->sketch_sequencesByFileInfo.push_back(this->sketch_metadata.size());
@@ -246,8 +246,8 @@ namespace skch
       int getRefGroup(const std::string& seqName) {
           auto it = std::find_if(this->sketch_metadata.begin(), this->sketch_metadata.end(),
                                  [&seqName](const ContigInfo& info) { return info.name == seqName; });
-          if (it != sketch_metadata.end()) {
-              size_t index = std::distance(sketch_metadata.begin(), it);
+          if (it != idManager->getMetadata().end()) {
+              size_t index = std::distance(idManager->getMetadata().begin(), it);
               return refIdGroup[index];
           }
           return -1; // Not found
@@ -1355,8 +1355,7 @@ namespace skch
           std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
 
           std::vector<int> refGroups(totalSeqs);
-          this->sketch_metadata.clear();
-          this->sketch_metadata.reserve(totalSeqs);
+          // Removed as sketch_metadata is no longer used
           int currentGroup = 0;
           std::string prevPrefix;
 
@@ -1369,7 +1368,7 @@ namespace skch
               }
 
               refGroups[originalIndex] = currentGroup;
-              this->sketch_metadata.push_back(ContigInfo{seqName, seqLength});
+              // Metadata is now handled by idManager, no need to push_back here
           }
 
           this->refIdGroup.swap(refGroups);
