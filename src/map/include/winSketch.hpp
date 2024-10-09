@@ -196,11 +196,6 @@ namespace skch
         std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
       }
 
-      // This method is no longer needed as metadata is managed by SequenceIdManager
-      // void copyMetadataFrom(const Sketch& other) {
-      //   // Removed
-      // }
-
       private:
       void reader_thread(const std::vector<std::string>& targets, std::atomic<bool>& reader_done) {
           for (const auto& fileName : param.refSequences) {
@@ -709,4 +704,3 @@ namespace skch
 } //End of namespace skch
 
 #endif
-      // Removed refIdGroup, prefix function, and metadata
