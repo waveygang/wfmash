@@ -40,6 +40,7 @@ namespace fs = std::filesystem;
 #include "common/atomic_queue/atomic_queue.h"
 #include "SequenceIdManager.hpp"
 #include "common/atomic_queue/atomic_queue.h"
+#include "common/progress.hpp"
 #include <thread>
 #include <atomic>
 
@@ -89,6 +90,7 @@ namespace skch
       HF_Map_t hashFreq;
 
       private:
+        progress_meter::ProgressMeter progress;
 
       public:
 
@@ -144,6 +146,21 @@ namespace skch
 
       void initialize(const std::vector<std::string>& targets = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
+        
+        // Calculate total sequence length
+        uint64_t total_seq_length = 0;
+        for (const auto& fileName : param.refSequences) {
+            seqiter::for_each_seq_in_file(
+                fileName,
+                targets,
+                [&](const std::string& seq_name, const std::string& seq) {
+                    total_seq_length += seq.length();
+                });
+        }
+        
+        // Initialize progress meter
+        progress = progress_meter::ProgressMeter(total_seq_length, "[mashmap::skch::Sketch::initialize] indexed");
+
         if (param.indexFilename.empty() 
             || !stdfs::exists(param.indexFilename)
             || param.overwrite_index)
@@ -203,10 +220,15 @@ namespace skch
                   fileName,
                   targets,
                   [&](const std::string& seq_name, const std::string& seq) {
-                      seqno_t seqId = idManager.getSequenceId(seq_name);
-                      auto record = new InputSeqContainer(seq, seq_name, seqId);
-                      while (!input_queue.try_push(record)) {
-                          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                      if (seq.length() >= param.segLength) {
+                          seqno_t seqId = idManager.getSequenceId(seq_name);
+                          auto record = new InputSeqContainer(seq, seq_name, seqId);
+                          while (!input_queue.try_push(record)) {
+                              std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                          }
+                      } else {
+                          // Update progress for skipped sequences
+                          progress.increment(seq.length());
                       }
                   });
           }
@@ -250,6 +272,10 @@ namespace skch
                       }
                   }
                   this->minmerIndex.insert(this->minmerIndex.end(), minmers->begin(), minmers->end());
+                  
+                  // Update progress meter
+                  progress.increment(minmers->size() * param.segLength);
+                  
                   delete minmers;
               } else if (workers_done.load() && output_queue.was_empty()) {
                   break;
@@ -257,6 +283,9 @@ namespace skch
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
+          
+          // Finalize progress meter
+          progress.finish();
       }
 
       /**
