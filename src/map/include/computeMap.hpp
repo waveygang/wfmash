@@ -662,8 +662,8 @@ namespace skch
             if (param.skip_prefix)
             {
               int currGroup = this->getRefGroup(idManager->getSequenceName(subrange_begin->refSeqId));
-              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup] (const auto& unfilteredMappings_candidate) {
-                  return currGroup == this->getRefGroup(idManager->getSequenceName(unfilteredMappings_candidate.refSeqId));
+              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& unfilteredMappings_candidate) {
+                  return currGroup == this->getRefGroup(idManager.getSequenceName(unfilteredMappings_candidate.refSeqId));
               });
             }
             else
@@ -809,7 +809,7 @@ namespace skch
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
-              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE);
+              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager);
               mappings = std::move(filteredMappings);
           }
 
@@ -875,7 +875,7 @@ namespace skch
       {
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
-              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false);
+              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager);
               readMappings = std::move(filteredMappings);
           }
       }
@@ -1744,7 +1744,7 @@ namespace skch
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t groupFilteredMappings;
-              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false);
+              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager);
               readMappings = std::move(groupFilteredMappings);
           }
       }
