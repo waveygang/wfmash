@@ -16,8 +16,7 @@ namespace skch {
 class SequenceIdManager {
 private:
     std::unordered_map<std::string, seqno_t> sequenceNameToId;
-    std::vector<std::string> idToSequenceName;
-    std::vector<offset_t> idToSequenceLength;
+    std::vector<ContigInfo> metadata;
     std::vector<std::string> querySequenceNames;
     std::vector<std::string> targetSequenceNames;
 
@@ -40,22 +39,27 @@ public:
         throw std::runtime_error("Sequence name not found: " + sequenceName);
     }
 
-    std::string getSequenceName(seqno_t id) const {
-        if (id < static_cast<seqno_t>(idToSequenceName.size())) {
-            return idToSequenceName[id];
+    const ContigInfo& getContigInfo(seqno_t id) const {
+        if (id < static_cast<seqno_t>(metadata.size())) {
+            return metadata[id];
         }
         throw std::runtime_error("Invalid sequence ID: " + std::to_string(id));
+    }
+
+    std::string getSequenceName(seqno_t id) const {
+        return getContigInfo(id).name;
     }
 
     offset_t getSequenceLength(seqno_t id) const {
-        if (id < static_cast<seqno_t>(idToSequenceLength.size())) {
-            return idToSequenceLength[id];
-        }
-        throw std::runtime_error("Invalid sequence ID: " + std::to_string(id));
+        return getContigInfo(id).len;
     }
 
     size_t size() const {
-        return idToSequenceName.size();
+        return metadata.size();
+    }
+
+    const std::vector<ContigInfo>& getMetadata() const {
+        return metadata;
     }
 
     const std::vector<std::string>& getQuerySequenceNames() const { return querySequenceNames; }
@@ -129,10 +133,9 @@ private:
         if (it != sequenceNameToId.end()) {
             return it->second;
         }
-        seqno_t newId = idToSequenceName.size();
+        seqno_t newId = metadata.size();
         sequenceNameToId[sequenceName] = newId;
-        idToSequenceName.push_back(sequenceName);
-        idToSequenceLength.push_back(length);
+        metadata.push_back(ContigInfo{sequenceName, length});
         return newId;
     }
 };

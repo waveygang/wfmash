@@ -116,7 +116,6 @@ namespace skch
       skch::Sketch* refSketch;
 
       //refmetadata
-      std::vector<ContigInfo> sketch_metadata;
       std::vector<int> sketch_sequencesByFileInfo;
 
       // Sequence ID manager
@@ -1428,7 +1427,7 @@ namespace skch
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
               // and if we are self-mapping, the query is shorter than the target
-              const auto& ref = this->sketch_metadata[l2.seqId];
+              const auto& ref = this->idManager->getContigInfo(l2.seqId);
               if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity)
                   || nucIdentity >= param.percentageIdentity)
               {
@@ -2027,16 +2026,16 @@ namespace skch
             {
               if(e.refStartPos < 0)
                 e.refStartPos = 0;
-              if(e.refStartPos >= this->sketch_metadata[e.refSeqId].len)
-                e.refStartPos = this->sketch_metadata[e.refSeqId].len - 1;
+              if(e.refStartPos >= this->idManager->getSequenceLength(e.refSeqId))
+                e.refStartPos = this->idManager->getSequenceLength(e.refSeqId) - 1;
             }
 
             //reference end pos
             {
               if(e.refEndPos < e.refStartPos)
                 e.refEndPos = e.refStartPos;
-              if(e.refEndPos >= this->sketch_metadata[e.refSeqId].len)
-                e.refEndPos = this->sketch_metadata[e.refSeqId].len - 1;
+              if(e.refEndPos >= this->idManager->getSequenceLength(e.refSeqId))
+                e.refEndPos = this->idManager->getSequenceLength(e.refSeqId) - 1;
             }
 
             //query start pos
@@ -2078,7 +2077,7 @@ namespace skch
                    << sep << e.queryEndPos - (param.legacy_output ? 1 : 0)
                    << sep << (e.strand == strnd::FWD ? "+" : "-")
                    << sep << idManager->getSequenceName(e.refSeqId)
-                   << sep << this->sketch_metadata[e.refSeqId].len
+                   << sep << this->idManager->getSequenceLength(e.refSeqId)
                    << sep << e.refStartPos
                    << sep << e.refEndPos - (param.legacy_output ? 1 : 0);
 
