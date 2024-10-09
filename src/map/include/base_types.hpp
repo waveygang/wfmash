@@ -209,6 +209,9 @@ namespace skch
 
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
+  //Vector type for storing MinmerInfo
+  typedef std::vector<MinmerInfo> MinVec_Type;
+
   //Container to save copy of kseq object
   struct InputSeqContainer
   {
