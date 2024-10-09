@@ -107,7 +107,7 @@ namespace skch
       MI_Type minmerIndex;
 
       // Atomic queues for input and output
-      using input_queue_t = atomic_queue::AtomicQueue<seqiter::SeqRecord*, 1024>;
+      using input_queue_t = atomic_queue::AtomicQueue<InputSeqContainer*, 1024>;
       using output_queue_t = atomic_queue::AtomicQueue<MI_Type*, 1024>;
       input_queue_t input_queue;
       output_queue_t output_queue;
@@ -209,7 +209,7 @@ namespace skch
                   targets,
                   [&](const std::string& seq_name, const std::string& seq) {
                       seqno_t seqId = idManager.getSequenceId(seq_name);
-                      auto record = new seqiter::SeqRecord{seq, seq_name, seqId};
+                      auto record = new InputSeqContainer(seq, seq_name, seqId);
                       while (!input_queue.try_push(record)) {
                           std::this_thread::sleep_for(std::chrono::milliseconds(10));
                       }
@@ -220,10 +220,10 @@ namespace skch
 
       void worker_thread(std::atomic<bool>& reader_done) {
           while (true) {
-              seqiter::SeqRecord* record = nullptr;
+              InputSeqContainer* record = nullptr;
               if (input_queue.try_pop(record)) {
                   auto minmers = new MinVec_Type();
-                  CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->seq.length(), 
+                  CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->len, 
                                          param.kmerSize, param.segLength, param.alphabetSize, 
                                          param.sketchSize, record->seqId);
                   while (!output_queue.try_push(minmers)) {
@@ -709,4 +709,4 @@ namespace skch
 } //End of namespace skch
 
 #endif
-      // Removed refIdGroup and prefix function
+      // Removed refIdGroup, prefix function, and metadata
