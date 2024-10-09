@@ -691,9 +691,9 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
         /// ....
         // Calculate the sizes of unaligned regions using only the bounds
         uint64_t left_query_size = bounds.query_start_offset;
-        uint64_t right_query_size = remaining_query_length - bounds.query_end_offset;
+        uint64_t right_query_size = remaining_query_length > bounds.query_end_offset ? remaining_query_length - bounds.query_end_offset : 0;
         uint64_t left_target_size = bounds.target_start_offset;
-        uint64_t right_target_size = remaining_target_length - bounds.target_end_offset;
+        uint64_t right_target_size = remaining_target_length > bounds.target_end_offset ? remaining_target_length - bounds.target_end_offset : 0;
 
         uint64_t max_left_size = std::max(left_query_size, left_target_size);
         uint64_t max_right_size = std::max(right_query_size, right_target_size);
