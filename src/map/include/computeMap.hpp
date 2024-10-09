@@ -450,8 +450,8 @@ namespace skch
         std::atomic<bool> workers_done(false);
         std::atomic<bool> fragments_done(false);
 
-        const auto& querySequenceNames = idManager->getQuerySequenceNames();
-        const auto& targetSequenceNames = idManager->getTargetSequenceNames();
+        this->querySequenceNames = idManager->getQuerySequenceNames();
+        this->targetSequenceNames = idManager->getTargetSequenceNames();
 
         // Count the total number of sequences and sequence length
         uint64_t total_seqs = querySequenceNames.size();
