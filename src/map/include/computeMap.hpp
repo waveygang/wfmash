@@ -645,7 +645,8 @@ namespace skch
           MappingResultsVector_t &unfilteredMappings,
           MappingResultsVector_t &filteredMappings,
           int n_mappings,
-          bool filter_ref)
+          bool filter_ref,
+          const SequenceIdManager& idManager)
       {
         filteredMappings.reserve(unfilteredMappings.size());
 
@@ -677,7 +678,7 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, *this->refSketch, n_mappings, param.dropRand, param.overlap_threshold);
+                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
