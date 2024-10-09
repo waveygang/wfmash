@@ -226,10 +226,8 @@ namespace skch
                           while (!input_queue.try_push(record)) {
                               std::this_thread::sleep_for(std::chrono::milliseconds(10));
                           }
-                      } else {
-                          // Update progress for skipped sequences
-                          progress.increment(seq.length());
                       }
+                      // We don't update progress here anymore
                   });
           }
           reader_done.store(true);
