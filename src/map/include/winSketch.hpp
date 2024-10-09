@@ -110,7 +110,7 @@ namespace skch
 
       // Atomic queues for input and output
       using input_queue_t = atomic_queue::AtomicQueue<InputSeqContainer*, 1024>;
-      using output_queue_t = atomic_queue::AtomicQueue<MI_Type*, 1024>;
+      using output_queue_t = atomic_queue::AtomicQueue<std::pair<uint64_t, MI_Type*>, 1024>;
       input_queue_t input_queue;
       output_queue_t output_queue;
 
@@ -239,11 +239,11 @@ namespace skch
           while (true) {
               InputSeqContainer* record = nullptr;
               if (input_queue.try_pop(record)) {
-                  auto minmers = new MinVec_Type();
+                  auto minmers = new MI_Type();
                   CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->len, 
                                          param.kmerSize, param.segLength, param.alphabetSize, 
                                          param.sketchSize, record->seqCounter);
-                  while (!output_queue.try_push(minmers)) {
+                  while (!output_queue.try_push(std::make_pair(record->len, minmers))) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
                   delete record;
@@ -257,8 +257,10 @@ namespace skch
 
       void writer_thread(std::atomic<bool>& workers_done) {
           while (true) {
-              MinVec_Type* minmers = nullptr;
-              if (output_queue.try_pop(minmers)) {
+              std::pair<uint64_t, MI_Type*> output;
+              if (output_queue.try_pop(output)) {
+                  uint64_t seq_length = output.first;
+                  MI_Type* minmers = output.second;
                   for (const auto& mi : *minmers) {
                       this->hashFreq[mi.hash]++;
                       if (minmerPosLookupIndex[mi.hash].size() == 0 
@@ -274,7 +276,7 @@ namespace skch
                   this->minmerIndex.insert(this->minmerIndex.end(), minmers->begin(), minmers->end());
                   
                   // Update progress meter
-                  progress.increment(minmers->size() * param.segLength);
+                  progress.increment(seq_length);
                   
                   delete minmers;
               } else if (workers_done.load() && output_queue.was_empty()) {
