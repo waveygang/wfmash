@@ -661,7 +661,7 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->getRefGroup(idManager->getSequenceName(subrange_begin->refSeqId));
+              int currGroup = this->getRefGroup(idManager.getSequenceName(subrange_begin->refSeqId));
               subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& unfilteredMappings_candidate) {
                   return currGroup == this->getRefGroup(idManager.getSequenceName(unfilteredMappings_candidate.refSeqId));
               });
@@ -678,7 +678,7 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold, minOverlapThreshold, maxMappingsPerRead, minScoreThreshold, minMappingQuality, minMappingLength);
+                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
