@@ -139,6 +139,12 @@ namespace skch
       //for an L1 candidate if the best intersection size is i;
       std::vector<int> sketchCutoffs; 
 
+      // Atomic queues for input and output
+      typedef atomic_queue::AtomicQueue<seqiter::SeqRecord*, 1024> input_queue_t;
+      typedef atomic_queue::AtomicQueue<MinVec_Type*, 1024> output_queue_t;
+      input_queue_t input_queue;
+      output_queue_t output_queue;
+
 
       // Sequence ID manager
       // Atomic queues for input and output
