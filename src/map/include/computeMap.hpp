@@ -122,9 +122,6 @@ namespace skch
       std::vector<std::string> querySequenceNames;
       std::vector<std::string> targetSequenceNames;
 
-      //Container type for saving read sketches during L1 and L2 both
-      typedef Sketch::MI_Type MinVec_Type;
-
       typedef Sketch::MIIter_t MIIter_t;
 
       //Custom function for post processing the results, by default does nothing
