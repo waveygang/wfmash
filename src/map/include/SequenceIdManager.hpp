@@ -32,6 +32,35 @@ public:
         : prefixDelim(prefixDelim) {
         populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, prefixDelim, queryList, targetList);
         buildRefGroups();
+        dumpState(); // Add this line to dump the state after initialization
+    }
+
+    // Add this method to dump the state of SequenceIdManager
+    void dumpState() const {
+        std::cerr << "SequenceIdManager State:" << std::endl;
+        std::cerr << "Total sequences: " << metadata.size() << std::endl;
+        std::cerr << "Query sequences: " << querySequenceNames.size() << std::endl;
+        std::cerr << "Target sequences: " << targetSequenceNames.size() << std::endl;
+        std::cerr << "\nSequence details:" << std::endl;
+        for (size_t i = 0; i < metadata.size(); ++i) {
+            std::cerr << "ID: " << i 
+                      << ", Name: " << metadata[i].name 
+                      << ", Length: " << metadata[i].len 
+                      << ", Group: " << metadata[i].groupId 
+                      << ", Type: " << (std::find(querySequenceNames.begin(), querySequenceNames.end(), metadata[i].name) != querySequenceNames.end() ? "Query" : "Target")
+                      << std::endl;
+        }
+        std::cerr << "\nGroup details:" << std::endl;
+        std::unordered_map<int, std::vector<std::string>> groupToSequences;
+        for (const auto& info : metadata) {
+            groupToSequences[info.groupId].push_back(info.name);
+        }
+        for (const auto& [groupId, sequences] : groupToSequences) {
+            std::cerr << "Group " << groupId << ": " << sequences.size() << " sequences" << std::endl;
+            for (const auto& seq : sequences) {
+                std::cerr << "  " << seq << std::endl;
+            }
+        }
     }
 
     seqno_t getSequenceId(const std::string& sequenceName) const {

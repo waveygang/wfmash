@@ -193,6 +193,17 @@ namespace skch
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
         idManager(std::make_unique<SequenceIdManager>(p.querySequences, p.refSequences, p.query_prefix, p.target_prefix, p.prefix_delim, p.query_list, p.target_list))
           {
+              std::cerr << "Initializing Map with parameters:" << std::endl;
+              std::cerr << "Query sequences: " << p.querySequences.size() << std::endl;
+              std::cerr << "Reference sequences: " << p.refSequences.size() << std::endl;
+              std::cerr << "Query prefix: " << (p.query_prefix.empty() ? "None" : p.query_prefix) << std::endl;
+              std::cerr << "Target prefix: " << (p.target_prefix.empty() ? "None" : p.target_prefix) << std::endl;
+              std::cerr << "Prefix delimiter: '" << p.prefix_delim << "'" << std::endl;
+              std::cerr << "Query list: " << (p.query_list.empty() ? "None" : p.query_list) << std::endl;
+              std::cerr << "Target list: " << (p.target_list.empty() ? "None" : p.target_list) << std::endl;
+              
+              idManager->dumpState();
+              
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
