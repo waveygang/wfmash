@@ -115,9 +115,6 @@ namespace skch
       //reference sketch
       skch::Sketch* refSketch;
 
-      //refmetadata
-      std::vector<int> sketch_sequencesByFileInfo;
-
       // Sequence ID manager
       std::unique_ptr<SequenceIdManager> idManager;
 
@@ -233,7 +230,6 @@ namespace skch
                   // Metadata is now handled by idManager, no need to push_back here
               }
 
-              this->sketch_sequencesByFileInfo.push_back(this->sketch_metadata.size());
               fai_destroy(fai);
           }
       }
@@ -1043,9 +1039,11 @@ namespace skch
           while(!pq.empty())
           {
             const IP_const_iterator ip_it = pq.front().it;
-            const auto& ref = this->sketch_metadata[ip_it->seqId];
+            //const auto& ref = this->sketch_metadata[ip_it->seqId];
+            const auto& ref_name = this->idManager->getSequenceName(ip_it->seqId);
+            //const auto& ref_len = this->idManager.getSeqLen(ip_it->seqId);
             bool skip_mapping = false;
-            if (param.skip_self && Q.seqName == ref.name) skip_mapping = true;
+            if (param.skip_self && Q.seqName == ref_name) skip_mapping = true;
             if (param.skip_prefix && this->refIdGroup[ip_it->seqId] == Q.refGroup) skip_mapping = true;
             if (param.lower_triangular && Q.seqCounter <= ip_it->seqId) skip_mapping = true;
     
@@ -1372,8 +1370,6 @@ namespace skch
           }
 
           this->refIdGroup.swap(refGroups);
-          this->sketch_sequencesByFileInfo.clear();
-          this->sketch_sequencesByFileInfo.push_back(totalSeqs);
 
           if (totalSeqs == 0) {
               std::cerr << "[mashmap::skch::Map::buildRefGroups] ERROR: No sequences indexed!" << std::endl;

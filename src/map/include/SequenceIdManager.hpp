@@ -46,11 +46,11 @@ public:
         throw std::runtime_error("Invalid sequence ID: " + std::to_string(id));
     }
 
-    std::string getSequenceName(seqno_t id) const {
+    const std::string& getSequenceName(seqno_t id) const {
         return getContigInfo(id).name;
     }
 
-    offset_t getSequenceLength(seqno_t id) const {
+    const offset_t& getSequenceLength(seqno_t id) const {
         return getContigInfo(id).len;
     }
 
