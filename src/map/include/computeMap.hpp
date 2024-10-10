@@ -524,6 +524,7 @@ namespace skch
 
             // Combine mappings from this subset with previous subsets
             for (auto& [queryName, mappings] : aggregatedMappings) {
+                auto querySeqId = idManager->getSequenceId(queryName);
                 combinedMappings[querySeqId].insert(
                     combinedMappings[querySeqId].end(),
                     mappings.begin(),
@@ -834,7 +835,6 @@ namespace skch
           while (true) {
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
-                  seqno_t querySeqId = idManager->getSequenceId(output->queryName);
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
                   combinedMappings[querySeqId].insert(
                       combinedMappings[querySeqId].end(),
