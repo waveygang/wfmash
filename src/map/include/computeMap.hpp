@@ -191,7 +191,14 @@ namespace skch
         param(p),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        idManager(std::make_unique<SequenceIdManager>(p.querySequences, p.refSequences, p.query_prefix, p.target_prefix, p.prefix_delim, p.query_list, p.target_list))
+        idManager(std::make_unique<SequenceIdManager>(
+            p.querySequences,
+            p.refSequences,
+            std::vector<std::string>{p.query_prefix},
+            std::vector<std::string>{p.target_prefix},
+            p.prefix_delim,
+            p.query_list,
+            p.target_list))
           {
               std::cerr << "Initializing Map with parameters:" << std::endl;
               std::cerr << "Query sequences: " << p.querySequences.size() << std::endl;
