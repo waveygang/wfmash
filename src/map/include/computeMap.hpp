@@ -470,7 +470,7 @@ namespace skch
             target_subsets.push_back(current_subset);
         }
         
-        std::unordered_map<std::string, MappingResultsVector_t> combinedMappings;
+        std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
         // For each subset of target sequences
         for (const auto& target_subset : target_subsets) {
@@ -544,7 +544,7 @@ namespace skch
         }
 
         // Process combined mappings
-        for (auto& [queryName, mappings] : combinedMappings) {
+        for (auto& [querySeqId, mappings] : combinedMappings) {
             // Sort mappings by query position, then reference sequence id, then reference position
             std::sort(
                 mappings.begin(), mappings.end(),
@@ -554,6 +554,7 @@ namespace skch
                 }
             );
 
+            std::string queryName = idManager->getSequenceName(querySeqId);
             processAggregatedMappings(queryName, mappings, outstrm);
             totalReadsMapped += !mappings.empty();
         }
@@ -833,8 +834,9 @@ namespace skch
           while (true) {
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
-                  aggregatedMappings[output->queryName].insert(
-                      aggregatedMappings[output->queryName].end(),
+                  seqno_t querySeqId = idManager->getSequenceId(output->queryName);
+                  aggregatedMappings[querySeqId].insert(
+                      aggregatedMappings[querySeqId].end(),
                       output->results.begin(),
                       output->results.end()
                   );
