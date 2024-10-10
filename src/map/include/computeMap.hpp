@@ -835,6 +835,7 @@ namespace skch
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
+                  seqno_t querySeqId = idManager->getSequenceId(output->queryName);
                   combinedMappings[querySeqId].insert(
                       combinedMappings[querySeqId].end(),
                       output->results.begin(),
