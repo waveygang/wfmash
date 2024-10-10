@@ -196,7 +196,7 @@ namespace skch
             p.refSequences,
             std::vector<std::string>{p.query_prefix},
             std::vector<std::string>{p.target_prefix},
-            p.prefix_delim,
+            std::string(1, p.prefix_delim),
             p.query_list,
             p.target_list))
           {
