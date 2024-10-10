@@ -235,7 +235,7 @@ namespace skch
                   auto minmers = new MI_Type();
                   CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->len, 
                                          param.kmerSize, param.segLength, param.alphabetSize, 
-                                         param.sketchSize, record->seqCounter);
+                                         param.sketchSize, record->seqId);
                   auto output_pair = new std::pair<uint64_t, MI_Type*>(record->len, minmers);
                   while (!output_queue.try_push(output_pair)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -379,7 +379,7 @@ namespace skch
                 param.segLength, 
                 param.alphabetSize, 
                 param.sketchSize,
-                input->seqCounter);
+                input->seqId);
 
         return thread_output;
       }

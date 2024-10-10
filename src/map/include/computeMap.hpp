@@ -63,7 +63,7 @@ namespace skch
       const char* seq;
       int len;
       int fullLen;
-      seqno_t seqCounter;
+      seqno_t seqId;
       std::string seqName;
       int refGroup;
       int fragmentIndex;
@@ -154,7 +154,7 @@ namespace skch
         Q.seq = const_cast<char*>(fragment->seq);
         Q.len = fragment->len;
         Q.fullLen = fragment->fullLen;
-        Q.seqCounter = fragment->seqCounter;
+        Q.seqId = fragment->seqId;
         Q.seqName = fragment->seqName;
         Q.refGroup = fragment->refGroup;
 
@@ -733,10 +733,10 @@ namespace skch
       QueryMappingOutput* mapModule(InputSeqProgContainer* input,
                                     fragment_atomic_queue_t& fragment_queue) {
 
-        QueryMappingOutput* output = new QueryMappingOutput{input->seqName, {}, {}, input->progress};
+        QueryMappingOutput* output = new QueryMappingOutput{input->name, {}, {}, input->progress};
         std::atomic<int> fragments_processed{0};
         bool split_mapping = true;
-        int refGroup = this->getRefGroup(input->seqName);
+        int refGroup = this->getRefGroup(input->name);
 
         std::vector<FragmentData*> fragments;
         int noOverlapFragmentCount = input->len / param.segLength;
@@ -746,8 +746,8 @@ namespace skch
                 &(input->seq)[0u] + i * param.segLength,
                 static_cast<int>(param.segLength),
                 static_cast<int>(input->len),
-                input->seqCounter,
-                input->seqName,
+                input->seqId,
+                input->name,
                 refGroup,
                 i,
                 output,
@@ -761,8 +761,8 @@ namespace skch
                 &(input->seq)[0u] + input->len - param.segLength,
                 static_cast<int>(param.segLength),
                 static_cast<int>(input->len),
-                input->seqCounter,
-                input->seqName,
+                input->seqId,
+                input->name,
                 refGroup,
                 noOverlapFragmentCount,
                 output,
@@ -960,7 +960,7 @@ namespace skch
             std::chrono::duration<double> timeSpentL2 = skch::Time::now() - t1;
             std::chrono::duration<double> timeSpentMappingFragment = skch::Time::now() - t0;
 
-            std::cerr << Q.seqCounter << " " << Q.len
+            std::cerr << Q.seqId << " " << Q.len
               << " " << timeSpentL1.count()
               << " " << timeSpentL2.count()
               << " " << timeSpentMappingFragment.count()
@@ -973,7 +973,7 @@ namespace skch
         void getSeedHits(Q_Info &Q)
         {
           Q.minmerTableQuery.reserve(param.sketchSize + 1);
-          CommonFunc::sketchSequence(Q.minmerTableQuery, Q.seq, Q.len, param.kmerSize, param.alphabetSize, param.sketchSize, Q.seqCounter);
+          CommonFunc::sketchSequence(Q.minmerTableQuery, Q.seq, Q.len, param.kmerSize, param.alphabetSize, param.sketchSize, Q.seqId);
           if(Q.minmerTableQuery.size() == 0) {
             Q.sketchSize = 0;
             return;
@@ -993,7 +993,7 @@ namespace skch
 
           Q.sketchSize = Q.minmerTableQuery.size();
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map::getSeedHits, read id " << Q.seqCounter << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
+          std::cerr << "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
 #endif
         } 
 
@@ -1013,7 +1013,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-          std::cerr<< "INFO, skch::Map::getSeedHits, read id " << Q.seqCounter << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
+          std::cerr<< "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
 #endif
 
           //For invalid query (example : just NNNs), we may be left with 0 sketch size
@@ -1046,12 +1046,12 @@ namespace skch
             const auto& ref_name = this->idManager->getSequenceName(ip_it->seqId);
             //const auto& ref_len = this->idManager.getSeqLen(ip_it->seqId);
             bool skip_mapping = false;
-            int queryGroup = idManager->getRefGroup(Q.seqCounter);
+            int queryGroup = idManager->getRefGroup(Q.seqId);
             int targetGroup = idManager->getRefGroup(ip_it->seqId);
 
             if (param.skip_self && queryGroup == targetGroup) skip_mapping = true;
             if (param.skip_prefix && queryGroup == targetGroup) skip_mapping = true;
-            if (param.lower_triangular && Q.seqCounter <= ip_it->seqId) skip_mapping = true;
+            if (param.lower_triangular && Q.seqId <= ip_it->seqId) skip_mapping = true;
     
             if (!skip_mapping) {
               intervalPoints.push_back(*ip_it);
@@ -1069,7 +1069,7 @@ namespace skch
           }
 
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqCounter << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
+          std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqId << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
 #endif
         }
 
@@ -1083,7 +1083,7 @@ namespace skch
             Vec2 &l1Mappings)
         {
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqCounter << std::endl;
+          std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqId << std::endl;
 #endif
 
           int overlapCount = 0;
@@ -1314,7 +1314,7 @@ namespace skch
             {
               int currGroup = this->getRefGroup(idManager->getSequenceName(ip_begin->seqId));
               ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, currGroup] (const auto& ip) {
-                  return currGroup == this->getRefGroup(idManager->getSequenceName(ip.seqId));
+                  return currGroup == this->idManager->getRefGroup(ip.seqId);
               });
             }
             else
@@ -1445,7 +1445,7 @@ namespace skch
                   res.queryStartPos = 0;
                   res.queryEndPos = Q.len;
                   res.refSeqId = l2.seqId;
-                  res.querySeqId = Q.seqCounter;
+                  res.querySeqId = Q.seqId;
                   res.nucIdentity = nucIdentity;
                   res.nucIdentityUpperBound = nucIdentityUpperBound;
                   res.sketchSize = Q.sketchSize;

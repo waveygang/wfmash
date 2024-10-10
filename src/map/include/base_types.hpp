@@ -215,10 +215,10 @@ namespace skch
   //Container to save copy of kseq object
   struct InputSeqContainer
   {
-    seqno_t seqCounter;                         //sequence counter
+    seqno_t seqId;                              //sequence id
     offset_t len;                               //sequence length
     std::string seq;                            //sequence string
-    std::string seqName;                        //sequence id
+    std::string name;                        //sequence name
 
 
     /*
@@ -227,11 +227,11 @@ namespace skch
      * @param[in] kseq_id   sequence id name
      * @param[in] len       length of sequence
      */
-      InputSeqContainer(const std::string& s, const std::string& id, seqno_t seqcount)
-          : seqCounter(seqcount)
+      InputSeqContainer(const std::string& s, const std::string& name, seqno_t id)
+          : seqId(id)
           , len(s.length())
           , seq(s)
-          , seqName(id) { }
+          , name(name) { }
   };
 
   struct InputSeqProgContainer : InputSeqContainer
@@ -246,8 +246,8 @@ namespace skch
      * @param[in] kseq_id   sequence id name
      * @param[in] len       length of sequence
      */
-      InputSeqProgContainer(const std::string& s, const std::string& id, seqno_t seqcount, progress_meter::ProgressMeter& pm)
-          : InputSeqContainer(s, id, seqcount)
+      InputSeqProgContainer(const std::string& s, const std::string& name, seqno_t id, progress_meter::ProgressMeter& pm)
+          : InputSeqContainer(s, name, id)
           , progress(pm) { }
   };
 
@@ -271,7 +271,7 @@ namespace skch
     struct QueryMetaData
     {
       char *seq;                          //query sequence pointer
-      seqno_t seqCounter;                 //query sequence counter
+      seqno_t seqId;                      //query sequence id
       offset_t len;                       //length of this query sequence
       offset_t fullLen;                   //length of the full sequence it derives from
       int sketchSize;                     //sketch size
