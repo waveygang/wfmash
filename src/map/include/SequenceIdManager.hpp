@@ -33,7 +33,7 @@ public:
         : prefixDelim(prefixDelim) {
         allPrefixes = queryPrefixes;
         allPrefixes.insert(allPrefixes.end(), targetPrefixes.begin(), targetPrefixes.end());
-        populateFromFiles(queryFiles, targetFiles, queryList, targetList);
+        populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefixes, prefixDelim, queryList, targetList);
         buildRefGroups();
         dumpState(); // Add this line to dump the state after initialization
     }
@@ -162,8 +162,8 @@ private:
     void populateFromFiles(const std::vector<std::string>& queryFiles,
                            const std::vector<std::string>& targetFiles,
                            const std::vector<std::string>& queryPrefixes,
-                           const std::string& targetPrefix,
-                           char prefixDelim,
+                           const std::vector<std::string>& targetPrefixes,
+                           const std::string& prefixDelim,
                            const std::string& queryList,
                            const std::string& targetList) {
         std::unordered_set<std::string> allowedQueryNames;
@@ -176,7 +176,7 @@ private:
             readFAI(file, queryPrefixes, prefixDelim, allowedQueryNames, true);
         }
         for (const auto& file : targetFiles) {
-            readFAI(file, {targetPrefix}, prefixDelim, allowedTargetNames, false);
+            readFAI(file, targetPrefixes, prefixDelim, allowedTargetNames, false);
         }
     }
 
@@ -190,7 +190,7 @@ private:
 
     void readFAI(const std::string& fileName, 
                  const std::vector<std::string>& prefixes, 
-                 char prefixDelim,
+                 const std::string& prefixDelim,
                  const std::unordered_set<std::string>& allowedNames,
                  bool isQuery) {
         std::string faiName = fileName + ".fai";
