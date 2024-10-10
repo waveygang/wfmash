@@ -19,18 +19,21 @@ private:
     std::vector<ContigInfo> metadata;
     std::vector<std::string> querySequenceNames;
     std::vector<std::string> targetSequenceNames;
-    char prefixDelim;
+    std::vector<std::string> allPrefixes;
+    std::string prefixDelim;
 
 public:
     SequenceIdManager(const std::vector<std::string>& queryFiles,
                       const std::vector<std::string>& targetFiles,
                       const std::vector<std::string>& queryPrefixes,
-                      const std::string& targetPrefix,
-                      char prefixDelim,
+                      const std::vector<std::string>& targetPrefixes,
+                      const std::string& prefixDelim,
                       const std::string& queryList = "",
                       const std::string& targetList = "") 
         : prefixDelim(prefixDelim) {
-        populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefix, prefixDelim, queryList, targetList);
+        allPrefixes = queryPrefixes;
+        allPrefixes.insert(allPrefixes.end(), targetPrefixes.begin(), targetPrefixes.end());
+        populateFromFiles(queryFiles, targetFiles, queryList, targetList);
         buildRefGroups();
         dumpState(); // Add this line to dump the state after initialization
     }
@@ -116,17 +119,30 @@ private:
         std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
 
         int currentGroup = 0;
-        std::string prevPrefix;
+        std::unordered_map<std::string, int> prefixToGroup;
 
         for (const auto& [seqName, originalIndex] : seqInfoWithIndex) {
-            std::string currPrefix = prefix(seqName);
+            std::string seqPrefix = getPrefix(seqName);
             
-            if (currPrefix != prevPrefix) {
-                currentGroup++;
-                prevPrefix = currPrefix;
+            if (allPrefixes.empty()) {
+                // If no prefixes specified, each sequence is its own group
+                metadata[originalIndex].groupId = ++currentGroup;
+            } else {
+                // Check if the sequence matches any of the specified prefixes
+                auto it = std::find_if(allPrefixes.begin(), allPrefixes.end(),
+                    [&seqPrefix](const std::string& prefix) { return seqPrefix.compare(0, prefix.length(), prefix) == 0; });
+                
+                if (it != allPrefixes.end()) {
+                    // Sequence matches a specified prefix
+                    if (prefixToGroup.find(*it) == prefixToGroup.end()) {
+                        prefixToGroup[*it] = ++currentGroup;
+                    }
+                    metadata[originalIndex].groupId = prefixToGroup[*it];
+                } else {
+                    // Sequence doesn't match any specified prefix, it's its own group
+                    metadata[originalIndex].groupId = ++currentGroup;
+                }
             }
-
-            metadata[originalIndex].groupId = currentGroup;
         }
 
         if (totalSeqs == 0) {
@@ -135,9 +151,12 @@ private:
         }
     }
 
-    std::string prefix(const std::string& s) const {
-        size_t pos = s.find_last_of(prefixDelim);
-        return (pos != std::string::npos) ? s.substr(0, pos) : s;
+    std::string getPrefix(const std::string& s) const {
+        if (!prefixDelim.empty()) {
+            size_t pos = s.find(prefixDelim);
+            return (pos != std::string::npos) ? s.substr(0, pos) : s;
+        }
+        return s;
     }
 
     void populateFromFiles(const std::vector<std::string>& queryFiles,

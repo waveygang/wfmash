@@ -1039,8 +1039,11 @@ namespace skch
             const auto& ref_name = this->idManager->getSequenceName(ip_it->seqId);
             //const auto& ref_len = this->idManager.getSeqLen(ip_it->seqId);
             bool skip_mapping = false;
-            if (param.skip_self && Q.seqName == ref_name) skip_mapping = true;
-            if (param.skip_prefix && this->getRefGroup(idManager->getSequenceName(ip_it->seqId)) == Q.refGroup) skip_mapping = true;
+            int queryGroup = idManager->getRefGroup(Q.seqCounter);
+            int targetGroup = idManager->getRefGroup(ip_it->seqId);
+
+            if (param.skip_self && queryGroup == targetGroup) skip_mapping = true;
+            if (param.skip_prefix && queryGroup == targetGroup) skip_mapping = true;
             if (param.lower_triangular && Q.seqCounter <= ip_it->seqId) skip_mapping = true;
     
             if (!skip_mapping) {
