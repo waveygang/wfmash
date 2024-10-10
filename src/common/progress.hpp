@@ -79,7 +79,7 @@ public:
         //std::cerr << input_seconds << " seconds is " << days << " days, " << hours << " hours, " << minutes << " minutes, and " << seconds << " seconds." << std::endl;
     }
     void increment(const uint64_t& incr) {
-        completed += incr;
+        completed.fetch_add(incr, std::memory_order_relaxed);
     }
 };
 

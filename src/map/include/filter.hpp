@@ -442,13 +442,13 @@ namespace skch
          * @param[in/out] eventRecord   event record containing end point of segment
          * @param[in]     refsketch     reference index class object
          */
-        void refPosDoPlusOne(eventRecord_t &eventRecord, const skch::Sketch &refsketch)
+        void refPosDoPlusOne(eventRecord_t &eventRecord, const skch::SequenceIdManager &idManager)
         {
           seqno_t currentSeqId = std::get<0>(eventRecord);
           offset_t currentSeqOffSet = std::get<1>(eventRecord);
 
           //if offset is at the end of reference sequence, shift to next
-          if(currentSeqOffSet == refsketch.metadata[currentSeqId].len - 1)
+          if(currentSeqOffSet == idManager.getSequenceLength(currentSeqId) - 1)
           {
             std::get<0>(eventRecord) += 1;    //shift id by 1
             std::get<1>(eventRecord) = 0;
@@ -464,7 +464,7 @@ namespace skch
        * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, const skch::Sketch &refsketch, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
+      void filterMappings(VecIn &readMappings, const skch::SequenceIdManager &idManager, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
         {
           if(readMappings.size() <= 1)
             return;
@@ -490,7 +490,7 @@ namespace skch
 
             eventRecord_t endEvent = std::make_tuple(readMappings[i].refSeqId, readMappings[i].refEndPos, event::END, i);
             //add one to above coordinate
-            obj.refPosDoPlusOne(endEvent, refsketch);
+            obj.refPosDoPlusOne(endEvent, idManager);
             eventSchedule.push_back (endEvent);
           }
 

@@ -104,6 +104,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> mashmap_index(mapping_opts, "FILE", "Use MashMap index in FILE, create if it doesn't exist", {"mm-index"});
     args::Flag create_mashmap_index_only(mapping_opts, "create-index-only", "Create only the index file without performing mapping", {"create-index-only"});
     args::Flag overwrite_mashmap_index(mapping_opts, "overwrite-mm-index", "Overwrite MashMap index if it exists", {"overwrite-mm-index"});
+    args::ValueFlag<std::string> index_by(mapping_opts, "SIZE", "Set the target total size of sequences for each index subset", {"index-by"});
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
@@ -648,6 +649,17 @@ void parse_args(int argc,
 
     map_parameters.overwrite_index = overwrite_mashmap_index;
     map_parameters.create_index_only = create_mashmap_index_only;
+
+    if (index_by) {
+        const int64_t index_size = wfmash::handy_parameter(args::get(index_by));
+        if (index_size <= 0) {
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, index-by size must be a positive integer." << std::endl;
+            exit(1);
+        }
+        map_parameters.index_by_size = index_size;
+    } else {
+        map_parameters.index_by_size = std::numeric_limits<size_t>::max(); // Default to indexing all sequences
+    }
 
     if (approx_mapping) {
         map_parameters.outFileName = "/dev/stdout";
