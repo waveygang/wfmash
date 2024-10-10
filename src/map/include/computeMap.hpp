@@ -830,7 +830,7 @@ namespace skch
 
       void aggregator_thread(merged_mappings_queue_t& merged_queue,
                              std::atomic<bool>& workers_done,
-                             std::unordered_map<std::string, MappingResultsVector_t>& aggregatedMappings) {
+                             std::unordered_map<seqno_t, MappingResultsVector_t>& aggregatedMappings) {
           while (true) {
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
