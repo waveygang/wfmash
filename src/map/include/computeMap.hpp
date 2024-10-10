@@ -504,7 +504,7 @@ namespace skch
 
             // Launch aggregator thread
             std::thread aggregator([&]() {
-                aggregator_thread(merged_queue, workers_done, aggregatedMappings);
+                aggregator_thread(merged_queue, workers_done, combinedMappings);
             });
 
             // Wait for all threads to complete
@@ -524,8 +524,8 @@ namespace skch
 
             // Combine mappings from this subset with previous subsets
             for (auto& [queryName, mappings] : aggregatedMappings) {
-                combinedMappings[queryName].insert(
-                    combinedMappings[queryName].end(),
+                combinedMappings[querySeqId].insert(
+                    combinedMappings[querySeqId].end(),
                     mappings.begin(),
                     mappings.end()
                 );
@@ -830,13 +830,13 @@ namespace skch
 
       void aggregator_thread(merged_mappings_queue_t& merged_queue,
                              std::atomic<bool>& workers_done,
-                             std::unordered_map<seqno_t, MappingResultsVector_t>& aggregatedMappings) {
+                             std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings) {
           while (true) {
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
-                  aggregatedMappings[querySeqId].insert(
-                      aggregatedMappings[querySeqId].end(),
+                  combinedMappings[querySeqId].insert(
+                      combinedMappings[querySeqId].end(),
                       output->results.begin(),
                       output->results.end()
                   );
