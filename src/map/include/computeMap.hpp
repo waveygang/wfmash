@@ -307,7 +307,8 @@ namespace skch
 						}
 					}
 					if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
-						|| !param.query_prefix.empty() && !prefix_skip) {
+						|| !param.query_prefix.empty() && !prefix_skip
+            || param.query_prefix.empty()) {
 						total_seqs++;
 						total_seq_length += std::stoul(line_split[1]);
 					}
