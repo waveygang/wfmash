@@ -194,8 +194,8 @@ namespace skch
         idManager(std::make_unique<SequenceIdManager>(
             p.querySequences,
             p.refSequences,
-            p.query_prefix,
-            p.target_prefix,
+            std::vector<std::string>{p.query_prefix},
+            std::vector<std::string>{p.target_prefix},
             p.prefix_delim,
             p.query_list,
             p.target_list))
