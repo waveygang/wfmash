@@ -119,30 +119,38 @@ private:
         std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
 
         int currentGroup = 0;
-        std::unordered_map<std::string, int> prefixToGroup;
+        std::unordered_map<std::string, int> groupMap;
 
         for (const auto& [seqName, originalIndex] : seqInfoWithIndex) {
-            std::string seqPrefix = getPrefix(seqName);
-            
-            if (allPrefixes.empty()) {
-                // If no prefixes specified, each sequence is its own group
-                metadata[originalIndex].groupId = ++currentGroup;
-            } else {
+            std::string groupKey;
+
+            if (!allPrefixes.empty()) {
                 // Check if the sequence matches any of the specified prefixes
                 auto it = std::find_if(allPrefixes.begin(), allPrefixes.end(),
-                    [&seqPrefix](const std::string& prefix) { return seqPrefix.compare(0, prefix.length(), prefix) == 0; });
+                    [&seqName](const std::string& prefix) { return seqName.compare(0, prefix.length(), prefix) == 0; });
                 
                 if (it != allPrefixes.end()) {
-                    // Sequence matches a specified prefix
-                    if (prefixToGroup.find(*it) == prefixToGroup.end()) {
-                        prefixToGroup[*it] = ++currentGroup;
-                    }
-                    metadata[originalIndex].groupId = prefixToGroup[*it];
-                } else {
-                    // Sequence doesn't match any specified prefix, it's its own group
-                    metadata[originalIndex].groupId = ++currentGroup;
+                    groupKey = *it;
                 }
             }
+
+            if (groupKey.empty() && !prefixDelim.empty()) {
+                // Use prefix before delimiter as group key
+                size_t pos = seqName.find(prefixDelim);
+                if (pos != std::string::npos) {
+                    groupKey = seqName.substr(0, pos);
+                }
+            }
+
+            if (groupKey.empty()) {
+                // If no group key found, use the sequence name itself
+                groupKey = seqName;
+            }
+
+            if (groupMap.find(groupKey) == groupMap.end()) {
+                groupMap[groupKey] = ++currentGroup;
+            }
+            metadata[originalIndex].groupId = groupMap[groupKey];
         }
 
         if (totalSeqs == 0) {
