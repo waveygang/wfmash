@@ -218,9 +218,7 @@ namespace skch
                       if (seq.length() >= param.segLength) {
                           seqno_t seqId = idManager.getSequenceId(seq_name);
                           auto record = new InputSeqContainer(seq, seq_name, seqId);
-                          while (!input_queue.try_push(record)) {
-                              std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                          }
+                          input_queue.push(record);
                       }
                       // We don't update progress here anymore
                   });
@@ -236,10 +234,8 @@ namespace skch
                   CommonFunc::addMinmers(*minmers, &(record->seq[0]), record->len, 
                                          param.kmerSize, param.segLength, param.alphabetSize, 
                                          param.sketchSize, record->seqId);
-                  auto output_pair = new std::pair<uint64_t, MI_Type*>(record->len, minmers);
-                  while (!output_queue.try_push(output_pair)) {
-                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                  }
+                  auto output_pair = new std::pair<uint64_t,MI_Type*>(record->len, minmers);
+                  output_queue.push(output_pair);
                   delete record;
               } else if (reader_done.load() && input_queue.was_empty()) {
                   break;
@@ -251,15 +247,15 @@ namespace skch
 
       void writer_thread(std::atomic<bool>& workers_done, progress_meter::ProgressMeter& progress) {
           while (true) {
-              std::pair<uint64_t, MI_Type*>* output;
+              std::pair<uint64_t, MI_Type*>* output = nullptr;
               if (output_queue.try_pop(output)) {
                   uint64_t seq_length = output->first;
                   MI_Type* minmers = output->second;
                   for (const auto& mi : *minmers) {
                       this->hashFreq[mi.hash]++;
                       if (minmerPosLookupIndex[mi.hash].size() == 0 
-                              || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                              || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+                          || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                          || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
                       {
                           minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
                           minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
@@ -267,8 +263,12 @@ namespace skch
                           minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
                       }
                   }
-                  this->minmerIndex.insert(this->minmerIndex.end(), minmers->begin(), minmers->end());
-                  
+                  //this->minmerIndex.insert(this->minmerIndex.end(), minmers->begin(), minmers->end());
+                  this->minmerIndex.insert(
+                      this->minmerIndex.end(), 
+                      std::make_move_iterator(minmers->begin()), 
+                      std::make_move_iterator(minmers->end()));
+
                   // Update progress meter
                   progress.increment(seq_length);
                   
@@ -280,7 +280,7 @@ namespace skch
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
-          
+
           // Finalize progress meter
           progress.finish();
       }
