@@ -249,11 +249,7 @@ namespace skch
 
     private:
 
-      // Gets the ref group of a query based on the sequence ID
-      int getRefGroup(const std::string& seqName) {
-          return idManager->getRefGroup(idManager->getSequenceId(seqName));
-      }
-      void setProbs() 
+      void setProbs()
       {
 
         float deltaANI = param.ANIDiff;
@@ -681,9 +677,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->getRefGroup(idManager.getSequenceName(subrange_begin->refSeqId));
+              int currGroup = idManager.getRefGroup(subrange_begin->refSeqId);
               subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& unfilteredMappings_candidate) {
-                  return currGroup == this->getRefGroup(idManager.getSequenceName(unfilteredMappings_candidate.refSeqId));
+                  return currGroup == idManager.getRefGroup(unfilteredMappings_candidate.refSeqId);
               });
             }
             else
@@ -736,7 +732,7 @@ namespace skch
         QueryMappingOutput* output = new QueryMappingOutput{input->name, {}, {}, input->progress};
         std::atomic<int> fragments_processed{0};
         bool split_mapping = true;
-        int refGroup = this->getRefGroup(input->name);
+        int refGroup = this->idManager->getRefGroup(input->seqId);
 
         std::vector<FragmentData*> fragments;
         int noOverlapFragmentCount = input->len / param.segLength;
@@ -930,9 +926,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->getRefGroup(idManager->getSequenceName(l1_begin->seqId));
+              int currGroup = this->idManager->getRefGroup(l1_begin->seqId);
               l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, currGroup] (const auto& candidate) {
-                  return currGroup == this->getRefGroup(idManager->getSequenceName(candidate.seqId));
+                  return currGroup == this->idManager->getRefGroup(candidate.seqId);
               });
             }
             else
@@ -1312,7 +1308,7 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->getRefGroup(idManager->getSequenceName(ip_begin->seqId));
+              int currGroup = this->idManager->getRefGroup(ip_begin->seqId);
               ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, currGroup] (const auto& ip) {
                   return currGroup == this->idManager->getRefGroup(ip.seqId);
               });
