@@ -159,6 +159,7 @@ namespace skch
             || !stdfs::exists(param.indexFilename)
             || param.overwrite_index)
         {
+            /*
           std::atomic<bool> reader_done(false);
           std::atomic<bool> workers_done(false);
           progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Sketch::initialize] indexed");
@@ -167,7 +168,7 @@ namespace skch
               reader_thread(targets, reader_done);
           });
 
-          std::vector<std::thread> workers;
+          std::vector<std::thread> workers; workers.reserve(param.threads);
           for (int i = 0; i < param.threads; ++i) {
               workers.emplace_back([&]() {
                   worker_thread(reader_done, progress);
@@ -184,7 +185,9 @@ namespace skch
           }
           workers_done.store(true);
           writer.join();
+            */
 
+          this->build(true, targets);
           this->computeFreqHist();
           this->computeFreqSeedSet();
           this->dropFreqSeedSet();
