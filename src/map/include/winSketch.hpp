@@ -146,7 +146,13 @@ namespace skch
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
         // Calculate total sequence length
+        /*
         for (const auto& fileName : param.refSequences) {
+            std::cerr << "targets are " << targets.size() << " ";
+            for (const auto& target : targets) {
+                std::cerr << target << " ";
+            }
+            std::cerr << std::endl;
             seqiter::for_each_seq_in_file(
                 fileName,
                 targets,
@@ -154,56 +160,18 @@ namespace skch
                     total_seq_length += seq.length();
                 });
         }
+        */
         
-        if (param.indexFilename.empty() 
-            || !stdfs::exists(param.indexFilename)
-            || param.overwrite_index)
+        this->build(true, targets);
+        this->computeFreqHist();
+        this->computeFreqSeedSet();
+        this->dropFreqSeedSet();
+        this->hashFreq.clear();
+        if (!param.indexFilename.empty())
         {
-            /*
-          std::atomic<bool> reader_done(false);
-          std::atomic<bool> workers_done(false);
-          progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Sketch::initialize] indexed");
-
-          std::thread reader([&]() {
-              reader_thread(targets, reader_done);
-          });
-
-          std::vector<std::thread> workers; workers.reserve(param.threads);
-          for (int i = 0; i < param.threads; ++i) {
-              workers.emplace_back([&]() {
-                  worker_thread(reader_done, progress);
-              });
-          }
-
-          std::thread writer([&]() {
-              writer_thread(workers_done, progress);
-          });
-
-          reader.join();
-          for (auto& worker : workers) {
-              worker.join();
-          }
-          workers_done.store(true);
-          writer.join();
-            */
-
-          this->build(true, targets);
-          this->computeFreqHist();
-          this->computeFreqSeedSet();
-          this->dropFreqSeedSet();
-          this->hashFreq.clear();
-          if (!param.indexFilename.empty())
-          {
             this->writeIndex();
-          }
-          if (param.create_index_only)
-          {
-            std::cerr << "[mashmap::skch::Sketch] Index created successfully. Exiting." << std::endl;
-            exit(0);
-          }
-        } else {
-          this->readIndex();
         }
+
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << idManager.size() << std::endl;
@@ -302,6 +270,7 @@ namespace skch
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
         if (compute_seeds) {
+            std::cerr << "creating seeds" << std::endl;
 
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
@@ -316,6 +285,7 @@ namespace skch
               fileName,
               target_names,
               [&](const std::string& seq_name, const std::string& seq) {
+                  std::cerr << "on sequence " << seq_name << std::endl;
                   if (seq.length() >= param.segLength) {
                       seqno_t seqId = idManager.getSequenceId(seq_name);
                       threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));

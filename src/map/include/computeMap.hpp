@@ -481,6 +481,12 @@ namespace skch
         // For each subset of target sequences
         uint64_t subset_count = 0;
         for (const auto& target_subset : target_subsets) {
+            std::cerr << "processing subset " << subset_count << " of " << target_subsets.size() << std::endl;
+            std::cerr << "entries: ";
+            for (const auto& seqName : target_subset) {
+                std::cerr << seqName << " ";
+            }
+            std::cerr << std::endl;
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
