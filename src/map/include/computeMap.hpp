@@ -495,57 +495,8 @@ namespace skch
                 std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
-                progress_meter::ProgressMeter progress(
-                    total_seq_length,
-                    "[mashmap::skch::Map::mapQuery] mapped ("
-                    + std::to_string(subset_count + 1) + "/" + std::to_string(target_subsets.size()) + ")");
-
-                // Launch reader thread
-                std::thread reader([&]() {
-                    reader_thread(input_queue, reader_done, progress, *idManager);
-                });
-
-                std::vector<std::thread> fragment_workers;
-                for (int i = 0; i < param.threads; ++i) {
-                    fragment_workers.emplace_back([&]() {
-                        fragment_thread(fragment_queue, fragments_done);
-                    });
-                }
-
-                // Launch worker threads
-                std::vector<std::thread> workers;
-                for (int i = 0; i < param.threads; ++i) {
-                    workers.emplace_back([&]() {
-                        worker_thread(input_queue, fragment_queue, merged_queue, progress, reader_done, workers_done);
-                    });
-                }
-
-                // Launch aggregator thread
-                std::thread aggregator([&]() {
-                    aggregator_thread(merged_queue, workers_done, combinedMappings);
-                });
-
-                // Wait for all threads to complete
-                reader.join();
-
-                for (auto& worker : workers) {
-                    worker.join();
-                }
-                workers_done.store(true);
-                fragments_done.store(true);
-
-                for (auto& worker : fragment_workers) {
-                    worker.join();
-                }
-
-                aggregator.join();
-
-                // Reset flags and clear aggregatedMappings for next iteration
-                reader_done.store(false);
-                workers_done.store(false);
-                fragments_done.store(false);
-
-                progress.finish();
+                processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
+                              fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
             }
 
             // Clean up the current refSketch
@@ -580,6 +531,65 @@ namespace skch
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
                   << ", total input reads = " << idManager->size()
                   << ", total input bp = " << total_seq_length << std::endl;
+      }
+
+      void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_seq_length,
+                         input_atomic_queue_t& input_queue, merged_mappings_queue_t& merged_queue,
+                         fragment_atomic_queue_t& fragment_queue, std::atomic<bool>& reader_done,
+                         std::atomic<bool>& workers_done, std::atomic<bool>& fragments_done,
+                         std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings)
+      {
+          progress_meter::ProgressMeter progress(
+              total_seq_length,
+              "[mashmap::skch::Map::mapQuery] mapped ("
+              + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
+
+          // Launch reader thread
+          std::thread reader([&]() {
+              reader_thread(input_queue, reader_done, progress, *idManager);
+          });
+
+          std::vector<std::thread> fragment_workers;
+          for (int i = 0; i < param.threads; ++i) {
+              fragment_workers.emplace_back([&]() {
+                  fragment_thread(fragment_queue, fragments_done);
+              });
+          }
+
+          // Launch worker threads
+          std::vector<std::thread> workers;
+          for (int i = 0; i < param.threads; ++i) {
+              workers.emplace_back([&]() {
+                  worker_thread(input_queue, fragment_queue, merged_queue, progress, reader_done, workers_done);
+              });
+          }
+
+          // Launch aggregator thread
+          std::thread aggregator([&]() {
+              aggregator_thread(merged_queue, workers_done, combinedMappings);
+          });
+
+          // Wait for all threads to complete
+          reader.join();
+
+          for (auto& worker : workers) {
+              worker.join();
+          }
+          workers_done.store(true);
+          fragments_done.store(true);
+
+          for (auto& worker : fragment_workers) {
+              worker.join();
+          }
+
+          aggregator.join();
+
+          // Reset flags and clear aggregatedMappings for next iteration
+          reader_done.store(false);
+          workers_done.store(false);
+          fragments_done.store(false);
+
+          progress.finish();
       }
 
       /**
