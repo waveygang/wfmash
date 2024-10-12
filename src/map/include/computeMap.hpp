@@ -430,7 +430,6 @@ namespace skch
         seqno_t totalReadsMapped = 0;
 
         std::ofstream outstrm(param.outFileName);
-        std::unordered_map<std::string, MappingResultsVector_t> aggregatedMappings;
 
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
@@ -525,21 +524,10 @@ namespace skch
 
             aggregator.join();
 
-            // Combine mappings from this subset with previous subsets
-            for (auto& [queryName, mappings] : aggregatedMappings) {
-                auto querySeqId = idManager->getSequenceId(queryName);
-                combinedMappings[querySeqId].insert(
-                    combinedMappings[querySeqId].end(),
-                    mappings.begin(),
-                    mappings.end()
-                );
-            }
-
             // Reset flags and clear aggregatedMappings for next iteration
             reader_done.store(false);
             workers_done.store(false);
             fragments_done.store(false);
-            aggregatedMappings.clear();
 
             // Clean up the current refSketch
             delete refSketch;
@@ -553,8 +541,8 @@ namespace skch
             std::sort(
                 mappings.begin(), mappings.end(),
                 [](const MappingResult &a, const MappingResult &b) {
-                    return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos)
-                        < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
+                    return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
+                        < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
                 }
             );
 
@@ -712,10 +700,8 @@ namespace skch
         std::sort(
             filteredMappings.begin(), filteredMappings.end(),
             [](const MappingResult &a, const MappingResult &b) {
-                return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) 
-                  < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
-                //return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
-                    //< std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
+                return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand) 
+                    < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
             });
       }
 
@@ -780,33 +766,7 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        // XXX we should fix this combined condition
-        auto& mappings = output->results;
-        if (param.mergeMappings && param.split) {
-            auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
-            filterMaximallyMerged(maximallyMergedMappings, param);
-            robin_hood::unordered_set<offset_t> kept_chains;
-            for (auto &mapping : maximallyMergedMappings) {
-                kept_chains.insert(mapping.splitMappingId);
-            }
-            mappings.erase(
-                std::remove_if(mappings.begin(), mappings.end(),
-                               [&kept_chains](const MappingResult &mapping) {
-                                   return !kept_chains.count(mapping.splitMappingId);
-                               }),
-                mappings.end());
-        } else {
-            filterNonMergedMappings(mappings, param);
-        }
-
-        mappingBoundarySanityCheck(input, mappings);
-    
-        if (param.filterLengthMismatches)
-        {
-            filterFalseHighIdentity(mappings);
-        }
-    
-        sparsifyMappings(mappings);
+        mappingBoundarySanityCheck(input, output->results);
 
         return output;
       }
@@ -831,6 +791,31 @@ namespace skch
       }
 
       void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
+
+          // XXX we should fix this combined condition
+          if (param.mergeMappings && param.split) {
+              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
+              filterMaximallyMerged(maximallyMergedMappings, param);
+              robin_hood::unordered_set<offset_t> kept_chains;
+              for (auto &mapping : maximallyMergedMappings) {
+                  kept_chains.insert(mapping.splitMappingId);
+              }
+              mappings.erase(
+                  std::remove_if(mappings.begin(), mappings.end(),
+                                 [&kept_chains](const MappingResult &mapping) {
+                                     return !kept_chains.count(mapping.splitMappingId);
+                                 }),
+                  mappings.end());
+          } else {
+              filterNonMergedMappings(mappings, param);
+          }
+
+          if (param.filterLengthMismatches) {
+              filterFalseHighIdentity(mappings);
+          }
+
+          sparsifyMappings(mappings);
+
           // Apply group filtering aggregated across all targets
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
@@ -1792,8 +1777,8 @@ namespace skch
           std::sort(
               readMappings.begin(), readMappings.end(),
               [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos)
-                      < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
+                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
+                      < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
               });
 
           //First assign a unique id to each split mapping in the sorted order
@@ -1870,8 +1855,8 @@ namespace skch
               readMappings.begin(),
               readMappings.end(),
               [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.splitMappingId, a.queryStartPos, a.refSeqId, a.refStartPos)
-                      < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos);
+                  return std::tie(a.splitMappingId, a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
+                      < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
               });
 
           // Create maximallyMergedMappings
