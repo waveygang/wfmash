@@ -491,9 +491,9 @@ namespace skch
       /**
        * @brief  Write all index data structures to disk
        */
-      void writeIndex() 
+      void writeIndex(const std::string& filename = "") 
       {
-        fs::path freqListFilename = fs::path(param.indexFilename);
+        fs::path freqListFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
         std::ofstream outStream;
         outStream.open(freqListFilename, std::ios::binary);
 
