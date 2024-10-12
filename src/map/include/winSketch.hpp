@@ -135,13 +135,34 @@ namespace skch
        */
       Sketch(skch::Parameters p,
              SequenceIdManager& idMgr,
-             const std::vector<std::string>& targets = {})
+             const std::vector<std::string>& targets = {},
+             const std::string& indexFilename = "")
         : param(std::move(p)),
           idManager(idMgr)
       {
-        initialize(targets);
+        if (!indexFilename.empty()) {
+          loadIndex(indexFilename);
+        } else {
+          initialize(targets);
+        }
       }
 
+      void loadIndex(const std::string& indexFilename) {
+        std::ifstream inStream(indexFilename, std::ios::binary);
+        if (!inStream) {
+          std::cerr << "Error: Unable to open index file: " << indexFilename << std::endl;
+          exit(1);
+        }
+        readParameters(inStream);
+        readSketchBinary(inStream);
+        readPosListBinary(inStream);
+        readFreqKmersBinary(inStream);
+        inStream.close();
+        isInitialized = true;
+        std::cerr << "[mashmap::skch::Sketch] Sketch loaded from index file: " << indexFilename << std::endl;
+      }
+
+    public:
       void initialize(const std::vector<std::string>& targets = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
