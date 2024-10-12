@@ -471,18 +471,24 @@ namespace skch
         if (!current_subset.empty()) {
             target_subsets.push_back(current_subset);
         }
-        
+
         std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
         // For each subset of target sequences
+        uint64_t subset_count = 0;
         for (const auto& target_subset : target_subsets) {
+            ++subset_count;
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
+
             // Build index for the current subset
             refSketch = new skch::Sketch(param, *idManager, target_subset);
 
-            progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
+            progress_meter::ProgressMeter progress(
+                total_seq_length,
+                "[mashmap::skch::Map::mapQuery] mapped ("
+                + std::to_string(subset_count) + "/" + std::to_string(target_subsets.size()) + ")");
 
             // Launch reader thread
             std::thread reader([&]() {
