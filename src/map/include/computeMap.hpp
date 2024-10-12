@@ -780,18 +780,33 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        //if (param.mergeMappings && param.split) {
-        //    output->results = mergeMappingsInRange(output->results, param.chain_gap);
-        //}
+        // XXX we should fix this combined condition
+        auto& mappings = output->results;
+        if (param.mergeMappings && param.split) {
+            auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
+            filterMaximallyMerged(maximallyMergedMappings, param);
+            robin_hood::unordered_set<offset_t> kept_chains;
+            for (auto &mapping : maximallyMergedMappings) {
+                kept_chains.insert(mapping.splitMappingId);
+            }
+            mappings.erase(
+                std::remove_if(mappings.begin(), mappings.end(),
+                               [&kept_chains](const MappingResult &mapping) {
+                                   return !kept_chains.count(mapping.splitMappingId);
+                               }),
+                mappings.end());
+        } else {
+            filterNonMergedMappings(mappings, param);
+        }
 
-        mappingBoundarySanityCheck(input, output->results);
+        mappingBoundarySanityCheck(input, mappings);
     
         if (param.filterLengthMismatches)
         {
-            filterFalseHighIdentity(output->results);
+            filterFalseHighIdentity(mappings);
         }
     
-        sparsifyMappings(output->results);
+        sparsifyMappings(mappings);
 
         return output;
       }
@@ -816,25 +831,7 @@ namespace skch
       }
 
       void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
-          if (param.mergeMappings && param.split) {
-              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
-              filterMaximallyMerged(maximallyMergedMappings, param);
-              robin_hood::unordered_set<offset_t> kept_chains;
-              for (auto &mapping : maximallyMergedMappings) {
-                  kept_chains.insert(mapping.splitMappingId);
-              }
-              mappings.erase(
-                  std::remove_if(mappings.begin(), mappings.end(),
-                                 [&kept_chains](const MappingResult &mapping) {
-                                     return !kept_chains.count(mapping.splitMappingId);
-                                 }),
-                  mappings.end());
-            //filterMaximallyMerged(mappings, param);
-          } else {
-              filterNonMergedMappings(mappings, param);
-          }
-
-          // Apply group filtering if necessary
+          // Apply group filtering aggregated across all targets
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
               filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager);
