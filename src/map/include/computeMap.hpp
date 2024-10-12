@@ -490,7 +490,7 @@ namespace skch
 
             if (param.create_index_only) {
                 // Save the index to a file
-                std::string indexFilename = param.indexFilename + "." + std::to_string(subset_count);
+                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
                 refSketch->writeIndex(indexFilename);
                 std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
