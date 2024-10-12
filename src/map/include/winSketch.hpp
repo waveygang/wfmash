@@ -38,7 +38,7 @@ namespace fs = std::filesystem;
 
 #include "common/seqiter.hpp"
 #include "common/atomic_queue/atomic_queue.h"
-#include "SequenceIdManager.hpp"
+#include "sequenceIds.hpp"
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/progress.hpp"
 #include <thread>
