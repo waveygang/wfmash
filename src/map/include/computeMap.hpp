@@ -422,6 +422,31 @@ namespace skch
           }
       }
 
+      std::vector<std::vector<std::string>> createTargetSubsets(const std::vector<std::string>& targetSequenceNames) {
+        std::vector<std::vector<std::string>> target_subsets;
+        uint64_t current_subset_size = 0;
+        std::vector<std::string> current_subset;
+
+        for (const auto& seqName : targetSequenceNames) {
+            seqno_t seqId = idManager->getSequenceId(seqName);
+            offset_t seqLen = idManager->getSequenceLength(seqId);
+            current_subset.push_back(seqName);
+            current_subset_size += seqLen;
+
+            if (current_subset_size >= param.index_by_size || &seqName == &targetSequenceNames.back()) {
+                if (!current_subset.empty()) {
+                    target_subsets.push_back(current_subset);
+                }
+                current_subset.clear();
+                current_subset_size = 0;
+            }
+        }
+        if (!current_subset.empty()) {
+            target_subsets.push_back(current_subset);
+        }
+        return target_subsets;
+      }
+
       void mapQuery()
       {
         //Count of reads mapped by us
@@ -449,28 +474,7 @@ namespace skch
             total_seq_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
         }
 
-        // Create subsets of target sequences
-        std::vector<std::vector<std::string>> target_subsets;
-        uint64_t current_subset_size = 0;
-        std::vector<std::string> current_subset;
-
-        for (const auto& seqName : targetSequenceNames) {
-            seqno_t seqId = idManager->getSequenceId(seqName);
-            offset_t seqLen = idManager->getSequenceLength(seqId);
-            current_subset.push_back(seqName);
-            current_subset_size += seqLen;
-
-            if (current_subset_size >= param.index_by_size || &seqName == &targetSequenceNames.back()) {
-                if (!current_subset.empty()) {
-                    target_subsets.push_back(current_subset);
-                }
-                current_subset.clear();
-                current_subset_size = 0;
-            }
-        }
-        if (!current_subset.empty()) {
-            target_subsets.push_back(current_subset);
-        }
+        std::vector<std::vector<std::string>> target_subsets = createTargetSubsets(targetSequenceNames);
 
         std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
