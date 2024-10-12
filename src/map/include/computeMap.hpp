@@ -492,7 +492,13 @@ namespace skch
             }
 
             // Build index for the current subset
-            refSketch = new skch::Sketch(param, *idManager, target_subset);
+            if (!param.indexFilename.empty() && !param.create_index_only) {
+                // load index from file
+                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
+                refSketch = new skch::Sketch(param, *idManager, target_subset, indexFilename);
+            } else {
+                refSketch = new skch::Sketch(param, *idManager, target_subset);
+            }
 
             if (param.create_index_only) {
                 // Save the index to a file
