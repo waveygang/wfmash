@@ -780,9 +780,9 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        if (param.mergeMappings && param.split) {
-            output->results = mergeMappingsInRange(output->results, param.chain_gap);
-        }
+        //if (param.mergeMappings && param.split) {
+        //    output->results = mergeMappingsInRange(output->results, param.chain_gap);
+        //}
 
         mappingBoundarySanityCheck(input, output->results);
     
@@ -817,7 +817,19 @@ namespace skch
 
       void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
           if (param.mergeMappings && param.split) {
-              filterMaximallyMerged(mappings, param);
+              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
+              filterMaximallyMerged(maximallyMergedMappings, param);
+              robin_hood::unordered_set<offset_t> kept_chains;
+              for (auto &mapping : maximallyMergedMappings) {
+                  kept_chains.insert(mapping.splitMappingId);
+              }
+              mappings.erase(
+                  std::remove_if(mappings.begin(), mappings.end(),
+                                 [&kept_chains](const MappingResult &mapping) {
+                                     return !kept_chains.count(mapping.splitMappingId);
+                                 }),
+                  mappings.end());
+            //filterMaximallyMerged(mappings, param);
           } else {
               filterNonMergedMappings(mappings, param);
           }
