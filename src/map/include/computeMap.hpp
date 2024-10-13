@@ -22,6 +22,11 @@ namespace fs = std::filesystem;
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
+#include <atomic>
+#include <thread>
+#include <condition_variable>
+#include <mutex>
+#include "common/atomic_queue/atomic_queue.h"
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -31,7 +36,6 @@ namespace fs = std::filesystem;
 #include "map/include/map_stats.hpp"
 #include "map/include/slidingMap.hpp"
 #include "map/include/MIIteratorL2.hpp"
-#include "map/include/ThreadPool.hpp"
 #include "map/include/filter.hpp"
 
 //External includes
@@ -48,14 +52,32 @@ namespace fs = std::filesystem;
 
 namespace skch
 {
+  struct QueryMappingOutput {
+      std::string queryName;
+      std::vector<MappingResult> results;
+      std::mutex mutex;
+      progress_meter::ProgressMeter& progress;
+  };
+
+  struct FragmentData {
+      const char* seq;
+      int len;
+      int fullLen;
+      seqno_t seqId;
+      std::string seqName;
+      int refGroup;
+      int fragmentIndex;
+      QueryMappingOutput* output;
+      std::atomic<int>* fragments_processed;
+  };
+
   /**
    * @class     skch::Map
    * @brief     L1 and L2 mapping stages
    */
   class Map
   {
-    public:
-
+    private:
       //Type for Stage L1's predicted candidate location
       struct L1_candidateLocus_t
       {
@@ -88,13 +110,17 @@ namespace skch
     private:
 
       //algorithm parameters
-      const skch::Parameters &param;
+      skch::Parameters param;
 
       //reference sketch
-      const skch::Sketch &refSketch;
+      skch::Sketch* refSketch;
 
-      //Container type for saving read sketches during L1 and L2 both
-      typedef Sketch::MI_Type MinVec_Type;
+      // Sequence ID manager
+      std::unique_ptr<SequenceIdManager> idManager;
+
+      // Vectors to store query and target sequences
+      std::vector<std::string> querySequenceNames;
+      std::vector<std::string> targetSequenceNames;
 
       typedef Sketch::MIIter_t MIIter_t;
 
@@ -110,10 +136,48 @@ namespace skch
       //for an L1 candidate if the best intersection size is i;
       std::vector<int> sketchCutoffs; 
 
-      //Vector for obtaining group from refId
-      //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
-      std::vector<int> refIdGroup; 
+      // Sequence ID manager
+      // Atomic queues for input and output
+      typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
+      typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> merged_mappings_queue_t;
+      typedef atomic_queue::AtomicQueue<MapModuleOutput*, 1024, nullptr, true, true, false, false> output_atomic_queue_t;
 
+    void processFragment(FragmentData* fragment, 
+                         std::vector<IntervalPoint>& intervalPoints,
+                         std::vector<L1_candidateLocus_t>& l1Mappings,
+                         MappingResultsVector_t& l2Mappings,
+                         QueryMetaData<MinVec_Type>& Q) {
+        intervalPoints.clear();
+        l1Mappings.clear();
+        l2Mappings.clear();
+
+        Q.seq = const_cast<char*>(fragment->seq);
+        Q.len = fragment->len;
+        Q.fullLen = fragment->fullLen;
+        Q.seqId = fragment->seqId;
+        Q.seqName = fragment->seqName;
+        Q.refGroup = fragment->refGroup;
+
+        mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+
+        std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
+            e.queryLen = fragment->fullLen;
+            e.queryStartPos = fragment->fragmentIndex * param.segLength;
+            e.queryEndPos = e.queryStartPos + fragment->len;
+        });
+
+        {
+            std::lock_guard<std::mutex> lock(fragment->output->mutex);
+            fragment->output->results.insert(fragment->output->results.end(), l2Mappings.begin(), l2Mappings.end());
+        }
+
+        // Update progress after processing the fragment
+        fragment->output->progress.increment(fragment->len);
+
+        fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
+        delete fragment;
+    }
+      
     public:
 
       /**
@@ -122,62 +186,70 @@ namespace skch
        * @param[in] refSketch   reference sketch
        * @param[in] f           optional user defined custom function to post process the reported mapping results
        */
-      Map(const skch::Parameters &p, const skch::Sketch &refsketch,
+      Map(skch::Parameters p,
           PostProcessResultsFn_t f = nullptr) :
         param(p),
-        refSketch(refsketch),
         processMappingResults(f),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
-        refIdGroup(refsketch.metadata.size())
-    {
-      if (p.stage1_topANI_filter) {
-        this->setProbs();
+        idManager(std::make_unique<SequenceIdManager>(
+            p.querySequences,
+            p.refSequences,
+            std::vector<std::string>{p.query_prefix},
+            std::vector<std::string>{p.target_prefix},
+            std::string(1, p.prefix_delim),
+            p.query_list,
+            p.target_list))
+          {
+              std::cerr << "Initializing Map with parameters:" << std::endl;
+              std::cerr << "Query sequences: " << p.querySequences.size() << std::endl;
+              std::cerr << "Reference sequences: " << p.refSequences.size() << std::endl;
+              std::cerr << "Query prefix: " << (p.query_prefix.empty() ? "None" : p.query_prefix[0]) << std::endl;
+              std::cerr << "Target prefix: " << (p.target_prefix.empty() ? "None" : p.target_prefix) << std::endl;
+              std::cerr << "Prefix delimiter: '" << p.prefix_delim << "'" << std::endl;
+              std::cerr << "Query list: " << (p.query_list.empty() ? "None" : p.query_list) << std::endl;
+              std::cerr << "Target list: " << (p.target_list.empty() ? "None" : p.target_list) << std::endl;
+              
+              idManager->dumpState();
+              
+              if (p.stage1_topANI_filter) {
+                  this->setProbs();
+              }
+              this->mapQuery();
+          }
+
+      // Removed populateIdManager() function
+
+      ~Map() = default;
+
+      private:
+      void buildMetadataFromIndex() {
+          for (const auto& fileName : param.refSequences) {
+              faidx_t* fai = fai_load(fileName.c_str());
+              if (fai == nullptr) {
+                  std::cerr << "Error: Failed to load FASTA index for file " << fileName << std::endl;
+                  exit(1);
+              }
+
+              int nseq = faidx_nseq(fai);
+              for (int i = 0; i < nseq; ++i) {
+                  const char* seq_name = faidx_iseq(fai, i);
+                  int seq_len = faidx_seq_len(fai, seq_name);
+                  if (seq_len == -1) {
+                      std::cerr << "Error: Failed to get length for sequence " << seq_name << std::endl;
+                      continue;
+                  }
+                  // Metadata is now handled by idManager, no need to push_back here
+              }
+
+              fai_destroy(fai);
+          }
       }
-      if (p.skip_prefix)
-      {
-        this->setRefGroups();
-      }
-      this->mapQuery();
-    }
+
+      public:
 
     private:
 
-      // Sets the groups of reference contigs based on prefix
-      void setRefGroups()
-      {
-        int group = 0;
-        int start_idx = 0;
-        int idx = 0;
-        while (start_idx < this->refSketch.metadata.size())
-        {
-          const auto currPrefix = prefix(this->refSketch.metadata[start_idx].name, param.prefix_delim);
-          idx = start_idx;
-          while (idx < this->refSketch.metadata.size()
-              && currPrefix == prefix(this->refSketch.metadata[idx].name, param.prefix_delim))
-          {
-            this->refIdGroup[idx++] = group;
-          }
-          group++;
-          start_idx = idx;
-        }
-      }
-
-      // Gets the ref group of a query based on the prefix
-      int getRefGroup(const std::string& seqName)
-      {
-        const auto queryPrefix = prefix(seqName, param.prefix_delim);
-        for (int i = 0; i < this->refSketch.metadata.size(); i++)
-        {
-          const auto currPrefix = prefix(this->refSketch.metadata[i].name, param.prefix_delim);
-          if (queryPrefix == currPrefix)
-          {
-            return this->refIdGroup[i];
-          }
-        }
-        // Doesn't belong to any ref group
-        return -1;
-      }
-      void setProbs() 
+      void setProbs()
       {
 
         float deltaANI = param.ANIDiff;
@@ -262,186 +334,274 @@ namespace skch
       /**
        * @brief   parse over sequences in query file and map each on the reference
        */
+      void reader_thread(input_atomic_queue_t& input_queue,
+                         std::atomic<bool>& reader_done,
+                         progress_meter::ProgressMeter& progress,
+                         SequenceIdManager& idManager) {
+          // Define allowed_query_names here
+          std::unordered_set<std::string> allowed_query_names;
+          if (!param.query_list.empty()) {
+              std::ifstream filter_list(param.query_list);
+              std::string name;
+              while (getline(filter_list, name)) {
+                  allowed_query_names.insert(name);
+              }
+          }
+
+          if (!param.querySequences.empty()) {
+              const auto& fileName = param.querySequences[0]; // Assume single query input file
+              seqiter::for_each_seq_in_file(
+                  fileName,
+                  querySequenceNames,
+                  [&](const std::string& seq_name, const std::string& seq) {
+                      seqno_t seqId = idManager.getSequenceId(seq_name);
+                      auto input = new InputSeqProgContainer(seq, seq_name, seqId, progress);
+                      while (!input_queue.try_push(input)) {
+                          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                      }
+                  });
+          }
+          reader_done.store(true);
+      }
+
+      typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
+      typedef atomic_queue::AtomicQueue<FragmentData*, 8192, nullptr, true, true, false, false> fragment_atomic_queue_t;
+
+      void worker_thread(input_atomic_queue_t& input_queue,
+                         fragment_atomic_queue_t& fragment_queue,
+                         merged_mappings_queue_t& merged_queue,
+                         progress_meter::ProgressMeter& progress,
+                         std::atomic<bool>& reader_done,
+                         std::atomic<bool>& workers_done) {
+          while (true) {
+              InputSeqProgContainer* input = nullptr;
+              if (input_queue.try_pop(input)) {
+                  auto output = mapModule(input, fragment_queue);
+                  //progress.increment(input->len / 4);
+                  while (!merged_queue.try_push(output)) {
+                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  }
+                  delete input;
+              } else if (reader_done.load() && input_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
+
+      void writer_thread(query_output_atomic_queue_t& output_queue,
+                         std::atomic<bool>& workers_done,
+                         seqno_t& totalReadsMapped,
+                         std::ofstream& outstrm,
+                         progress_meter::ProgressMeter& progress,
+                         MappingResultsVector_t& allReadMappings) {
+          int wait_count = 0;
+          while (true) {
+              QueryMappingOutput* output = nullptr;
+              if (output_queue.try_pop(output)) {
+                  wait_count = 0;
+                  if(output->results.size() > 0)
+                      totalReadsMapped++;
+                  if (param.filterMode == filter::ONETOONE) {
+                      allReadMappings.insert(allReadMappings.end(), output->results.begin(), output->results.end());
+                  } else {
+                      reportReadMappings(output->results, output->queryName, outstrm);
+                  }
+                  delete output;
+              } else if (workers_done.load() && output_queue.was_empty()) {
+                  ++wait_count;
+                  if (wait_count < 5) {
+                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  } else {
+                      break;
+                  }
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
+
+      std::vector<std::vector<std::string>> createTargetSubsets(const std::vector<std::string>& targetSequenceNames) {
+        std::vector<std::vector<std::string>> target_subsets;
+        uint64_t current_subset_size = 0;
+        std::vector<std::string> current_subset;
+
+        for (const auto& seqName : targetSequenceNames) {
+            seqno_t seqId = idManager->getSequenceId(seqName);
+            offset_t seqLen = idManager->getSequenceLength(seqId);
+            current_subset.push_back(seqName);
+            current_subset_size += seqLen;
+
+            if (current_subset_size >= param.index_by_size || &seqName == &targetSequenceNames.back()) {
+                if (!current_subset.empty()) {
+                    target_subsets.push_back(current_subset);
+                }
+                current_subset.clear();
+                current_subset_size = 0;
+            }
+        }
+        if (!current_subset.empty()) {
+            target_subsets.push_back(current_subset);
+        }
+        return target_subsets;
+      }
+
       void mapQuery()
       {
         //Count of reads mapped by us
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
         seqno_t totalReadsMapped = 0;
-        seqno_t seqCounter = 0;
 
         std::ofstream outstrm(param.outFileName);
-        MappingResultsVector_t allReadMappings;  //Aggregate mapping results for the complete run
 
-        //Create the thread pool
-        ThreadPool<InputSeqProgContainer, MapModuleOutput> threadPool( [this](InputSeqProgContainer* e){return mapModule(e);}, param.threads);
+        // Initialize atomic queues and flags
+        input_atomic_queue_t input_queue;
+        merged_mappings_queue_t merged_queue;
+        fragment_atomic_queue_t fragment_queue;
+        std::atomic<bool> reader_done(false);
+        std::atomic<bool> workers_done(false);
+        std::atomic<bool> fragments_done(false);
 
-		// allowed set of queries
-		std::unordered_set<std::string> allowed_query_names;
-		if (!param.query_list.empty()) {
-			std::ifstream filter_list(param.query_list);
-			std::string name;
-			while (getline(filter_list, name)) {
-				allowed_query_names.insert(name); 
-			}
-		}
+        this->querySequenceNames = idManager->getQuerySequenceNames();
+        this->targetSequenceNames = idManager->getTargetSequenceNames();
 
-		// Count the total number of sequences and sequence length
-		uint64_t total_seqs = 0;
-		uint64_t total_seq_length = 0;
-		for (const auto& fileName : param.querySequences) {
-			// Check if there is a .fai file
-			std::string fai_name = fileName + ".fai";
-			if (fs::exists(fai_name)) {
-				std::string line;
-				std::ifstream in(fai_name.c_str());
-                while (std::getline(in, line)) {
-                    auto line_split = CommonFunc::split(line, '\t');
-					// if we have a param.target_prefix and the sequence name matches, skip it
-					auto seq_name = line_split[0];
-					bool prefix_skip = true;
-					for (const auto& prefix : param.query_prefix) {
-						if (seq_name.substr(0, prefix.size()) == prefix) {
-							prefix_skip = false;
-							break;
-						}
-					}
-					if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
-						|| !param.query_prefix.empty() && !prefix_skip) {
-						total_seqs++;
-						total_seq_length += std::stoul(line_split[1]);
-					}
-				}
-			} else {
-				// If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
-				std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to filter query sequences (slow)" << std::endl;
-				seqiter::for_each_seq_in_file_filtered(
-					fileName,
-					param.query_prefix,
-					allowed_query_names,
-					[&](const std::string& seq_name, const std::string& seq) {
-						++total_seqs;
-						total_seq_length += seq.size();
-					});
-			}
-		}
-		
-        progress_meter::ProgressMeter progress(total_seq_length, "[mashmap::skch::Map::mapQuery] mapped");
-
-        for(const auto &fileName : param.querySequences)
-        {
-
-#ifdef DEBUG
-            std::cerr << "[mashmap::skch::Map::mapQuery] mapping reads in " << fileName << std::endl;
-#endif
-
-			seqiter::for_each_seq_in_file_filtered(
-				fileName,
-				param.query_prefix,
-				allowed_query_names,
-                [&](const std::string& seq_name,
-                    const std::string& seq) {
-                    // todo: offset_t is an 32-bit integer, which could cause problems
-                    offset_t len = seq.length();
-					if (param.skip_self
-						&& param.target_prefix != ""
-						&& seq_name.substr(0, param.target_prefix.size()) == param.target_prefix) {
-						// skip
-					} else {
-						if (param.filterMode == filter::ONETOONE)
-							qmetadata.push_back( ContigInfo{seq_name, len} );
-						//Is the read too short?
-						if(len < param.kmerSize)
-						{
-//#ifdef DEBUG
-							// TODO Should we somehow revert to < windowSize?
-							std::cerr << std::endl
-									  << "WARNING, skch::Map::mapQuery, read "
-									  << seq_name << " of " << len << "bp "
-									  << " is not long enough for mapping at segment length "
-									  << param.segLength << std::endl;
-//#endif
-						}
-						else
-						{
-							totalReadsPickedForMapping++;
-							//Dispatch input to thread
-							threadPool.runWhenThreadAvailable(new InputSeqProgContainer(seq, seq_name, seqCounter, progress));
-
-							//Collect output if available
-							while ( threadPool.outputAvailable() ) {
-								mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
-							}
-						}
-						//progress.increment(seq.size()/2);
-						seqCounter++;
-					}
-                }); //Finish reading query input file
-
+        // Count the total number of sequences and sequence length
+        uint64_t total_seqs = querySequenceNames.size();
+        uint64_t total_seq_length = 0;
+        for (const auto& seqName : querySequenceNames) {
+            total_seq_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
         }
 
-        //Collect remaining output objects
-        while ( threadPool.running() )
-            mapModuleHandleOutput(threadPool.popOutputWhenAvailable(), allReadMappings, totalReadsMapped, outstrm, progress);
+        std::vector<std::vector<std::string>> target_subsets = createTargetSubsets(targetSequenceNames);
 
-        //Filter over reference axis and report the mappings
-        if (param.filterMode == filter::ONETOONE)
-        {
-          // how many secondary mappings to keep
-          int n_mappings = param.numMappingsForSegment - 1;
+        std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
-          // Group sequences by query prefix, then pass to ref filter
-          auto subrange_begin = allReadMappings.begin();
-          auto subrange_end = allReadMappings.begin();
-          MappingResultsVector_t tmpMappings;
-          MappingResultsVector_t filteredMappings;
-
-          while (subrange_end != allReadMappings.end())
-          {
-            if (param.skip_prefix)
-            {
-              int currGroup = this->getRefGroup(qmetadata[subrange_begin->querySeqId].name);
-              subrange_end = std::find_if_not(subrange_begin, allReadMappings.end(), [this, currGroup] (const auto& allReadMappings_candidate) {
-                  return currGroup == this->getRefGroup(this->qmetadata[allReadMappings_candidate.querySeqId].name);
-              });
+        // For each subset of target sequences
+        uint64_t subset_count = 0;
+        for (const auto& target_subset : target_subsets) {
+            std::cerr << "processing subset " << subset_count << " of " << target_subsets.size() << std::endl;
+            std::cerr << "entries: ";
+            for (const auto& seqName : target_subset) {
+                std::cerr << seqName << " ";
             }
-            else
-            {
-              subrange_end = allReadMappings.end();
+            std::cerr << std::endl;
+            if (target_subset.empty()) {
+                continue;  // Skip empty subsets
             }
-            tmpMappings.insert(
-                tmpMappings.end(), 
-                std::make_move_iterator(subrange_begin), 
-                std::make_move_iterator(subrange_end));
 
-            // tmpMappings now contains mappings from one group of query sequences to all reference groups
-            // we now run filterByGroup, which filters based on the reference group.
-            filterByGroup(tmpMappings, filteredMappings, n_mappings, true);
-            tmpMappings.clear();
-            subrange_begin = subrange_end;
-          }
-          allReadMappings = std::move(filteredMappings);
+            // Build index for the current subset
+            if (!param.indexFilename.empty() && !param.create_index_only) {
+                // load index from file
+                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
+                refSketch = new skch::Sketch(param, *idManager, target_subset, indexFilename);
+            } else {
+                refSketch = new skch::Sketch(param, *idManager, target_subset);
+            }
 
-          //Re-sort mappings by input order of query sequences
-          //This order may be needed for any post analysis of output
-          std::sort(
-              allReadMappings.begin(), allReadMappings.end(),
-              [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.querySeqId, a.queryStartPos, a.refSeqId, a.refStartPos) 
-                    < std::tie(b.querySeqId, b.queryStartPos, b.refSeqId, b.refStartPos);
-              });
+            if (param.create_index_only) {
+                // Save the index to a file
+                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
+                refSketch->writeIndex(indexFilename);
+                std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
+                          << " and saved to " << indexFilename << std::endl;
+            } else {
+                processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
+                              fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
+            }
 
-          reportReadMappings(allReadMappings, "", outstrm);
+            // Clean up the current refSketch
+            delete refSketch;
+            refSketch = nullptr;
+            ++subset_count;
         }
 
-        progress.finish();
+        if (param.create_index_only) {
+            std::cerr << "[mashmap::skch::Map::mapQuery] All indices created successfully. Exiting." << std::endl;
+            exit(0);
+        }
+
+        // Process combined mappings
+        for (auto& [querySeqId, mappings] : combinedMappings) {
+            // Sort mappings by query position, then reference sequence id, then reference position
+            std::sort(
+                mappings.begin(), mappings.end(),
+                [](const MappingResult &a, const MappingResult &b) {
+                    return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
+                        < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
+                }
+            );
+
+            std::string queryName = idManager->getSequenceName(querySeqId);
+            processAggregatedMappings(queryName, mappings, outstrm);
+            totalReadsMapped += !mappings.empty();
+        }
 
         std::cerr << "[mashmap::skch::Map::mapQuery] "
                   << "count of mapped reads = " << totalReadsMapped
                   << ", reads qualified for mapping = " << totalReadsPickedForMapping
-                  << ", total input reads = " << seqCounter
+                  << ", total input reads = " << idManager->size()
                   << ", total input bp = " << total_seq_length << std::endl;
+      }
 
+      void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_seq_length,
+                         input_atomic_queue_t& input_queue, merged_mappings_queue_t& merged_queue,
+                         fragment_atomic_queue_t& fragment_queue, std::atomic<bool>& reader_done,
+                         std::atomic<bool>& workers_done, std::atomic<bool>& fragments_done,
+                         std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings)
+      {
+          progress_meter::ProgressMeter progress(
+              total_seq_length,
+              "[mashmap::skch::Map::mapQuery] mapped ("
+              + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
+
+          // Launch reader thread
+          std::thread reader([&]() {
+              reader_thread(input_queue, reader_done, progress, *idManager);
+          });
+
+          std::vector<std::thread> fragment_workers;
+          for (int i = 0; i < param.threads; ++i) {
+              fragment_workers.emplace_back([&]() {
+                  fragment_thread(fragment_queue, fragments_done);
+              });
+          }
+
+          // Launch worker threads
+          std::vector<std::thread> workers;
+          for (int i = 0; i < param.threads; ++i) {
+              workers.emplace_back([&]() {
+                  worker_thread(input_queue, fragment_queue, merged_queue, progress, reader_done, workers_done);
+              });
+          }
+
+          // Launch aggregator thread
+          std::thread aggregator([&]() {
+              aggregator_thread(merged_queue, workers_done, combinedMappings);
+          });
+
+          // Wait for all threads to complete
+          reader.join();
+
+          for (auto& worker : workers) {
+              worker.join();
+          }
+          workers_done.store(true);
+          fragments_done.store(true);
+
+          for (auto& worker : fragment_workers) {
+              worker.join();
+          }
+
+          aggregator.join();
+
+          // Reset flags and clear aggregatedMappings for next iteration
+          reader_done.store(false);
+          workers_done.store(false);
+          fragments_done.store(false);
+
+          progress.finish();
       }
 
       /**
@@ -535,7 +695,8 @@ namespace skch
           MappingResultsVector_t &unfilteredMappings,
           MappingResultsVector_t &filteredMappings,
           int n_mappings,
-          bool filter_ref)
+          bool filter_ref,
+          const SequenceIdManager& idManager)
       {
         filteredMappings.reserve(unfilteredMappings.size());
 
@@ -550,9 +711,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->refIdGroup[subrange_begin->refSeqId];
-              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup] (const auto& unfilteredMappings_candidate) {
-                  return currGroup == this->refIdGroup[unfilteredMappings_candidate.refSeqId];
+              int currGroup = idManager.getRefGroup(subrange_begin->refSeqId);
+              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& unfilteredMappings_candidate) {
+                  return currGroup == idManager.getRefGroup(unfilteredMappings_candidate.refSeqId);
               });
             }
             else
@@ -567,7 +728,7 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, this->refSketch, n_mappings, param.dropRand, param.overlap_threshold);
+                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
@@ -585,10 +746,8 @@ namespace skch
         std::sort(
             filteredMappings.begin(), filteredMappings.end(),
             [](const MappingResult &a, const MappingResult &b) {
-                return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) 
-                  < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
-                //return std::tie(a.refSeqId, a.refStartPos, a.queryStartPos)
-                    //< std::tie(b.refSeqId, b.refStartPos, b.queryStartPos);
+                return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand) 
+                    < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
             });
       }
 
@@ -599,141 +758,139 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      MapModuleOutput* mapModule (InputSeqProgContainer* input)
-      {
-        MapModuleOutput* output = new MapModuleOutput();
+      QueryMappingOutput* mapModule(InputSeqProgContainer* input,
+                                    fragment_atomic_queue_t& fragment_queue) {
 
-        //save query sequence name and length
-        output->qseqName = input->seqName;
-        output->qseqLen = input->len;
+        QueryMappingOutput* output = new QueryMappingOutput{input->name, {}, {}, input->progress};
+        std::atomic<int> fragments_processed{0};
         bool split_mapping = true;
-        std::vector<IntervalPoint> intervalPoints;
-        // Reserve the "expected" number of interval points
-        intervalPoints.reserve(
-            2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
-        std::vector<L1_candidateLocus_t> l1Mappings;
-        MappingResultsVector_t l2Mappings;
-        MappingResultsVector_t unfilteredMappings;
-        int refGroup = this->getRefGroup(input->seqName);
+        int refGroup = this->idManager->getRefGroup(input->seqId);
 
-        if (!param.split || input->len <= param.segLength)
-        {
-            QueryMetaData <MinVec_Type> Q;
-            Q.seq = &(input->seq)[0u];
-            Q.len = input->len;
-            Q.fullLen = input->len;
-            Q.seqCounter = input->seqCounter;
-            Q.seqName = input->seqName;
-            Q.refGroup = refGroup;
+        std::vector<FragmentData*> fragments;
+        int noOverlapFragmentCount = input->len / param.segLength;
 
-            // Map this sequence
-            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-            unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-        
-            // Apply non-merged filtering
-            filterNonMergedMappings(unfilteredMappings, param);
-
-            split_mapping = false;
-            input->progress.increment(input->len);
+        for (int i = 0; i < noOverlapFragmentCount; i++) {
+            auto fragment = new FragmentData{
+                &(input->seq)[0u] + i * param.segLength,
+                static_cast<int>(param.segLength),
+                static_cast<int>(input->len),
+                input->seqId,
+                input->name,
+                refGroup,
+                i,
+                output,
+                &fragments_processed
+            };
+            fragments.push_back(fragment);
         }
-        else // Split read mapping
-        {
-            int noOverlapFragmentCount = input->len / param.segLength;
 
-            // Map individual non-overlapping fragments in the read
-            for (int i = 0; i < noOverlapFragmentCount; i++)
-            {
-                QueryMetaData <MinVec_Type> Q;
-                Q.seq = &(input->seq)[0u] + i * param.segLength;
-                Q.len = param.segLength;
-                Q.fullLen = input->len;
-                Q.seqCounter = input->seqCounter;
-                Q.seqName = input->seqName;
-                Q.refGroup = refGroup;
+        if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+            auto fragment = new FragmentData{
+                &(input->seq)[0u] + input->len - param.segLength,
+                static_cast<int>(param.segLength),
+                static_cast<int>(input->len),
+                input->seqId,
+                input->name,
+                refGroup,
+                noOverlapFragmentCount,
+                output,
+                &fragments_processed
+            };
+            fragments.push_back(fragment);
+            noOverlapFragmentCount++;
+        }
 
-                intervalPoints.clear();
-                l1Mappings.clear();
-                l2Mappings.clear();
-
-                mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-                std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                    e.queryLen = input->len;
-                    e.queryStartPos = i * param.segLength;
-                    e.queryEndPos = i * param.segLength + Q.len;
-                });
-
-                unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-                input->progress.increment(param.segLength);
-            }
-
-            // Map last overlapping fragment to cover the whole read
-            if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0)
-            {
-                QueryMetaData <MinVec_Type> Q;
-                Q.seq = &(input->seq)[0u] + input->len - param.segLength;
-                Q.len = param.segLength;
-                Q.seqCounter = input->seqCounter;
-                Q.seqName = input->seqName;
-                Q.refGroup = refGroup;
-
-                intervalPoints.clear();
-                l1Mappings.clear();
-                l2Mappings.clear();
-
-                mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-                std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                    e.queryLen = input->len;
-                    e.queryStartPos = input->len - param.segLength;
-                    e.queryEndPos = input->len;
-                });
-
-                unfilteredMappings.insert(unfilteredMappings.end(), l2Mappings.begin(), l2Mappings.end());
-                input->progress.increment(input->len % param.segLength);
-            }
-
-            if (param.mergeMappings) 
-            {
-                // the maximally merged mappings are top-level chains
-                // while the unfiltered mappings now contain splits at max_mapping_length
-                auto maximallyMergedMappings =
-                    mergeMappingsInRange(unfilteredMappings, param.chain_gap);
-                // we filter on the top level chains
-                filterMaximallyMerged(maximallyMergedMappings, param);
-                // collect splitMappingIds in the maximally merged mappings
-                robin_hood::unordered_set<offset_t> kept_chains;
-                for (auto &mapping : maximallyMergedMappings) {
-                    kept_chains.insert(mapping.splitMappingId);
-                }
-                // and use them to filter mappings to discard
-                unfilteredMappings.erase(
-                    std::remove_if(unfilteredMappings.begin(), unfilteredMappings.end(),
-                                   [&kept_chains](const MappingResult &mapping) {
-                                       return !kept_chains.count(mapping.splitMappingId);
-                                   }),
-                    unfilteredMappings.end()
-                    );
-            }
-            else 
-            {
-                filterNonMergedMappings(unfilteredMappings, param);
+        for (auto& fragment : fragments) {
+            while (!fragment_queue.try_push(fragment)) {
+                //std::this_thread::yield(); // too fast
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
 
-        // Common post-processing for both merged and non-merged mappings
-        mappingBoundarySanityCheck(input, unfilteredMappings);
-    
-        if (param.filterLengthMismatches)
-        {
-            filterFalseHighIdentity(unfilteredMappings);
+        // Wait for all fragments to be processed
+        while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-    
-        sparsifyMappings(unfilteredMappings);
 
-        output->readMappings = std::move(unfilteredMappings);
+        mappingBoundarySanityCheck(input, output->results);
 
         return output;
+      }
+
+      void fragment_thread(fragment_atomic_queue_t& fragment_queue,
+                           std::atomic<bool>& fragments_done) {
+          std::vector<IntervalPoint> intervalPoints;
+          std::vector<L1_candidateLocus_t> l1Mappings;
+          MappingResultsVector_t l2Mappings;
+          QueryMetaData<MinVec_Type> Q;
+
+          while (!fragments_done.load()) {
+              FragmentData* fragment = nullptr;
+              if (fragment_queue.try_pop(fragment)) {
+                  if (fragment) {
+                      processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                  }
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
+      }
+
+      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, std::ofstream& outstrm) {
+
+          // XXX we should fix this combined condition
+          if (param.mergeMappings && param.split) {
+              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
+              filterMaximallyMerged(maximallyMergedMappings, param);
+              robin_hood::unordered_set<offset_t> kept_chains;
+              for (auto &mapping : maximallyMergedMappings) {
+                  kept_chains.insert(mapping.splitMappingId);
+              }
+              mappings.erase(
+                  std::remove_if(mappings.begin(), mappings.end(),
+                                 [&kept_chains](const MappingResult &mapping) {
+                                     return !kept_chains.count(mapping.splitMappingId);
+                                 }),
+                  mappings.end());
+          } else {
+              filterNonMergedMappings(mappings, param);
+          }
+
+          if (param.filterLengthMismatches) {
+              filterFalseHighIdentity(mappings);
+          }
+
+          sparsifyMappings(mappings);
+
+          // Apply group filtering aggregated across all targets
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t filteredMappings;
+              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager);
+              mappings = std::move(filteredMappings);
+          }
+
+          reportReadMappings(mappings, queryName, outstrm);
+      }
+
+      void aggregator_thread(merged_mappings_queue_t& merged_queue,
+                             std::atomic<bool>& workers_done,
+                             std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings) {
+          while (true) {
+              QueryMappingOutput* output = nullptr;
+              if (merged_queue.try_pop(output)) {
+                  seqno_t querySeqId = idManager->getSequenceId(output->queryName);
+                  combinedMappings[querySeqId].insert(
+                      combinedMappings[querySeqId].end(),
+                      output->results.begin(),
+                      output->results.end()
+                  );
+                  delete output;
+              } else if (workers_done.load() && merged_queue.was_empty()) {
+                  break;
+              } else {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+          }
       }
 
       /**
@@ -747,9 +904,8 @@ namespace skch
       void mapModuleHandleOutput(MapModuleOutput* output,
                                  Vec &allReadMappings,
                                  seqno_t &totalReadsMapped,
-                                 std::ofstream &outstrm,
-                                 progress_meter::ProgressMeter& progress)
-        {
+                                 std::ofstream &outstrm) {
+
           if(output->readMappings.size() > 0)
             totalReadsMapped++;
 
@@ -764,8 +920,6 @@ namespace skch
             reportReadMappings(output->readMappings, output->qseqName, outstrm);
           }
 
-          //progress.increment(output->qseqLen/2 + (output->qseqLen % 2 != 0));
-
           delete output;
         }
 
@@ -778,7 +932,7 @@ namespace skch
       {
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
-              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false);
+              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager);
               readMappings = std::move(filteredMappings);
           }
       }
@@ -812,9 +966,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->refIdGroup[l1_begin->seqId];
+              int currGroup = this->idManager->getRefGroup(l1_begin->seqId);
               l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, currGroup] (const auto& candidate) {
-                  return currGroup == this->refIdGroup[candidate.seqId];
+                  return currGroup == this->idManager->getRefGroup(candidate.seqId);
               });
             }
             else
@@ -842,7 +996,7 @@ namespace skch
             std::chrono::duration<double> timeSpentL2 = skch::Time::now() - t1;
             std::chrono::duration<double> timeSpentMappingFragment = skch::Time::now() - t0;
 
-            std::cerr << Q.seqCounter << " " << Q.len
+            std::cerr << Q.seqId << " " << Q.len
               << " " << timeSpentL1.count()
               << " " << timeSpentL2.count()
               << " " << timeSpentMappingFragment.count()
@@ -855,7 +1009,7 @@ namespace skch
         void getSeedHits(Q_Info &Q)
         {
           Q.minmerTableQuery.reserve(param.sketchSize + 1);
-          CommonFunc::sketchSequence(Q.minmerTableQuery, Q.seq, Q.len, param.kmerSize, param.alphabetSize, param.sketchSize, Q.seqCounter);
+          CommonFunc::sketchSequence(Q.minmerTableQuery, Q.seq, Q.len, param.kmerSize, param.alphabetSize, param.sketchSize, Q.seqId);
           if(Q.minmerTableQuery.size() == 0) {
             Q.sketchSize = 0;
             return;
@@ -869,13 +1023,13 @@ namespace skch
 
           // TODO remove them from the original sketch instead of removing for each read
           auto new_end = std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(), [&](auto& mi) {
-            return refSketch.isFreqSeed(mi.hash);
+            return refSketch->isFreqSeed(mi.hash);
           });
           Q.minmerTableQuery.erase(new_end, Q.minmerTableQuery.end());
 
           Q.sketchSize = Q.minmerTableQuery.size();
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map::getSeedHits, read id " << Q.seqCounter << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
+          std::cerr << "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
 #endif
         } 
 
@@ -895,7 +1049,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-          std::cerr<< "INFO, skch::Map::getSeedHits, read id " << Q.seqCounter << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
+          std::cerr<< "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
 #endif
 
           //For invalid query (example : just NNNs), we may be left with 0 sketch size
@@ -912,9 +1066,9 @@ namespace skch
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
-            const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
+            const auto seedFind = refSketch->minmerPosLookupIndex.find(it->hash);
 
-            if(seedFind != refSketch.minmerPosLookupIndex.end())
+            if(seedFind != refSketch->minmerPosLookupIndex.end())
             {
               pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
             }
@@ -924,11 +1078,16 @@ namespace skch
           while(!pq.empty())
           {
             const IP_const_iterator ip_it = pq.front().it;
-            const auto& ref = this->refSketch.metadata[ip_it->seqId];
+            //const auto& ref = this->sketch_metadata[ip_it->seqId];
+            const auto& ref_name = this->idManager->getSequenceName(ip_it->seqId);
+            //const auto& ref_len = this->idManager.getSeqLen(ip_it->seqId);
             bool skip_mapping = false;
-            if (param.skip_self && Q.seqName == ref.name) skip_mapping = true;
-            if (param.skip_prefix && this->refIdGroup[ip_it->seqId] == Q.refGroup) skip_mapping = true;
-            if (param.lower_triangular && Q.seqCounter <= ip_it->seqId) skip_mapping = true;
+            int queryGroup = idManager->getRefGroup(Q.seqId);
+            int targetGroup = idManager->getRefGroup(ip_it->seqId);
+
+            if (param.skip_self && queryGroup == targetGroup) skip_mapping = true;
+            if (param.skip_prefix && queryGroup == targetGroup) skip_mapping = true;
+            if (param.lower_triangular && Q.seqId <= ip_it->seqId) skip_mapping = true;
     
             if (!skip_mapping) {
               intervalPoints.push_back(*ip_it);
@@ -946,7 +1105,7 @@ namespace skch
           }
 
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqCounter << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
+          std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqId << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
 #endif
         }
 
@@ -960,7 +1119,7 @@ namespace skch
             Vec2 &l1Mappings)
         {
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqCounter << std::endl;
+          std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqId << std::endl;
 #endif
 
           int overlapCount = 0;
@@ -1189,9 +1348,9 @@ namespace skch
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->refIdGroup[ip_begin->seqId];
+              int currGroup = this->idManager->getRefGroup(ip_begin->seqId);
               ip_end = std::find_if_not(ip_begin, intervalPoints.end(), [this, currGroup] (const auto& ip) {
-                  return currGroup == this->refIdGroup[ip.seqId];
+                  return currGroup == this->idManager->getRefGroup(ip.seqId);
               });
             }
             else
@@ -1205,10 +1364,59 @@ namespace skch
         }
 
 
-      // helper to get the prefix of a string
-      const std::string prefix(const std::string& s, const char c) {
-          //std::cerr << "prefix of " << s << " by " << c << " is " << s.substr(0, s.find_last_of(c)) << std::endl;
-          return s.substr(0, s.find_last_of(c));
+      /**
+       * @brief     Build metadata and reference groups for sequences
+       * @details   Read FAI files, sort sequences, and assign groups
+       */
+      void buildRefGroups() {
+          std::vector<std::tuple<std::string, size_t, offset_t>> seqInfoWithIndex;
+          size_t totalSeqs = 0;
+
+          for (const auto& fileName : param.refSequences) {
+              std::string faiName = fileName + ".fai";
+              std::ifstream faiFile(faiName);
+              
+              if (!faiFile.is_open()) {
+                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
+                  exit(1);
+              }
+
+              std::string line;
+              while (std::getline(faiFile, line)) {
+                  std::istringstream iss(line);
+                  std::string seqName;
+                  offset_t seqLength;
+                  iss >> seqName >> seqLength;
+
+                  seqInfoWithIndex.emplace_back(seqName, totalSeqs++, seqLength);
+              }
+          }
+
+          std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
+
+          std::vector<int> refGroups(totalSeqs);
+          // Removed as sketch_metadata is no longer used
+          int currentGroup = 0;
+          std::string prevPrefix;
+
+          for (const auto& [seqName, originalIndex, seqLength] : seqInfoWithIndex) {
+              std::string currPrefix = seqName.substr(0, seqName.find_last_of(param.prefix_delim));
+              
+              if (currPrefix != prevPrefix) {
+                  currentGroup++;
+                  prevPrefix = currPrefix;
+              }
+
+              refGroups[originalIndex] = currentGroup;
+              // Metadata is now handled by idManager, no need to push_back here
+          }
+
+          // Removed refIdGroup swap as it's no longer needed
+
+          if (totalSeqs == 0) {
+              std::cerr << "[mashmap::skch::Map::buildRefGroups] ERROR: No sequences indexed!" << std::endl;
+              exit(1);
+          }
       }
 
       /**
@@ -1256,7 +1464,7 @@ namespace skch
               //Report the alignment if it passes our identity threshold and,
               // if we are in all-vs-all mode, it isn't a self-mapping,
               // and if we are self-mapping, the query is shorter than the target
-              const auto& ref = this->refSketch.metadata[l2.seqId];
+              const auto& ref = this->idManager->getContigInfo(l2.seqId);
               if((param.keep_low_pct_id && nucIdentityUpperBound >= param.percentageIdentity)
                   || nucIdentity >= param.percentageIdentity)
               {
@@ -1273,7 +1481,7 @@ namespace skch
                   res.queryStartPos = 0;
                   res.queryEndPos = Q.len;
                   res.refSeqId = l2.seqId;
-                  res.querySeqId = Q.seqCounter;
+                  res.querySeqId = Q.seqId;
                   res.nucIdentity = nucIdentity;
                   res.nucIdentityUpperBound = nucIdentityUpperBound;
                   res.sketchSize = Q.sketchSize;
@@ -1320,7 +1528,7 @@ namespace skch
           //std::cerr << "INFO, skch::Map:computeL2MappedRegions, read id " << Q.seqName << "_" << Q.startPos << std::endl; 
 #endif
            
-          auto& minmerIndex = refSketch.minmerIndex;
+          auto& minmerIndex = refSketch->minmerIndex;
 
           //candidateLocus.rangeStartPos -= param.segLength;
           //candidateLocus.rangeEndPos += param.segLength;
@@ -1596,10 +1804,9 @@ namespace skch
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t groupFilteredMappings;
-              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false);
+              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager);
               readMappings = std::move(groupFilteredMappings);
           }
-
       }
 
       /**
@@ -1609,17 +1816,15 @@ namespace skch
        */
       template <typename VecIn>
       VecIn mergeMappingsInRange(VecIn &readMappings,
-                                int max_dist) {
-          assert(param.split == true);
-
-          if(readMappings.size() < 2) return readMappings;
+                                 int max_dist) {
+          if (!param.split || readMappings.size() < 2) return readMappings;
 
           //Sort the mappings by query position, then reference sequence id, then reference position
           std::sort(
               readMappings.begin(), readMappings.end(),
               [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos)
-                      < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos);
+                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
+                      < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
               });
 
           //First assign a unique id to each split mapping in the sorted order
@@ -1696,8 +1901,8 @@ namespace skch
               readMappings.begin(),
               readMappings.end(),
               [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.splitMappingId, a.queryStartPos, a.refSeqId, a.refStartPos)
-                      < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos);
+                  return std::tie(a.splitMappingId, a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
+                      < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
               });
 
           // Create maximallyMergedMappings
@@ -1858,16 +2063,16 @@ namespace skch
             {
               if(e.refStartPos < 0)
                 e.refStartPos = 0;
-              if(e.refStartPos >= this->refSketch.metadata[e.refSeqId].len)
-                e.refStartPos = this->refSketch.metadata[e.refSeqId].len - 1;
+              if(e.refStartPos >= this->idManager->getSequenceLength(e.refSeqId))
+                e.refStartPos = this->idManager->getSequenceLength(e.refSeqId) - 1;
             }
 
             //reference end pos
             {
               if(e.refEndPos < e.refStartPos)
                 e.refEndPos = e.refStartPos;
-              if(e.refEndPos >= this->refSketch.metadata[e.refSeqId].len)
-                e.refEndPos = this->refSketch.metadata[e.refSeqId].len - 1;
+              if(e.refEndPos >= this->idManager->getSequenceLength(e.refSeqId))
+                e.refEndPos = this->idManager->getSequenceLength(e.refSeqId) - 1;
             }
 
             //query start pos
@@ -1900,18 +2105,16 @@ namespace skch
         //Print the results
         for(auto &e : readMappings)
         {
-          assert(e.refSeqId < this->refSketch.metadata.size());
-
           float fakeMapQ = e.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(e.nucIdentity)));
           std::string sep = param.legacy_output ? " " : "\t";
 
-          outstrm  << (param.filterMode == filter::ONETOONE ? qmetadata[e.querySeqId].name : queryName)
+          outstrm  << (param.filterMode == filter::ONETOONE ? idManager->getSequenceName(e.querySeqId) : queryName)
                    << sep << e.queryLen
                    << sep << e.queryStartPos
                    << sep << e.queryEndPos - (param.legacy_output ? 1 : 0)
                    << sep << (e.strand == strnd::FWD ? "+" : "-")
-                   << sep << this->refSketch.metadata[e.refSeqId].name
-                   << sep << this->refSketch.metadata[e.refSeqId].len
+                   << sep << idManager->getSequenceName(e.refSeqId)
+                   << sep << this->idManager->getSequenceLength(e.refSeqId)
                    << sep << e.refStartPos
                    << sep << e.refEndPos - (param.legacy_output ? 1 : 0);
 

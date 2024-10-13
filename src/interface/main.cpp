@@ -67,22 +67,10 @@ int main(int argc, char** argv) {
           std::cerr << "[wfmash::map] Spaced seed sensitivity " << sps.sensitivity << std::endl;
         }
 
-        //Build the sketch for reference
-        skch::Sketch referSketch(map_parameters);
-
-        std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
-        std::cerr << "[wfmash::map] time spent computing the reference index: " << timeRefSketch.count() << " sec" << std::endl;
-
-        if (referSketch.minmerIndex.size() == 0)
-        {
-            std::cerr << "[wfmash::map] ERROR, reference sketch is empty. Reference sequences shorter than the segment length are not indexed" << std::endl;
-            return 1;
-        }
-
         //Map the sequences in query file
         t0 = skch::Time::now();
 
-        skch::Map mapper = skch::Map(map_parameters, referSketch);
+        skch::Map mapper = skch::Map(map_parameters);
 
         std::chrono::duration<double> timeMapQuery = skch::Time::now() - t0;
         std::cerr << "[wfmash::map] time spent mapping the query: " << timeMapQuery.count() << " sec" << std::endl;

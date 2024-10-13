@@ -69,8 +69,8 @@ struct Parameters
     bool filterLengthMismatches;                      //true if filtering out length mismatches
     float kmerComplexityThreshold;                    //minimum kmer complexity to consider (default 0)
 
-	std::string query_list;                           // file containing list of query sequence names
-	std::vector<std::string> query_prefix;            // prefix for query sequences to use
+    std::string query_list;                           // file containing list of query sequence names
+    std::vector<std::string> query_prefix;            // prefix for query sequences to use
 
     int sketchSize;
     bool use_spaced_seeds;                            //
@@ -83,6 +83,7 @@ struct Parameters
 
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //
+    int64_t index_by_size = std::numeric_limits<int64_t>::max();  // Target total size of sequences for each index subset
 };
 
 
