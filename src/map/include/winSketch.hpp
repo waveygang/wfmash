@@ -166,23 +166,6 @@ namespace skch
       void initialize(const std::vector<std::string>& targets = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
-        // Calculate total sequence length
-        /*
-        for (const auto& fileName : param.refSequences) {
-            std::cerr << "targets are " << targets.size() << " ";
-            for (const auto& target : targets) {
-                std::cerr << target << " ";
-            }
-            std::cerr << std::endl;
-            seqiter::for_each_seq_in_file(
-                fileName,
-                targets,
-                [&](const std::string& seq_name, const std::string& seq) {
-                    total_seq_length += seq.length();
-                });
-        }
-        */
-        
         this->build(true, targets);
         this->computeFreqHist();
         this->computeFreqSeedSet();
@@ -291,7 +274,6 @@ namespace skch
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
         if (compute_seeds) {
-            std::cerr << "creating seeds" << std::endl;
 
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
@@ -306,13 +288,11 @@ namespace skch
               fileName,
               target_names,
               [&](const std::string& seq_name, const std::string& seq) {
-                  std::cerr << "on sequence " << seq_name << std::endl;
                   if (seq.length() >= param.segLength) {
                       seqno_t seqId = idManager.getSequenceId(seq_name);
                       threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
                       totalSeqProcessed++;
                       shortestSeqLength = std::min(shortestSeqLength, seq.length());
-                      std::cerr << "DEBUG: Processing sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
 
                       //Collect output if available
                       while (threadPool.outputAvailable()) {
@@ -330,7 +310,6 @@ namespace skch
           
           // Update sequencesByFileInfo
           // Removed as sequencesByFileInfo is no longer used
-          std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects
           while (threadPool.running())

@@ -200,17 +200,6 @@ namespace skch
             p.query_list,
             p.target_list))
           {
-              std::cerr << "Initializing Map with parameters:" << std::endl;
-              std::cerr << "Query sequences: " << p.querySequences.size() << std::endl;
-              std::cerr << "Reference sequences: " << p.refSequences.size() << std::endl;
-              std::cerr << "Query prefix: " << (p.query_prefix.empty() ? "None" : p.query_prefix[0]) << std::endl;
-              std::cerr << "Target prefix: " << (p.target_prefix.empty() ? "None" : p.target_prefix) << std::endl;
-              std::cerr << "Prefix delimiter: '" << p.prefix_delim << "'" << std::endl;
-              std::cerr << "Query list: " << (p.query_list.empty() ? "None" : p.query_list) << std::endl;
-              std::cerr << "Target list: " << (p.target_list.empty() ? "None" : p.target_list) << std::endl;
-              
-              idManager->dumpState();
-              
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
