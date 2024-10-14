@@ -475,23 +475,38 @@ namespace skch
             }
 
             // Build index for the current subset
+            // Open the index file once
+            std::ifstream indexStream;
             if (!param.indexFilename.empty() && !param.create_index_only) {
-                // load index from file
-                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
-                refSketch = new skch::Sketch(param, *idManager, target_subset, indexFilename);
+                indexStream.open(param.indexFilename.string(), std::ios::binary);
+                if (!indexStream) {
+                    std::cerr << "Error: Unable to open index file: " << param.indexFilename << std::endl;
+                    exit(1);
+                }
+            }
+
+            if (!param.indexFilename.empty() && !param.create_index_only) {
+                // Load index from file
+                refSketch = new skch::Sketch(param, *idManager, target_subset);
+                refSketch->readIndex(indexStream, target_subset);
             } else {
                 refSketch = new skch::Sketch(param, *idManager, target_subset);
             }
 
             if (param.create_index_only) {
                 // Save the index to a file
-                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
-                refSketch->writeIndex(indexFilename);
+                std::string indexFilename = param.indexFilename.string();
+                bool append = (subset_count != 0); // Append if not the first subset
+                refSketch->writeIndex(indexFilename, append);
                 std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
                 processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
                               fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
+            }
+
+            if (indexStream.is_open()) {
+                indexStream.close();
             }
 
             // Clean up the current refSketch

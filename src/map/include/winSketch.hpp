@@ -461,16 +461,38 @@ namespace skch
       /**
        * @brief  Write all index data structures to disk
        */
-      void writeIndex(const std::string& filename = "") 
+      void writeIndex(const std::string& filename = "", bool append = false) 
       {
-        fs::path freqListFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
+        fs::path indexFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
         std::ofstream outStream;
-        outStream.open(freqListFilename, std::ios::binary);
-
+        if (append) {
+            outStream.open(indexFilename, std::ios::binary | std::ios::app);
+        } else {
+            outStream.open(indexFilename, std::ios::binary);
+        }
+        if (!outStream) {
+            std::cerr << "Error: Unable to open index file for writing: " << indexFilename << std::endl;
+            exit(1);
+        }
+        writeSubIndexHeader(outStream);
         writeParameters(outStream);
         writeSketchBinary(outStream);
         writePosListBinary(outStream);
         writeFreqKmersBinary(outStream);
+        outStream.close();
+      }
+
+      void writeSubIndexHeader(std::ofstream& outStream) 
+      {
+        const uint64_t magic_number = 0xDEADBEEFCAFEBABE;
+        outStream.write(reinterpret_cast<const char*>(&magic_number), sizeof(magic_number));
+        uint64_t num_sequences = idManager.getSequenceNames().size();
+        outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
+        for (const auto& seqName : idManager.getSequenceNames()) {
+            uint64_t name_length = seqName.size();
+            outStream.write(reinterpret_cast<const char*>(&name_length), sizeof(name_length));
+            outStream.write(seqName.c_str(), name_length);
+        }
       }
 
       /**
@@ -546,7 +568,6 @@ namespace skch
        */
       void readParameters(std::ifstream& inStream)
       {
-        // Read segment length, sketch size, and kmer size
         decltype(param.segLength) index_segLength;
         decltype(param.sketchSize) index_sketchSize;
         decltype(param.kmerSize) index_kmerSize;
@@ -559,11 +580,11 @@ namespace skch
             || param.sketchSize != index_sketchSize
             || param.kmerSize != index_kmerSize)
         {
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: Parameters of indexed sketch differ from CLI parameters" << std::endl;
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: Index --> segLength=" << index_segLength
-            << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: CLI   --> segLength=" << param.segLength
-            << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::readParameters] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::readParameters] Index --> segLength=" << index_segLength
+                    << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::readParameters] Current --> segLength=" << param.segLength
+                    << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
           exit(1);
         }
       }
@@ -572,15 +593,37 @@ namespace skch
       /**
        * @brief  Read all index data structures from file
        */
-      void readIndex() 
-      { 
-        fs::path indexFilename = fs::path(param.indexFilename);
-        std::ifstream inStream;
-        inStream.open(indexFilename, std::ios::binary);
+      void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
+      {
+        if (!readSubIndexHeader(inStream, targetSequenceNames)) {
+            std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
+            exit(1);
+        }
         readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
         readFreqKmersBinary(inStream);
+      }
+
+      bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
+      {
+        uint64_t magic_number = 0;
+        inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+        if (magic_number != 0xDEADBEEFCAFEBABE) {
+            std::cerr << "Error: Invalid magic number in index file." << std::endl;
+            exit(1);
+        }
+        uint64_t num_sequences = 0;
+        inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
+        std::vector<std::string> sequenceNames;
+        for (uint64_t i = 0; i < num_sequences; ++i) {
+            uint64_t name_length = 0;
+            inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            std::string seqName(name_length, '\0');
+            inStream.read(&seqName[0], name_length);
+            sequenceNames.push_back(seqName);
+        }
+        return sequenceNames == targetSequenceNames;
       }
 
 
