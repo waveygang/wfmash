@@ -486,9 +486,9 @@ namespace skch
       {
         const uint64_t magic_number = 0xDEADBEEFCAFEBABE;
         outStream.write(reinterpret_cast<const char*>(&magic_number), sizeof(magic_number));
-        uint64_t num_sequences = idManager.getSequenceNames().size();
+        uint64_t num_sequences = idManager.getTargetSequenceNames().size();
         outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
-        for (const auto& seqName : idManager.getSequenceNames()) {
+        for (const auto& seqName : idManager.getTargetSequenceNames()) {
             uint64_t name_length = seqName.size();
             outStream.write(reinterpret_cast<const char*>(&name_length), sizeof(name_length));
             outStream.write(seqName.c_str(), name_length);
