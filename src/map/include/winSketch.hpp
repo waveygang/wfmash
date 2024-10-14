@@ -173,7 +173,7 @@ namespace skch
         this->hashFreq.clear();
         if (!param.indexFilename.empty())
         {
-            this->writeIndex();
+            this->writeIndex(targets);
         }
 
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
@@ -461,7 +461,7 @@ namespace skch
       /**
        * @brief  Write all index data structures to disk
        */
-      void writeIndex(const std::string& filename = "", bool append = false) 
+      void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false) 
       {
         fs::path indexFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
         std::ofstream outStream;
@@ -474,7 +474,7 @@ namespace skch
             std::cerr << "Error: Unable to open index file for writing: " << indexFilename << std::endl;
             exit(1);
         }
-        writeSubIndexHeader(outStream);
+        writeSubIndexHeader(outStream, target_subset);
         writeParameters(outStream);
         writeSketchBinary(outStream);
         writePosListBinary(outStream);
@@ -482,13 +482,13 @@ namespace skch
         outStream.close();
       }
 
-      void writeSubIndexHeader(std::ofstream& outStream) 
+      void writeSubIndexHeader(std::ofstream& outStream, const std::vector<std::string>& target_subset) 
       {
         const uint64_t magic_number = 0xDEADBEEFCAFEBABE;
         outStream.write(reinterpret_cast<const char*>(&magic_number), sizeof(magic_number));
-        uint64_t num_sequences = idManager.getTargetSequenceNames().size();
+        uint64_t num_sequences = target_subset.size();
         outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
-        for (const auto& seqName : idManager.getTargetSequenceNames()) {
+        for (const auto& seqName : target_subset) {
             uint64_t name_length = seqName.size();
             outStream.write(reinterpret_cast<const char*>(&name_length), sizeof(name_length));
             outStream.write(seqName.c_str(), name_length);
