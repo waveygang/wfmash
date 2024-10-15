@@ -574,7 +574,7 @@ namespace skch
         readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
-        readFreqKmersBinary(inStream);
+        // Removed readFreqKmersBinary call
       }
 
       bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
@@ -642,8 +642,7 @@ namespace skch
         minmerPosLookupIndex.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();
-        frequentSeeds.clear();
-        freqThreshold = std::numeric_limits<uint64_t>::max();
+        // Removed frequentSeeds and freqThreshold
       }
 
     }; //End of class Sketch
