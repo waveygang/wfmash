@@ -67,8 +67,6 @@ namespace skch
       //algorithm parameters
       skch::Parameters param;
 
-      // Removed frequent kmer tracking
-
       //Make the default constructor protected, non-accessible
       protected:
       Sketch(SequenceIdManager& idMgr) : idManager(idMgr) {}
@@ -163,7 +161,6 @@ namespace skch
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
         this->build(true, targets);
-        // Removed frequent kmer related function calls
         this->hashFreq.clear();
         if (!param.indexFilename.empty())
         {
@@ -530,12 +527,6 @@ namespace skch
 
 
       /**
-       * @brief  read frequent kmers from file
-       */
-      // Removed readFreqKmersBinary function
-
-
-      /**
        * @brief  Read parameters and compare to CLI params
        */
       void readParameters(std::ifstream& inStream)
@@ -600,12 +591,6 @@ namespace skch
       }
 
 
-      /**
-       * @brief   report the frequency histogram of minmers using position lookup index
-       *          and compute which high frequency minmers to ignore
-       */
-      // Removed computeFreqHist function
-
       public:
 
       /**
@@ -634,15 +619,12 @@ namespace skch
         return this->minmerIndex.end();
       }
 
-      // Removed frequent kmer related functions
-
       void clear()
       {
         hashFreq.clear();
         minmerPosLookupIndex.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();
-        // Removed frequentSeeds and freqThreshold
       }
 
     }; //End of class Sketch
