@@ -470,7 +470,6 @@ namespace skch
         // Build index for the current subset
         // Open the index file once
         std::ifstream indexStream;
-        std::ifstream indexStream;
         if (!param.indexFilename.empty() && !param.create_index_only) {
             indexStream.open(param.indexFilename.string(), std::ios::binary);
             if (!indexStream) {
