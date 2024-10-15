@@ -74,7 +74,6 @@ void parse_args(int argc,
     args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each query/reference pair [default: 1]", {'n', "num-mappings-for-segment"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
     args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 15]", {'k', "kmer"});
-    args::ValueFlag<float> kmer_pct_threshold(mapping_opts, "%", "ignore the top % most-frequent kmers [default: 0.001]", {'H', "kmer-threshold"});
     args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
@@ -469,12 +468,6 @@ void parse_args(int argc,
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
         */
         map_parameters.kmerSize = 15;
-    }
-
-    if (kmer_pct_threshold) {
-        map_parameters.kmer_pct_threshold = args::get(kmer_pct_threshold);
-    } else {
-        map_parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
     }
 
     //if (spaced_seed_params) {
