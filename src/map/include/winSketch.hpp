@@ -80,9 +80,6 @@ namespace skch
       using MIIter_t = MI_Type::const_iterator;
       using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
 
-      // Frequency of each hash
-      HF_Map_t hashFreq;
-
       public:
         uint64_t total_seq_length = 0;
 
@@ -146,15 +143,10 @@ namespace skch
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
         this->build(true, targets);
-        this->hashFreq.clear();
-        if (!param.indexFilename.empty())
-        {
-            this->writeIndex(targets);
-        }
 
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << idManager.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << targets.size() << std::endl;
         isInitialized = true;
         std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
       }
@@ -203,7 +195,6 @@ namespace skch
                   uint64_t seq_length = output->first;
                   MI_Type* minmers = output->second;
                   for (const auto& mi : *minmers) {
-                      this->hashFreq[mi.hash]++;
                       if (minmerPosLookupIndex[mi.hash].size() == 0 
                           || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                           || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
@@ -341,7 +332,6 @@ namespace skch
       {
         for (MinmerInfo& mi : *contigMinmerIndex)
         {
-          this->hashFreq[mi.hash]++;
           if (minmerPosLookupIndex[mi.hash].size() == 0 
                   || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                   || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
@@ -599,7 +589,6 @@ namespace skch
 
       void clear()
       {
-        hashFreq.clear();
         minmerPosLookupIndex.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();

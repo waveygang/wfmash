@@ -480,39 +480,42 @@ namespace skch
 
         // For each subset of target sequences
         uint64_t subset_count = 0;
+        std::cerr << "[mashmap::skch::Map::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
 
-            if (!param.indexFilename.empty() && !param.create_index_only) {
-                // Load index from file
-                std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << std::endl;
-                refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
-            } else {
-                refSketch = new skch::Sketch(param, *idManager, target_subset);
-            }
-
             if (param.create_index_only) {
                 // Save the index to a file
+                std::cerr << "[mashmap::skch::Map::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                refSketch = new skch::Sketch(param, *idManager, target_subset);
                 std::string indexFilename = param.indexFilename.string();
                 bool append = (subset_count != 0); // Append if not the first subset
                 refSketch->writeIndex(target_subset, indexFilename, append);
                 std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
+                if (!param.indexFilename.empty()) {
+                    // Load index from file
+                    std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+                } else {
+                    std::cerr << "[mashmap::skch::Map::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    refSketch = new skch::Sketch(param, *idManager, target_subset);
+                }
                 processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
                               fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
-            }
-
-            if (indexStream.is_open()) {
-                indexStream.close();
             }
 
             // Clean up the current refSketch
             delete refSketch;
             refSketch = nullptr;
             ++subset_count;
+        }
+
+        if (indexStream.is_open()) {
+            indexStream.close();
         }
 
         if (param.create_index_only) {
