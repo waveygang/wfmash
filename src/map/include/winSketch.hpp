@@ -135,7 +135,7 @@ namespace skch
           idManager(idMgr)
       {
         if (indexStream) {
-          loadIndex(*indexStream);
+          readIndex(*indexStream, targets);
         } else {
           initialize(targets);
         }
