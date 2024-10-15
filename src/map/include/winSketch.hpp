@@ -624,18 +624,6 @@ namespace skch
             sequenceNames.push_back(seqName);
         }
         
-        // Debug: Print sequences from the index
-        std::cerr << "Sequences from the index:" << std::endl;
-        for (const auto& name : sequenceNames) {
-            std::cerr << name << std::endl;
-        }
-        
-        // Debug: Print expected sequences
-        std::cerr << "Expected sequences:" << std::endl;
-        for (const auto& name : targetSequenceNames) {
-            std::cerr << name << std::endl;
-        }
-        
         return sequenceNames == targetSequenceNames;
       }
 
