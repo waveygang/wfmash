@@ -470,6 +470,7 @@ namespace skch
         // Build index for the current subset
         // Open the index file once
         std::ifstream indexStream;
+        std::ifstream indexStream;
         if (!param.indexFilename.empty() && !param.create_index_only) {
             indexStream.open(param.indexFilename.string(), std::ios::binary);
             if (!indexStream) {
@@ -488,8 +489,7 @@ namespace skch
             if (!param.indexFilename.empty() && !param.create_index_only) {
                 // Load index from file
                 std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << std::endl;
-                refSketch = new skch::Sketch(param, *idManager, target_subset);
-                refSketch->readIndex(indexStream, target_subset);
+                refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
             } else {
                 refSketch = new skch::Sketch(param, *idManager, target_subset);
             }
