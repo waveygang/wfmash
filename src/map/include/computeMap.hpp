@@ -467,6 +467,17 @@ namespace skch
 
         std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
+        // Build index for the current subset
+        // Open the index file once
+        std::ifstream indexStream;
+        if (!param.indexFilename.empty() && !param.create_index_only) {
+            indexStream.open(param.indexFilename.string(), std::ios::binary);
+            if (!indexStream) {
+                std::cerr << "Error: Unable to open index file: " << param.indexFilename << std::endl;
+                exit(1);
+            }
+        }
+
         // For each subset of target sequences
         uint64_t subset_count = 0;
         for (const auto& target_subset : target_subsets) {
@@ -474,19 +485,9 @@ namespace skch
                 continue;  // Skip empty subsets
             }
 
-            // Build index for the current subset
-            // Open the index file once
-            std::ifstream indexStream;
-            if (!param.indexFilename.empty() && !param.create_index_only) {
-                indexStream.open(param.indexFilename.string(), std::ios::binary);
-                if (!indexStream) {
-                    std::cerr << "Error: Unable to open index file: " << param.indexFilename << std::endl;
-                    exit(1);
-                }
-            }
-
             if (!param.indexFilename.empty() && !param.create_index_only) {
                 // Load index from file
+                std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << std::endl;
                 refSketch = new skch::Sketch(param, *idManager, target_subset);
                 refSketch->readIndex(indexStream, target_subset);
             } else {

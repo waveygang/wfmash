@@ -558,6 +558,7 @@ namespace skch
        */
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
+        std::cerr << "[mashmap::skch::Sketch::readIndex] Reading index" << std::endl;
         if (!readSubIndexHeader(inStream, targetSequenceNames)) {
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);
@@ -592,14 +593,6 @@ namespace skch
 
 
       public:
-
-      /**
-       * @brief               search hash associated with given position inside the index
-       * @details             if MIIter_t iter is returned, than *iter's wpos >= winpos
-       * @param[in]   seqId
-       * @param[in]   winpos
-       * @return              iterator to the minmer in the index
-       */
 
       /**
        * @brief                 check if iterator points to index end
