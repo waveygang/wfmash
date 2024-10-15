@@ -141,14 +141,6 @@ namespace skch
         }
       }
 
-      void loadIndex(std::ifstream& inStream) {
-        readParameters(inStream);
-        readSketchBinary(inStream);
-        readPosListBinary(inStream);
-        isInitialized = true;
-        std::cerr << "[mashmap::skch::Sketch] Sketch loaded from index stream" << std::endl;
-      }
-
     public:
       void initialize(const std::vector<std::string>& targets = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
