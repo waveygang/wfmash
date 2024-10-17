@@ -93,7 +93,7 @@ void parse_args(int argc,
     //ToFix: args::Flag keep_ties(mapping_opts, "", "keep all mappings with equal score even if it results in more than n mappings", {'D', "keep-ties"});
     args::ValueFlag<int64_t> sketch_size(mapping_opts, "N", "sketch size for sketching.", {'w', "sketch-size"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "F", "Drop segments w/ predicted kmer complexity below this cutoff. Kmer complexity defined as #kmers / (s - k + 1)", {'J', "kmer-complexity"});
-    args::Flag hg_filter(mapping_opts, "", "Use the hypergeometric filtering instead of the MashMap2 first pass filtering.", {"hg-filter"});
+    args::Flag no_hg_filter(mapping_opts, "", "Don't use the hypergeometric filtering and instead use the MashMap2 first pass filtering.", {"no-hg-filter"});
     args::ValueFlag<double> hg_filter_ani_diff(mapping_opts, "%", "Filter out mappings unlikely to be this ANI less than the best mapping [default: 0.0]", {"hg-filter-ani-diff"});
     args::ValueFlag<double> hg_filter_conf(mapping_opts, "%", "Confidence value for the hypergeometric filtering [default: 99.9%]", {"hg-filter-conf"});
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
@@ -608,7 +608,7 @@ void parse_args(int argc,
 
     map_parameters.filterLengthMismatches = true;
 
-    map_parameters.stage1_topANI_filter = bool(hg_filter);
+    map_parameters.stage1_topANI_filter = !bool(no_hg_filter);
     map_parameters.stage2_full_scan = true;
 
     if (hg_filter_ani_diff)
