@@ -94,7 +94,6 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     cmd.defineOption("kmer", "kmer size [default : 19]", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("kmer","k");
 
-    cmd.defineOption("kmerThreshold", "ignore the top \% most-frequent kmer window [default: 0.001]", ArgvParser::OptionRequiresValue);
     cmd.defineOption("kmerComplexity", "threshold for kmer complexity [0, 1] [default : 0.0]", ArgvParser::OptionRequiresValue);
 
 
@@ -490,14 +489,6 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     } else {
         parameters.keep_low_pct_id = true;
     }
-
-    if (cmd.foundOption("kmerThreshold")) {
-        str << cmd.optionValue("kmerThreshold");
-        str >> parameters.kmer_pct_threshold;
-    } else {
-        parameters.kmer_pct_threshold = 0.001; // in percent! so we keep 99.999% of kmers
-    }
-    str.clear();
 
     if (cmd.foundOption("numMappingsForSegment")) {
       uint32_t n;
