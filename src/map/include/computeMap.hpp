@@ -1144,6 +1144,7 @@ namespace skch
 
           if (param.stage1_topANI_filter) {
             double maxJaccard = refSketch->globalJaccardNumerator / static_cast<double>(Q.sketchSize);
+            double cutoff_j = Stat::md2j(1 - param.percentageIdentity + param.ANIDiff, param.kmerSize);
             int minIntersectionSize = std::max(
                 static_cast<int>(cutoff_j * Q.sketchSize),
                 minimumHits);
