@@ -1450,16 +1450,6 @@ namespace skch
 
               double candidateJaccard = static_cast<double>(candidateLocus.intersectionSize) / Q.sketchSize;
 
-              std::cerr << "Debug: globalJaccardNumerator=" << refSketch->globalJaccardNumerator
-                        << ", sketchSize=" << Q.sketchSize
-                        << ", jaccardSimilarity=" << jaccardSimilarity
-                        << ", mash_dist=" << mash_dist
-                        << ", cutoff_ani=" << cutoff_ani
-                        << ", cutoff_j=" << cutoff_j
-                        << ", candidateJaccard=" << candidateJaccard
-                        << ", intersectionSize=" << candidateLocus.intersectionSize
-                        << std::endl;
-
               if (candidateJaccard < cutoff_j) 
               {
                 break;
