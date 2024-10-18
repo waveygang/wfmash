@@ -156,13 +156,13 @@ namespace skch
         std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << targets.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Global Jaccard numerator: " << globalJaccardNumerator 
-                  << " (based on total reference size: " << param.totalReferenceSize << " bp)" << std::endl;
+                  << " (based on estimated unique " << param.kmerSize << "-mers: " << param.estimatedUniqueKmers << ")" << std::endl;
         isInitialized = true;
         std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
       }
 
       double determineGlobalJaccardNumerator() {
-          double totalUniqueKmers = param.totalUniqueKmers;
+          double totalUniqueKmers = param.estimatedUniqueKmers;
           double sketchSize = param.sketchSize;
           
           // Probability of a k-mer being in the sketch

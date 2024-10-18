@@ -622,10 +622,16 @@ void parse_args(int argc,
     // Set the total reference size
     map_parameters.totalReferenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
-    // Estimate total unique k-mers
-    // This is a simplistic estimate; you might want to refine this based on your knowledge of the data
-    double estimated_unique_kmer_ratio = 0.8;  // Adjust based on expected repetitiveness of your data
-    map_parameters.totalUniqueKmers = static_cast<uint64_t>(map_parameters.totalReferenceSize * estimated_unique_kmer_ratio);
+    // Estimate total unique k-mers using information theoretic approach
+    map_parameters.estimatedUniqueKmers = skch::CommonFunc::estimateUniqueKmers(
+        map_parameters.totalReferenceSize, 
+        map_parameters.kmerSize
+    );
+
+    std::cerr << "[wfmash] Estimated unique " << map_parameters.kmerSize << "-mers: " 
+              << map_parameters.estimatedUniqueKmers 
+              << " (based on total reference size: " << map_parameters.totalReferenceSize << " bp)" 
+              << std::endl;
 
     map_parameters.filterLengthMismatches = true;
 
