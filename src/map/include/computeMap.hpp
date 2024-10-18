@@ -308,7 +308,6 @@ namespace skch
           );
           sketchCutoffs[cmax] = ci;
 
-          std::cerr << "Debug: sketchCutoffs[" << cmax << "] = " << ci << std::endl;
 
           // For really high min_p values and some values of cmax, there are no values of
           // ci that satisfy the cutoff, so we just set to the max
@@ -1198,13 +1197,6 @@ namespace skch
                       / std::max<double>(1, param.sketchSize / skch::fixed::ss_table_max))
                   ],
                   minIntersectionSize);
-              
-              std::cerr << "Debug: L1 minimumHits=" << minimumHits
-                        << ", minIntersectionSize=" << minIntersectionSize
-                        << ", bestIntersectionSize=" << bestIntersectionSize
-                        << ", Q.sketchSize=" << Q.sketchSize
-                        << ", maxJaccard=" << maxJaccard
-                        << std::endl;
             }
           } 
           
