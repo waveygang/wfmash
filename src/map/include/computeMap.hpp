@@ -1455,16 +1455,19 @@ namespace skch
               double cutoff_ani = std::max(0.0, (1 - mash_dist) - param.ANIDiff);
               double cutoff_j = Stat::md2j(1 - cutoff_ani, param.kmerSize);
 
+              double candidateJaccard = static_cast<double>(candidateLocus.intersectionSize) / Q.sketchSize;
+
               std::cerr << "Debug: globalJaccardNumerator=" << refSketch->globalJaccardNumerator
                         << ", sketchSize=" << Q.sketchSize
                         << ", jaccardSimilarity=" << jaccardSimilarity
                         << ", mash_dist=" << mash_dist
                         << ", cutoff_ani=" << cutoff_ani
                         << ", cutoff_j=" << cutoff_j
-                        << ", candidateIntersection=" << (double(candidateLocus.intersectionSize) / Q.sketchSize)
+                        << ", candidateJaccard=" << candidateJaccard
+                        << ", intersectionSize=" << candidateLocus.intersectionSize
                         << std::endl;
 
-              if (double(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
+              if (candidateJaccard < cutoff_j) 
               {
                 break;
               }
