@@ -615,6 +615,7 @@ void parse_args(int argc,
             exit(1);
         }
         map_parameters.fixedJaccardNumerator = value;
+        std::cerr << "[wfmash] Fixed Jaccard numerator set to: " << value << std::endl;
     } else {
         map_parameters.fixedJaccardNumerator = 0.0;  // Default to automatic determination
     }

@@ -308,6 +308,8 @@ namespace skch
           );
           sketchCutoffs[cmax] = ci;
 
+          std::cerr << "Debug: sketchCutoffs[" << cmax << "] = " << ci << std::endl;
+
           // For really high min_p values and some values of cmax, there are no values of
           // ci that satisfy the cutoff, so we just set to the max
           if (sketchCutoffs[cmax] == 0) {
@@ -1190,6 +1192,11 @@ namespace skch
                       / std::max<double>(1, param.sketchSize / skch::fixed::ss_table_max))
                   ],
                   minimumHits);
+              
+              std::cerr << "Debug: L1 minimumHits=" << minimumHits
+                        << ", bestIntersectionSize=" << bestIntersectionSize
+                        << ", Q.sketchSize=" << Q.sketchSize
+                        << std::endl;
             }
           } 
           
@@ -1435,16 +1442,26 @@ namespace skch
 
             if (param.stage1_topANI_filter)
             {
-              // If using HG filter, don't consider any mappings which have no chance of being 
-              // within param.ANIDiff of the best mapping seen so far
-              double cutoff_ani = std::max(0.0, double((1 - Stat::j2md(refSketch->globalJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff));
+              // Use the global Jaccard numerator here
+              double jaccardSimilarity = refSketch->globalJaccardNumerator / Q.sketchSize;
+              double mash_dist = Stat::j2md(jaccardSimilarity, param.kmerSize);
+              double cutoff_ani = std::max(0.0, (1 - mash_dist) - param.ANIDiff);
               double cutoff_j = Stat::md2j(1 - cutoff_ani, param.kmerSize);
+
+              std::cerr << "Debug: globalJaccardNumerator=" << refSketch->globalJaccardNumerator
+                        << ", sketchSize=" << Q.sketchSize
+                        << ", jaccardSimilarity=" << jaccardSimilarity
+                        << ", mash_dist=" << mash_dist
+                        << ", cutoff_ani=" << cutoff_ani
+                        << ", cutoff_j=" << cutoff_j
+                        << ", candidateIntersection=" << (double(candidateLocus.intersectionSize) / Q.sketchSize)
+                        << std::endl;
+
               if (double(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
               {
                 break;
               }
             }
-
 
             l2_vec.clear();
             computeL2MappedRegions(Q, candidateLocus, l2_vec);

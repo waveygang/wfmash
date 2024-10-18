@@ -148,8 +148,12 @@ namespace skch
 
         if (param.fixedJaccardNumerator == 0.0) {
             this->globalJaccardNumerator = determineGlobalJaccardNumerator();
+            std::cerr << "[mashmap::skch::Sketch] Automatically determined Global Jaccard numerator: " 
+                      << globalJaccardNumerator << std::endl;
         } else {
             this->globalJaccardNumerator = param.fixedJaccardNumerator;
+            std::cerr << "[mashmap::skch::Sketch] Using fixed Global Jaccard numerator: " 
+                      << globalJaccardNumerator << std::endl;
         }
 
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
