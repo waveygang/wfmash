@@ -1143,6 +1143,11 @@ namespace skch
           std::unordered_map<hash_t, int> hash_to_freq;
 
           if (param.stage1_topANI_filter) {
+            double maxJaccard = refSketch->globalJaccardNumerator / static_cast<double>(Q.sketchSize);
+            int minIntersectionSize = std::max(
+                static_cast<int>(cutoff_j * Q.sketchSize),
+                minimumHits);
+
             while (leadingIt != ip_end)
             {
               // Catch the trailing iterator up to the leading iterator - windowLen
@@ -1181,7 +1186,7 @@ namespace skch
 
             // Only go back through to find local opts if we know that there are some that are 
             // large enough
-            if (bestIntersectionSize < minimumHits) 
+            if (bestIntersectionSize < minIntersectionSize) 
             {
               return;
             } else 
@@ -1191,11 +1196,13 @@ namespace skch
                     int(std::min(bestIntersectionSize, Q.sketchSize) 
                       / std::max<double>(1, param.sketchSize / skch::fixed::ss_table_max))
                   ],
-                  minimumHits);
+                  minIntersectionSize);
               
               std::cerr << "Debug: L1 minimumHits=" << minimumHits
+                        << ", minIntersectionSize=" << minIntersectionSize
                         << ", bestIntersectionSize=" << bestIntersectionSize
                         << ", Q.sketchSize=" << Q.sketchSize
+                        << ", maxJaccard=" << maxJaccard
                         << std::endl;
             }
           } 
