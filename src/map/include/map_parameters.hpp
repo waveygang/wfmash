@@ -72,6 +72,7 @@ struct Parameters
     std::vector<std::string> query_prefix;            // prefix for query sequences to use
 
     int sketchSize;
+    double fixedJaccardNumerator = 0.0;               // 0.0 means use automatic determination
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //

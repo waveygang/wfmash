@@ -1437,7 +1437,7 @@ namespace skch
             {
               // If using HG filter, don't consider any mappings which have no chance of being 
               // within param.ANIDiff of the best mapping seen so far
-              double cutoff_ani = std::max(0.0, double((1 - Stat::j2md(bestJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff));
+              double cutoff_ani = std::max(0.0, double((1 - Stat::j2md(refSketch->globalJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff));
               double cutoff_j = Stat::md2j(1 - cutoff_ani, param.kmerSize);
               if (double(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
               {

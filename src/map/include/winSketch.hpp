@@ -103,6 +103,8 @@ namespace skch
       input_queue_t input_queue;
       output_queue_t output_queue;
 
+      double globalJaccardNumerator;
+
       private:
 
       /**
@@ -144,11 +146,31 @@ namespace skch
         
         this->build(true, targets);
 
+        if (param.fixedJaccardNumerator == 0.0) {
+            this->globalJaccardNumerator = determineGlobalJaccardNumerator();
+        } else {
+            this->globalJaccardNumerator = param.fixedJaccardNumerator;
+        }
+
         std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << targets.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] Global Jaccard numerator: " << globalJaccardNumerator << std::endl;
         isInitialized = true;
         std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
+      }
+
+      double determineGlobalJaccardNumerator() {
+          double totalUniqueKmers = minmerPosLookupIndex.size();
+          double sketchSize = param.sketchSize;
+          
+          // Probability of a k-mer being in the sketch
+          double p = sketchSize / totalUniqueKmers;
+          
+          // Expected number of shared k-mers (upper bound on Jaccard numerator)
+          double expectedSharedKmers = sketchSize * (1 - std::pow(1 - p, totalUniqueKmers));
+          
+          return std::min(expectedSharedKmers, sketchSize);
       }
 
       private:
