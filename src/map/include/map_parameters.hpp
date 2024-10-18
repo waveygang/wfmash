@@ -75,7 +75,6 @@ struct Parameters
     double fixedJaccardNumerator = 0.0;               // 0.0 means use automatic determination
     uint64_t totalReferenceSize = 0;                  // Total size of all reference sequences
     uint64_t estimatedUniqueKmers = 0;                // Estimate of total unique k-mers
-    double fixedJaccardNumerator = 0.0;               // 0.0 means use automatic determination
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
