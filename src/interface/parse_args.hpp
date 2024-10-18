@@ -615,11 +615,17 @@ void parse_args(int argc,
             exit(1);
         }
         map_parameters.fixedJaccardNumerator = value;
-    } else if (auto_jaccard_numerator) {
-        map_parameters.fixedJaccardNumerator = 0.0;  // Trigger automatic determination
     } else {
         map_parameters.fixedJaccardNumerator = 0.0;  // Default to automatic determination
     }
+
+    // Set the total reference size
+    map_parameters.totalReferenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
+
+    // Estimate total unique k-mers
+    // This is a simplistic estimate; you might want to refine this based on your knowledge of the data
+    double estimated_unique_kmer_ratio = 0.8;  // Adjust based on expected repetitiveness of your data
+    map_parameters.totalUniqueKmers = static_cast<uint64_t>(map_parameters.totalReferenceSize * estimated_unique_kmer_ratio);
 
     map_parameters.filterLengthMismatches = true;
 
