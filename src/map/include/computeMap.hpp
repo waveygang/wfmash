@@ -1142,7 +1142,7 @@ namespace skch
           std::unordered_map<hash_t, int> hash_to_freq;
 
           if (param.stage1_topANI_filter) {
-            double maxJaccard = refSketch->globalJaccardNumerator / static_cast<double>(Q.sketchSize);
+            double maxJaccard = refSketch->hgNumerator / static_cast<double>(Q.sketchSize);
             double cutoff_j = Stat::md2j(1 - param.percentageIdentity + param.ANIDiff, param.kmerSize);
             int minIntersectionSize = std::max(
                 static_cast<int>(cutoff_j * Q.sketchSize),
@@ -1443,7 +1443,7 @@ namespace skch
             if (param.stage1_topANI_filter)
             {
               // Use the global Jaccard numerator here
-              double jaccardSimilarity = refSketch->globalJaccardNumerator / Q.sketchSize;
+              double jaccardSimilarity = refSketch->hgNumerator / Q.sketchSize;
               double mash_dist = Stat::j2md(jaccardSimilarity, param.kmerSize);
               double cutoff_ani = std::max(0.0, (1 - mash_dist) - param.ANIDiff);
               double cutoff_j = Stat::md2j(1 - cutoff_ani, param.kmerSize);
