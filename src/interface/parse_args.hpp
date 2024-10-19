@@ -92,9 +92,9 @@ void parse_args(int argc,
     args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
     //ToFix: args::Flag keep_ties(mapping_opts, "", "keep all mappings with equal score even if it results in more than n mappings", {'D', "keep-ties"});
     args::ValueFlag<int64_t> sketch_size(mapping_opts, "N", "sketch size for sketching.", {'w', "sketch-size"});
-    args::ValueFlag<int> hg_numerator(mapping_opts, "N", 
+    args::ValueFlag<double> hg_numerator(mapping_opts, "N", 
         "Set the numerator for the hypergeometric filter's Jaccard similarity calculation. "
-        "Higher values increase speed at the cost of sensitivity. [default: 1]", 
+        "Higher values increase speed at the cost of sensitivity. [default: 1.0]", 
         {"hg-numerator"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "F", "Drop segments w/ predicted kmer complexity below this cutoff. Kmer complexity defined as #kmers / (s - k + 1)", {'J', "kmer-complexity"});
     args::Flag no_hg_filter(mapping_opts, "", "Don't use the hypergeometric filtering and instead use the MashMap2 first pass filtering.", {"no-hg-filter"});
@@ -611,14 +611,14 @@ void parse_args(int argc,
     }
 
     if (hg_numerator) {
-        int value = args::get(hg_numerator);
-        if (value < 1) {
-            std::cerr << "[wfmash] ERROR: hg-numerator must be >= 1." << std::endl;
+        double value = args::get(hg_numerator);
+        if (value < 1.0) {
+            std::cerr << "[wfmash] ERROR: hg-numerator must be >= 1.0." << std::endl;
             exit(1);
         }
         map_parameters.hgNumerator = value;
     } else {
-        map_parameters.hgNumerator = 1;  // Default value
+        map_parameters.hgNumerator = 1.0;  // Default value
     }
 
     // Set the total reference size

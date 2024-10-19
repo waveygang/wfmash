@@ -72,7 +72,7 @@ struct Parameters
     std::vector<std::string> query_prefix;            // prefix for query sequences to use
 
     int sketchSize;
-    int hgNumerator = 1;                              // Numerator for the hypergeometric filter's Jaccard similarity calculation
+    double hgNumerator = 1.0;                         // Numerator for the hypergeometric filter's Jaccard similarity calculation
     uint64_t totalReferenceSize = 0;                  // Total size of all reference sequences
     uint64_t estimatedUniqueKmers = 0;                // Estimate of total unique k-mers
     bool use_spaced_seeds;                            //

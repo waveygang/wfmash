@@ -103,7 +103,7 @@ namespace skch
       input_queue_t input_queue;
       output_queue_t output_queue;
 
-      int hgNumerator;
+      double hgNumerator;
 
       private:
 
