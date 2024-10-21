@@ -401,14 +401,13 @@ namespace skch
                       reportReadMappings(output->results, output->queryName, outstrm);
                   }
                   delete output;
-              } else if (workers_done.load() && output_queue.was_empty()) {
-                  ++wait_count;
-                  if (wait_count < 5) {
-                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                  } else {
+              } else {
+                  if (workers_done.load() && output_queue.was_empty()) {
+                      ++wait_count;
+                  }
+                  if (wait_count > 10) {
                       break;
                   }
-              } else {
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
@@ -2180,9 +2179,11 @@ namespace skch
 
     private:
       void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done) {
-          while (!processing_done.load()) {
+          int wait_count = 0;
+          while (true) {
               std::pair<seqno_t, MappingResultsVector_t*>* task = nullptr;
               if (aggregate_queue.try_pop(task)) {
+                  wait_count = 0;
                   auto querySeqId = task->first;
                   auto& mappings = *(task->second);
                   
@@ -2198,20 +2199,32 @@ namespace skch
                   }
                   delete task;
               } else {
+                  if (processing_done.load() && aggregate_queue.was_empty()) {
+                      ++wait_count;
+                  }
+                  if (wait_count > 10) {
+                      break;
+                  }
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
       }
 
       void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, std::atomic<bool>& output_done) {
+          int wait_count = 0;
           while (!output_done.load()) {
               std::string* result = nullptr;
               if (writer_queue.try_pop(result)) {
+                  wait_count = 0;
                   outstrm << *result;
                   delete result;
-              } else if (processing_done.load() && writer_queue.was_empty()) {
-                  output_done.store(true);
               } else {
+                  if (processing_done.load() && writer_queue.was_empty()) {
+                      ++wait_count;
+                  }
+                  if (wait_count > 10) {
+                      output_done.store(true);
+                  }
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
