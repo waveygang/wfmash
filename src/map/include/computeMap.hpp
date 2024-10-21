@@ -141,12 +141,11 @@ namespace skch
       // Atomic queues for input and output
       typedef atomic_queue::AtomicQueue<InputSeqProgContainer*, 1024, nullptr, true, true, false, false> input_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> merged_mappings_queue_t;
-      typedef atomic_queue::AtomicQueue<MapModuleOutput*, 1024, nullptr, true, true, false, false> output_atomic_queue_t;
-      typedef atomic_queue::AtomicQueue<std::pair<seqno_t, MappingResultsVector_t*>*, 1024> input_atomic_queue_t;
-      typedef atomic_queue::AtomicQueue<std::string*, 1024> output_atomic_queue_t;
+      typedef atomic_queue::AtomicQueue<std::pair<seqno_t, MappingResultsVector_t*>*, 1024> aggregate_atomic_queue_t;
+      typedef atomic_queue::AtomicQueue<std::string*, 1024> writer_atomic_queue_t;
 
       input_atomic_queue_t input_queue;
-      output_atomic_queue_t output_queue;
+      writer_atomic_queue_t output_queue;
 
     void processFragment(FragmentData* fragment, 
                          std::vector<IntervalPoint>& intervalPoints,
