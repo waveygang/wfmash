@@ -452,9 +452,6 @@ namespace skch
         merged_mappings_queue_t merged_queue;
         fragment_atomic_queue_t fragment_queue;
         writer_atomic_queue_t writer_queue;
-        std::atomic<bool> reader_done(false);
-        std::atomic<bool> workers_done(false);
-        std::atomic<bool> fragments_done(false);
 
         this->querySequenceNames = idManager->getQuerySequenceNames();
         this->targetSequenceNames = idManager->getTargetSequenceNames();
@@ -507,6 +504,9 @@ namespace skch
                     std::cerr << "[mashmap::skch::Map::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset);
                 }
+                std::atomic<bool> reader_done(false);
+                std::atomic<bool> workers_done(false);
+                std::atomic<bool> fragments_done(false);
                 processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
                               fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
             }
@@ -528,6 +528,7 @@ namespace skch
 
         // Process combined mappings
         std::atomic<bool> processing_done(false);
+        std::atomic<bool> workers_done(false);
         std::atomic<bool> output_done(false);
         aggregate_atomic_queue_t aggregate_queue;
 
@@ -543,7 +544,7 @@ namespace skch
         }
 
         // Start output thread
-        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(output_done), std::ref(progress));
+        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(workers_done), std::ref(output_done), std::ref(progress));
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
@@ -560,6 +561,8 @@ namespace skch
         for (auto& worker : workers) {
             worker.join();
         }
+
+        workers_done.store(true);
 
         // Wait for output thread to finish
         while (!output_done.load()) {
@@ -2217,7 +2220,8 @@ namespace skch
           }
       }
 
-      void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, std::atomic<bool>& output_done, progress_meter::ProgressMeter& progress) {
+      void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done,
+                        std::atomic<bool>& workers_done, std::atomic<bool>& output_done, progress_meter::ProgressMeter& progress) {
           int wait_count = 0;
           while (!output_done.load()) {
               std::string* result = nullptr;
@@ -2228,7 +2232,7 @@ namespace skch
                   // Increment progress
                   progress.increment(1);
               } else {
-                  if (processing_done.load() && writer_queue.was_empty()) {
+                  if (processing_done.load() && workers_done.load() && writer_queue.was_empty()) {
                       ++wait_count;
                   }
                   if (wait_count > 10) {
