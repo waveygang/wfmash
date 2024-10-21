@@ -531,10 +531,15 @@ namespace skch
         std::atomic<bool> output_done(false);
         aggregate_atomic_queue_t aggregate_queue;
 
+        // Initialize progress logger
+        progress_meter::ProgressMeter progress(
+            combinedMappings.size(),
+            "[mashmap::skch::Map::mapQuery] processed combined mappings");
+
         // Start worker threads
         std::vector<std::thread> workers;
         for (int i = 0; i < param.threads; ++i) {
-            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done));
+            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done), std::ref(progress));
         }
 
         // Start output thread
@@ -561,6 +566,8 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         output_thread.join();
+
+        progress.finish();
 
         std::cerr << "[mashmap::skch::Map::mapQuery] "
                   << "count of mapped reads = " << totalReadsMapped
@@ -2178,7 +2185,7 @@ namespace skch
       }
 
     private:
-      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done) {
+      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, progress_meter::ProgressMeter& progress) {
           int wait_count = 0;
           while (true) {
               std::pair<seqno_t, MappingResultsVector_t*>* task = nullptr;
@@ -2198,6 +2205,9 @@ namespace skch
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
                   delete task;
+                  
+                  // Increment progress
+                  progress.increment(1);
               } else {
                   if (processing_done.load() && aggregate_queue.was_empty()) {
                       ++wait_count;
