@@ -531,10 +531,7 @@ namespace skch
         // Process combined mappings
         std::atomic<bool> processing_done(false);
         std::atomic<bool> output_done(false);
-        typedef atomic_queue::AtomicQueue<std::pair<seqno_t, MappingResultsVector_t*>*, 1024> aggregate_atomic_queue_t;
-        typedef atomic_queue::AtomicQueue<std::string*, 1024> writer_atomic_queue_t;
         aggregate_atomic_queue_t aggregate_queue;
-        writer_atomic_queue_t writer_queue;
 
         // Start worker threads
         std::vector<std::thread> workers;
