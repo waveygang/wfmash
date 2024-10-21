@@ -534,7 +534,7 @@ namespace skch
         // Initialize progress logger
         progress_meter::ProgressMeter progress(
             combinedMappings.size(),
-            "[mashmap::skch::Map::mapQuery] processed combined mappings");
+            "[mashmap::skch::Map::mapQuery] filtering and writing mappings");
 
         // Start worker threads
         std::vector<std::thread> workers;
