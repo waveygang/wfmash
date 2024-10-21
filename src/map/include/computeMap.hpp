@@ -26,6 +26,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <condition_variable>
 #include <mutex>
+#include <sstream>
 #include "common/atomic_queue/atomic_queue.h"
 
 //Own includes
