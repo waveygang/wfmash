@@ -143,9 +143,7 @@ namespace skch
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> merged_mappings_queue_t;
       typedef atomic_queue::AtomicQueue<std::pair<seqno_t, MappingResultsVector_t*>*, 1024> aggregate_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<std::string*, 1024> writer_atomic_queue_t;
-
-      input_atomic_queue_t input_queue;
-      writer_atomic_queue_t output_queue;
+      typedef atomic_queue::AtomicQueue<FragmentData*, 8192, nullptr, true, true, false, false> fragment_atomic_queue_t;
 
     void processFragment(FragmentData* fragment, 
                          std::vector<IntervalPoint>& intervalPoints,
@@ -455,6 +453,7 @@ namespace skch
         input_atomic_queue_t input_queue;
         merged_mappings_queue_t merged_queue;
         fragment_atomic_queue_t fragment_queue;
+        writer_atomic_queue_t writer_queue;
         std::atomic<bool> reader_done(false);
         std::atomic<bool> workers_done(false);
         std::atomic<bool> fragments_done(false);
