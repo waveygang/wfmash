@@ -533,20 +533,24 @@ namespace skch
         // Process combined mappings
         std::atomic<bool> processing_done(false);
         std::atomic<bool> output_done(false);
+        typedef atomic_queue::AtomicQueue<std::pair<seqno_t, MappingResultsVector_t*>*, 1024> aggregate_atomic_queue_t;
+        typedef atomic_queue::AtomicQueue<std::string*, 1024> writer_atomic_queue_t;
+        aggregate_atomic_queue_t aggregate_queue;
+        writer_atomic_queue_t writer_queue;
 
         // Start worker threads
         std::vector<std::thread> workers;
         for (int i = 0; i < param.threads; ++i) {
-            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(processing_done));
+            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done));
         }
 
         // Start output thread
-        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(processing_done), std::ref(output_done));
+        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(output_done));
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
             auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings);
-            while (!input_queue.try_push(task)) {
+            while (!aggregate_queue.try_push(task)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
@@ -2181,10 +2185,10 @@ namespace skch
       }
 
     private:
-      void processCombinedMappingsThread(std::atomic<bool>& processing_done) {
+      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done) {
           while (!processing_done.load()) {
               std::pair<seqno_t, MappingResultsVector_t*>* task = nullptr;
-              if (input_queue.try_pop(task)) {
+              if (aggregate_queue.try_pop(task)) {
                   auto querySeqId = task->first;
                   auto& mappings = *(task->second);
                   
@@ -2195,7 +2199,7 @@ namespace skch
                   reportReadMappings(mappings, queryName, ss);
                   
                   auto* output = new std::string(ss.str());
-                  while (!output_queue.try_push(output)) {
+                  while (!writer_queue.try_push(output)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
                   delete task;
@@ -2205,13 +2209,13 @@ namespace skch
           }
       }
 
-      void outputThread(std::ofstream& outstrm, std::atomic<bool>& processing_done, std::atomic<bool>& output_done) {
+      void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, std::atomic<bool>& output_done) {
           while (!output_done.load()) {
               std::string* result = nullptr;
-              if (output_queue.try_pop(result)) {
+              if (writer_queue.try_pop(result)) {
                   outstrm << *result;
                   delete result;
-              } else if (processing_done.load() && output_queue.was_empty()) {
+              } else if (processing_done.load() && writer_queue.was_empty()) {
                   output_done.store(true);
               } else {
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
