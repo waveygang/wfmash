@@ -539,11 +539,11 @@ namespace skch
         // Start worker threads
         std::vector<std::thread> workers;
         for (int i = 0; i < param.threads; ++i) {
-            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done), std::ref(progress));
+            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done));
         }
 
         // Start output thread
-        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(output_done));
+        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(output_done), std::ref(progress));
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
@@ -2185,7 +2185,7 @@ namespace skch
       }
 
     private:
-      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, progress_meter::ProgressMeter& progress) {
+      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done) {
           int wait_count = 0;
           while (true) {
               std::pair<seqno_t, MappingResultsVector_t*>* task = nullptr;
@@ -2205,9 +2205,6 @@ namespace skch
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
                   delete task;
-                  
-                  // Increment progress
-                  progress.increment(1);
               } else {
                   if (processing_done.load() && aggregate_queue.was_empty()) {
                       ++wait_count;
@@ -2220,7 +2217,7 @@ namespace skch
           }
       }
 
-      void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, std::atomic<bool>& output_done) {
+      void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, std::atomic<bool>& output_done, progress_meter::ProgressMeter& progress) {
           int wait_count = 0;
           while (!output_done.load()) {
               std::string* result = nullptr;
@@ -2228,6 +2225,8 @@ namespace skch
                   wait_count = 0;
                   outstrm << *result;
                   delete result;
+                  // Increment progress
+                  progress.increment(1);
               } else {
                   if (processing_done.load() && writer_queue.was_empty()) {
                       ++wait_count;
