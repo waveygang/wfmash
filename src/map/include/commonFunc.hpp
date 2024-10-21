@@ -617,6 +617,20 @@ namespace skch {
             split(s, delim, std::back_inserter(elems));
             return elems;
         }
+
+        uint64_t estimateUniqueKmers(uint64_t sequenceLength, int kmerSize) {
+            // Calculate the theoretical maximum number of k-mers
+            uint64_t maxKmers = sequenceLength - kmerSize + 1;
+            
+            // Calculate the probability of a k-mer being unique
+            // This uses the "Birthday Problem" approach
+            double probabilityUnique = std::exp(-static_cast<double>(maxKmers) / std::pow(4, kmerSize));
+            
+            // Estimate the number of unique k-mers
+            uint64_t estimatedUnique = maxKmers * (1 - probabilityUnique);
+            
+            return estimatedUnique;
+        }
     }
 }
 

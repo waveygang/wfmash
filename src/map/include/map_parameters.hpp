@@ -32,7 +32,6 @@ struct ales_params {
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
-    float kmer_pct_threshold;                         //use only kmers not in the top kmer_pct_threshold %-ile
     offset_t segLength;                                //For split mapping case, this represents the fragment length
                                                       //for noSplit, it represents minimum read length to multimap
     offset_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
@@ -73,6 +72,9 @@ struct Parameters
     std::vector<std::string> query_prefix;            // prefix for query sequences to use
 
     int sketchSize;
+    double hgNumerator = 1.0;                         // Numerator for the hypergeometric filter's Jaccard similarity calculation
+    uint64_t totalReferenceSize = 0;                  // Total size of all reference sequences
+    uint64_t estimatedUniqueKmers = 0;                // Estimate of total unique k-mers
     bool use_spaced_seeds;                            //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //

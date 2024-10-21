@@ -67,12 +67,6 @@ namespace skch
       //algorithm parameters
       skch::Parameters param;
 
-      //Minmers that occur this or more times will be ignored (computed based on percentageThreshold)
-      uint64_t freqThreshold = std::numeric_limits<uint64_t>::max();
-
-      //Set of frequent seeds to be ignored
-      ankerl::unordered_dense::set<hash_t> frequentSeeds;
-
       //Make the default constructor protected, non-accessible
       protected:
       Sketch(SequenceIdManager& idMgr) : idManager(idMgr) {}
@@ -85,9 +79,6 @@ namespace skch
       using MI_Type = std::vector< MinmerInfo >;
       using MIIter_t = MI_Type::const_iterator;
       using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
-
-      // Frequency of each hash
-      HF_Map_t hashFreq;
 
       public:
         uint64_t total_seq_length = 0;
@@ -111,6 +102,8 @@ namespace skch
       using output_queue_t = atomic_queue::AtomicQueue<std::pair<uint64_t, MI_Type*>*, 1024>;
       input_queue_t input_queue;
       output_queue_t output_queue;
+
+      double hgNumerator;
 
       private:
 
@@ -136,69 +129,35 @@ namespace skch
       Sketch(skch::Parameters p,
              SequenceIdManager& idMgr,
              const std::vector<std::string>& targets = {},
-             const std::string& indexFilename = "")
+             std::ifstream* indexStream = nullptr)
         : param(std::move(p)),
           idManager(idMgr)
       {
-        if (!indexFilename.empty()) {
-          loadIndex(indexFilename);
+        if (indexStream) {
+          readIndex(*indexStream, targets);
         } else {
           initialize(targets);
         }
-      }
-
-      void loadIndex(const std::string& indexFilename) {
-        std::ifstream inStream(indexFilename, std::ios::binary);
-        if (!inStream) {
-          std::cerr << "Error: Unable to open index file: " << indexFilename << std::endl;
-          exit(1);
-        }
-        readParameters(inStream);
-        readSketchBinary(inStream);
-        readPosListBinary(inStream);
-        readFreqKmersBinary(inStream);
-        inStream.close();
-        isInitialized = true;
-        std::cerr << "[mashmap::skch::Sketch] Sketch loaded from index file: " << indexFilename << std::endl;
       }
 
     public:
       void initialize(const std::vector<std::string>& targets = {}) {
         std::cerr << "[mashmap::skch::Sketch] Initializing Sketch..." << std::endl;
         
-        // Calculate total sequence length
-        /*
-        for (const auto& fileName : param.refSequences) {
-            std::cerr << "targets are " << targets.size() << " ";
-            for (const auto& target : targets) {
-                std::cerr << target << " ";
-            }
-            std::cerr << std::endl;
-            seqiter::for_each_seq_in_file(
-                fileName,
-                targets,
-                [&](const std::string& seq_name, const std::string& seq) {
-                    total_seq_length += seq.length();
-                });
-        }
-        */
-        
         this->build(true, targets);
-        this->computeFreqHist();
-        this->computeFreqSeedSet();
-        this->dropFreqSeedSet();
-        this->hashFreq.clear();
-        if (!param.indexFilename.empty())
-        {
-            this->writeIndex();
-        }
 
-        std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes after pruning = " << (minmerPosLookupIndex.size() - this->frequentSeeds.size()) << std::endl;
+        this->hgNumerator = param.hgNumerator;
+        std::cerr << "[mashmap::skch::Sketch] Using HG numerator: " << hgNumerator << std::endl;
+
+        std::cerr << "[mashmap::skch::Sketch] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
         std::cerr << "[mashmap::skch::Sketch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << idManager.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] Number of sequences = " << targets.size() << std::endl;
+        std::cerr << "[mashmap::skch::Sketch] HG numerator: " << hgNumerator << std::endl;
         isInitialized = true;
         std::cerr << "[mashmap::skch::Sketch] Sketch initialization complete." << std::endl;
       }
+
+      // Removed determineGlobalJaccardNumerator function
 
       private:
       void reader_thread(const std::vector<std::string>& targets, std::atomic<bool>& reader_done) {
@@ -244,7 +203,6 @@ namespace skch
                   uint64_t seq_length = output->first;
                   MI_Type* minmers = output->second;
                   for (const auto& mi : *minmers) {
-                      this->hashFreq[mi.hash]++;
                       if (minmerPosLookupIndex[mi.hash].size() == 0 
                           || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                           || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
@@ -291,7 +249,6 @@ namespace skch
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
         if (compute_seeds) {
-            std::cerr << "creating seeds" << std::endl;
 
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
@@ -306,13 +263,11 @@ namespace skch
               fileName,
               target_names,
               [&](const std::string& seq_name, const std::string& seq) {
-                  std::cerr << "on sequence " << seq_name << std::endl;
                   if (seq.length() >= param.segLength) {
                       seqno_t seqId = idManager.getSequenceId(seq_name);
                       threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
                       totalSeqProcessed++;
                       shortestSeqLength = std::min(shortestSeqLength, seq.length());
-                      std::cerr << "DEBUG: Processing sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
 
                       //Collect output if available
                       while (threadPool.outputAvailable()) {
@@ -330,7 +285,6 @@ namespace skch
           
           // Update sequencesByFileInfo
           // Removed as sequencesByFileInfo is no longer used
-          std::cerr << "[mashmap::skch::Sketch::build] Shortest sequence length: " << shortestSeqLength << std::endl;
 
           //Collect remaining output objects
           while (threadPool.running())
@@ -386,7 +340,6 @@ namespace skch
       {
         for (MinmerInfo& mi : *contigMinmerIndex)
         {
-          this->hashFreq[mi.hash]++;
           if (minmerPosLookupIndex[mi.hash].size() == 0 
                   || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                   || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
@@ -454,17 +407,7 @@ namespace skch
       /**
        * @brief  Write posList for quick loading
        */
-      void writeFreqKmersBinary(std::ofstream& outStream) 
-      {
-        typename MI_Map_t::size_type size = frequentSeeds.size();
-        outStream.write((char*)&size, sizeof(size));
-
-        for (hash_t kmerHash : frequentSeeds) 
-        {
-          MinmerMapKeyType key = kmerHash;
-          outStream.write((char*)&key, sizeof(key));
-        }
-      }
+      // Removed writeFreqKmersBinary function
 
 
       /**
@@ -482,16 +425,38 @@ namespace skch
       /**
        * @brief  Write all index data structures to disk
        */
-      void writeIndex(const std::string& filename = "") 
+      void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false) 
       {
-        fs::path freqListFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
+        fs::path indexFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
         std::ofstream outStream;
-        outStream.open(freqListFilename, std::ios::binary);
-
+        if (append) {
+            outStream.open(indexFilename, std::ios::binary | std::ios::app);
+        } else {
+            outStream.open(indexFilename, std::ios::binary);
+        }
+        if (!outStream) {
+            std::cerr << "Error: Unable to open index file for writing: " << indexFilename << std::endl;
+            exit(1);
+        }
+        writeSubIndexHeader(outStream, target_subset);
         writeParameters(outStream);
         writeSketchBinary(outStream);
         writePosListBinary(outStream);
-        writeFreqKmersBinary(outStream);
+        // Removed writeFreqKmersBinary call
+        outStream.close();
+      }
+
+      void writeSubIndexHeader(std::ofstream& outStream, const std::vector<std::string>& target_subset) 
+      {
+        const uint64_t magic_number = 0xDEADBEEFCAFEBABE;
+        outStream.write(reinterpret_cast<const char*>(&magic_number), sizeof(magic_number));
+        uint64_t num_sequences = target_subset.size();
+        outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
+        for (const auto& seqName : target_subset) {
+            uint64_t name_length = seqName.size();
+            outStream.write(reinterpret_cast<const char*>(&name_length), sizeof(name_length));
+            outStream.write(seqName.c_str(), name_length);
+        }
       }
 
       /**
@@ -545,29 +510,10 @@ namespace skch
 
 
       /**
-       * @brief  read frequent kmers from file
-       */
-      void readFreqKmersBinary(std::ifstream& inStream) 
-      {
-        typename MI_Map_t::size_type numKeys = 0;
-        inStream.read((char*)&numKeys, sizeof(numKeys));
-        frequentSeeds.reserve(numKeys);
-
-        for (auto idx = 0; idx < numKeys; idx++) 
-        {
-          MinmerMapKeyType key = 0;
-          inStream.read((char*)&key, sizeof(key));
-          frequentSeeds.insert(key);
-        }
-      }
-
-
-      /**
        * @brief  Read parameters and compare to CLI params
        */
       void readParameters(std::ifstream& inStream)
       {
-        // Read segment length, sketch size, and kmer size
         decltype(param.segLength) index_segLength;
         decltype(param.sketchSize) index_sketchSize;
         decltype(param.kmerSize) index_kmerSize;
@@ -580,11 +526,11 @@ namespace skch
             || param.sketchSize != index_sketchSize
             || param.kmerSize != index_kmerSize)
         {
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: Parameters of indexed sketch differ from CLI parameters" << std::endl;
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: Index --> segLength=" << index_segLength
-            << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR: CLI   --> segLength=" << param.segLength
-            << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::readParameters] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::readParameters] Index --> segLength=" << index_segLength
+                    << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::readParameters] Current --> segLength=" << param.segLength
+                    << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
           exit(1);
         }
       }
@@ -593,76 +539,43 @@ namespace skch
       /**
        * @brief  Read all index data structures from file
        */
-      void readIndex() 
-      { 
-        fs::path indexFilename = fs::path(param.indexFilename);
-        std::ifstream inStream;
-        inStream.open(indexFilename, std::ios::binary);
+      void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
+      {
+        std::cerr << "[mashmap::skch::Sketch::readIndex] Reading index" << std::endl;
+        if (!readSubIndexHeader(inStream, targetSequenceNames)) {
+            std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
+            exit(1);
+        }
         readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
-        readFreqKmersBinary(inStream);
+        // Removed readFreqKmersBinary call
       }
 
-
-      /**
-       * @brief   report the frequency histogram of minmers using position lookup index
-       *          and compute which high frequency minmers to ignore
-       */
-      void computeFreqHist()
+      bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
-          if (!this->minmerPosLookupIndex.empty()) {
-              //1. Compute histogram
-
-              for (auto& e : this->minmerPosLookupIndex)
-                  this->minmerFreqHistogram[e.second.size()]++;
-
-              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] Frequency histogram of minmer interval points = "
-                        << *this->minmerFreqHistogram.begin() << " ... " << *this->minmerFreqHistogram.rbegin()
-                        << std::endl;
-
-              //2. Compute frequency threshold to ignore most frequent minmers
-
-              int64_t totalUniqueMinmers = this->minmerPosLookupIndex.size();
-              int64_t minmerToIgnore = totalUniqueMinmers * param.kmer_pct_threshold / 100;
-
-              int64_t sum = 0;
-
-              //Iterate from highest frequent minmers
-              for (auto it = this->minmerFreqHistogram.rbegin(); it != this->minmerFreqHistogram.rend(); it++) {
-                  sum += it->second; //add frequency
-                  if (sum < minmerToIgnore) {
-                      this->freqThreshold = it->first;
-                      //continue
-                  } else if (sum == minmerToIgnore) {
-                      this->freqThreshold = it->first;
-                      break;
-                  } else {
-                      break;
-                  }
-              }
-
-              if (this->freqThreshold != std::numeric_limits<uint64_t>::max())
-                  std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, ignore minmers with more than >= " << this->freqThreshold << " interval points during mapping."
-                            << std::endl;
-              else
-                  std::cerr << "[mashmap::skch::Sketch::computeFreqHist] With threshold " << this->param.kmer_pct_threshold
-                            << "\%, consider all minmers during mapping." << std::endl;
-          } else {
-              std::cerr << "[mashmap::skch::Sketch::computeFreqHist] No minmers." << std::endl;
-          }
+        uint64_t magic_number = 0;
+        inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+        if (magic_number != 0xDEADBEEFCAFEBABE) {
+            std::cerr << "Error: Invalid magic number in index file." << std::endl;
+            exit(1);
+        }
+        uint64_t num_sequences = 0;
+        inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
+        std::vector<std::string> sequenceNames;
+        for (uint64_t i = 0; i < num_sequences; ++i) {
+            uint64_t name_length = 0;
+            inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            std::string seqName(name_length, '\0');
+            inStream.read(&seqName[0], name_length);
+            sequenceNames.push_back(seqName);
+        }
+        
+        return sequenceNames == targetSequenceNames;
       }
+
 
       public:
-
-      /**
-       * @brief               search hash associated with given position inside the index
-       * @details             if MIIter_t iter is returned, than *iter's wpos >= winpos
-       * @param[in]   seqId
-       * @param[in]   winpos
-       * @return              iterator to the minmer in the index
-       */
 
       /**
        * @brief                 check if iterator points to index end
@@ -682,42 +595,11 @@ namespace skch
         return this->minmerIndex.end();
       }
 
-      int getFreqThreshold() const
-      {
-        return this->freqThreshold;
-      }
-
-      void computeFreqSeedSet()
-      {
-        for(auto &e : this->minmerPosLookupIndex) {
-          if (e.second.size() >= this->freqThreshold) {
-            this->frequentSeeds.insert(e.first);
-          }
-        }
-      }
-
-      void dropFreqSeedSet()
-      {
-        this->minmerIndex.erase(
-          std::remove_if(minmerIndex.begin(), minmerIndex.end(), [&] 
-            (auto& mi) {return this->frequentSeeds.find(mi.hash) != this->frequentSeeds.end();}
-          ), minmerIndex.end()
-        );
-      }
-
-      bool isFreqSeed(hash_t h) const
-      {
-        return frequentSeeds.find(h) != frequentSeeds.end();
-      }
-
       void clear()
       {
-        hashFreq.clear();
         minmerPosLookupIndex.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();
-        frequentSeeds.clear();
-        freqThreshold = std::numeric_limits<uint64_t>::max();
       }
 
     }; //End of class Sketch

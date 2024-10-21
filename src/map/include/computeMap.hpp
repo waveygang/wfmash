@@ -200,17 +200,6 @@ namespace skch
             p.query_list,
             p.target_list))
           {
-              std::cerr << "Initializing Map with parameters:" << std::endl;
-              std::cerr << "Query sequences: " << p.querySequences.size() << std::endl;
-              std::cerr << "Reference sequences: " << p.refSequences.size() << std::endl;
-              std::cerr << "Query prefix: " << (p.query_prefix.empty() ? "None" : p.query_prefix[0]) << std::endl;
-              std::cerr << "Target prefix: " << (p.target_prefix.empty() ? "None" : p.target_prefix) << std::endl;
-              std::cerr << "Prefix delimiter: '" << p.prefix_delim << "'" << std::endl;
-              std::cerr << "Query list: " << (p.query_list.empty() ? "None" : p.query_list) << std::endl;
-              std::cerr << "Target list: " << (p.target_list.empty() ? "None" : p.target_list) << std::endl;
-              
-              idManager->dumpState();
-              
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
@@ -318,6 +307,7 @@ namespace skch
               )
           );
           sketchCutoffs[cmax] = ci;
+
 
           // For really high min_p values and some values of cmax, there are no values of
           // ci that satisfy the cutoff, so we just set to the max
@@ -478,35 +468,43 @@ namespace skch
 
         std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
+        // Build index for the current subset
+        // Open the index file once
+        std::ifstream indexStream;
+        if (!param.indexFilename.empty() && !param.create_index_only) {
+            indexStream.open(param.indexFilename.string(), std::ios::binary);
+            if (!indexStream) {
+                std::cerr << "Error: Unable to open index file: " << param.indexFilename << std::endl;
+                exit(1);
+            }
+        }
+
         // For each subset of target sequences
         uint64_t subset_count = 0;
+        std::cerr << "[mashmap::skch::Map::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
         for (const auto& target_subset : target_subsets) {
-            std::cerr << "processing subset " << subset_count << " of " << target_subsets.size() << std::endl;
-            std::cerr << "entries: ";
-            for (const auto& seqName : target_subset) {
-                std::cerr << seqName << " ";
-            }
-            std::cerr << std::endl;
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
 
-            // Build index for the current subset
-            if (!param.indexFilename.empty() && !param.create_index_only) {
-                // load index from file
-                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
-                refSketch = new skch::Sketch(param, *idManager, target_subset, indexFilename);
-            } else {
-                refSketch = new skch::Sketch(param, *idManager, target_subset);
-            }
-
             if (param.create_index_only) {
                 // Save the index to a file
-                std::string indexFilename = param.indexFilename.string() + "." + std::to_string(subset_count);
-                refSketch->writeIndex(indexFilename);
+                std::cerr << "[mashmap::skch::Map::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                refSketch = new skch::Sketch(param, *idManager, target_subset);
+                std::string indexFilename = param.indexFilename.string();
+                bool append = (subset_count != 0); // Append if not the first subset
+                refSketch->writeIndex(target_subset, indexFilename, append);
                 std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
+                if (!param.indexFilename.empty()) {
+                    // Load index from file
+                    std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+                } else {
+                    std::cerr << "[mashmap::skch::Map::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    refSketch = new skch::Sketch(param, *idManager, target_subset);
+                }
                 processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
                               fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
             }
@@ -515,6 +513,10 @@ namespace skch
             delete refSketch;
             refSketch = nullptr;
             ++subset_count;
+        }
+
+        if (indexStream.is_open()) {
+            indexStream.close();
         }
 
         if (param.create_index_only) {
@@ -1021,11 +1023,7 @@ namespace skch
           const double max_hash_01 = (long double)(Q.minmerTableQuery.back().hash) / std::numeric_limits<hash_t>::max();
           Q.kmerComplexity = (double(Q.minmerTableQuery.size()) / max_hash_01) / ((Q.len - param.kmerSize + 1)*2);
 
-          // TODO remove them from the original sketch instead of removing for each read
-          auto new_end = std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(), [&](auto& mi) {
-            return refSketch->isFreqSeed(mi.hash);
-          });
-          Q.minmerTableQuery.erase(new_end, Q.minmerTableQuery.end());
+          // Removed frequent kmer filtering
 
           Q.sketchSize = Q.minmerTableQuery.size();
 #ifdef DEBUG
@@ -1144,6 +1142,12 @@ namespace skch
           std::unordered_map<hash_t, int> hash_to_freq;
 
           if (param.stage1_topANI_filter) {
+            double maxJaccard = refSketch->hgNumerator / static_cast<double>(Q.sketchSize);
+            double cutoff_j = Stat::md2j(1 - param.percentageIdentity + param.ANIDiff, param.kmerSize);
+            int minIntersectionSize = std::max(
+                static_cast<int>(cutoff_j * Q.sketchSize),
+                minimumHits);
+
             while (leadingIt != ip_end)
             {
               // Catch the trailing iterator up to the leading iterator - windowLen
@@ -1182,7 +1186,7 @@ namespace skch
 
             // Only go back through to find local opts if we know that there are some that are 
             // large enough
-            if (bestIntersectionSize < minimumHits) 
+            if (bestIntersectionSize < minIntersectionSize) 
             {
               return;
             } else 
@@ -1192,7 +1196,7 @@ namespace skch
                     int(std::min(bestIntersectionSize, Q.sketchSize) 
                       / std::max<double>(1, param.sketchSize / skch::fixed::ss_table_max))
                   ],
-                  minimumHits);
+                  minIntersectionSize);
             }
           } 
           
@@ -1438,16 +1442,19 @@ namespace skch
 
             if (param.stage1_topANI_filter)
             {
-              // If using HG filter, don't consider any mappings which have no chance of being 
-              // within param.ANIDiff of the best mapping seen so far
-              double cutoff_ani = std::max(0.0, double((1 - Stat::j2md(bestJaccardNumerator / Q.sketchSize, param.kmerSize)) - param.ANIDiff));
+              // Use the global Jaccard numerator here
+              double jaccardSimilarity = refSketch->hgNumerator / Q.sketchSize;
+              double mash_dist = Stat::j2md(jaccardSimilarity, param.kmerSize);
+              double cutoff_ani = std::max(0.0, (1 - mash_dist) - param.ANIDiff);
               double cutoff_j = Stat::md2j(1 - cutoff_ani, param.kmerSize);
-              if (double(candidateLocus.intersectionSize) / Q.sketchSize < cutoff_j) 
+
+              double candidateJaccard = static_cast<double>(candidateLocus.intersectionSize) / Q.sketchSize;
+
+              if (candidateJaccard < cutoff_j) 
               {
                 break;
               }
             }
-
 
             l2_vec.clear();
             computeL2MappedRegions(Q, candidateLocus, l2_vec);
