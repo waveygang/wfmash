@@ -171,8 +171,6 @@ target_link_libraries(wfmash
   Threads::Threads
 )
 
-configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
-
 add_test(
   NAME wfmash-test
   COMMAND ./build/bin/wfmash data/LPA.subset.fa.gz -p 80 -n 5 -t 8
