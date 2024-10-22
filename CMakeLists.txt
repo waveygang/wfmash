@@ -173,7 +173,7 @@ target_link_libraries(wfmash
 
 add_test(
   NAME wfmash-test
-  COMMAND ./build/bin/wfmash data/LPA.subset.fa.gz -p 80 -n 5 -t 8
+  COMMAND wfmash data/LPA.subset.fa.gz -p 80 -n 5 -t 8
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
