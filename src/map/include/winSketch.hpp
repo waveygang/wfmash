@@ -286,7 +286,7 @@ namespace skch
                 param.alphabetSize, 
                 param.sketchSize,
                 input->seqId,
-                &progress);
+                progress);
 
         return thread_output;
       }
