@@ -769,7 +769,7 @@ namespace skch
                 { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold, progress);
+                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
@@ -882,7 +882,7 @@ namespace skch
           // XXX we should fix this combined condition
           if (param.mergeMappings && param.split) {
               auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
-              filterMaximallyMerged(maximallyMergedMappings, param);
+              filterMaximallyMerged(maximallyMergedMappings, param, progress);
               robin_hood::unordered_set<offset_t> kept_chains;
               for (auto &mapping : maximallyMergedMappings) {
                   kept_chains.insert(mapping.splitMappingId);
@@ -906,7 +906,7 @@ namespace skch
           // Apply group filtering aggregated across all targets
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
-              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager);
+              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager, progress);
               mappings = std::move(filteredMappings);
           }
 
