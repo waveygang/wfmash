@@ -18,10 +18,12 @@ public:
     std::thread logger;
     ProgressMeter(uint64_t _total, const std::string& _banner)
         : total(_total), banner(_banner) {
+        std::cerr << "TOTAL IS " << total << std::endl;
         start_time = std::chrono::steady_clock::now();
         completed = 0;
         logger = std::thread(
             [&](void) {
+                std::cerr << "completed is " << completed << std::endl;
                 do_print();
                 auto last = 0;
                 while (completed < total) {
@@ -30,7 +32,7 @@ public:
                         do_print();
                         last = completed;
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             });
     };
