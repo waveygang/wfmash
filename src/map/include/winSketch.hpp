@@ -256,6 +256,11 @@ namespace skch
               total_seq_length += idManager.getSequenceLength(seqId);
           }
 
+          // Log file processing before initializing progress meter
+          for (const auto& fileName : param.refSequences) {
+            std::cerr << "[mashmap::skch::Sketch::build] Processing file: " << fileName << std::endl;
+          }
+
           // Initialize progress meter with known total
           progress_meter::ProgressMeter progress(
               total_seq_length,
@@ -269,8 +274,6 @@ namespace skch
           size_t shortestSeqLength = std::numeric_limits<size_t>::max();
           
           for (const auto& fileName : param.refSequences) {
-            std::cerr << "[mashmap::skch::Sketch::build] Processing file: " << fileName << std::endl;
-
             seqiter::for_each_seq_in_file(
               fileName,
               target_names,
