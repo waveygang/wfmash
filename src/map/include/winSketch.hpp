@@ -249,6 +249,17 @@ namespace skch
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
         if (compute_seeds) {
+          // Calculate total sequence length from id manager
+          uint64_t total_seq_length = 0;
+          for (const auto& seqName : target_names) {
+              seqno_t seqId = idManager.getSequenceId(seqName);
+              total_seq_length += idManager.getSequenceLength(seqId);
+          }
+
+          // Initialize progress meter with known total
+          progress_meter::ProgressMeter progress(
+              total_seq_length,
+              "[mashmap::skch::Sketch::build] computing sketch");
 
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
@@ -256,6 +267,7 @@ namespace skch
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
           size_t shortestSeqLength = std::numeric_limits<size_t>::max();
+          
           for (const auto& fileName : param.refSequences) {
             std::cerr << "[mashmap::skch::Sketch::build] Processing file: " << fileName << std::endl;
 
@@ -271,37 +283,45 @@ namespace skch
 
                       //Collect output if available
                       while (threadPool.outputAvailable()) {
-                          this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+                          auto output = threadPool.popOutputWhenAvailable();
+                          this->buildHandleThreadOutput(output);
+                          // Update progress based on the sequence that was just processed
+                          progress.increment(seq.length());
                       }
-                    
-                      // Update metadata
-                      // Metadata is now handled by idManager, no need to push_back here
                   } else {
                       totalSeqSkipped++;
-                      std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name << " (length: " << seq.length() << ")" << std::endl;
+                      std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name 
+                               << " (length: " << seq.length() << ")" << std::endl;
                   }
               });
           }
-          
-          // Update sequencesByFileInfo
-          // Removed as sequencesByFileInfo is no longer used
 
           //Collect remaining output objects
-          while (threadPool.running())
-            this->buildHandleThreadOutput(threadPool.popOutputWhenAvailable());
+          while (threadPool.running()) {
+            auto output = threadPool.popOutputWhenAvailable();
+            this->buildHandleThreadOutput(output);
+            // We don't update progress here as all sequences have been processed
+          }
+
+          progress.finish();
 
           std::cerr << "[mashmap::skch::Sketch::build] Total sequences processed: " << totalSeqProcessed << std::endl;
           std::cerr << "[mashmap::skch::Sketch::build] Total sequences skipped: " << totalSeqSkipped << std::endl;
-          std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " << minmerPosLookupIndex.size() << std::endl;
-          std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " << minmerIndex.size() << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] Total sequence length: " << total_seq_length << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] Unique minmer hashes before pruning = " 
+                    << minmerPosLookupIndex.size() << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] Total minmer windows before pruning = " 
+                    << minmerIndex.size() << std::endl;
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
-        std::cerr << "[mashmap::skch::Sketch::build] time spent computing the reference index: " << timeRefSketch.count() << " sec" << std::endl;
+        std::cerr << "[mashmap::skch::Sketch::build] time spent computing the reference index: " 
+                  << timeRefSketch.count() << " sec" << std::endl;
 
         if (this->minmerIndex.size() == 0)
         {
-          std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. Reference sequences shorter than the kmer size are not indexed" << std::endl;
+          std::cerr << "[mashmap::skch::Sketch::build] ERROR, reference sketch is empty. "
+                    << "Reference sequences shorter than the kmer size are not indexed" << std::endl;
           exit(1);
         }
       }
