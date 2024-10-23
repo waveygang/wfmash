@@ -306,7 +306,7 @@ namespace skch {
               int alphabetSize,
               int sketchSize,
               seqno_t seqCounter,
-              progress_meter::ProgressMeter* progress = nullptr)
+              progress_meter::ProgressMeter* progress)
           {
             /**
              * Double-ended queue (saves minimum at front end)
