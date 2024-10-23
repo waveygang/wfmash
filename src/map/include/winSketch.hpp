@@ -191,7 +191,7 @@ namespace skch
               "[mashmap::skch::Sketch::build] computing sketch");
 
           //Create the thread pool 
-          ThreadPool<InputSeqContainer, MI_Type> threadPool([this](InputSeqContainer* e) { return buildHelper(e); }, param.threads);
+          ThreadPool<InputSeqContainer, MI_Type> threadPool([this, &progress](InputSeqContainer* e) { return buildHelper(e, &progress); }, param.threads);
 
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
@@ -272,7 +272,7 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      MI_Type* buildHelper(InputSeqContainer *input)
+      MI_Type* buildHelper(InputSeqContainer *input, progress_meter::ProgressMeter* progress)
       {
         MI_Type* thread_output = new MI_Type();
 
@@ -286,7 +286,7 @@ namespace skch
                 param.alphabetSize, 
                 param.sketchSize,
                 input->seqId,
-                &seq_progress);
+                progress);
 
         return thread_output;
       }
