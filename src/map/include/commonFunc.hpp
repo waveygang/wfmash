@@ -337,6 +337,7 @@ namespace skch {
 
             for(offset_t i = 0; i < len - kmerSize + 1; i++)
             {
+                progress->increment(1);
               //The serial number of current sliding window
               //First valid window appears when i = windowSize - 1
               offset_t currentWindowId = i + kmerSize - windowSize;
@@ -448,15 +449,6 @@ namespace skch {
               {
                 ambig_kmer_count--;
               }
-
-              // Update progress every 8192 bases (2^13)
-              const uint32_t PROGRESS_MASK = 8191;  // 2^13 - 1
-              if (progress && ((i & PROGRESS_MASK) == 0)) {
-                progress->increment(8192);
-              }
-              
-
-
 
               // Add kmers from heap to window until full
               if(currentWindowId >= 0)
@@ -573,12 +565,6 @@ namespace skch {
                   minmerIndex.end(), 
                   [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }),
                 minmerIndex.end());
-
-            // Handle remainder progress using bitwise mask
-            const uint32_t PROGRESS_MASK = 8191;  // 2^13 - 1
-            if (progress) {
-                progress->increment((len - kmerSize + 1) & PROGRESS_MASK);
-            }
 
           }
 

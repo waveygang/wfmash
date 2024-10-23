@@ -36,3 +36,4 @@ test/
 cmake-build-debug/
 result
 .aider*
+.env

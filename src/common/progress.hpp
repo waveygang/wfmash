@@ -53,6 +53,7 @@ public:
         std::chrono::duration<double> elapsed_seconds = curr-start_time;
         double rate = completed / elapsed_seconds.count();
         double seconds_to_completion = (completed > 0 ? (total - completed) / rate : 0);
+        std::cerr << "completed is " << completed << " and total is " << total << std::endl;
         std::cerr << "\r" << banner << " "
                   << std::defaultfloat
                   << std::setfill(' ')
