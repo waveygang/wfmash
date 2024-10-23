@@ -272,6 +272,8 @@ namespace skch
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
           size_t shortestSeqLength = std::numeric_limits<size_t>::max();
+          uint64_t processedBases = 0;
+          const uint64_t progressUpdateInterval = 10000; // 10kbp
           
           for (const auto& fileName : param.refSequences) {
             seqiter::for_each_seq_in_file(
@@ -288,8 +290,12 @@ namespace skch
                       while (threadPool.outputAvailable()) {
                           auto output = threadPool.popOutputWhenAvailable();
                           this->buildHandleThreadOutput(output);
-                          // Update progress based on the sequence that was just processed
-                          progress.increment(seq.length());
+                          processedBases += output->size();
+                          // Update progress every 10kbp
+                          if (processedBases >= progressUpdateInterval) {
+                              progress.increment(processedBases);
+                              processedBases = 0;
+                          }
                       }
                   } else {
                       totalSeqSkipped++;
@@ -303,7 +309,12 @@ namespace skch
           while (threadPool.running()) {
             auto output = threadPool.popOutputWhenAvailable();
             this->buildHandleThreadOutput(output);
-            // We don't update progress here as all sequences have been processed
+            processedBases += output->size();
+          }
+
+          // Update progress with any remaining bases
+          if (processedBases > 0) {
+              progress.increment(processedBases);
           }
 
           progress.finish();
