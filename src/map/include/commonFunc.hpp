@@ -449,9 +449,10 @@ namespace skch {
                 ambig_kmer_count--;
               }
 
-              // Update progress every 10kb
-              if (progress && (i % 10000) == 0) {
-                progress->increment(10000);
+              // Update progress every 8192 bases (2^13)
+              const uint32_t PROGRESS_MASK = 8191;  // 2^13 - 1
+              if (progress && ((i & PROGRESS_MASK) == 0)) {
+                progress->increment(8192);
               }
               
 
@@ -573,9 +574,10 @@ namespace skch {
                   [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }),
                 minmerIndex.end());
 
-            // Handle remainder progress
-            if (progress && ((len - kmerSize + 1) % 10000) != 0) {
-                progress->increment((len - kmerSize + 1) % 10000);
+            // Handle remainder progress using bitwise mask
+            const uint32_t PROGRESS_MASK = 8191;  // 2^13 - 1
+            if (progress) {
+                progress->increment((len - kmerSize + 1) & PROGRESS_MASK);
             }
 
           }
