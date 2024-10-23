@@ -276,6 +276,11 @@ namespace skch
       {
         MI_Type* thread_output = new MI_Type();
 
+        // Create progress meter for this sequence
+        progress_meter::ProgressMeter seq_progress(
+            input->len,
+            "[mashmap::skch::Sketch::buildHelper] processing sequence");
+
         //Compute minmers in reference sequence
         skch::CommonFunc::addMinmers(
                 *thread_output, 
@@ -286,7 +291,7 @@ namespace skch
                 param.alphabetSize, 
                 param.sketchSize,
                 input->seqId,
-                nullptr);
+                &seq_progress);
 
         return thread_output;
       }
