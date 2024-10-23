@@ -305,7 +305,8 @@ namespace skch {
               int windowSize,
               int alphabetSize,
               int sketchSize,
-              seqno_t seqCounter)
+              seqno_t seqCounter,
+              progress_meter::ProgressMeter* progress = nullptr)
           {
             /**
              * Double-ended queue (saves minimum at front end)
@@ -447,6 +448,11 @@ namespace skch {
               {
                 ambig_kmer_count--;
               }
+
+              // Update progress every 10kb
+              if (progress && (i % 10000) == 0) {
+                progress->increment(10000);
+              }
               
 
 
@@ -566,6 +572,11 @@ namespace skch {
                   minmerIndex.end(), 
                   [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }),
                 minmerIndex.end());
+
+            // Handle remainder progress
+            if (progress && ((len - kmerSize + 1) % 10000) != 0) {
+                progress->increment((len - kmerSize + 1) % 10000);
+            }
 
           }
 
