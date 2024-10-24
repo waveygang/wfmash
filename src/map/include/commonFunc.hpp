@@ -305,7 +305,8 @@ namespace skch {
               int windowSize,
               int alphabetSize,
               int sketchSize,
-              seqno_t seqCounter)
+              seqno_t seqCounter,
+              progress_meter::ProgressMeter* progress)
           {
             /**
              * Double-ended queue (saves minimum at front end)
@@ -336,6 +337,7 @@ namespace skch {
 
             for(offset_t i = 0; i < len - kmerSize + 1; i++)
             {
+                progress->increment(1);
               //The serial number of current sliding window
               //First valid window appears when i = windowSize - 1
               offset_t currentWindowId = i + kmerSize - windowSize;
@@ -447,9 +449,6 @@ namespace skch {
               {
                 ambig_kmer_count--;
               }
-              
-
-
 
               // Add kmers from heap to window until full
               if(currentWindowId >= 0)

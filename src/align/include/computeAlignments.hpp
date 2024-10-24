@@ -305,7 +305,7 @@ void single_reader_thread(const std::string& input_file,
                           std::atomic<bool>& reader_done) {
     std::ifstream mappingListStream(input_file);
     if (!mappingListStream.is_open()) {
-        throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open input mapping file: " + input_file);
+        throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + input_file);
     }
 
     std::string line;
@@ -490,7 +490,7 @@ void writer_thread(const std::string& output_file,
     }
 
     if (!outstream.is_open()) {
-        throw std::runtime_error("[wfmash::align::computeAlignments] Error! Failed to open output file: " + output_file);
+        throw std::runtime_error("[wfmash::align] Error! Failed to open output file: " + output_file);
     }
 
     auto all_workers_done = [&]() {
@@ -543,7 +543,7 @@ void computeAlignments() {
     }
 
     // Create progress meter
-    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align::computeAlignments] aligned");
+    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
 
     // Create atomic counter for processed alignment length
     std::atomic<uint64_t> processed_alignment_length(0);
@@ -590,7 +590,7 @@ void computeAlignments() {
     // Finish progress meter
     progress.finish();
 
-    std::cerr << "[wfmash::align::computeAlignments] "
+    std::cerr << "[wfmash::align] "
               << "total aligned records = " << total_alignments_queued.load() 
               << ", total aligned bp = " << processed_alignment_length.load()
               << ", time taken = " << duration.count() << " seconds" << std::endl;

@@ -10,6 +10,12 @@
 namespace progress_meter {
 
 class ProgressMeter {
+private:
+    const uint64_t update_interval = 500; // ms between updates
+    const uint64_t min_progress_for_update = 1000; // Minimum progress before showing an update
+    std::atomic<bool> running;
+    std::chrono::time_point<std::chrono::steady_clock> last_update;
+
 public:
     std::string banner;
     std::atomic<uint64_t> total;
@@ -17,22 +23,30 @@ public:
     std::chrono::time_point<std::chrono::steady_clock> start_time;
     std::thread logger;
     ProgressMeter(uint64_t _total, const std::string& _banner)
-        : total(_total), banner(_banner) {
+        : total(_total), banner(_banner), running(true) {
         start_time = std::chrono::steady_clock::now();
+        last_update = start_time;
         completed = 0;
-        logger = std::thread(
-            [&](void) {
-                do_print();
-                auto last = 0;
-                while (completed < total) {
-                    auto curr = completed - last;
-                    if (curr > 0) {
-                        do_print();
-                        last = completed;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        
+        logger = std::thread([this]() {
+            uint64_t last_completed = 0;
+            
+            while (running.load(std::memory_order_relaxed)) {
+                auto now = std::chrono::steady_clock::now();
+                auto time_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update).count();
+                uint64_t current_completed = completed.load(std::memory_order_relaxed);
+                
+                if (time_since_update >= update_interval && 
+                    (current_completed - last_completed >= min_progress_for_update ||
+                     current_completed >= total)) {
+                    do_print();
+                    last_completed = current_completed;
+                    last_update = now;
                 }
-            });
+                
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        });
     };
     void do_print(void) {
         auto curr = std::chrono::steady_clock::now();
@@ -45,15 +59,17 @@ public:
                   << std::setw(5)
                   << std::fixed
                   << std::setprecision(2)
-                  << 100.0 * ((double)completed / (double)total) << "%"
-                  << " @ "
-                  << std::setw(4) << std::scientific << rate << " bp/s "
-                  << "elapsed: " << print_time(elapsed_seconds.count()) << " "
-                  << "remain: " << print_time(seconds_to_completion);
+                  << 100.0 * ((double)completed / (double)total) << "% "
+                  << "in: " << print_time(elapsed_seconds.count()) << " "
+                  << "todo: " << print_time(seconds_to_completion) << " @"
+                  << std::setw(4) << std::scientific << rate << "/s";
     }
-    void finish(void) {
+    void finish() {
+        running.store(false, std::memory_order_relaxed);
+        if (logger.joinable()) {
+            logger.join();
+        }
         completed.store(total);
-        logger.join();
         do_print();
         std::cerr << std::endl;
     }
@@ -80,6 +96,11 @@ public:
     }
     void increment(const uint64_t& incr) {
         completed.fetch_add(incr, std::memory_order_relaxed);
+    }
+    ~ProgressMeter() {
+        if (running.load(std::memory_order_relaxed)) {
+            finish();
+        }
     }
 };
 

@@ -480,7 +480,7 @@ namespace skch
 
         // For each subset of target sequences
         uint64_t subset_count = 0;
-        std::cerr << "[mashmap::skch::Map::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
+        std::cerr << "[mashmap::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
@@ -488,20 +488,20 @@ namespace skch
 
             if (param.create_index_only) {
                 // Save the index to a file
-                std::cerr << "[mashmap::skch::Map::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                std::cerr << "[mashmap::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                 refSketch = new skch::Sketch(param, *idManager, target_subset);
                 std::string indexFilename = param.indexFilename.string();
                 bool append = (subset_count != 0); // Append if not the first subset
                 refSketch->writeIndex(target_subset, indexFilename, append);
-                std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
+                std::cerr << "[mashmap::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
                 if (!param.indexFilename.empty()) {
                     // Load index from file
-                    std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[mashmap::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
                 } else {
-                    std::cerr << "[mashmap::skch::Map::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[mashmap::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset);
                 }
                 std::atomic<bool> reader_done(false);
@@ -522,7 +522,7 @@ namespace skch
         }
 
         if (param.create_index_only) {
-            std::cerr << "[mashmap::skch::Map::mapQuery] All indices created successfully. Exiting." << std::endl;
+            std::cerr << "[mashmap::mapQuery] All indices created successfully. Exiting." << std::endl;
             exit(0);
         }
 
@@ -532,19 +532,25 @@ namespace skch
         std::atomic<bool> output_done(false);
         aggregate_atomic_queue_t aggregate_queue;
 
+        // Get total count of mappings
+        uint64_t totalMappings = 0;
+        for (const auto& [querySeqId, mappings] : combinedMappings) {
+            totalMappings += mappings.size();
+        }
+
         // Initialize progress logger
         progress_meter::ProgressMeter progress(
-            combinedMappings.size(),
-            "[mashmap::skch::Map::mapQuery] filtering");
+            totalMappings * 2,
+            "[mashmap::mapQuery] merging and filtering");
 
         // Start worker threads
         std::vector<std::thread> workers;
         for (int i = 0; i < param.threads; ++i) {
-            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done));
+            workers.emplace_back(&Map::processCombinedMappingsThread, this, std::ref(aggregate_queue), std::ref(writer_queue), std::ref(processing_done), std::ref(progress));
         }
 
         // Start output thread
-        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(workers_done), std::ref(output_done), std::ref(progress));
+        std::thread output_thread(&Map::outputThread, this, std::ref(outstrm), std::ref(writer_queue), std::ref(processing_done), std::ref(workers_done), std::ref(output_done));
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
@@ -572,10 +578,8 @@ namespace skch
 
         progress.finish();
 
-        std::cerr << "[mashmap::skch::Map::mapQuery] "
-                  << "count of mapped reads = " << totalReadsMapped
-                  << ", reads qualified for mapping = " << totalReadsPickedForMapping
-                  << ", total input reads = " << idManager->size()
+        std::cerr << "[mashmap::mapQuery] "
+                  << "input seqs = " << idManager->size()
                   << ", total input bp = " << total_seq_length << std::endl;
       }
 
@@ -587,7 +591,7 @@ namespace skch
       {
           progress_meter::ProgressMeter progress(
               total_seq_length,
-              "[mashmap::skch::Map::mapQuery] mapping ("
+              "[mashmap::mapQuery] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
           // Launch reader thread
@@ -730,7 +734,8 @@ namespace skch
           MappingResultsVector_t &filteredMappings,
           int n_mappings,
           bool filter_ref,
-          const SequenceIdManager& idManager)
+          const SequenceIdManager& idManager,
+          progress_meter::ProgressMeter& progress)
       {
         filteredMappings.reserve(unfilteredMappings.size());
 
@@ -746,8 +751,8 @@ namespace skch
             if (param.skip_prefix)
             {
               int currGroup = idManager.getRefGroup(subrange_begin->refSeqId);
-              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& unfilteredMappings_candidate) {
-                  return currGroup == idManager.getRefGroup(unfilteredMappings_candidate.refSeqId);
+              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& candidate) {
+                  return currGroup == idManager.getRefGroup(candidate.refSeqId);
               });
             }
             else
@@ -766,7 +771,7 @@ namespace skch
             }
             else
             {
-                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold);
+                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold, progress);
             }
             filteredMappings.insert(
                 filteredMappings.end(), 
@@ -870,12 +875,12 @@ namespace skch
           }
       }
 
-      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings) {
+      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
 
           // XXX we should fix this combined condition
           if (param.mergeMappings && param.split) {
-              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
-              filterMaximallyMerged(maximallyMergedMappings, param);
+              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
+              filterMaximallyMerged(maximallyMergedMappings, param, progress);
               robin_hood::unordered_set<offset_t> kept_chains;
               for (auto &mapping : maximallyMergedMappings) {
                   kept_chains.insert(mapping.splitMappingId);
@@ -887,7 +892,7 @@ namespace skch
                                  }),
                   mappings.end());
           } else {
-              filterNonMergedMappings(mappings, param);
+              filterNonMergedMappings(mappings, param, progress);
           }
 
           if (param.filterLengthMismatches) {
@@ -899,7 +904,7 @@ namespace skch
           // Apply group filtering aggregated across all targets
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
-              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager);
+              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager, progress);
               mappings = std::move(filteredMappings);
           }
 
@@ -962,11 +967,11 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap
        * @param[in]     param         Algorithm parameters
        */
-      void filterNonMergedMappings(MappingResultsVector_t &readMappings, const Parameters& param)
+      void filterNonMergedMappings(MappingResultsVector_t &readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
       {
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t filteredMappings;
-              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager);
+              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
               readMappings = std::move(filteredMappings);
           }
       }
@@ -1835,7 +1840,7 @@ namespace skch
        * @param[in]   param           Algorithm parameters
        * @return                      Filtered mappings
        */
-      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param)
+      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
       {
           // Filter weak mappings
           filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
@@ -1843,7 +1848,7 @@ namespace skch
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
               MappingResultsVector_t groupFilteredMappings;
-              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager);
+              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
               readMappings = std::move(groupFilteredMappings);
           }
       }
@@ -1855,7 +1860,8 @@ namespace skch
        */
       template <typename VecIn>
       VecIn mergeMappingsInRange(VecIn &readMappings,
-                                 int max_dist) {
+                                 int max_dist,
+                                 progress_meter::ProgressMeter& progress) {
           if (!param.split || readMappings.size() < 2) return readMappings;
 
           //Sort the mappings by query position, then reference sequence id, then reference position
@@ -1928,6 +1934,7 @@ namespace skch
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
               }
+              progress.increment(1);
           }
 
           // Assign the merged mapping ids
@@ -2188,7 +2195,7 @@ namespace skch
       }
 
     private:
-      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done) {
+      void processCombinedMappingsThread(aggregate_atomic_queue_t& aggregate_queue, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done, progress_meter::ProgressMeter& progress) {
           int wait_count = 0;
           while (true) {
               std::pair<seqno_t, MappingResultsVector_t*>* task = nullptr;
@@ -2198,7 +2205,7 @@ namespace skch
                   auto& mappings = *(task->second);
                   
                   std::string queryName = idManager->getSequenceName(querySeqId);
-                  processAggregatedMappings(queryName, mappings);
+                  processAggregatedMappings(queryName, mappings, progress);
                   
                   std::stringstream ss;
                   reportReadMappings(mappings, queryName, ss);
@@ -2221,7 +2228,7 @@ namespace skch
       }
 
       void outputThread(std::ofstream& outstrm, writer_atomic_queue_t& writer_queue, std::atomic<bool>& processing_done,
-                        std::atomic<bool>& workers_done, std::atomic<bool>& output_done, progress_meter::ProgressMeter& progress) {
+                        std::atomic<bool>& workers_done, std::atomic<bool>& output_done) {
           int wait_count = 0;
           while (!output_done.load()) {
               std::string* result = nullptr;
@@ -2229,8 +2236,6 @@ namespace skch
                   wait_count = 0;
                   outstrm << *result;
                   delete result;
-                  // Increment progress
-                  progress.increment(1);
               } else {
                   if (processing_done.load() && workers_done.load() && writer_queue.was_empty()) {
                       ++wait_count;
