@@ -11,7 +11,7 @@ namespace progress_meter {
 
 class ProgressMeter {
 private:
-    const uint64_t update_interval = 100; // ms between updates
+    const uint64_t update_interval = 500; // ms between updates
     const uint64_t min_progress_for_update = 1000; // Minimum progress before showing an update
     std::atomic<bool> running;
     std::chrono::time_point<std::chrono::steady_clock> last_update;
@@ -44,7 +44,7 @@ public:
                     last_update = now;
                 }
                 
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         });
     };
@@ -53,7 +53,6 @@ public:
         std::chrono::duration<double> elapsed_seconds = curr-start_time;
         double rate = completed / elapsed_seconds.count();
         double seconds_to_completion = (completed > 0 ? (total - completed) / rate : 0);
-        std::cerr << "completed is " << completed << " and total is " << total << std::endl;
         std::cerr << "\r" << banner << " "
                   << std::defaultfloat
                   << std::setfill(' ')

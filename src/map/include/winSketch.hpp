@@ -196,8 +196,7 @@ namespace skch
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
           size_t shortestSeqLength = std::numeric_limits<size_t>::max();
-          const uint64_t progressUpdateInterval = 10000; // 10kbp
-          
+
           for (const auto& fileName : param.refSequences) {
             seqiter::for_each_seq_in_file(
               fileName,

@@ -540,8 +540,8 @@ namespace skch
 
         // Initialize progress logger
         progress_meter::ProgressMeter progress(
-            totalMappings,
-            "[mashmap::skch::Map::mapQuery] filtering");
+            totalMappings * 2,
+            "[mashmap::skch::Map::mapQuery] merging and filtering");
 
         // Start worker threads
         std::vector<std::thread> workers;
@@ -753,8 +753,8 @@ namespace skch
             if (param.skip_prefix)
             {
               int currGroup = idManager.getRefGroup(subrange_begin->refSeqId);
-              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& unfilteredMappings_candidate) {
-                  return currGroup == idManager.getRefGroup(unfilteredMappings_candidate.refSeqId);
+              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& candidate) {
+                  return currGroup == idManager.getRefGroup(candidate.refSeqId);
               });
             }
             else
@@ -881,7 +881,7 @@ namespace skch
 
           // XXX we should fix this combined condition
           if (param.mergeMappings && param.split) {
-              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap);
+              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
               filterMaximallyMerged(maximallyMergedMappings, param, progress);
               robin_hood::unordered_set<offset_t> kept_chains;
               for (auto &mapping : maximallyMergedMappings) {
@@ -1862,7 +1862,8 @@ namespace skch
        */
       template <typename VecIn>
       VecIn mergeMappingsInRange(VecIn &readMappings,
-                                 int max_dist) {
+                                 int max_dist,
+                                 progress_meter::ProgressMeter& progress) {
           if (!param.split || readMappings.size() < 2) return readMappings;
 
           //Sort the mappings by query position, then reference sequence id, then reference position
@@ -1935,6 +1936,7 @@ namespace skch
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
               }
+              progress.increment(1);
           }
 
           // Assign the merged mapping ids

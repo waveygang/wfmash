@@ -18,6 +18,7 @@
 //Own includes
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
+#include "common/progress.hpp"
 
 //External includes
 
@@ -165,7 +166,7 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap
        */
       template <typename VecIn>
-      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold)
+      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
         {
           if(readMappings.size() <= 1)
             return;
@@ -219,6 +220,7 @@ namespace skch
             //mark mappings as good
             obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
+            progress.increment(std::distance(it, it2));
             it = it2;
           }
 
@@ -296,10 +298,10 @@ namespace skch
        *                                 until we only have secondaryToKeep secondary mappings
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
+      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
       {
           //Apply the main filtering algorithm to ensure the best mappings across complete axis
-          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold);
+          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold, progress);
       }
 
      /**
@@ -307,10 +309,10 @@ namespace skch
        * @param[in/out] readMappings  Mappings computed by Mashmap (post merge step)
        */
       template <typename VecIn>
-      void filterUnmergedMappings(VecIn &readMappings, int secondaryToKeep)
+      void filterUnmergedMappings(VecIn &readMappings, int secondaryToKeep, progress_meter::ProgressMeter& progress)
       {
           //Apply a simple filtering algorithm that keeps the best secondaryToKeep+1 mappings per position
-          indexedFilterAlgorithm(readMappings, secondaryToKeep);
+          indexedFilterAlgorithm(readMappings, secondaryToKeep, progress);
       }
     } //End of query namespace
 
