@@ -59,11 +59,10 @@ public:
                   << std::setw(5)
                   << std::fixed
                   << std::setprecision(2)
-                  << 100.0 * ((double)completed / (double)total) << "%"
-                  << " @ "
-                  << std::setw(4) << std::scientific << rate << " bp/s "
-                  << "elapsed: " << print_time(elapsed_seconds.count()) << " "
-                  << "remain: " << print_time(seconds_to_completion);
+                  << 100.0 * ((double)completed / (double)total) << "% "
+                  << "in: " << print_time(elapsed_seconds.count()) << " "
+                  << "todo: " << print_time(seconds_to_completion) << " @"
+                  << std::setw(4) << std::scientific << rate << "/s";
     }
     void finish() {
         running.store(false, std::memory_order_relaxed);

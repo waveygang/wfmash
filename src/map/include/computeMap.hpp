@@ -480,7 +480,7 @@ namespace skch
 
         // For each subset of target sequences
         uint64_t subset_count = 0;
-        std::cerr << "[mashmap::skch::Map::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
+        std::cerr << "[mashmap::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
@@ -488,20 +488,20 @@ namespace skch
 
             if (param.create_index_only) {
                 // Save the index to a file
-                std::cerr << "[mashmap::skch::Map::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                std::cerr << "[mashmap::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                 refSketch = new skch::Sketch(param, *idManager, target_subset);
                 std::string indexFilename = param.indexFilename.string();
                 bool append = (subset_count != 0); // Append if not the first subset
                 refSketch->writeIndex(target_subset, indexFilename, append);
-                std::cerr << "[mashmap::skch::Map::mapQuery] Index created for subset " << subset_count 
+                std::cerr << "[mashmap::mapQuery] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
                 if (!param.indexFilename.empty()) {
                     // Load index from file
-                    std::cerr << "[mashmap::skch::Map::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[mashmap::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
                 } else {
-                    std::cerr << "[mashmap::skch::Map::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[mashmap::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset);
                 }
                 std::atomic<bool> reader_done(false);
@@ -522,7 +522,7 @@ namespace skch
         }
 
         if (param.create_index_only) {
-            std::cerr << "[mashmap::skch::Map::mapQuery] All indices created successfully. Exiting." << std::endl;
+            std::cerr << "[mashmap::mapQuery] All indices created successfully. Exiting." << std::endl;
             exit(0);
         }
 
@@ -541,7 +541,7 @@ namespace skch
         // Initialize progress logger
         progress_meter::ProgressMeter progress(
             totalMappings * 2,
-            "[mashmap::skch::Map::mapQuery] merging and filtering");
+            "[mashmap::mapQuery] merging and filtering");
 
         // Start worker threads
         std::vector<std::thread> workers;
@@ -578,10 +578,8 @@ namespace skch
 
         progress.finish();
 
-        std::cerr << "[mashmap::skch::Map::mapQuery] "
-                  << "count of mapped reads = " << totalReadsMapped
-                  << ", reads qualified for mapping = " << totalReadsPickedForMapping
-                  << ", total input reads = " << idManager->size()
+        std::cerr << "[mashmap::mapQuery] "
+                  << "input seqs = " << idManager->size()
                   << ", total input bp = " << total_seq_length << std::endl;
       }
 
@@ -593,7 +591,7 @@ namespace skch
       {
           progress_meter::ProgressMeter progress(
               total_seq_length,
-              "[mashmap::skch::Map::mapQuery] mapping ("
+              "[mashmap::mapQuery] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
           // Launch reader thread
