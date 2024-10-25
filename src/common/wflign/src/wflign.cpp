@@ -442,6 +442,24 @@ void WFlign::wflign_affine_wavefront(
 #ifdef WFA_PNG_TSV_TIMING
     const auto start_time = std::chrono::steady_clock::now();
 #endif
+    // Set penalties for wfa convex
+    wflign_penalties_t wfa_convex_penalties;
+    if (wfa_patching_mismatch_score > 0 && wfa_patching_gap_opening_score1 > 0 && wfa_patching_gap_extension_score1 > 0 && wfa_patching_gap_opening_score2 > 0 && wfa_patching_gap_extension_score2 > 0){
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = wfa_patching_mismatch_score;
+        wfa_convex_penalties.gap_opening1 = wfa_patching_gap_opening_score1;
+        wfa_convex_penalties.gap_extension1 = wfa_patching_gap_extension_score1;
+        wfa_convex_penalties.gap_opening2 = wfa_patching_gap_opening_score2;
+        wfa_convex_penalties.gap_extension2 = wfa_patching_gap_extension_score2;
+    } else {
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = 5;
+        wfa_convex_penalties.gap_opening1 = 8;
+        wfa_convex_penalties.gap_extension1 = 2;
+        wfa_convex_penalties.gap_opening2 = 49;
+        wfa_convex_penalties.gap_extension2 = 1;
+    }
+
     if (force_biwfa_alignment ||
             (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
             (mashmap_estimated_identity >= 0.99
