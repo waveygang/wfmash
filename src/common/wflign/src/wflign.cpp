@@ -331,6 +331,21 @@ void WFlign::wflign_affine_wavefront(
         return;
     }
 
+    // Use biWFA for smaller sequences or very high identity matches
+    if (force_biwfa_alignment ||
+        (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
+        (mashmap_estimated_identity >= 0.99 && 
+         query_length <= MAX_LEN_FOR_STANDARD_WFA && 
+         target_length <= MAX_LEN_FOR_STANDARD_WFA)) {
+            
+        do_biwfa_alignment(
+            query_name, query, query_total_length, query_offset, query_length, query_is_rev,
+            target_name, target, target_total_length, target_offset, target_length,
+            *out, wfa_convex_penalties, emit_md_tag, paf_format_else_sam, no_seq_in_sam,
+            min_identity, wflign_max_len_minor, mashmap_estimated_identity);
+        return;
+    }
+
     // Check if mashmap_estimated_identity == 1 to avoid division by zero, leading to a minhash_kmer_size of 8.
     // Such low value was leading to confusion in HORs alignments in the human centromeres (high runtime and memory usage, and wrong alignments)
     const int minhash_kmer_size = mashmap_estimated_identity == 1 ? 17 : std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
