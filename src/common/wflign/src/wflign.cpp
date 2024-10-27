@@ -425,6 +425,7 @@ void WFlign::wflign_affine_wavefront(
 #ifdef WFA_PNG_TSV_TIMING
     const auto start_time = std::chrono::steady_clock::now();
 #endif
+
     // Set penalties for wfa convex
     wflign_penalties_t wfa_convex_penalties;
     if (wfa_patching_mismatch_score > 0 && wfa_patching_gap_opening_score1 > 0 && wfa_patching_gap_extension_score1 > 0 && wfa_patching_gap_opening_score2 > 0 && wfa_patching_gap_extension_score2 > 0){
