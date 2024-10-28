@@ -88,6 +88,7 @@ namespace wflign {
             bool emit_patching_tsv;
             std::ostream* out_patching_tsv;
 #endif
+            bool force_wflign;
             bool merge_alignments;
             bool emit_md_tag;
             bool paf_format_else_sam;
@@ -97,7 +98,7 @@ namespace wflign {
             WFlign(
                     const uint16_t segment_length,
                     const float min_identity,
-                    const bool force_biwfa_alignment,
+                    const bool force_wflign,
                     const int wfa_mismatch_score,
                     const int wfa_gap_opening_score,
                     const int wfa_gap_extension_score,
