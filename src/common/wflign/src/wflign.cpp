@@ -76,22 +76,48 @@ void do_biwfa_alignment(
                 min_identity,
                 mashmap_estimated_identity);
         } else {
-            write_sam_alignment(
+            write_merged_alignment(
                 out,
-                aln,
-                query_name,
+                {&aln},  // Convert single alignment to vector
+                wf_aligner,
+                penalties,
+                emit_md_tag,
+                paf_format_else_sam,
+                no_seq_in_sam,
                 query,
+                query_name,
                 query_total_length,
                 query_offset,
                 query_length,
                 query_is_rev,
-                target_name,
                 target,
+                target_name,
                 target_total_length,
                 target_offset,
                 target_length,
-                emit_md_tag,
-                no_seq_in_sam);
+                min_identity,
+#ifdef WFA_PNG_TSV_TIMING
+                0, // elapsed_time_wflambda_ms
+                1, // num_alignments 
+                1, // num_alignments_performed
+#endif
+                mashmap_estimated_identity,
+                wflign_max_len_minor,
+                wflign_max_len_minor,
+                0, // erode_k
+                0, // chain_gap
+                0, // max_patching_score
+                0, // min_inversion_length
+                MIN_WF_LENGTH,
+                0  // wf_max_dist_threshold
+#ifdef WFA_PNG_TSV_TIMING
+                ,
+                nullptr, // prefix_wavefront_plot_in_png
+                0,      // wfplot_max_size
+                false,  // emit_patching_tsv
+                nullptr // out_patching_tsv
+#endif
+                );
         }
     }
 }
