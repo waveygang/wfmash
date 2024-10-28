@@ -68,7 +68,7 @@ void do_biwfa_alignment(
         if (paf_format_else_sam) {
             write_alignment_paf(
                 out,
-                aln,
+                *aln,  // Dereference the pointer
                 query_name,
                 query_total_length,
                 query_offset,
