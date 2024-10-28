@@ -53,16 +53,16 @@ void do_biwfa_alignment(
     const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
     
     if (status == 0) { // WF_STATUS_SUCCESSFUL
-        // Create alignment record
-        alignment_t aln;
-        aln.ok = true;
-        aln.j = 0;
-        aln.i = 0;
-        aln.query_length = query_length;
-        aln.target_length = target_length;
+        // Create alignment record on heap
+        auto* aln = new alignment_t();
+        aln->ok = true;
+        aln->j = 0;
+        aln->i = 0;
+        aln->query_length = query_length;
+        aln->target_length = target_length;
         
         // Copy alignment CIGAR
-        wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
+        wflign_edit_cigar_copy(wf_aligner, &aln->edit_cigar);
         
         // Write alignment
         if (paf_format_else_sam) {
@@ -83,7 +83,7 @@ void do_biwfa_alignment(
         } else {
             write_merged_alignment(
                 out,
-                {&aln},  // Convert single alignment to vector
+                {aln},  // Pass pointer to alignment
                 wf_aligner,
                 penalties,
                 emit_md_tag,
