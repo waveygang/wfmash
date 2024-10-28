@@ -111,7 +111,7 @@ void parse_args(int argc,
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::Flag force_biwfa_alignment(alignment_opts, "force-biwfa", "force alignment with biWFA for all sequence pairs", {'I', "force-biwfa"});
+    args::Flag force_wflign(alignment_opts, "force-wflign", "force alignment with WFLign instead of the default biWFA", {'I', "force-wflign"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
 												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 2,3,1]",
