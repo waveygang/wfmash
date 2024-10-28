@@ -10,6 +10,11 @@
 namespace wflign {
 namespace wavefront {
 
+/*
+* Configuration
+*/
+#define MIN_WF_LENGTH            256
+
 void do_biwfa_alignment(
     const std::string& query_name,
     char* const query,
@@ -126,7 +131,6 @@ void do_biwfa_alignment(
 * Configuration
 */
 #define MAX_LEN_FOR_STANDARD_WFA 1000
-#define MIN_WF_LENGTH            256
 
 /*
 * Utils
