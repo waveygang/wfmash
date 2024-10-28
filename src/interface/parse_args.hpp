@@ -428,8 +428,8 @@ void parse_args(int argc,
         map_parameters.chain_gap = l;
         align_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 30000;
-        align_parameters.chain_gap = 30000;
+        map_parameters.chain_gap = 2000;
+        align_parameters.chain_gap = 2000;
     }
 
     if (max_mapping_length) {
