@@ -467,7 +467,7 @@ void WFlign::wflign_affine_wavefront(
 
     // Use biWFA for smaller sequences or very high identity matches
 
-    if (!force_wflign) {
+    if (force_wflign) {
             
         do_biwfa_alignment(
             query_name, query, query_total_length, query_offset, query_length, query_is_rev,
