@@ -10,6 +10,92 @@
 namespace wflign {
 namespace wavefront {
 
+void do_biwfa_alignment(
+    const std::string& query_name,
+    char* const query,
+    const uint64_t query_total_length,
+    const uint64_t query_offset,
+    const uint64_t query_length,
+    const bool query_is_rev,
+    const std::string& target_name,
+    char* const target,
+    const uint64_t target_total_length,
+    const uint64_t target_offset,
+    const uint64_t target_length,
+    std::ostream& out,
+    const wflign_penalties_t& penalties,
+    const bool emit_md_tag,
+    const bool paf_format_else_sam,
+    const bool no_seq_in_sam,
+    const float min_identity,
+    const uint64_t wflign_max_len_minor,
+    const float mashmap_estimated_identity) {
+    
+    // Create WFA aligner with the provided penalties
+    wfa::WFAlignerGapAffine2Pieces wf_aligner(
+        0,  // match
+        penalties.mismatch,
+        penalties.gap_opening1,
+        penalties.gap_extension1,
+        penalties.gap_opening2,
+        penalties.gap_extension2,
+        wfa::WFAligner::Alignment,
+        wfa::WFAligner::MemoryUltralow);
+    
+    wf_aligner.setHeuristicNone();
+    
+    // Perform the alignment
+    const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
+    
+    if (status == 0) { // WF_STATUS_SUCCESSFUL
+        // Create alignment record
+        alignment_t aln;
+        aln.ok = true;
+        aln.j = 0;
+        aln.i = 0;
+        aln.query_length = query_length;
+        aln.target_length = target_length;
+        
+        // Copy alignment CIGAR
+        wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
+        
+        // Write alignment
+        if (paf_format_else_sam) {
+            write_alignment_paf(
+                out,
+                aln,
+                query_name,
+                query_total_length,
+                query_offset,
+                query_length,
+                query_is_rev,
+                target_name,
+                target_total_length,
+                target_offset,
+                target_length,
+                min_identity,
+                mashmap_estimated_identity);
+        } else {
+            write_sam_alignment(
+                out,
+                aln,
+                query_name,
+                query,
+                query_total_length,
+                query_offset,
+                query_length,
+                query_is_rev,
+                target_name,
+                target,
+                target_total_length,
+                target_offset,
+                target_length,
+                emit_md_tag,
+                no_seq_in_sam);
+        }
+    }
+}
+
 /*
 * Configuration
 */
