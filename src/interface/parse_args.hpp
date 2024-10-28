@@ -371,7 +371,7 @@ void parse_args(int argc,
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
-    align_parameters.force_biwfa_alignment = args::get(force_biwfa_alignment);
+    align_parameters.force_wflign = args::get(force_wflign);
     map_parameters.split = !args::get(no_split);
     map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
     align_parameters.split = !args::get(no_split);

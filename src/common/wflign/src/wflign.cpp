@@ -467,11 +467,7 @@ void WFlign::wflign_affine_wavefront(
 
     // Use biWFA for smaller sequences or very high identity matches
 
-    if (force_biwfa_alignment ||
-        (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
-        (mashmap_estimated_identity >= 0.99 && 
-         query_length <= MAX_LEN_FOR_STANDARD_WFA && 
-         target_length <= MAX_LEN_FOR_STANDARD_WFA)) {
+    if (!force_wflign) {
             
         do_biwfa_alignment(
             query_name, query, query_total_length, query_offset, query_length, query_is_rev,
