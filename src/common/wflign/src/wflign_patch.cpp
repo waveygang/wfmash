@@ -2017,7 +2017,8 @@ query_start : query_end)
 
     // Clean up
     free(cigarv);
-
+    
+    // Write SAM format alignments and clean up trace
     if (!paf_format_else_sam) {
         // Clean up the trace alignments since we're done with them
         for (auto* aln : trace) {
@@ -2026,6 +2027,7 @@ query_start : query_end)
             }
         }
         
+        // Write the patch alignments
         for (auto& patch_aln : multi_patch_alns) {
             write_alignment_sam(
                 out, patch_aln, query_name, query_total_length,
@@ -2034,6 +2036,13 @@ query_start : query_end)
                 min_identity, mashmap_estimated_identity,
                 no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift);
         }
+        
+        // Clean up patch alignments after writing
+        for (auto& patch_aln : multi_patch_alns) {
+            free(patch_aln.edit_cigar.cigar_ops);
+            patch_aln.edit_cigar.cigar_ops = nullptr;
+        }
+        multi_patch_alns.clear();
     } else {
         // write how many reverse complement alignments were found
         //std::cerr << "got " << rev_patch_alns.size() << " rev patch alns" << std::endl;
