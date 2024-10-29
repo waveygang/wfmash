@@ -2017,18 +2017,15 @@ query_start : query_end)
 
     // Clean up
     free(cigarv);
-    
-    // Clean up alignment objects if we own them
+
     if (!paf_format_else_sam) {
+        // Clean up the trace alignments since we're done with them
         for (auto* aln : trace) {
             if (aln != nullptr) {
                 delete aln;
             }
         }
-    }
-
-
-    if (!paf_format_else_sam) {
+        
         for (auto& patch_aln : multi_patch_alns) {
             write_alignment_sam(
                 out, patch_aln, query_name, query_total_length,
