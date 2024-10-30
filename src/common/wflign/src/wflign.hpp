@@ -34,6 +34,27 @@
 namespace wflign {
     namespace wavefront {
 
+        void do_biwfa_alignment(
+            const std::string& query_name,
+            char* const query,
+            const uint64_t query_total_length,
+            const uint64_t query_offset,
+            const uint64_t query_length,
+            const bool query_is_rev,
+            const std::string& target_name,
+            char* const target,
+            const uint64_t target_total_length,
+            const uint64_t target_offset,
+            const uint64_t target_length,
+            std::ostream& out,
+            const wflign_penalties_t& penalties,
+            const bool emit_md_tag,
+            const bool paf_format_else_sam,
+            const bool no_seq_in_sam,
+            const float min_identity,
+            const uint64_t wflign_max_len_minor,
+            const float mashmap_estimated_identity);
+
         class WFlign {
         public:
             // WFlambda parameters
