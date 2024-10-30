@@ -84,7 +84,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
-    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 30k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking (inf to unset) [default: 50k]", {'P', "max-mapping-length"});
     args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "F", "drop mappings overlapping more than fraction F with a higher scoring mapping [default: 0.5]", {'O', "overlap-threshold"});
@@ -111,7 +111,7 @@ void parse_args(int argc,
 
     args::Group alignment_opts(parser, "[ Alignment Options ]");
     args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::Flag force_biwfa_alignment(alignment_opts, "force-biwfa", "force alignment with biWFA for all sequence pairs", {'I', "force-biwfa"});
+    args::Flag force_wflign(alignment_opts, "force-wflign", "force alignment with WFLign instead of the default biWFA", {'I', "force-wflign"});
     args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
     args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
 												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 2,3,1]",
@@ -371,7 +371,7 @@ void parse_args(int argc,
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
-    align_parameters.force_biwfa_alignment = args::get(force_biwfa_alignment);
+    align_parameters.force_wflign = args::get(force_wflign);
     map_parameters.split = !args::get(no_split);
     map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
     align_parameters.split = !args::get(no_split);
@@ -428,8 +428,8 @@ void parse_args(int argc,
         map_parameters.chain_gap = l;
         align_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 30000;
-        align_parameters.chain_gap = 30000;
+        map_parameters.chain_gap = 2000;
+        align_parameters.chain_gap = 2000;
     }
 
     if (max_mapping_length) {

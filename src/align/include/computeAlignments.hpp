@@ -242,49 +242,19 @@ std::string processAlignment(seq_record_t* rec) {
         skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand.data(), query_seq.size());
     }
 
-    wflign::wavefront::WFlign wflign(
-        param.wflambda_segment_length,
-        param.min_identity,
-        param.force_biwfa_alignment,
-        param.wfa_mismatch_score,
-        param.wfa_gap_opening_score,
-        param.wfa_gap_extension_score,
-        param.wfa_patching_mismatch_score,
-        param.wfa_patching_gap_opening_score1,
-        param.wfa_patching_gap_extension_score1,
-        param.wfa_patching_gap_opening_score2,
-        param.wfa_patching_gap_extension_score2,
-        rec->currentRecord.mashmap_estimated_identity,
-        param.wflign_mismatch_score,
-        param.wflign_gap_opening_score,
-        param.wflign_gap_extension_score,
-        param.wflign_max_mash_dist,
-        param.wflign_min_wavefront_length,
-        param.wflign_max_distance_threshold,
-        param.wflign_max_len_major,
-        param.wflign_max_len_minor,
-        param.wflign_erode_k,
-        param.chain_gap,
-        param.wflign_min_inv_patch_len,
-        param.wflign_max_patching_score);
+    // Set up penalties for biWFA
+    wflign_penalties_t wfa_penalties;
+    wfa_penalties.match = 0;
+    wfa_penalties.mismatch = param.wfa_patching_mismatch_score;
+    wfa_penalties.gap_opening1 = param.wfa_patching_gap_opening_score1;
+    wfa_penalties.gap_extension1 = param.wfa_patching_gap_extension_score1;
+    wfa_penalties.gap_opening2 = param.wfa_patching_gap_opening_score2;
+    wfa_penalties.gap_extension2 = param.wfa_patching_gap_extension_score2;
 
     std::stringstream output;
-    wflign.set_output(
-        &output,
-#ifdef WFA_PNG_TSV_TIMING
-        !param.tsvOutputPrefix.empty(),
-        nullptr,
-        param.prefix_wavefront_plot_in_png,
-        param.wfplot_max_size,
-        !param.path_patching_info_in_tsv.empty(),
-        nullptr,
-#endif
-        true, // merge alignments
-        param.emit_md_tag,
-        !param.sam_format,
-        param.no_seq_in_sam);
 
-    wflign.wflign_affine_wavefront(
+    // Do direct biWFA alignment
+    wflign::wavefront::do_biwfa_alignment(
         rec->currentRecord.qId,
         queryRegionStrand.data(),
         rec->queryTotalLength,
@@ -295,7 +265,15 @@ std::string processAlignment(seq_record_t* rec) {
         ref_seq_ptr,
         rec->refTotalLength,
         rec->currentRecord.rStartPos,
-        rec->currentRecord.rEndPos - rec->currentRecord.rStartPos);
+        rec->currentRecord.rEndPos - rec->currentRecord.rStartPos,
+        output,
+        wfa_penalties,
+        param.emit_md_tag,
+        !param.sam_format,
+        param.no_seq_in_sam,
+        param.min_identity,
+        param.wflign_max_len_minor,
+        rec->currentRecord.mashmap_estimated_identity);
 
     return output.str();
 }

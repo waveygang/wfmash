@@ -13,8 +13,103 @@ namespace wavefront {
 /*
 * Configuration
 */
-#define MAX_LEN_FOR_STANDARD_WFA 1000
 #define MIN_WF_LENGTH            256
+
+void do_biwfa_alignment(
+    const std::string& query_name,
+    char* const query,
+    const uint64_t query_total_length,
+    const uint64_t query_offset,
+    const uint64_t query_length,
+    const bool query_is_rev,
+    const std::string& target_name,
+    char* const target,
+    const uint64_t target_total_length,
+    const uint64_t target_offset,
+    const uint64_t target_length,
+    std::ostream& out,
+    const wflign_penalties_t& penalties,
+    const bool emit_md_tag,
+    const bool paf_format_else_sam,
+    const bool no_seq_in_sam,
+    const float min_identity,
+    const uint64_t wflign_max_len_minor,
+    const float mashmap_estimated_identity) {
+    
+    // Create WFA aligner with the provided penalties
+    wfa::WFAlignerGapAffine2Pieces wf_aligner(
+        0,  // match
+        penalties.mismatch,
+        penalties.gap_opening1,
+        penalties.gap_extension1,
+        penalties.gap_opening2,
+        penalties.gap_extension2,
+        wfa::WFAligner::Alignment,
+        wfa::WFAligner::MemoryUltralow);
+    
+    wf_aligner.setHeuristicNone();
+    
+    // Perform the alignment
+    const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
+    
+    if (status == 0) { // WF_STATUS_SUCCESSFUL
+        // Create alignment record on stack
+        alignment_t aln;
+        aln.ok = true;
+        aln.j = 0;
+        aln.i = 0;
+        aln.query_length = query_length;
+        aln.target_length = target_length;
+        aln.is_rev = false;
+        
+        // Copy alignment CIGAR
+        wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
+        
+        // Write alignment
+        if (paf_format_else_sam) {
+            write_alignment_paf(
+                out,
+                aln,
+                query_name,
+                query_total_length,
+                query_offset,
+                query_length,
+                query_is_rev,
+                target_name,
+                target_total_length,
+                target_offset,
+                target_length,
+                min_identity,
+                mashmap_estimated_identity);
+        } else {
+            // Write SAM output directly
+            write_alignment_sam(
+                out,
+                aln,
+                query_name,
+                query_total_length,
+                query_offset,
+                query_length,
+                query_is_rev,
+                target_name,
+                target_total_length,
+                target_offset,
+                target_length,
+                min_identity,
+                mashmap_estimated_identity,
+                no_seq_in_sam,
+                emit_md_tag,
+                query,
+                target,
+                0); // No target pointer shift for biwfa
+        }
+    }
+}
+
+/*
+* Configuration
+*/
+#define MAX_LEN_FOR_STANDARD_WFA 1000
 
 /*
 * Utils
@@ -42,7 +137,7 @@ void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
 WFlign::WFlign(
     const uint16_t segment_length,
     const float min_identity,
-    const bool force_biwfa_alignment,
+    const bool force_wflign_,
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
     const int wfa_gap_extension_score,
@@ -68,7 +163,7 @@ WFlign::WFlign(
     this->segment_length = segment_length;
     this->min_identity = min_identity;
 
-    this->force_biwfa_alignment = force_biwfa_alignment;
+    this->force_wflign = force_wflign_;
 
     this->wfa_mismatch_score = wfa_mismatch_score;
     this->wfa_gap_opening_score = wfa_gap_opening_score;
@@ -331,6 +426,35 @@ void WFlign::wflign_affine_wavefront(
         return;
     }
 
+    // Set penalties for wfa convex
+    wflign_penalties_t wfa_convex_penalties;
+    if (wfa_patching_mismatch_score > 0 && wfa_patching_gap_opening_score1 > 0 && wfa_patching_gap_extension_score1 > 0 && wfa_patching_gap_opening_score2 > 0 && wfa_patching_gap_extension_score2 > 0){
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = wfa_patching_mismatch_score;
+        wfa_convex_penalties.gap_opening1 = wfa_patching_gap_opening_score1;
+        wfa_convex_penalties.gap_extension1 = wfa_patching_gap_extension_score1;
+        wfa_convex_penalties.gap_opening2 = wfa_patching_gap_opening_score2;
+        wfa_convex_penalties.gap_extension2 = wfa_patching_gap_extension_score2;
+    } else {
+        wfa_convex_penalties.match = 0;
+        wfa_convex_penalties.mismatch = 6;
+        wfa_convex_penalties.gap_opening1 = 6;
+        wfa_convex_penalties.gap_extension1 = 2;
+        wfa_convex_penalties.gap_opening2 = 26;
+        wfa_convex_penalties.gap_extension2 = 1;
+    }
+
+    // Use biWFA for smaller sequences or very high identity matches
+
+    if (!force_wflign && (query_length <= MAX_LEN_FOR_STANDARD_WFA || target_length <= MAX_LEN_FOR_STANDARD_WFA)) {
+        do_biwfa_alignment(
+            query_name, query, query_total_length, query_offset, query_length, query_is_rev,
+            target_name, target, target_total_length, target_offset, target_length,
+            *out, wfa_convex_penalties, emit_md_tag, paf_format_else_sam, no_seq_in_sam,
+            min_identity, wflign_max_len_minor, mashmap_estimated_identity);
+        return;
+    }
+
     // Check if mashmap_estimated_identity == 1 to avoid division by zero, leading to a minhash_kmer_size of 8.
     // Such low value was leading to confusion in HORs alignments in the human centromeres (high runtime and memory usage, and wrong alignments)
     const int minhash_kmer_size = mashmap_estimated_identity == 1 ? 17 : std::max(8, std::min(17, (int)std::floor(1.0 / (1.0 - mashmap_estimated_identity))));
@@ -366,23 +490,6 @@ void WFlign::wflign_affine_wavefront(
         */
     }
 
-    // Set penalties for wfa convex
-    wflign_penalties_t wfa_convex_penalties;
-    if (wfa_patching_mismatch_score > 0 && wfa_patching_gap_opening_score1 > 0 && wfa_patching_gap_extension_score1 > 0 && wfa_patching_gap_opening_score2 > 0 && wfa_patching_gap_extension_score2 > 0){
-        wfa_convex_penalties.match = 0;
-        wfa_convex_penalties.mismatch = wfa_patching_mismatch_score;
-        wfa_convex_penalties.gap_opening1 = wfa_patching_gap_opening_score1;
-        wfa_convex_penalties.gap_extension1 = wfa_patching_gap_extension_score1;
-        wfa_convex_penalties.gap_opening2 = wfa_patching_gap_opening_score2;
-        wfa_convex_penalties.gap_extension2 = wfa_patching_gap_extension_score2;
-    } else {
-        wfa_convex_penalties.match = 0;
-        wfa_convex_penalties.mismatch = 5;
-        wfa_convex_penalties.gap_opening1 = 8;
-        wfa_convex_penalties.gap_extension1 = 2;
-        wfa_convex_penalties.gap_opening2 = 49;
-        wfa_convex_penalties.gap_extension2 = 1;
-    }
 
     // heuristic bound on the max mash dist, adaptive based on estimated
     // identity the goal here is to sparsify the set of alignments in the
@@ -426,11 +533,8 @@ void WFlign::wflign_affine_wavefront(
 #ifdef WFA_PNG_TSV_TIMING
     const auto start_time = std::chrono::steady_clock::now();
 #endif
-    if (force_biwfa_alignment ||
-            (query_length <= segment_length * 8 || target_length <= segment_length * 8) ||
-            (mashmap_estimated_identity >= 0.99
-             && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)
-            ) {
+
+    if (!force_wflign) {
         wfa::WFAlignerGapAffine2Pieces* wf_aligner =
                 new wfa::WFAlignerGapAffine2Pieces(
                         0,
@@ -492,6 +596,7 @@ void WFlign::wflign_affine_wavefront(
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now() - start_time).count();
 #endif
+
 
         // Free old aligner
         delete wf_aligner;

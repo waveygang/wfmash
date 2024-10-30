@@ -26,6 +26,7 @@ struct Parameters {
     uint16_t wflambda_segment_length;             //segment length for wflambda
 
     bool force_biwfa_alignment;				   //force biwfa alignment
+    bool force_wflign;                          //force alignment with WFlign instead of the default biWFA
 
     int wfa_mismatch_score;
     int wfa_gap_opening_score;
