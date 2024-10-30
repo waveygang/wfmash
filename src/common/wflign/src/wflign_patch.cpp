@@ -2222,7 +2222,7 @@ void write_alignment_sam(
             << "NM:i:" << (patch_mismatches + patch_inserted_bp + patch_deleted_bp) << "\t"
             << "gi:f:" << patch_gap_compressed_identity << "\t"
             << "bi:f:" << patch_block_identity << "\t"
-            << "md:f:" << mashmap_estimated_identity << "\t"
+            << "md:f:" << mashmap_estimated_identity << "\t";
             //<< "pt:Z:true" << "\t"
             //<< "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
 
