@@ -2223,8 +2223,8 @@ void write_alignment_sam(
             << "gi:f:" << patch_gap_compressed_identity << "\t"
             << "bi:f:" << patch_block_identity << "\t"
             << "md:f:" << mashmap_estimated_identity << "\t"
-            << "pt:Z:true" << "\t"
-            << "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
+            //<< "pt:Z:true" << "\t"
+            //<< "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
 
         if (emit_md_tag) {
             out << "\t";
