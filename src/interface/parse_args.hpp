@@ -66,7 +66,7 @@ void parse_args(int argc,
     parser.helpParams.helpindent = 35;
     parser.helpParams.eachgroupindent = 2;
 
-    args::Group options_group(parser, "Options:");
+    args::Group options_group(parser, "");
     args::Positional<std::string> target_sequence_file(options_group, "target.fa", "input target FASTA file");
     args::Positional<std::string> query_sequence_file(options_group, "query.fa", "input query FASTA file (optional: if not given, target.fa will be used as query)");
     args::Group indexing_opts(options_group, "Indexing:");
