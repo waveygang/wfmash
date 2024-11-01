@@ -97,29 +97,10 @@ void parse_args(int argc,
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
-    args::Flag create_mashmap_index_only(mapping_opts, "create-index-only", "Create only the index file without performing mapping", {"create-index-only"});
-    args::Flag overwrite_mashmap_index(mapping_opts, "overwrite-mm-index", "Overwrite MashMap index if it exists", {"overwrite-mm-index"});
 
     args::Group alignment_opts(parser, "Alignment:");
     args::ValueFlag<std::string> wfa_params(alignment_opts, "MISMATCH,GAP1,EXT1,GAP2,EXT2", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
-    args::ValueFlag<std::string> wfa_patching_score_params(alignment_opts, "mismatch,gap1,ext1,gap2,ext2",
-														   "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 3,4,2,24,1]",
-														   {"wfa-patching-params"});
-    //wflign parameters
-    args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
-													 "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 2,3,1]",
-													 {"wflign-params"});
-    args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
-    args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
-    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 2048/(estimated_identity^2)]", {'q', "wflign-max-distance"});
-
-    // patching parameter
-    args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
-    args::ValueFlag<std::string> wflign_max_len_minor(alignment_opts, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
-    args::ValueFlag<int> wflign_erode_k(alignment_opts, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
-    args::ValueFlag<int> wflign_min_inv_patch_len(alignment_opts, "N", "minimum length of inverted patch for output [default: 23]", {'V', "min-inv-len"});
-    args::ValueFlag<int> wflign_max_patching_score(alignment_opts, "N", "maximum score allowed when patching [default: adaptive with respect to gap penalties and sequence length]", {"max-patching-score"});
 
     args::Group output_opts(parser, "Output Format:");
     args::Flag sam_format(output_opts, "", "output in SAM format (PAF by default)", {'a', "sam"});
