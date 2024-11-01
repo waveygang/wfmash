@@ -149,17 +149,8 @@ void parse_args(int argc,
         exit(0);
     }
 
-    if (skip_self) {
-        map_parameters.skip_self = true;
-    } else {
-        map_parameters.skip_self = false;
-    }
-
-	if (lower_triangular) {
-		map_parameters.lower_triangular = true;
-	} else {
-		map_parameters.lower_triangular = false;
-	}
+    map_parameters.skip_self = false;
+    map_parameters.lower_triangular = false;
 
     if (skip_prefix) {
         map_parameters.skip_prefix = true;
