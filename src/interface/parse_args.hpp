@@ -68,7 +68,6 @@ void parse_args(int argc,
     args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
     args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {"write-index"});
     args::ValueFlag<std::string> index_by(indexing_opts, "SIZE", "target batch size for indexing [4G]", {'b', "batch"});
-    args::ValueFlag<int> kmer_size(indexing_opts, "INT", "k-mer size [15]", {'k', "kmer"});
     args::ValueFlag<int64_t> sketch_size(indexing_opts, "INT", "sketch size for MinHash [auto]", {'w', "sketch-size"});
 
     args::Group mapping_opts(parser, "Mapping:");
@@ -77,7 +76,6 @@ void parse_args(int argc,
     args::ValueFlag<std::string> segment_length(mapping_opts, "INT", "segment length for mapping [1k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [3*segment-length]", {'l', "block-length"});
     args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
-    args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 15]", {'k', "kmer"});
     args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
     args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
@@ -100,10 +98,8 @@ void parse_args(int argc,
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
     args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
-    args::ValueFlag<std::string> mashmap_index(mapping_opts, "FILE", "Use MashMap index in FILE, create if it doesn't exist", {"mm-index"});
     args::Flag create_mashmap_index_only(mapping_opts, "create-index-only", "Create only the index file without performing mapping", {"create-index-only"});
     args::Flag overwrite_mashmap_index(mapping_opts, "overwrite-mm-index", "Overwrite MashMap index if it exists", {"overwrite-mm-index"});
-    args::ValueFlag<std::string> index_by(mapping_opts, "SIZE", "Set the target total size of sequences for each index subset", {"index-by"});
 
     args::Group alignment_opts(parser, "Alignment:");
     args::ValueFlag<std::string> wfa_params(alignment_opts, "MISMATCH,GAP1,EXT1,GAP2,EXT2", 
@@ -132,14 +128,6 @@ void parse_args(int argc,
     args::Flag emit_md_tag(output_opts, "", "output MD tag", {'d', "md-tag"});
     args::Flag no_seq_in_sam(output_opts, "", "omit sequence field in SAM output", {'q', "no-seq-sam"});
 
-    args::Group seq_opts(parser, "Sequence Selection:");
-    args::ValueFlag<std::string> target_prefix(seq_opts, "STR", "use only targets with this prefix", {'T', "target-prefix"});
-    args::ValueFlag<std::string> target_list(seq_opts, "FILE", "file containing target sequence names", {'R', "target-list"});
-    args::ValueFlag<std::string> query_prefix(seq_opts, "STR[,...]", "use only queries with these prefixes", {'Q', "query-prefix"});
-    args::ValueFlag<std::string> query_list(seq_opts, "FILE", "file containing query sequence names", {'A', "query-list"});
-    args::ValueFlag<char> skip_prefix(seq_opts, "CHAR", "skip mappings when query/target share prefix before char [#]", {'Y', "skip-prefix"});
-    args::Flag skip_self(seq_opts, "", "skip self mappings", {'X', "skip-self"});
-    args::Flag lower_triangular(seq_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
 
     args::Group system_opts(parser, "System:");
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
@@ -155,7 +143,6 @@ void parse_args(int argc,
 #endif
 
     args::Group threading_opts(parser, "[ Threading ]");
-    args::ValueFlag<int> thread_count(threading_opts, "N", "use this many threads during parallel steps", {'t', "threads"});
 
     args::Group program_info_opts(parser, "[ Program Information ]");
     args::Flag version(program_info_opts, "version", "show version number and github commit hash", {'v', "version"});
@@ -259,6 +246,7 @@ void parse_args(int argc,
         }
     }
 
+    args::ValueFlag<double> map_sparsification(parser, "FLOAT", "sparsification factor [1.0]", {"sparsification"});
     if (map_sparsification) {
         if (args::get(map_sparsification) == 1) {
             // overflows
@@ -272,6 +260,7 @@ void parse_args(int argc,
             = std::numeric_limits<uint64_t>::max();
     }
 
+    args::ValueFlag<std::string> wfa_score_params(alignment_opts, "MISMATCH,GAP,EXT", "WFA scoring parameters [2,3,1]", {"wfa-params"});
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
@@ -372,6 +361,7 @@ void parse_args(int argc,
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
+    args::Flag force_wflign(alignment_opts, "", "force WFlign alignment", {"force-wflign"});
     align_parameters.force_wflign = args::get(force_wflign);
     map_parameters.split = !args::get(no_split);
     map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
@@ -530,6 +520,7 @@ void parse_args(int argc,
 
     align_parameters.min_identity = 0; // disabled
 
+    args::ValueFlag<int> wflambda_segment_length(alignment_opts, "N", "WFlambda segment length [256]", {"wflambda-segment"});
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {
@@ -611,6 +602,7 @@ void parse_args(int argc,
         map_parameters.kmerComplexityThreshold = 0;
     }
 
+    args::ValueFlag<double> hg_numerator(mapping_opts, "FLOAT", "hypergeometric filter numerator [1.0]", {"hg-numerator"});
     if (hg_numerator) {
         double value = args::get(hg_numerator);
         if (value < 1.0) {
@@ -638,9 +630,11 @@ void parse_args(int argc,
 
     map_parameters.filterLengthMismatches = true;
 
+    args::Flag no_hg_filter(mapping_opts, "", "disable hypergeometric filter", {"no-hg-filter"});
     map_parameters.stage1_topANI_filter = !bool(no_hg_filter);
     map_parameters.stage2_full_scan = true;
 
+    args::ValueFlag<double> hg_filter_ani_diff(mapping_opts, "FLOAT", "hypergeometric filter ANI difference [0.0]", {"hg-filter-ani-diff"});
     if (hg_filter_ani_diff)
     {
         map_parameters.ANIDiff = args::get(hg_filter_ani_diff);
@@ -649,6 +643,7 @@ void parse_args(int argc,
         map_parameters.ANIDiff = skch::fixed::ANIDiff;
     }
 
+    args::ValueFlag<double> hg_filter_conf(mapping_opts, "FLOAT", "hypergeometric filter confidence [99.9]", {"hg-filter-conf"});
     if (hg_filter_conf)
     {
         map_parameters.ANIDiffConf = args::get(hg_filter_conf);
@@ -703,6 +698,7 @@ void parse_args(int argc,
             }
         }
 
+        args::ValueFlag<std::string> align_input_paf(parser, "FILE", "input PAF file for alignment", {"align-paf"});
         if (align_input_paf) {
             // directly use the input mapping file
             yeet_parameters.remapping = true;
@@ -736,6 +732,7 @@ void parse_args(int argc,
     }
 #endif
 
+    args::ValueFlag<int> num_mappings_for_segments(mapping_opts, "N", "number of mappings per segment [1]", {"mappings-per-segment"});
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {
             map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
