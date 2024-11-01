@@ -84,7 +84,6 @@ void parse_args(int argc,
     args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
     args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "use only queries whose names start with these prefixes (comma delimited)", {'Q', "query-prefix"});
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
-    args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "maximum length of a single mapping [50k]", {'P', "max-length"});
@@ -103,7 +102,6 @@ void parse_args(int argc,
     args::Group alignment_opts(parser, "Alignment:");
     args::ValueFlag<std::string> wfa_params(alignment_opts, "MISMATCH,GAP1,EXT1,GAP2,EXT2", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
-    args::Flag approx_mapping(alignment_opts, "", "skip base-level alignment (mapping only)", {'m', "approx-map"});
     args::ValueFlag<std::string> wfa_patching_score_params(alignment_opts, "mismatch,gap1,ext1,gap2,ext2",
 														   "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 3,4,2,24,1]",
 														   {"wfa-patching-params"});
@@ -127,6 +125,8 @@ void parse_args(int argc,
     args::Flag emit_md_tag(output_opts, "", "output MD tag", {'d', "md-tag"});
     args::Flag no_seq_in_sam(output_opts, "", "omit sequence field in SAM output", {'q', "no-seq-sam"});
 
+
+    args::ValueFlag<int> kmer_size(mapping_opts, "INT", "k-mer size [15]", {"kmer-size"});
 
     args::Group system_opts(parser, "System:");
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
