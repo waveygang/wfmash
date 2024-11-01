@@ -64,6 +64,7 @@ void parse_args(int argc,
     parser.helpParams.descriptionindent = 0;
     parser.helpParams.flagindent = 2;
     parser.helpParams.helpindent = 23;
+    parser.helpParams.eachgroupindent = 2;
 
     args::Group options_group(parser, "Options");
     args::Positional<std::string> target_sequence_file(options_group, "target.fa", "input target FASTA file");
@@ -123,9 +124,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> path_patching_info_in_tsv(parser, "FILE", " write patching information for each alignment in TSV format in FILE", {"path-patching-tsv"});
 #endif
 
-    args::Group program_info_opts(parser, "");
-    args::Flag version(program_info_opts, "version", "show version number and github commit hash", {'v', "version"});
-    args::HelpFlag help(program_info_opts, "help", "display this help menu", {'h', "help"});
+    args::Flag version(system_opts, "version", "show version number and github commit hash", {'v', "version"});
+    args::HelpFlag help(system_opts, "help", "display this help menu", {'h', "help"});
 
     try {
         parser.ParseCLI(argc, argv);
