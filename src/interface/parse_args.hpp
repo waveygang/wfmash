@@ -57,20 +57,22 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash: a pangenome-scale aligner, " + std::string(WFMASH_GIT_VERSION));
+    args::ArgumentParser parser("Usage: wfmash [options] <target.fa> [query.fa]");
     parser.helpParams.width = 100;
     parser.helpParams.showTerminator = false;
 
-    args::Positional<std::string> target_sequence_file(parser, "target.fa", "alignment target/reference sequence file");
+    args::Positional<std::string> target_sequence_file(parser, "target.fa", "target sequence file");
     args::Positional<std::string> query_sequence_file(parser, "query.fa", "query sequence file (optional)");
 
-    args::Group indexing_opts(parser, "Indexing:");
-    args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
+    args::Group options_group(parser, "Options:");
+    args::Group indexing_opts(options_group, "Indexing:");
     args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {"write-index"});
+    args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
     args::ValueFlag<std::string> index_by(indexing_opts, "SIZE", "target batch size for indexing [4G]", {'b', "batch"});
     args::ValueFlag<int64_t> sketch_size(indexing_opts, "INT", "sketch size for MinHash [auto]", {'w', "sketch-size"});
+    args::ValueFlag<int> kmer_size(indexing_opts, "INT", "k-mer size [15]", {'k', "kmer-size"});
 
-    args::Group mapping_opts(parser, "Mapping:");
+    args::Group mapping_opts(options_group, "Mapping:");
     args::Flag approx_mapping(mapping_opts, "", "output approximate mappings (no alignment)", {'m', "approx-mapping"});
     args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum mapping identity [70]", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per query/target pair [1]", {'n', "mappings"});
@@ -98,15 +100,14 @@ void parse_args(int argc,
     args::ValueFlag<std::string> wfa_params(alignment_opts, "MISMATCH,GAP1,EXT1,GAP2,EXT2", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
-    args::Group output_opts(parser, "Output Format:");
+    args::Group output_opts(options_group, "Output Format:");
     args::Flag sam_format(output_opts, "", "output in SAM format (PAF by default)", {'a', "sam"});
     args::Flag emit_md_tag(output_opts, "", "output MD tag", {'d', "md-tag"});
     args::Flag no_seq_in_sam(output_opts, "", "omit sequence field in SAM output", {'q', "no-seq-sam"});
 
 
-    args::ValueFlag<int> kmer_size(mapping_opts, "INT", "k-mer size [15]", {'k', "kmer-size"});
 
-    args::Group system_opts(parser, "System:");
+    args::Group system_opts(options_group, "System:");
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
     args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "base directory for temporary files [pwd]", {'B', "tmp-base"});
     args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
