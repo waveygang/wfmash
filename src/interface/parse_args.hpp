@@ -67,8 +67,8 @@ void parse_args(int argc,
     parser.helpParams.eachgroupindent = 2;
 
     args::Group options_group(parser, "");
-    args::Positional<std::string> target_sequence_file(options_group, "target.fa", "input target FASTA file");
-    args::Positional<std::string> query_sequence_file(options_group, "query.fa", "input query FASTA file (optional: if not given, target.fa will be used as query)");
+    args::Positional<std::string> target_sequence_file(options_group, "target.fa", "target sequences (required)");
+    args::Positional<std::string> query_sequence_file(options_group, "query.fa", "query sequences (optional, defaults to target)");
     args::Group indexing_opts(options_group, "Indexing:");
     args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {'W', "write-index"});
     args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
