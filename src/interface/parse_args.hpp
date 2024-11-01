@@ -102,7 +102,7 @@ void parse_args(int argc,
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     args::Group alignment_opts(options_group, "Alignment:");
-    args::ValueFlag<std::string> wfa_params(alignment_opts, "MISMATCH,GAP1,EXT1,GAP2,EXT2", 
+    args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
     args::Group output_opts(options_group, "Output Format:");
