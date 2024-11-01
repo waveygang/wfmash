@@ -87,7 +87,7 @@ void parse_args(int argc,
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "map only between different sequence groups defined by prefix", {'Y', "group-prefix"});
     args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
     args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
-    args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "filter queries by these prefixes", {'Q', "query-prefix"});
+    args::ValueFlag<std::string> query_prefix(mapping_opts, "pfxs", "filter queries by comma-separated prefixes", {'Q', "query-prefix"});
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
