@@ -57,14 +57,12 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("Usage: wfmash [options] <target.fa> [query.fa]");
+    args::ArgumentParser parser("wfmash [target.fa] [query.fa] {OPTIONS}");
     parser.helpParams.width = 100;
     parser.helpParams.showTerminator = false;
 
-    args::Positional<std::string> target_sequence_file(parser, "target.fa", "target sequence file");
-    args::Positional<std::string> query_sequence_file(parser, "query.fa", "query sequence file (optional)");
-
-    args::Group options_group(parser, "Options:");
+    args::Positional<std::string> target_sequence_file(parser, "target.fa", "");
+    args::Positional<std::string> query_sequence_file(parser, "query.fa", "");
     args::Group indexing_opts(options_group, "Indexing:");
     args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {"write-index"});
     args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
@@ -120,9 +118,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> path_patching_info_in_tsv(parser, "FILE", " write patching information for each alignment in TSV format in FILE", {"path-patching-tsv"});
 #endif
 
-    args::Group threading_opts(parser, "[ Threading ]");
-
-    args::Group program_info_opts(parser, "[ Program Information ]");
+    args::Group program_info_opts(parser, "");
     args::Flag version(program_info_opts, "version", "show version number and github commit hash", {'v', "version"});
     args::HelpFlag help(program_info_opts, "help", "display this help menu", {'h', "help"});
 
