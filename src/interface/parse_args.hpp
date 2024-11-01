@@ -64,7 +64,6 @@ void parse_args(int argc,
     parser.helpParams.descriptionindent = 0;
     parser.helpParams.flagindent = 2;
     parser.helpParams.helpindent = 23;
-    parser.helpParams.usageindent = 6;
 
     args::Group options_group(parser, "Options");
     args::Positional<std::string> target_sequence_file(options_group, "target.fa", "input target FASTA file");
