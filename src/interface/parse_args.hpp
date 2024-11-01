@@ -86,7 +86,6 @@ void parse_args(int argc,
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "maximum length of a single mapping [50k]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "maximum mapping overlap fraction [0.5]", {'O', "overlap"});
-    args::Flag drop_low_map_pct_identity(mapping_opts, "", "drop mappings below identity threshold", {'K', "drop-low-id"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-complexity"});
@@ -347,11 +346,6 @@ void parse_args(int argc,
         exit(1);
     }
 
-    if (drop_low_map_pct_identity) {
-        map_parameters.keep_low_pct_id = false;
-    } else {
-        map_parameters.keep_low_pct_id = true;
-    }
 
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
