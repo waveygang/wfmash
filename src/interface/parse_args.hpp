@@ -70,7 +70,7 @@ void parse_args(int argc,
     args::Positional<std::string> target_sequence_file(options_group, "target.fa", "input target FASTA file");
     args::Positional<std::string> query_sequence_file(options_group, "query.fa", "input query FASTA file (optional: if not given, target.fa will be used as query)");
     args::Group indexing_opts(options_group, "Indexing:");
-    args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {"write-index"});
+    args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {'W', "write-index"});
     args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
     args::ValueFlag<std::string> index_by(indexing_opts, "SIZE", "target batch size for indexing [4G]", {'b', "batch"});
     args::ValueFlag<int64_t> sketch_size(indexing_opts, "INT", "sketch size for MinHash [auto]", {'w', "sketch-size"});
