@@ -127,7 +127,7 @@ void parse_args(int argc,
     args::Flag no_seq_in_sam(output_opts, "", "omit sequence field in SAM output", {'q', "no-seq-sam"});
 
 
-    args::ValueFlag<int> kmer_size(mapping_opts, "INT", "k-mer size [15]", {"kmer-size"});
+    args::ValueFlag<int> kmer_size(mapping_opts, "INT", "k-mer size [15]", {'k', "kmer-size"});
 
     args::Group system_opts(parser, "System:");
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
