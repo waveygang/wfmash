@@ -97,7 +97,6 @@ void parse_args(int argc,
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
-    args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
     args::Flag create_mashmap_index_only(mapping_opts, "create-index-only", "Create only the index file without performing mapping", {"create-index-only"});
     args::Flag overwrite_mashmap_index(mapping_opts, "overwrite-mm-index", "Overwrite MashMap index if it exists", {"overwrite-mm-index"});
 
