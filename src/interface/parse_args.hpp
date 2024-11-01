@@ -260,81 +260,19 @@ void parse_args(int argc,
         align_parameters.wfa_gap_extension_score = 1;
     }
 
-    if (!args::get(wfa_patching_score_params).empty()) {
-        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_patching_score_params), ',');
-        if (params_str.size() != 5) {
-            std::cerr << "[wfmash] ERROR error: 5 scoring parameters must be given to --wfa-patching-params"
-                      << std::endl;
-            exit(1);
-        }
+    align_parameters.wfa_patching_mismatch_score = 3;
+    align_parameters.wfa_patching_gap_opening_score1 = 4;
+    align_parameters.wfa_patching_gap_extension_score1 = 2;
+    align_parameters.wfa_patching_gap_opening_score2 = 24;
+    align_parameters.wfa_patching_gap_extension_score2 = 1;
 
-        std::vector<int> params(params_str.size());
-        std::transform(params_str.begin(), params_str.end(), params.begin(),
-                       [](const std::string &s) { return std::stoi(s); });
+    align_parameters.wflign_mismatch_score = 2;
+    align_parameters.wflign_gap_opening_score = 3;
+    align_parameters.wflign_gap_extension_score = 1;
 
-        align_parameters.wfa_patching_mismatch_score = params[0];
-        align_parameters.wfa_patching_gap_opening_score1 = params[1];
-        align_parameters.wfa_patching_gap_extension_score1 = params[2];
-        align_parameters.wfa_patching_gap_opening_score2 = params[3];
-        align_parameters.wfa_patching_gap_extension_score2 = params[4];
-    } else {
-        align_parameters.wfa_patching_mismatch_score = 3;
-        align_parameters.wfa_patching_gap_opening_score1 = 4;
-        align_parameters.wfa_patching_gap_extension_score1 = 2;
-        align_parameters.wfa_patching_gap_opening_score2 = 24;
-        align_parameters.wfa_patching_gap_extension_score2 = 1;
-    }
-
-    if (!args::get(wflign_score_params).empty()) {
-        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wflign_score_params), ',');
-        if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to --wflign-params."
-                      << std::endl;
-            exit(1);
-        }
-
-        std::vector<int> params(params_str.size());
-        std::transform(params_str.begin(), params_str.end(), params.begin(),
-                       [](const std::string &s) { return std::stoi(s); });
-
-        align_parameters.wflign_mismatch_score = params[0];
-        align_parameters.wflign_gap_opening_score = params[1];
-        align_parameters.wflign_gap_extension_score = params[2];
-    } else {
-        align_parameters.wflign_mismatch_score = 2;
-        align_parameters.wflign_gap_opening_score = 3;
-        align_parameters.wflign_gap_extension_score = 1;
-    }
-
-    if (wflign_max_mash_dist) {
-        if (args::get(wflign_max_mash_dist) <= 0 || args::get(wflign_max_mash_dist) > 1) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance must be greater than 0 and less than or equal to 1." << std::endl;
-            exit(1);
-        }
-        align_parameters.wflign_max_mash_dist = args::get(wflign_max_mash_dist);
-    } else {
-        align_parameters.wflign_max_mash_dist = -1;
-    }
-
-    if (wflign_min_wavefront_length) {
-        if (args::get(wflign_min_wavefront_length) <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, min wavefront length for heuristic WFlign must be greater than 0." << std::endl;
-            exit(1);
-        }
-        align_parameters.wflign_min_wavefront_length = args::get(wflign_min_wavefront_length);
-    } else {
-        align_parameters.wflign_min_wavefront_length = 1024;
-    }
-
-    if (wflign_max_distance_threshold) {
-        if (args::get(wflign_max_distance_threshold) <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, max distance threshold for heuristic WFlign must be greater than 0." << std::endl;
-            exit(1);
-        }
-        align_parameters.wflign_max_distance_threshold = args::get(wflign_max_distance_threshold);
-    } else {
-        align_parameters.wflign_max_distance_threshold = -1;
-    }
+    align_parameters.wflign_max_mash_dist = -1;
+    align_parameters.wflign_min_wavefront_length = 1024;
+    align_parameters.wflign_max_distance_threshold = -1;
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
@@ -505,49 +443,11 @@ void parse_args(int argc,
         align_parameters.wflambda_segment_length = 256;
     }
 
-    if (wflign_max_len_major) {
-        const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
-
-        if (wflign_max_len_major_ <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the major axis has to be a float value greater than 0." << std::endl;
-            exit(1);
-        }
-
-        align_parameters.wflign_max_len_major = wflign_max_len_major_;
-    } else {
-        align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
-    }
-
-    if (wflign_max_len_minor) {
-        const uint64_t wflign_max_len_minor_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_minor));
-
-        if (wflign_max_len_minor_ <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the minor axis has to be a float value greater than 0." << std::endl;
-            exit(1);
-        }
-
-        align_parameters.wflign_max_len_minor = wflign_max_len_minor_;
-    } else {
-        align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
-    }
-
-    if (wflign_erode_k) {
-        align_parameters.wflign_erode_k = args::get(wflign_erode_k);
-    } else {
-        align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
-    }
-
-    if (wflign_min_inv_patch_len) {
-        align_parameters.wflign_min_inv_patch_len = args::get(wflign_min_inv_patch_len);
-    } else {
-        align_parameters.wflign_min_inv_patch_len = 23;
-    }
-
-    if (wflign_max_patching_score) {
-        align_parameters.wflign_max_patching_score = args::get(wflign_max_patching_score);
-    } else {
-        align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
-    }
+    align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
+    align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
+    align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
+    align_parameters.wflign_min_inv_patch_len = 23;
+    align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
@@ -643,8 +543,8 @@ void parse_args(int argc,
       map_parameters.indexFilename = "";
     }
 
-    map_parameters.overwrite_index = overwrite_mashmap_index;
-    map_parameters.create_index_only = create_mashmap_index_only;
+    map_parameters.overwrite_index = false;
+    map_parameters.create_index_only = false;
 
     if (index_by) {
         const int64_t index_size = wfmash::handy_parameter(args::get(index_by));
@@ -722,16 +622,7 @@ void parse_args(int argc,
         map_parameters.numMappingsForSegment = 1;
     }
 
-    if (num_mappings_for_short_seq) {
-        if (args::get(num_mappings_for_short_seq) > 0) {
-            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq);
-        } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
-            exit(1);
-        }
-    } else {
-        map_parameters.numMappingsForShortSequence = 1;
-    }
+    map_parameters.numMappingsForShortSequence = 1;
 
 	map_parameters.legacy_output = false;
 
