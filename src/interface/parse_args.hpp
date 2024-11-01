@@ -71,7 +71,7 @@ void parse_args(int argc,
     args::ValueFlag<int64_t> sketch_size(indexing_opts, "INT", "sketch size for MinHash [auto]", {'w', "sketch-size"});
 
     args::Group mapping_opts(parser, "Mapping:");
-    args::Flag approx_mapping(mapping_opts, "", "output approximate mappings (no alignment)", {'x', "approx-mapping"});
+    args::Flag approx_mapping(mapping_opts, "", "output approximate mappings (no alignment)", {'m', "approx-mapping"});
     args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum mapping identity [70]", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per query/target pair [1]", {'n', "mappings"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "INT", "segment length for mapping [1k]", {'s', "segment-length"});
