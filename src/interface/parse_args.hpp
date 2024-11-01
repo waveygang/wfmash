@@ -61,6 +61,7 @@ void parse_args(int argc,
     parser.helpParams.width = 100;
     parser.helpParams.showTerminator = false;
 
+    args::Group options_group(parser, "Options");
     args::Positional<std::string> target_sequence_file(parser, "target.fa", "");
     args::Positional<std::string> query_sequence_file(parser, "query.fa", "");
     args::Group indexing_opts(options_group, "Indexing:");
