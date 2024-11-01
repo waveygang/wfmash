@@ -57,13 +57,18 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash [target.fa] [query.fa] {OPTIONS}");
-    parser.helpParams.width = 100;
+    args::ArgumentParser parser("wfmash");
+    parser.helpParams.width = 80;
     parser.helpParams.showTerminator = false;
+    parser.helpParams.progindent = 0;
+    parser.helpParams.descriptionindent = 0;
+    parser.helpParams.flagindent = 2;
+    parser.helpParams.helpindent = 23;
+    parser.helpParams.usageindent = 6;
 
     args::Group options_group(parser, "Options");
-    args::Positional<std::string> target_sequence_file(parser, "target.fa", "");
-    args::Positional<std::string> query_sequence_file(parser, "query.fa", "");
+    args::Positional<std::string> target_sequence_file(options_group, "target.fa", "input target FASTA file");
+    args::Positional<std::string> query_sequence_file(options_group, "query.fa", "input query FASTA file (optional: if not given, target.fa will be used as query)");
     args::Group indexing_opts(options_group, "Indexing:");
     args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {"write-index"});
     args::ValueFlag<std::string> mashmap_index(indexing_opts, "FILE", "use pre-built index from FILE", {'i', "index"});
@@ -95,7 +100,7 @@ void parse_args(int argc,
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
-    args::Group alignment_opts(parser, "Alignment:");
+    args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> wfa_params(alignment_opts, "MISMATCH,GAP1,EXT1,GAP2,EXT2", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
