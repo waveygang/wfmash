@@ -57,7 +57,7 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash");
+    args::ArgumentParser parser("");
     parser.helpParams.width = 100;
     parser.helpParams.showTerminator = false;
     parser.helpParams.progindent = 0;
