@@ -160,7 +160,7 @@ void parse_args(int argc,
         map_parameters.prefix_delim = args::get(skip_prefix);
     } else {
         map_parameters.skip_prefix = false;
-        map_parameters.prefix_delim = '\0';
+        map_parameters.prefix_delim = '#';
     }
 
 	if (target_list) {
