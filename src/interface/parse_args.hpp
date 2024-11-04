@@ -293,6 +293,13 @@ void parse_args(int argc,
                       << "[wfmash] This is because Mashmap is not designed for computing short local alignments." << std::endl;
             exit(1);
         }
+
+        if (!yeet_parameters.approx_mapping && s > 10000) {
+            std::cerr << "[wfmash] ERROR: segment length (-s) must be <= 10kb when running alignment." << std::endl
+                      << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
+                      << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
+            exit(1);
+        }
         map_parameters.segLength = s;
     } else {
         map_parameters.segLength = 1000;
@@ -316,6 +323,12 @@ void parse_args(int argc,
             exit(1);
         }
 
+        if (!yeet_parameters.approx_mapping && l > 30000) {
+            std::cerr << "[wfmash] ERROR: block length (-l) must be <= 30kb when running alignment." << std::endl
+                      << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
+                      << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
+            exit(1);
+        }
         map_parameters.block_length = l;
     } else {
         map_parameters.block_length = 3 * map_parameters.segLength;
@@ -339,6 +352,12 @@ void parse_args(int argc,
             : wfmash::handy_parameter(args::get(max_mapping_length));
         if (l <= 0) {
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
+            exit(1);
+        }
+        if (!yeet_parameters.approx_mapping && l > 100000) {
+            std::cerr << "[wfmash] ERROR: max mapping length (-P) must be <= 100kb when running alignment." << std::endl
+                      << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
+                      << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
             exit(1);
         }
         map_parameters.max_mapping_length = l;
