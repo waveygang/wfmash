@@ -102,6 +102,7 @@ void parse_args(int argc,
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
 
     args::Group alignment_opts(options_group, "Alignment:");
+    args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF/SAM file for alignment", {'i', "input-mapping"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
@@ -565,12 +566,11 @@ void parse_args(int argc,
             }
         }
 
-        args::ValueFlag<std::string> align_input_paf(parser, "FILE", "input PAF file for alignment", {"align-paf"});
-        if (align_input_paf) {
+        if (input_mapping) {
             // directly use the input mapping file
             yeet_parameters.remapping = true;
-            map_parameters.outFileName = args::get(align_input_paf);
-            align_parameters.mashmapPafFile = args::get(align_input_paf);
+            map_parameters.outFileName = args::get(input_mapping);
+            align_parameters.mashmapPafFile = args::get(input_mapping);
         } else {
             // make a temporary mapping file
             map_parameters.outFileName = temp_file::create();
