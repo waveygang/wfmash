@@ -636,6 +636,20 @@ void parse_args(int argc,
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
 
+    std::cerr << "[mashmap] Parameters: k=" << map_parameters.kmerSize 
+              << ", w=" << map_parameters.sketchSize
+              << ", s=" << map_parameters.segLength << (map_parameters.split ? " (split)" : "")
+              << ", l=" << map_parameters.block_length
+              << ", c=" << map_parameters.chain_gap
+              << ", P=" << map_parameters.max_mapping_length
+              << ", n=" << map_parameters.numMappingsForSegment
+              << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
+              << ", t=" << map_parameters.threads << std::endl;
+    std::cerr << "[mashmap] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
+              << ", hg(Δ=" << map_parameters.ANIDiff << ",conf=" << map_parameters.ANIDiffConf << ")"
+              << ", mode=" << map_parameters.filterMode << " (1=map,2=1-to-1,3=none)" << std::endl;
+    std::cerr << "[mashmap] Output: " << map_parameters.outFileName << std::endl;
+
     temp_file::set_keep_temp(args::get(keep_temp_files));
 
 }
