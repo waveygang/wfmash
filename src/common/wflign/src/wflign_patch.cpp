@@ -5,7 +5,7 @@
 #include <atomic_image.hpp>
 #include "rkmh.hpp"
 #include "wflign_patch.hpp"
-#include "wfmash_git_version.hpp"
+#include "wflign_git_version.hpp"
 
 namespace wflign {
 
@@ -1940,7 +1940,7 @@ query_start : query_end)
             out << "\t" << "cg:Z:" << cigarv << "\n";
 #endif
         } else {
-            out << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFMASH_GIT_VERSION << "\n"
+            out << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFLIGN_GIT_VERSION << "\n"
                 << query_name                          // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
                 << "\t" << target_name // Reference sequence NAME
