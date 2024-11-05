@@ -184,14 +184,6 @@ void parse_args(int argc,
         align_parameters.querySequences.push_back(args::get(query_sequence_file));
     }
 
-	if (target_sequence_file && map_parameters.querySequences.empty()
-		&& map_parameters.refSequences.size() == 1
-		&& !map_parameters.lower_triangular
-		&& map_parameters.target_list.empty()
-		&& map_parameters.target_prefix.empty()) {
-		std::cerr << "[wfmash] Warning: Detected single file all-vs-all mapping with no other options. "
-				  << "Consider adding -L, --lower-triangular for efficiency." << std::endl;
-	}
 
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
