@@ -189,4 +189,4 @@ install(TARGETS wfa2_static
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/include)
-execute_process(COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src)
+execute_process(COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/generate_git_version.sh ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/common/wflign/src)
