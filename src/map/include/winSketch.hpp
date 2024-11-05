@@ -142,16 +142,16 @@ namespace skch
 
     public:
       void initialize(const std::vector<std::string>& targets = {}) {
-        std::cerr << "[mashmap::skch] Initializing Sketch..." << std::endl;
+        std::cerr << "[wfmash::mashmap] Initializing Sketch..." << std::endl;
         
         this->build(true, targets);
 
         this->hgNumerator = param.hgNumerator;
-        std::cerr << "[mashmap::skch] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch] Number of sequences = " << targets.size() << std::endl;
+        std::cerr << "[wfmash::mashmap] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
+        std::cerr << "[wfmash::mashmap] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
+        std::cerr << "[wfmash::mashmap] Number of sequences = " << targets.size() << std::endl;
         isInitialized = true;
-        std::cerr << "[mashmap::skch] Sketch initialization complete." << std::endl;
+        std::cerr << "[wfmash::mashmap] Sketch initialization complete." << std::endl;
       }
 
     private:
@@ -179,13 +179,13 @@ namespace skch
 
           // Log file processing before initializing progress meter
           for (const auto& fileName : param.refSequences) {
-            std::cerr << "[mashmap::skch] Processing file: " << fileName << std::endl;
+            std::cerr << "[wfmash::mashmap] Processing file: " << fileName << std::endl;
           }
 
           // Initialize progress meter with known total
           progress_meter::ProgressMeter progress(
               total_seq_length,
-              "[mashmap::skch] computing sketch");
+              "[wfmash::mashmap] computing sketch");
 
           //Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool([this, &progress](InputSeqContainer* e) { return buildHelper(e, &progress); }, param.threads);
@@ -241,7 +241,7 @@ namespace skch
 
         if (this->minmerIndex.size() == 0)
         {
-          std::cerr << "[mashmap::skch] ERROR, reference sketch is empty. "
+          std::cerr << "[wfmash::mashmap] ERROR, reference sketch is empty. "
                     << "Reference sequences shorter than the kmer size are not indexed" << std::endl;
           exit(1);
         }
@@ -468,10 +468,10 @@ namespace skch
             || param.sketchSize != index_sketchSize
             || param.kmerSize != index_kmerSize)
         {
-          std::cerr << "[mashmap::skch] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
-          std::cerr << "[mashmap::skch] Index --> segLength=" << index_segLength
+          std::cerr << "[wfmash::mashmap] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
+          std::cerr << "[wfmash::mashmap] Index --> segLength=" << index_segLength
                     << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
-          std::cerr << "[mashmap::skch] Current --> segLength=" << param.segLength
+          std::cerr << "[wfmash::mashmap] Current --> segLength=" << param.segLength
                     << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
           exit(1);
         }
@@ -483,7 +483,7 @@ namespace skch
        */
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
-        std::cerr << "[mashmap::skch] Reading index" << std::endl;
+        std::cerr << "[wfmash::mashmap] Reading index" << std::endl;
         if (!readSubIndexHeader(inStream, targetSequenceNames)) {
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);

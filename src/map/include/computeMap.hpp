@@ -578,7 +578,7 @@ namespace skch
 
         progress.finish();
 
-        std::cerr << "[mashmap::mapQuery] "
+        std::cerr << "[wfmash::mashmap] "
                   << "input seqs = " << idManager->size()
                   << ", total input bp = " << total_seq_length << std::endl;
       }
