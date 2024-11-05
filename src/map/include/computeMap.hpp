@@ -541,7 +541,7 @@ namespace skch
         // Initialize progress logger
         progress_meter::ProgressMeter progress(
             totalMappings * 2,
-            "[mashmap::mapQuery] merging and filtering");
+            "[wfmash::mashmap] merging and filtering");
 
         // Start worker threads
         std::vector<std::thread> workers;
@@ -591,7 +591,7 @@ namespace skch
       {
           progress_meter::ProgressMeter progress(
               total_seq_length,
-              "[mashmap::mapQuery] mapping ("
+              "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
           // Launch reader thread
