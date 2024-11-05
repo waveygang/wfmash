@@ -1084,7 +1084,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-          std::cerr<< "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
+          std::cerr<< "INFO, wfmash::mashmap, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
 #endif
 
           //For invalid query (example : just NNNs), we may be left with 0 sketch size
@@ -1140,7 +1140,7 @@ namespace skch
           }
 
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqId << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
+          std::cerr << "INFO, wfmash::mashmap, read id " << Q.seqId << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
 #endif
         }
 
