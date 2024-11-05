@@ -453,7 +453,7 @@ void write_sam_header(std::ofstream& outstream) {
                 });
         }
     }
-    outstream << "@PG\tID:wfmash\tPN:wfmash\tVN:0.1\tCL:wfmash\n";
+    outstream << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFMASH_GIT_VERSION << "\tCL:wfmash\n";
 }
 
 void writer_thread(const std::string& output_file,
