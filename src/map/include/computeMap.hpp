@@ -225,12 +225,9 @@ namespace skch
                   total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
               }
 
-              std::cerr << "[wfmash::mashmap] "
-                        << "input seqs = " << idManager->size()
-                        << ", total query bp = " << total_query_length
-                        << ", target prefix = " << target_prefix
-                        << ", target seqs = " << target_seq_count
-                        << ", total target bp = " << total_target_length << std::endl;
+              std::cerr << "[wfmash::mashmap] " 
+                        << querySequenceNames.size() << " seqs (" << total_query_length << "bp) vs "
+                        << target_seq_count << " targets (" << total_target_length << "bp)" << std::endl;
 
               if (p.stage1_topANI_filter) {
                   this->setProbs();
