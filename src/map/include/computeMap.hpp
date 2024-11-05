@@ -205,6 +205,7 @@ namespace skch
             p.query_list,
             p.target_list))
           {
+
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
