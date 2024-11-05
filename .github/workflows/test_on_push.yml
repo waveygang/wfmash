@@ -46,6 +46,14 @@ jobs:
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head
       - name: Test mapping+alignment with short reads (255bps) (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf
+      - name: Test input mapping functionality
+        run: |
+          # First generate mappings
+          ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y '#' > mappings.paf
+          # Then align using the mappings
+          ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/scerevisiae8.fa.gz -i mappings.paf > aligned.paf
+          # Verify output has alignments (CIGAR strings)
+          grep -q "[0-9]\+M" aligned.paf || (echo "No alignments found in output" && exit 1)
       - name: Install Rust and Cargo
         uses: actions-rs/toolchain@v1
         with:
