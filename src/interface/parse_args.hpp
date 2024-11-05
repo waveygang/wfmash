@@ -508,6 +508,13 @@ void parse_args(int argc,
         map_parameters.kmerSize
     );
 
+    std::cerr << "[wfmash] Reference size: " << map_parameters.totalReferenceSize << " bp" << std::endl;
+    std::cerr << "[wfmash] Sequences in reference:" << std::endl;
+    for (const auto& seqName : targetSequenceNames) {
+        seqno_t seqId = idManager->getSequenceId(seqName);
+        offset_t seqLen = idManager->getSequenceLength(seqId);
+        std::cerr << "  " << seqName << ": " << seqLen << " bp" << std::endl;
+    }
     std::cerr << "[wfmash] Estimated unique " << map_parameters.kmerSize << "-mers: " 
               << map_parameters.estimatedUniqueKmers 
               << " (based on total reference size: " << map_parameters.totalReferenceSize << " bp)" 
