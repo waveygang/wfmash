@@ -214,13 +214,12 @@ namespace skch
 
           progress.finish();
 
-          std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp)" << std::endl;
-          std::cerr << "[wfmash::mashmap] Pre-pruning stats: " << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl;
+          std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
+                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl;
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
-        std::cerr << "[wfmash::mashmap] time spent computing the reference index: " 
-                  << timeRefSketch.count() << " sec" << std::endl;
+        std::cerr << "[wfmash::mashmap] reference index computed in " << timeRefSketch.count() << "s" << std::endl;
 
         if (this->minmerIndex.size() == 0)
         {
