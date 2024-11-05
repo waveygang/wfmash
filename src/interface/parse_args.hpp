@@ -502,6 +502,19 @@ void parse_args(int argc,
     // Set the total reference size
     map_parameters.totalReferenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
+    // Create sequence ID manager for getting sequence info
+    std::unique_ptr<skch::SequenceIdManager> idManager = std::make_unique<skch::SequenceIdManager>(
+        map_parameters.querySequences,
+        map_parameters.refSequences,
+        std::vector<std::string>{map_parameters.query_prefix},
+        std::vector<std::string>{map_parameters.target_prefix},
+        std::string(1, map_parameters.prefix_delim),
+        map_parameters.query_list,
+        map_parameters.target_list);
+
+    // Get target sequence names
+    std::vector<std::string> targetSequenceNames = idManager->getTargetSequenceNames();
+
     // Estimate total unique k-mers using information theoretic approach
     map_parameters.estimatedUniqueKmers = skch::CommonFunc::estimateUniqueKmers(
         map_parameters.totalReferenceSize, 
@@ -511,8 +524,8 @@ void parse_args(int argc,
     std::cerr << "[wfmash] Reference size: " << map_parameters.totalReferenceSize << " bp" << std::endl;
     std::cerr << "[wfmash] Sequences in reference:" << std::endl;
     for (const auto& seqName : targetSequenceNames) {
-        seqno_t seqId = idManager->getSequenceId(seqName);
-        offset_t seqLen = idManager->getSequenceLength(seqId);
+        skch::seqno_t seqId = idManager->getSequenceId(seqName);
+        skch::offset_t seqLen = idManager->getSequenceLength(seqId);
         std::cerr << "  " << seqName << ": " << seqLen << " bp" << std::endl;
     }
     std::cerr << "[wfmash] Estimated unique " << map_parameters.kmerSize << "-mers: " 
