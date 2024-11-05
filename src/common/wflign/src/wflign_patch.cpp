@@ -1940,7 +1940,7 @@ query_start : query_end)
             out << "\t" << "cg:Z:" << cigarv << "\n";
 #endif
         } else {
-            out << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFMASH_GIT_VERSION << "\tCL:wfmash\n"
+            out << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFLIGN_GIT_VERSION << "\tCL:wfmash\n"
                 << query_name                          // Query template NAME
                 << "\t" << (query_is_rev ? "16" : "0") // bitwise FLAG
                 << "\t" << target_name // Reference sequence NAME
