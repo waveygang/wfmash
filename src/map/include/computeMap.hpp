@@ -205,6 +205,32 @@ namespace skch
             p.query_list,
             p.target_list))
           {
+              // Initialize sequence names right after creating idManager
+              this->querySequenceNames = idManager->getQuerySequenceNames();
+              this->targetSequenceNames = idManager->getTargetSequenceNames();
+
+              // Calculate total target length
+              uint64_t total_target_length = 0;
+              size_t target_seq_count = targetSequenceNames.size();
+              std::string target_prefix = param.target_prefix.empty() ? "none" : param.target_prefix;
+
+              for (const auto& seqName : targetSequenceNames) {
+                  seqno_t seqId = idManager->getSequenceId(seqName);
+                  total_target_length += idManager->getSequenceLength(seqId);
+              }
+
+              // Calculate total query length
+              uint64_t total_query_length = 0;
+              for (const auto& seqName : querySequenceNames) {
+                  total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
+              }
+
+              std::cerr << "[wfmash::mashmap] "
+                        << "input seqs = " << idManager->size()
+                        << ", total query bp = " << total_query_length
+                        << ", target prefix = " << target_prefix
+                        << ", target seqs = " << target_seq_count
+                        << ", total target bp = " << total_target_length << std::endl;
 
               if (p.stage1_topANI_filter) {
                   this->setProbs();
