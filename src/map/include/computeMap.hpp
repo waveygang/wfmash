@@ -503,6 +503,11 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Calculate total length of sequences in this subset
+            uint64_t subset_length = 0;
+            for (const auto& seqName : target_subset) {
+                seqno_t seqId = idManager->getSequenceId(seqName);
+                subset_length += idManager->getSequenceLength(seqId);
+            }            
 
             if (param.create_index_only) {
                 // Save the index to a file
