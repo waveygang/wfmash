@@ -226,13 +226,8 @@ namespace skch
 
           progress.finish();
 
-          std::cerr << "[mashmap::skch] Total sequences processed: " << totalSeqProcessed << std::endl;
-          std::cerr << "[mashmap::skch] Total sequences skipped: " << totalSeqSkipped << std::endl;
-          std::cerr << "[mashmap::skch] Total sequence length: " << total_seq_length << std::endl;
-          std::cerr << "[mashmap::skch] Unique minmer hashes before pruning = " 
-                    << minmerPosLookupIndex.size() << std::endl;
-          std::cerr << "[mashmap::skch] Total minmer windows before pruning = " 
-                    << minmerIndex.size() << std::endl;
+          std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp)" << std::endl;
+          std::cerr << "[wfmash::mashmap] Pre-pruning stats: " << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl;
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
