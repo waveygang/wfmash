@@ -520,18 +520,12 @@ void parse_args(int argc,
 
     // Calculate total reference size from actual sequence lengths
     map_parameters.totalReferenceSize = 0;
-    std::cerr << "[wfmash] Sequences in reference:" << std::endl;
+    // Calculate total reference size silently
     for (const auto& seqName : targetSequenceNames) {
         skch::seqno_t seqId = idManager->getSequenceId(seqName);
         skch::offset_t seqLen = idManager->getSequenceLength(seqId);
-        std::cerr << "  " << seqName << ": " << seqLen << " bp" << std::endl;
         map_parameters.totalReferenceSize += seqLen;
     }
-    std::cerr << "[wfmash] Total reference size: " << map_parameters.totalReferenceSize << " bp" << std::endl;
-    std::cerr << "[wfmash] Estimated unique " << map_parameters.kmerSize << "-mers: " 
-              << map_parameters.estimatedUniqueKmers 
-              << " (based on total reference size: " << map_parameters.totalReferenceSize << " bp)" 
-              << std::endl;
 
     map_parameters.filterLengthMismatches = true;
 
