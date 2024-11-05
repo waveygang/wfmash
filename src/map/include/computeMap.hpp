@@ -489,12 +489,6 @@ namespace skch
             total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
         }
 
-        std::cerr << "[wfmash::mashmap] "
-                  << "input queries = " << idManager->size()
-                  << ", total query bp = " << total_query_length
-                  << ", target prefix = " << target_prefix
-                  << ", target seqs = " << target_seq_count
-                  << ", total target bp = " << total_target_length << std::endl;
 
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
