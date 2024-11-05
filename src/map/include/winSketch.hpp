@@ -142,13 +142,8 @@ namespace skch
 
     public:
       void initialize(const std::vector<std::string>& targets = {}) {
-        std::cerr << "[wfmash::mashmap] Initializing Sketch..." << std::endl;
-        
         this->build(true, targets);
-
         this->hgNumerator = param.hgNumerator;
-        std::cerr << "[wfmash::mashmap] Sketch initialized with " << minmerPosLookupIndex.size() << " unique hashes, " 
-                  << minmerIndex.size() << " windows, " << targets.size() << " sequences" << std::endl;
         isInitialized = true;
       }
 
@@ -173,11 +168,6 @@ namespace skch
           for (const auto& seqName : target_names) {
               seqno_t seqId = idManager.getSequenceId(seqName);
               total_seq_length += idManager.getSequenceLength(seqId);
-          }
-
-          // Log file processing before initializing progress meter
-          for (const auto& fileName : param.refSequences) {
-            std::cerr << "[wfmash::mashmap] Processing file: " << fileName << std::endl;
           }
 
           // Initialize progress meter with known total
