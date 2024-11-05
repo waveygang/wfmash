@@ -231,7 +231,7 @@ namespace skch
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
-        std::cerr << "[mashmap::skch] time spent computing the reference index: " 
+        std::cerr << "[wfmash::mashmap] time spent computing the reference index: " 
                   << timeRefSketch.count() << " sec" << std::endl;
 
         if (this->minmerIndex.size() == 0)
