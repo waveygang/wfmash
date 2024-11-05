@@ -447,6 +447,23 @@ namespace skch
 
         std::ofstream outstrm(param.outFileName);
 
+        // Calculate total target length
+        uint64_t total_target_length = 0;
+        size_t target_seq_count = targetSequenceNames.size();
+        std::string target_prefix = param.target_prefix.empty() ? "none" : param.target_prefix;
+
+        for (const auto& seqName : targetSequenceNames) {
+            seqno_t seqId = idManager->getSequenceId(seqName);
+            total_target_length += idManager->getSequenceLength(seqId);
+        }
+
+        std::cerr << "[wfmash::mashmap] "
+                  << "input seqs = " << idManager->size()
+                  << ", total input bp = " << total_seq_length
+                  << ", target prefix = " << target_prefix
+                  << ", target seqs = " << target_seq_count
+                  << ", total target bp = " << total_target_length << std::endl;
+
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
         merged_mappings_queue_t merged_queue;
@@ -486,11 +503,6 @@ namespace skch
                 continue;  // Skip empty subsets
             }
             // Calculate total length of sequences in this subset
-            uint64_t subset_length = 0;
-            for (const auto& seqName : target_subset) {
-                seqno_t seqId = idManager->getSequenceId(seqName);
-                subset_length += idManager->getSequenceLength(seqId);
-            }
 
             if (param.create_index_only) {
                 // Save the index to a file
