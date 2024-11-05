@@ -141,10 +141,9 @@ void parse_args(int argc,
         exit(1);
         //return; // 1;
     }
-    if (argc==1) {
+    if (argc==1 || !target_sequence_file) {
         std::cout << parser;
         exit(1);
-        //return; // 1;
     }
 
     if (version) {
