@@ -147,11 +147,9 @@ namespace skch
         this->build(true, targets);
 
         this->hgNumerator = param.hgNumerator;
-        std::cerr << "[wfmash::mashmap] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
-        std::cerr << "[wfmash::mashmap] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-        std::cerr << "[wfmash::mashmap] Number of sequences = " << targets.size() << std::endl;
+        std::cerr << "[wfmash::mashmap] Sketch initialized with " << minmerPosLookupIndex.size() << " unique hashes, " 
+                  << minmerIndex.size() << " windows, " << targets.size() << " sequences" << std::endl;
         isInitialized = true;
-        std::cerr << "[wfmash::mashmap] Sketch initialization complete." << std::endl;
       }
 
     private:
