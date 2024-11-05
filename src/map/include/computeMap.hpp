@@ -457,9 +457,15 @@ namespace skch
             total_target_length += idManager->getSequenceLength(seqId);
         }
 
+        // Calculate total query length
+        uint64_t total_query_length = 0;
+        for (const auto& seqName : querySequenceNames) {
+            total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
+        }
+
         std::cerr << "[wfmash::mashmap] "
                   << "input seqs = " << idManager->size()
-                  << ", total input bp = " << total_seq_length
+                  << ", total query bp = " << total_query_length
                   << ", target prefix = " << target_prefix
                   << ", target seqs = " << target_seq_count
                   << ", total target bp = " << total_target_length << std::endl;
