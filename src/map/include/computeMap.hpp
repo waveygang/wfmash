@@ -225,9 +225,25 @@ namespace skch
                   total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
               }
 
+              // Count unique groups
+              std::unordered_set<int> query_groups, target_groups;
+              for (const auto& seqName : querySequenceNames) {
+                  query_groups.insert(idManager->getRefGroup(idManager->getSequenceId(seqName)));
+              }
+              for (const auto& seqName : targetSequenceNames) {
+                  target_groups.insert(idManager->getRefGroup(idManager->getSequenceId(seqName)));
+              }
+
+              // Calculate average sizes
+              double avg_query_size_per_group = query_groups.size() ? (double)total_query_length / query_groups.size() : 0;
+              double avg_target_size_per_group = target_groups.size() ? (double)total_target_length / target_groups.size() : 0;
+
               std::cerr << "[wfmash::mashmap] " 
-                        << querySequenceNames.size() << " queries (" << total_query_length << "bp) vs "
-                        << target_seq_count << " targets (" << total_target_length << "bp)" << std::endl;
+                        << querySequenceNames.size() << " queries (" << total_query_length << "bp) in "
+                        << query_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_query_size_per_group << "bp/group) vs "
+                        << target_seq_count << " targets (" << total_target_length << "bp) in "
+                        << target_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_target_size_per_group << "bp/group)" 
+                        << std::endl;
 
               if (p.stage1_topANI_filter) {
                   this->setProbs();
