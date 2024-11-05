@@ -240,7 +240,8 @@ namespace skch
 
               std::cerr << "[wfmash::mashmap] " 
                         << querySequenceNames.size() << " queries (" << total_query_length << "bp) in "
-                        << query_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_query_size_per_group << "bp/group) vs "
+                        << query_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_query_size_per_group << "bp/group)" << std::endl
+                        << "[wfmash::mashmap] "
                         << target_seq_count << " targets (" << total_target_length << "bp) in "
                         << target_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_target_size_per_group << "bp/group)" 
                         << std::endl;
