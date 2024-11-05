@@ -1064,7 +1064,7 @@ namespace skch
 
           Q.sketchSize = Q.minmerTableQuery.size();
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
+          std::cerr << "INFO, wfmash::mashmap, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
 #endif
         } 
 
