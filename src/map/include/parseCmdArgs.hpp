@@ -207,7 +207,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cerr << "[mashmap] MashMap v" << fixed::VERSION << std::endl;
+    std::cerr << "[wfmash] MashMap v" << fixed::VERSION << std::endl;
   }
 
   /**
@@ -421,7 +421,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       str << cmd.optionValue("blockLength");
       str >> parameters.block_length;
       if (parameters.block_length < 0) {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
           exit(1);
       }
     } else {
@@ -436,7 +436,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       str << cmd.optionValue("chainGap");
       str >> l;
       if (l < 0) {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
           exit(1);
       }
       parameters.chain_gap = l;
@@ -458,7 +458,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       if (n > 0) {
           parameters.numMappingsForSegment = n;
       } else {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be greater than 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be greater than 0." << std::endl;
           exit(1);
       }
     } else {
@@ -473,7 +473,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       if (n > 0) {
           parameters.numMappingsForShortSequence = n;
       } else {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
           exit(1);
       }
     } else {

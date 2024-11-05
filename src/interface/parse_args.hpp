@@ -201,7 +201,7 @@ void parse_args(int argc,
 
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
-        std::cerr << "[mashmap] Performing all-vs-all mapping including self mappings." << std::endl;
+        std::cerr << "[wfmash] Performing all-vs-all mapping including self mappings." << std::endl;
         map_parameters.querySequences.push_back(map_parameters.refSequences.back());
         align_parameters.querySequences.push_back(align_parameters.refSequences.back());
     }
@@ -636,7 +636,7 @@ void parse_args(int argc,
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
 
-    std::cerr << "[mashmap] Parameters: k=" << map_parameters.kmerSize 
+    std::cerr << "[wfmash] Parameters: k=" << map_parameters.kmerSize 
               << ", w=" << map_parameters.sketchSize
               << ", s=" << map_parameters.segLength << (map_parameters.split ? " (split)" : "")
               << ", l=" << map_parameters.block_length
@@ -645,10 +645,10 @@ void parse_args(int argc,
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
               << ", t=" << map_parameters.threads << std::endl;
-    std::cerr << "[mashmap] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
+    std::cerr << "[wfmash] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
               << ", hg(Δ=" << map_parameters.ANIDiff << ",conf=" << map_parameters.ANIDiffConf << ")"
               << ", mode=" << map_parameters.filterMode << " (1=map,2=1-to-1,3=none)" << std::endl;
-    std::cerr << "[mashmap] Output: " << map_parameters.outFileName << std::endl;
+    std::cerr << "[wfmash] Output: " << map_parameters.outFileName << std::endl;
 
     temp_file::set_keep_temp(args::get(keep_temp_files));
 
