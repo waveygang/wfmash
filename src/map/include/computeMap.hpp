@@ -485,6 +485,12 @@ namespace skch
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
+            // Calculate total length of sequences in this subset
+            uint64_t subset_length = 0;
+            for (const auto& seqName : target_subset) {
+                seqno_t seqId = idManager->getSequenceId(seqName);
+                subset_length += idManager->getSequenceLength(seqId);
+            }
 
             if (param.create_index_only) {
                 // Save the index to a file
@@ -501,7 +507,8 @@ namespace skch
                     std::cerr << "[wfmash::mashmap] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
                 } else {
-                    std::cerr << "[wfmash::mashmap] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[wfmash::mashmap] Building index for subset " << subset_count << " with " << target_subset.size() 
+                             << " sequences (" << subset_length << " bp)" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset);
                 }
                 std::atomic<bool> reader_done(false);
