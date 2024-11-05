@@ -6,28 +6,17 @@ _**a pangenome-scale aligner**_
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](https://anaconda.org/bioconda/wfmash)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6949373.svg)](https://doi.org/10.5281/zenodo.6949373)
 
-`wfmash` is an aligner for pangenomes based on sparse homology mapping and wavefront inception.
+`wfmash` is an aligner for pangenomes that combines efficient homology mapping with base-level alignment. It uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) to obtain base-level alignments.
 
-`wfmash` uses a variant of [MashMap](https://github.com/marbl/MashMap) to find large-scale sequence homologies.
-It then obtains base-level alignments using [WFA](https://github.com/smarco/WFA2-lib), via the [`wflign`](https://github.com/waveygang/wfmash/tree/master/src/common/wflign) hierarchical wavefront alignment algorithm.
+`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
 
-`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence.
-It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
+`wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph. It can scale to support the all-to-all alignment of hundreds of human genomes.
 
-`wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph.
-It can scale to support the all-to-all alignment of hundreds of human genomes.
+## Process
 
-## process
+By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA.
 
-`wfmash` uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) directly to obtain base-level alignments. By default, mappings are limited to 50kb in length, which allows each chunk to be efficiently aligned with WFA in reasonable time.
-
-Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]` (default: 1kb).
-These segments are mapped using MashMap, then merged across gaps up to `-c[N], --chain-gap=[N]` base-pairs away.
-
-The resulting mappings are aligned using WFA to obtain base-level alignments with extended CIGARs in the `cg:Z:*` tag.
-For longer sequences, use `-m, --approx-map` to get approximate mappings only.
-
-All operations run in parallel using a configurable number of threads (`-t`, default: 1).
+For longer sequences, use `-m/--approx-mapping` to get approximate mappings only, which allows working with much larger segment and mapping lengths.
 
 ## usage
 
