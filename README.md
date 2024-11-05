@@ -19,16 +19,15 @@ It can scale to support the all-to-all alignment of hundreds of human genomes.
 
 ## process
 
-Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]`.
-These segments are then mapped using MashMap's mapping algorithm.
-Unlike MashMap, `wfmash` merges aggressively across large gaps, finding the best neighboring segment up to `-c[N], --chain-gap=[N]` base-pairs away.
+`wfmash` uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) directly to obtain base-level alignments. By default, mappings are limited to 50kb in length, which allows each chunk to be efficiently aligned with WFA in reasonable time.
 
-Each mapping location is then used as a target for alignment using the wavefront inception algorithm in `wflign`.
-The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
-Approximate mappings can be obtained with `-m, --approx-map`.
+Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]` (default: 1kb).
+These segments are mapped using MashMap, then merged across gaps up to `-c[N], --chain-gap=[N]` base-pairs away.
 
-Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
-The number of threads must be set manually, using `-t`, and defaults to 1.
+The resulting mappings are aligned using WFA to obtain base-level alignments with extended CIGARs in the `cg:Z:*` tag.
+For longer sequences, use `-m, --approx-map` to get approximate mappings only.
+
+All operations run in parallel using a configurable number of threads (`-t`, default: 1).
 
 ## usage
 
@@ -85,10 +84,10 @@ Map a set of query sequences against a reference genome:
 wfmash reference.fa query.fa >aln.paf
 ```
 
-Setting a longer segment length forces the alignments to be more collinear:
+For mapping longer sequences without alignment, use -m with larger segment and max length values:
 
 ```sh
-wfmash -s 20k reference.fa query.fa >aln.paf
+wfmash -m -s 50k -P 500k reference.fa query.fa >mappings.paf
 ```
 
 Self-mapping of sequences:
