@@ -447,6 +447,8 @@ namespace skch
 
         std::ofstream outstrm(param.outFileName);
 
+        // Get sequence names from ID manager
+
         // Calculate total target length
         uint64_t total_target_length = 0;
         size_t target_seq_count = targetSequenceNames.size();
