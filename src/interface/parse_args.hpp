@@ -134,21 +134,20 @@ void parse_args(int argc,
     } catch (args::Help) {
         std::cout << parser;
         exit(0);
-        //return; // 0;
     } catch (args::ParseError e) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
-        exit(1);
-        //return; // 1;
-    }
-    if (argc==1 || !target_sequence_file) {
-        std::cout << parser;
         exit(1);
     }
 
     if (version) {
         std::cerr << WFMASH_GIT_VERSION << std::endl;
         exit(0);
+    }
+
+    if (argc==1 || !target_sequence_file) {
+        std::cout << parser;
+        exit(1);
     }
 
     map_parameters.skip_self = false;
