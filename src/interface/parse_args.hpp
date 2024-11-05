@@ -154,13 +154,8 @@ void parse_args(int argc,
     map_parameters.lower_triangular = args::get(lower_triangular);
     map_parameters.keep_low_pct_id = true;
 
-    if (skip_prefix) {
-        map_parameters.skip_prefix = true;
-        map_parameters.prefix_delim = args::get(skip_prefix);
-    } else {
-        map_parameters.skip_prefix = false;
-        map_parameters.prefix_delim = '#';
-    }
+    map_parameters.prefix_delim = skip_prefix ? args::get(skip_prefix) : '#';
+    map_parameters.skip_prefix = true;
 
 	if (target_list) {
 		map_parameters.target_list = args::get(target_list);
