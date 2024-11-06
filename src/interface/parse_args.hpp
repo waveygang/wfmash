@@ -638,7 +638,30 @@ void parse_args(int argc,
 
 	map_parameters.legacy_output = false;
 
-    //Check if files are valid
+    // Check if files are valid and have .fai indexes
+    for (const auto& file : map_parameters.refSequences) {
+        const std::string fai_path = file + ".fai";
+        std::ifstream fai_file(fai_path);
+        if (!fai_file.good()) {
+            std::cerr << "[wfmash] ERROR: Missing .fai index for reference file: " << file << std::endl;
+            std::cerr << "[wfmash] Please create the index with 'samtools faidx " << file << "'" << std::endl;
+            exit(1);
+        }
+    }
+    for (const auto& file : map_parameters.querySequences) {
+        // Don't check twice if query is same as reference
+        if (std::find(map_parameters.refSequences.begin(), map_parameters.refSequences.end(), file) == map_parameters.refSequences.end()) {
+            const std::string fai_path = file + ".fai";
+            std::ifstream fai_file(fai_path);
+            if (!fai_file.good()) {
+                std::cerr << "[wfmash] ERROR: Missing .fai index for query file: " << file << std::endl;
+                std::cerr << "[wfmash] Please create the index with 'samtools faidx " << file << "'" << std::endl;
+                exit(1);
+            }
+        }
+    }
+    
+    // Check if files exist and are readable
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
 
     std::cerr << "[wfmash] Parameters: k=" << map_parameters.kmerSize 
