@@ -97,7 +97,11 @@ namespace skch
         return a.intersectionSize < b.intersectionSize;
       };
 
-      //Type for Stage L2's predicted mapping coordinate within each L1 candidate
+      //Cache for commonly used values
+      offset_t cached_segment_length;
+      int cached_minimum_hits;
+
+      //Type for Stage L2's predicted mapping coordinate within each L1 candidate  
       struct L2_mapLocus_t
       {
         seqno_t seqId;                    //sequence id where read is mapped
@@ -203,7 +207,9 @@ namespace skch
             std::vector<std::string>{p.target_prefix},
             std::string(1, p.prefix_delim),
             p.query_list,
-            p.target_list))
+            p.target_list)),
+        cached_segment_length(p.segLength),
+        cached_minimum_hits(Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval))
           {
               // Initialize sequence names right after creating idManager
               this->querySequenceNames = idManager->getQuerySequenceNames();
@@ -1444,7 +1450,12 @@ namespace skch
           getSeedIntervalPoints(Q, intervalPoints);
 
           //3. Compute L1 windows
-          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
+          int minimumHits;
+          if (Q.len == cached_segment_length) {
+              minimumHits = cached_minimum_hits;
+          } else {
+              minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
+          }
 
           // For each "group"
           auto ip_begin = intervalPoints.begin();
