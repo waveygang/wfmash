@@ -487,12 +487,7 @@ namespace skch
 
       void mapQuery()
       {
-        std::cerr << "[wfmash::mashmap] L1 filtering parameters: "
-                  << "cached_segment_length=" << cached_segment_length << " "
-                  << "cached_minimum_hits=" << cached_minimum_hits << " "
-                  << "sketch_size=" << param.sketchSize << " "
-                  << "kmer_size=" << param.kmerSize << " "
-                  << "percent_identity=" << (param.percentageIdentity * 100) << "%" << std::endl;
+        std::cerr << "[wfmash::mashmap] L1 filtering parameters: cached_minimum_hits=" << cached_minimum_hits << std::endl;
 
         //Count of reads mapped by us
         //Some reads are dropped because of short length
