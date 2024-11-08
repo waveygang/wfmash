@@ -236,8 +236,16 @@ namespace skch
               total_windows,
               "[wfmash::mashmap] building index");
 
-          // Build index in parallel
-          buildIndexInParallel(threadOutputs, index_progress, param.threads);
+          // Count k-mer frequencies first
+          std::unordered_map<hash_t, uint64_t> kmer_freqs;
+          for (const auto& output : threadOutputs) {
+              for (const auto& mi : *output) {
+                  kmer_freqs[mi.hash]++;
+              }
+          }
+
+          // Build index in parallel, respecting frequency threshold
+          buildIndexInParallel(threadOutputs, index_progress, param.threads, kmer_freqs);
           
           // Finish second progress meter
           index_progress.finish();
@@ -296,7 +304,8 @@ namespace skch
        */
       void buildIndexInParallel(std::vector<MI_Type*>& threadOutputs,
                                progress_meter::ProgressMeter& progress,
-                               size_t num_threads) {
+                               size_t num_threads,
+                               const std::unordered_map<hash_t, uint64_t>& kmer_freqs) {
           // Split the thread outputs into chunks for parallel processing
           std::vector<std::vector<MI_Type*>> chunks(num_threads);
           for (size_t i = 0; i < threadOutputs.size(); ++i) {
@@ -314,6 +323,12 @@ namespace skch
                   // Process all outputs in this chunk
                   for (auto* output : chunks[i]) {
                       for (MinmerInfo& mi : *output) {
+                          // Skip high-frequency k-mers
+                          auto freq_it = kmer_freqs.find(mi.hash);
+                          if (freq_it != kmer_freqs.end() && freq_it->second > param.max_kmer_freq) {
+                              continue;
+                          }
+                          
                           if (local_index[mi.hash].size() == 0 
                                   || local_index[mi.hash].back().hash != mi.hash 
                                   || local_index[mi.hash].back().pos != mi.wpos) {
