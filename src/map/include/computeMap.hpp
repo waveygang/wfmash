@@ -492,7 +492,7 @@ namespace skch
                   << "cached_minimum_hits=" << cached_minimum_hits << " "
                   << "sketch_size=" << param.sketchSize << " "
                   << "kmer_size=" << param.kmerSize << " "
-                  << "percent_identity=" << param.percentageIdentity << std::endl;
+                  << "percent_identity=" << (param.percentageIdentity * 100) << "%" << std::endl;
 
         //Count of reads mapped by us
         //Some reads are dropped because of short length
