@@ -97,6 +97,7 @@ void parse_args(int argc,
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
+    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {"min-hits"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF/SAM file for alignment", {'i', "input-mapping"});
@@ -548,6 +549,8 @@ void parse_args(int argc,
 
     if (min_hits) {
         map_parameters.minimum_hits = args::get(min_hits);
+    } else {
+        map_parameters.minimum_hits = -1; // auto
     }
 
     //if (window_minimizers) {
