@@ -150,7 +150,7 @@ void parse_args(int argc,
     }
 
     map_parameters.skip_self = false;
-    map_parameters.lower_triangular = args::get(lower_triangular);
+    map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
 
     if (skip_prefix) {
