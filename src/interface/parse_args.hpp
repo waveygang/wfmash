@@ -330,7 +330,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
             exit(1);
         }
-        map_parameters.chain_gap = l;
+        map_parameters.chain_gap = l;p
         align_parameters.chain_gap = l;
     } else {
         map_parameters.chain_gap = 2000;
@@ -521,6 +521,8 @@ void parse_args(int argc,
 
     map_parameters.filterLengthMismatches = true;
 
+    // OMG This must be rewritten to remove these args parsing flags, which are broken, and to correctly use the hg_filer comma-separated list above, and if it's not set, to use the defaults!!!!!!!!!
+    
     args::Flag no_hg_filter(mapping_opts, "", "disable hypergeometric filter", {"no-hg-filter"});
     map_parameters.stage1_topANI_filter = !bool(no_hg_filter);
     map_parameters.stage2_full_scan = true;
