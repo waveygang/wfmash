@@ -6,29 +6,17 @@ _**a pangenome-scale aligner**_
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](https://anaconda.org/bioconda/wfmash)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6949373.svg)](https://doi.org/10.5281/zenodo.6949373)
 
-`wfmash` is an aligner for pangenomes based on sparse homology mapping and wavefront inception.
+`wfmash` is an aligner for pangenomes that combines efficient homology mapping with base-level alignment. It uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) to obtain base-level alignments.
 
-`wfmash` uses a variant of [MashMap](https://github.com/marbl/MashMap) to find large-scale sequence homologies.
-It then obtains base-level alignments using [WFA](https://github.com/smarco/WFA2-lib), via the [`wflign`](https://github.com/waveygang/wfmash/tree/master/src/common/wflign) hierarchical wavefront alignment algorithm.
+`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
 
-`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence.
-It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
+`wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph. It can scale to support the all-to-all alignment of hundreds of human genomes.
 
-`wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph.
-It can scale to support the all-to-all alignment of hundreds of human genomes.
+## Process
 
-## process
+By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA. This length limit is important because WFA's computational complexity is quadratic in the number of differences between sequences, not their percent divergence - meaning longer sequences with the same divergence percentage require dramatically more compute time.
 
-Each query sequence is broken into non-overlapping pieces defined by `-s[N], --segment-length=[N]`.
-These segments are then mapped using MashMap's mapping algorithm.
-Unlike MashMap, `wfmash` merges aggressively across large gaps, finding the best neighboring segment up to `-c[N], --chain-gap=[N]` base-pairs away.
-
-Each mapping location is then used as a target for alignment using the wavefront inception algorithm in `wflign`.
-The resulting alignments always contain extended CIGARs in the `cg:Z:*` tag.
-Approximate mappings can be obtained with `-m, --approx-map`.
-
-Sketching, mapping, and alignment are all run in parallel using a configurable number of threads.
-The number of threads must be set manually, using `-t`, and defaults to 1.
+For longer sequences, use `-m/--approx-mapping` to get approximate mappings only, which allows working with much larger segment and mapping lengths.
 
 ## usage
 
@@ -85,10 +73,10 @@ Map a set of query sequences against a reference genome:
 wfmash reference.fa query.fa >aln.paf
 ```
 
-Setting a longer segment length forces the alignments to be more collinear:
+For mapping longer sequences without alignment, use -m with larger segment and max length values:
 
 ```sh
-wfmash -s 20k reference.fa query.fa >aln.paf
+wfmash -m -s 50k -P 500k reference.fa query.fa >mappings.paf
 ```
 
 Self-mapping of sequences:

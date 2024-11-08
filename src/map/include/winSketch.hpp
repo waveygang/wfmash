@@ -142,16 +142,9 @@ namespace skch
 
     public:
       void initialize(const std::vector<std::string>& targets = {}) {
-        std::cerr << "[mashmap::skch] Initializing Sketch..." << std::endl;
-        
         this->build(true, targets);
-
         this->hgNumerator = param.hgNumerator;
-        std::cerr << "[mashmap::skch] Unique minmer hashes = " << minmerPosLookupIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch] Total minmer windows after pruning = " << minmerIndex.size() << std::endl;
-        std::cerr << "[mashmap::skch] Number of sequences = " << targets.size() << std::endl;
         isInitialized = true;
-        std::cerr << "[mashmap::skch] Sketch initialization complete." << std::endl;
       }
 
     private:
@@ -177,71 +170,88 @@ namespace skch
               total_seq_length += idManager.getSequenceLength(seqId);
           }
 
-          // Log file processing before initializing progress meter
-          for (const auto& fileName : param.refSequences) {
-            std::cerr << "[mashmap::skch] Processing file: " << fileName << std::endl;
-          }
-
           // Initialize progress meter with known total
           progress_meter::ProgressMeter progress(
               total_seq_length,
-              "[mashmap::skch] computing sketch");
+              "[wfmash::mashmap] computing sketch");
 
-          //Create the thread pool 
-          ThreadPool<InputSeqContainer, MI_Type> threadPool([this, &progress](InputSeqContainer* e) { return buildHelper(e, &progress); }, param.threads);
+          // First progress meter for sketch computation
+          progress_meter::ProgressMeter sketch_progress(
+              total_seq_length,
+              "[wfmash::mashmap] computing sketch");
+
+          // Create the thread pool 
+          ThreadPool<InputSeqContainer, MI_Type> threadPool(
+              [this, &sketch_progress](InputSeqContainer* e) { 
+                  return buildHelper(e, &sketch_progress); 
+              }, 
+              param.threads);
 
           size_t totalSeqProcessed = 0;
           size_t totalSeqSkipped = 0;
           size_t shortestSeqLength = std::numeric_limits<size_t>::max();
+          
+          // Vector to store all thread outputs
+          std::vector<MI_Type*> threadOutputs;
 
           for (const auto& fileName : param.refSequences) {
-            seqiter::for_each_seq_in_file(
-              fileName,
-              target_names,
-              [&](const std::string& seq_name, const std::string& seq) {
-                  if (seq.length() >= param.segLength) {
-                      seqno_t seqId = idManager.getSequenceId(seq_name);
-                      threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
-                      totalSeqProcessed++;
-                      shortestSeqLength = std::min(shortestSeqLength, seq.length());
+              seqiter::for_each_seq_in_file(
+                  fileName,
+                  target_names,
+                  [&](const std::string& seq_name, const std::string& seq) {
+                      if (seq.length() >= param.segLength) {
+                          seqno_t seqId = idManager.getSequenceId(seq_name);
+                          threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
+                          totalSeqProcessed++;
+                          shortestSeqLength = std::min(shortestSeqLength, seq.length());
 
-                      //Collect output if available
-                      while (threadPool.outputAvailable()) {
-                          auto output = threadPool.popOutputWhenAvailable();
-                          this->buildHandleThreadOutput(output);
+                          while (threadPool.outputAvailable()) {
+                              auto output = threadPool.popOutputWhenAvailable();
+                              threadOutputs.push_back(output);
+                          }
+                      } else {
+                          totalSeqSkipped++;
+                          std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name 
+                                   << " (length: " << seq.length() << ")" << std::endl;
                       }
-                  } else {
-                      totalSeqSkipped++;
-                      std::cerr << "WARNING, skch::Sketch::build, skipping short sequence: " << seq_name 
-                               << " (length: " << seq.length() << ")" << std::endl;
-                  }
-              });
+                  });
           }
 
-          //Collect remaining output objects
           while (threadPool.running()) {
-            auto output = threadPool.popOutputWhenAvailable();
-            this->buildHandleThreadOutput(output);
+              auto output = threadPool.popOutputWhenAvailable();
+              threadOutputs.push_back(output);
           }
 
-          progress.finish();
+          // Make sure to finish first progress meter before starting the next
+          sketch_progress.finish();
 
-          std::cerr << "[mashmap::skch] Total sequences processed: " << totalSeqProcessed << std::endl;
-          std::cerr << "[mashmap::skch] Total sequences skipped: " << totalSeqSkipped << std::endl;
-          std::cerr << "[mashmap::skch] Total sequence length: " << total_seq_length << std::endl;
-          std::cerr << "[mashmap::skch] Unique minmer hashes before pruning = " 
-                    << minmerPosLookupIndex.size() << std::endl;
-          std::cerr << "[mashmap::skch] Total minmer windows before pruning = " 
-                    << minmerIndex.size() << std::endl;
+          // Calculate total windows for index building progress
+          uint64_t total_windows = 0;
+          for (const auto& output : threadOutputs) {
+              total_windows += output->size();
+          }
+
+          // Second progress meter for index building
+          progress_meter::ProgressMeter index_progress(
+              total_windows,
+              "[wfmash::mashmap] building index");
+
+          // Build index in parallel
+          buildIndexInParallel(threadOutputs, index_progress, param.threads);
+          
+          // Finish second progress meter
+          index_progress.finish();
+
+          std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
+                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl;
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
-        std::cerr << "[mashmap::skch] time spent computing the reference index: " 
-                  << timeRefSketch.count() << " sec" << std::endl;
+        std::cerr << "[wfmash::mashmap] reference index computed in " << timeRefSketch.count() << "s" << std::endl;
 
         if (this->minmerIndex.size() == 0)
         {
-          std::cerr << "[mashmap::skch] ERROR, reference sketch is empty. "
+          std::cerr << "[wfmash::mashmap] ERROR, reference sketch is empty. "
                     << "Reference sequences shorter than the kmer size are not indexed" << std::endl;
           exit(1);
         }
@@ -278,27 +288,99 @@ namespace skch
        * @brief                 routine to handle thread's local minmer index
        * @param[in] output      thread local minmer output
        */
+      /**
+       * @brief     Build the index from thread outputs in parallel
+       * @param[in] threadOutputs    Vector of thread-local minmer indices
+       * @param[in] progress         Progress meter for tracking
+       * @param[in] num_threads      Number of threads to use
+       */
+      void buildIndexInParallel(std::vector<MI_Type*>& threadOutputs,
+                               progress_meter::ProgressMeter& progress,
+                               size_t num_threads) {
+          // Split the thread outputs into chunks for parallel processing
+          std::vector<std::vector<MI_Type*>> chunks(num_threads);
+          for (size_t i = 0; i < threadOutputs.size(); ++i) {
+              chunks[i % num_threads].push_back(threadOutputs[i]);
+          }
+
+          // Create threads to process chunks
+          std::vector<std::thread> threads;
+          std::mutex index_mutex; // For thread-safe index updates
+
+          for (size_t i = 0; i < num_threads; ++i) {
+              threads.emplace_back([this, &chunks, i, &progress, &index_mutex]() {
+                  MI_Map_t local_index; // Thread-local index
+                  
+                  // Process all outputs in this chunk
+                  for (auto* output : chunks[i]) {
+                      for (MinmerInfo& mi : *output) {
+                          if (local_index[mi.hash].size() == 0 
+                                  || local_index[mi.hash].back().hash != mi.hash 
+                                  || local_index[mi.hash].back().pos != mi.wpos) {
+                              local_index[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                              local_index[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+                          } else {
+                              local_index[mi.hash].back().pos = mi.wpos_end;
+                          }
+                          progress.increment(1);
+                      }
+                  }
+
+                  // Merge thread-local index into global index
+                  {
+                      std::lock_guard<std::mutex> lock(index_mutex);
+                      for (auto& [hash, points] : local_index) {
+                          auto& global_points = minmerPosLookupIndex[hash];
+                          global_points.insert(
+                              global_points.end(),
+                              std::make_move_iterator(points.begin()),
+                              std::make_move_iterator(points.end())
+                          );
+                      }
+                  }
+
+                  // Insert minmers into global minmerIndex
+                  {
+                      std::lock_guard<std::mutex> lock(index_mutex);
+                      for (auto* output : chunks[i]) {
+                          minmerIndex.insert(
+                              minmerIndex.end(),
+                              std::make_move_iterator(output->begin()),
+                              std::make_move_iterator(output->end())
+                          );
+                          delete output;
+                      }
+                  }
+              });
+          }
+
+          // Wait for all threads to complete
+          for (auto& thread : threads) {
+              thread.join();
+          }
+      }
+
       void buildHandleThreadOutput(MI_Type* contigMinmerIndex)
       {
-        for (MinmerInfo& mi : *contigMinmerIndex)
-        {
-          if (minmerPosLookupIndex[mi.hash].size() == 0 
-                  || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                  || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
-            {
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
-            } else {
-              minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+          // This function is kept for compatibility but should not be used
+          // when parallel index building is enabled
+          for (MinmerInfo& mi : *contigMinmerIndex) {
+              if (minmerPosLookupIndex[mi.hash].size() == 0 
+                      || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                      || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
+                  minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                  minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+              } else {
+                  minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+              }
           }
-        }
 
-        this->minmerIndex.insert(
-            this->minmerIndex.end(), 
-            std::make_move_iterator(contigMinmerIndex->begin()), 
-            std::make_move_iterator(contigMinmerIndex->end()));
+          this->minmerIndex.insert(
+              this->minmerIndex.end(), 
+              std::make_move_iterator(contigMinmerIndex->begin()), 
+              std::make_move_iterator(contigMinmerIndex->end()));
 
-        delete contigMinmerIndex;
+          delete contigMinmerIndex;
       }
 
 
@@ -468,10 +550,10 @@ namespace skch
             || param.sketchSize != index_sketchSize
             || param.kmerSize != index_kmerSize)
         {
-          std::cerr << "[mashmap::skch] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
-          std::cerr << "[mashmap::skch] Index --> segLength=" << index_segLength
+          std::cerr << "[wfmash::mashmap] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
+          std::cerr << "[wfmash::mashmap] Index --> segLength=" << index_segLength
                     << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
-          std::cerr << "[mashmap::skch] Current --> segLength=" << param.segLength
+          std::cerr << "[wfmash::mashmap] Current --> segLength=" << param.segLength
                     << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
           exit(1);
         }
@@ -483,7 +565,7 @@ namespace skch
        */
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
-        std::cerr << "[mashmap::skch] Reading index" << std::endl;
+        std::cerr << "[wfmash::mashmap] Reading index" << std::endl;
         if (!readSubIndexHeader(inStream, targetSequenceNames)) {
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);

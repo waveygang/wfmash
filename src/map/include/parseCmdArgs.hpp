@@ -207,46 +207,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
    */
   void printCmdOptions(skch::Parameters &parameters)
   {
-    std::cerr << "[mashmap] MashMap v" << fixed::VERSION << std::endl;
-    std::cerr << "[mashmap] Reference = " << parameters.refSequences << std::endl;
-    std::cerr << "[mashmap] Query = " << parameters.querySequences << std::endl;
-    std::cerr << "[mashmap] Kmer size = " << parameters.kmerSize << std::endl;
-    std::cerr << "[mashmap] Sketch size = " << parameters.sketchSize << std::endl;
-    std::cerr << "[mashmap] Segment length = " << parameters.segLength << (parameters.split ? " (read split allowed)": " (read split disabled)") << std::endl;
-    if (parameters.block_length <= parameters.segLength)
-    {
-      std::cerr << "[mashmap] No block length filtering" << std::endl;
-    } else
-    {
-      std::cerr << "[mashmap] Block length min = " << parameters.block_length << std::endl;
-
-    }
-    std::cerr << "[mashmap] Chaining gap max = " << parameters.chain_gap << std::endl;
-    std::cerr << "[mashmap] Max mapping length = " << parameters.max_mapping_length << std::endl;
-    std::cerr << "[mashmap] Mappings per segment = " << parameters.numMappingsForSegment << std::endl;
-    std::cerr << "[mashmap] Percentage identity threshold = " << 100 * parameters.percentageIdentity << "\%" << std::endl;
-
-    if (parameters.kmerComplexityThreshold > 0)
-    {
-      std::cerr << "[mashmap] Kmer complexity threshold = " << 100 * parameters.kmerComplexityThreshold << "\%" << std::endl;
-    }
-
-    std::cerr << "[mashmap] " << (parameters.skip_self ? "Skip" : "Do not skip") << " self mappings" << std::endl;
-
-    if (parameters.skip_prefix) 
-    {
-      std::cerr << "[mashmap] " << "Skipping sequences containing the same prefix based on the delimiter \""
-        << parameters.prefix_delim << "\"" << std::endl;
-    }
-
-    if (parameters.stage1_topANI_filter) 
-      std::cerr << "[mashmap] " << "Hypergeometric filter w/ delta = " << parameters.ANIDiff << " and confidence " << parameters.ANIDiffConf << std::endl;
-    else
-      std::cerr << "[mashmap] " <<  "No hypergeometric filter" << std::endl;
-
-    std::cerr << "[mashmap] Mapping output file = " << parameters.outFileName << std::endl;
-    std::cerr << "[mashmap] Filter mode = " << parameters.filterMode << " (1 = map, 2 = one-to-one, 3 = none)" << std::endl;
-    std::cerr << "[mashmap] Execution threads  = " << parameters.threads << std::endl;
+    std::cerr << "[wfmash] MashMap v" << fixed::VERSION << std::endl;
   }
 
   /**
@@ -460,7 +421,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       str << cmd.optionValue("blockLength");
       str >> parameters.block_length;
       if (parameters.block_length < 0) {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, min block length has to be a float value greater than or equal to 0." << std::endl;
           exit(1);
       }
     } else {
@@ -475,7 +436,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       str << cmd.optionValue("chainGap");
       str >> l;
       if (l < 0) {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
           exit(1);
       }
       parameters.chain_gap = l;
@@ -497,7 +458,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       if (n > 0) {
           parameters.numMappingsForSegment = n;
       } else {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be greater than 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be greater than 0." << std::endl;
           exit(1);
       }
     } else {
@@ -512,7 +473,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       if (n > 0) {
           parameters.numMappingsForShortSequence = n;
       } else {
-          std::cerr << "[mashmap] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
+          std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
           exit(1);
       }
     } else {

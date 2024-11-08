@@ -205,6 +205,47 @@ namespace skch
             p.query_list,
             p.target_list))
           {
+              // Initialize sequence names right after creating idManager
+              this->querySequenceNames = idManager->getQuerySequenceNames();
+              this->targetSequenceNames = idManager->getTargetSequenceNames();
+
+              // Calculate total target length
+              uint64_t total_target_length = 0;
+              size_t target_seq_count = targetSequenceNames.size();
+              std::string target_prefix = param.target_prefix.empty() ? "none" : param.target_prefix;
+
+              for (const auto& seqName : targetSequenceNames) {
+                  seqno_t seqId = idManager->getSequenceId(seqName);
+                  total_target_length += idManager->getSequenceLength(seqId);
+              }
+
+              // Calculate total query length
+              uint64_t total_query_length = 0;
+              for (const auto& seqName : querySequenceNames) {
+                  total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
+              }
+
+              // Count unique groups
+              std::unordered_set<int> query_groups, target_groups;
+              for (const auto& seqName : querySequenceNames) {
+                  query_groups.insert(idManager->getRefGroup(idManager->getSequenceId(seqName)));
+              }
+              for (const auto& seqName : targetSequenceNames) {
+                  target_groups.insert(idManager->getRefGroup(idManager->getSequenceId(seqName)));
+              }
+
+              // Calculate average sizes
+              double avg_query_size_per_group = query_groups.size() ? (double)total_query_length / query_groups.size() : 0;
+              double avg_target_size_per_group = target_groups.size() ? (double)total_target_length / target_groups.size() : 0;
+
+              std::cerr << "[wfmash::mashmap] " 
+                        << querySequenceNames.size() << " queries (" << total_query_length << "bp) in "
+                        << query_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_query_size_per_group << "bp/group)" << std::endl
+                        << "[wfmash::mashmap] "
+                        << target_seq_count << " targets (" << total_target_length << "bp) in "
+                        << target_groups.size() << " groups (≈" << std::fixed << std::setprecision(0) << avg_target_size_per_group << "bp/group)" 
+                        << std::endl;
+
               if (p.stage1_topANI_filter) {
                   this->setProbs();
               }
@@ -447,6 +488,25 @@ namespace skch
 
         std::ofstream outstrm(param.outFileName);
 
+        // Get sequence names from ID manager
+
+        // Calculate total target length
+        uint64_t total_target_length = 0;
+        size_t target_seq_count = targetSequenceNames.size();
+        std::string target_prefix = param.target_prefix.empty() ? "none" : param.target_prefix;
+
+        for (const auto& seqName : targetSequenceNames) {
+            seqno_t seqId = idManager->getSequenceId(seqName);
+            total_target_length += idManager->getSequenceLength(seqId);
+        }
+
+        // Calculate total query length
+        uint64_t total_query_length = 0;
+        for (const auto& seqName : querySequenceNames) {
+            total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
+        }
+
+
         // Initialize atomic queues and flags
         input_atomic_queue_t input_queue;
         merged_mappings_queue_t merged_queue;
@@ -480,28 +540,35 @@ namespace skch
 
         // For each subset of target sequences
         uint64_t subset_count = 0;
-        std::cerr << "[mashmap::mapQuery] Number of target subsets: " << target_subsets.size() << std::endl;
+        std::cerr << "[wfmash::mashmap] Number of target subsets: " << target_subsets.size() << std::endl;
         for (const auto& target_subset : target_subsets) {
             if (target_subset.empty()) {
                 continue;  // Skip empty subsets
             }
+            // Calculate total length of sequences in this subset
+            uint64_t subset_length = 0;
+            for (const auto& seqName : target_subset) {
+                seqno_t seqId = idManager->getSequenceId(seqName);
+                subset_length += idManager->getSequenceLength(seqId);
+            }            
 
             if (param.create_index_only) {
                 // Save the index to a file
-                std::cerr << "[mashmap::mapQuery] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                std::cerr << "[wfmash::mashmap] Building and saving index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                 refSketch = new skch::Sketch(param, *idManager, target_subset);
                 std::string indexFilename = param.indexFilename.string();
                 bool append = (subset_count != 0); // Append if not the first subset
                 refSketch->writeIndex(target_subset, indexFilename, append);
-                std::cerr << "[mashmap::mapQuery] Index created for subset " << subset_count 
+                std::cerr << "[wfmash::mashmap] Index created for subset " << subset_count 
                           << " and saved to " << indexFilename << std::endl;
             } else {
                 if (!param.indexFilename.empty()) {
                     // Load index from file
-                    std::cerr << "[mashmap::mapQuery] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[wfmash::mashmap] Loading index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
                 } else {
-                    std::cerr << "[mashmap::mapQuery] Building index for subset " << subset_count << " with " << target_subset.size() << " sequences" << std::endl;
+                    std::cerr << "[wfmash::mashmap] Building index for subset " << subset_count << " with " << target_subset.size() 
+                             << " sequences (" << subset_length << " bp)" << std::endl;
                     refSketch = new skch::Sketch(param, *idManager, target_subset);
                 }
                 std::atomic<bool> reader_done(false);
@@ -522,7 +589,7 @@ namespace skch
         }
 
         if (param.create_index_only) {
-            std::cerr << "[mashmap::mapQuery] All indices created successfully. Exiting." << std::endl;
+            std::cerr << "[wfmash::mashmap] All indices created successfully. Exiting." << std::endl;
             exit(0);
         }
 
@@ -541,7 +608,7 @@ namespace skch
         // Initialize progress logger
         progress_meter::ProgressMeter progress(
             totalMappings * 2,
-            "[mashmap::mapQuery] merging and filtering");
+            "[wfmash::mashmap] merging and filtering");
 
         // Start worker threads
         std::vector<std::thread> workers;
@@ -578,9 +645,6 @@ namespace skch
 
         progress.finish();
 
-        std::cerr << "[mashmap::mapQuery] "
-                  << "input seqs = " << idManager->size()
-                  << ", total input bp = " << total_seq_length << std::endl;
       }
 
       void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_seq_length,
@@ -591,7 +655,7 @@ namespace skch
       {
           progress_meter::ProgressMeter progress(
               total_seq_length,
-              "[mashmap::mapQuery] mapping ("
+              "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
           // Launch reader thread
@@ -1064,7 +1128,7 @@ namespace skch
 
           Q.sketchSize = Q.minmerTableQuery.size();
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
+          std::cerr << "INFO, wfmash::mashmap, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
 #endif
         } 
 
@@ -1084,7 +1148,7 @@ namespace skch
         {
 
 #ifdef DEBUG
-          std::cerr<< "INFO, skch::Map::getSeedHits, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
+          std::cerr<< "INFO, wfmash::mashmap, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << " " << Q.len << "\n";
 #endif
 
           //For invalid query (example : just NNNs), we may be left with 0 sketch size
@@ -1140,7 +1204,7 @@ namespace skch
           }
 
 #ifdef DEBUG
-          std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqId << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
+          std::cerr << "INFO, wfmash::mashmap, read id " << Q.seqId << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
 #endif
         }
 
@@ -1455,7 +1519,7 @@ namespace skch
           // Removed refIdGroup swap as it's no longer needed
 
           if (totalSeqs == 0) {
-              std::cerr << "[mashmap::skch::Map::buildRefGroups] ERROR: No sequences indexed!" << std::endl;
+              std::cerr << "[wfmash::mashmap] ERROR: No sequences indexed!" << std::endl;
               exit(1);
           }
       }

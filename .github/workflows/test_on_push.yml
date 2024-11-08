@@ -46,6 +46,20 @@ jobs:
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head
       - name: Test mapping+alignment with short reads (255bps) (PAF output)
         run: ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf
+      - name: Test input mapping functionality
+        run: |
+          # First generate mappings
+          ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/scerevisiae8.fa.gz -p 95 -T S288C -Q SK1 -m >mappings.paf
+          # Then align using the mappings
+          ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 build/bin/wfmash data/scerevisiae8.fa.gz -i mappings.paf > aligned.paf
+          # Count lines in alignment file
+          ALIGN_LINES=$(wc -l < aligned.paf)
+          if [ $ALIGN_LINES -eq 0 ]; then
+            echo "ERROR: Alignment file is empty"
+            exit 1
+          else
+            echo "Found $ALIGN_LINES alignments"
+          fi
       - name: Install Rust and Cargo
         uses: actions-rs/toolchain@v1
         with:

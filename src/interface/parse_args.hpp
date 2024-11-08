@@ -57,93 +57,66 @@ void parse_args(int argc,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
 
-    args::ArgumentParser parser("wfmash: a pangenome-scale aligner, " + std::string(WFMASH_GIT_VERSION));
+    args::ArgumentParser parser("");
     parser.helpParams.width = 100;
     parser.helpParams.showTerminator = false;
+    parser.helpParams.progindent = 0;
+    parser.helpParams.descriptionindent = 0;
+    parser.helpParams.flagindent = 2;
+    parser.helpParams.helpindent = 35;
+    parser.helpParams.eachgroupindent = 2;
 
-    args::Group mandatory_opts(parser, "[ MANDATORY OPTIONS ]");
-    args::Positional<std::string> target_sequence_file(mandatory_opts, "target", "alignment target/reference sequence file");
+    args::Group options_group(parser, "");
+    args::Positional<std::string> target_sequence_file(options_group, "target.fa", "target sequences (required, default: self-map)");
+    args::Positional<std::string> query_sequence_file(options_group, "query.fa", "query sequences (optional)");
+    args::Group indexing_opts(options_group, "Indexing:");
+    args::ValueFlag<std::string> write_index(indexing_opts, "FILE", "build and save index to FILE", {'W', "write-index"});
+    args::ValueFlag<std::string> read_index(indexing_opts, "FILE", "use pre-built index from FILE", {'I', "read-index"});
+    args::ValueFlag<std::string> index_by(indexing_opts, "SIZE", "target batch size for indexing [4G]", {'b', "batch"});
+    args::ValueFlag<int64_t> sketch_size(indexing_opts, "INT", "sketch size for MinHash [auto]", {'w', "sketch-size"});
+    args::ValueFlag<int> kmer_size(indexing_opts, "INT", "k-mer size [15]", {'k', "kmer-size"});
 
-    args::Group io_opts(parser, "[ Files IO Options ]");
-    args::Positional<std::string> query_sequence_file(io_opts, "query", "query sequence file (optional)");
-
-    args::Group mapping_opts(parser, "[ Mapping Options ]");
-    args::ValueFlag<float> map_pct_identity(mapping_opts, "%", "percent identity in the mashmap step [default: 70]", {'p', "map-pct-id"});
-    args::ValueFlag<std::string> segment_length(mapping_opts, "N", "segment seed length for mapping [default: 1k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length(mapping_opts, "N", "keep merged mappings supported by homologies of this total length [default: 3*segment-length]", {'l', "block-length"});
-    args::ValueFlag<uint32_t> num_mappings_for_segments(mapping_opts, "N", "number of mappings to retain for each query/reference pair [default: 1]", {'n', "num-mappings-for-segment"});
-    args::ValueFlag<uint32_t> num_mappings_for_short_seq(mapping_opts, "N", "number of mappings to retain for each query/reference pair where the query sequence is shorter than segment length [default: 1]", {'S', "num-mappings-for-short-seq"});
-    args::ValueFlag<int> kmer_size(mapping_opts, "N", "kmer size [default: 15]", {'k', "kmer"});
-    args::Flag lower_triangular(mapping_opts, "", "only map shorter sequences against longer", {'L', "lower-triangular"});
-    args::Flag skip_self(mapping_opts, "", "skip self mappings when the query and target name is the same (for all-vs-all mode)", {'X', "skip-self"});
-    args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'4', "one-to-one"});
-    args::ValueFlag<char> skip_prefix(mapping_opts, "C", "skip mappings when the query and target have the same prefix before the last occurrence of the given character C", {'Y', "skip-prefix"});
+    args::Group mapping_opts(options_group, "Mapping:");
+    args::Flag approx_mapping(mapping_opts, "", "output approximate mappings (no alignment)", {'m', "approx-mapping"});
+    args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum mapping identity [70]", {'p', "map-pct-id"});
+    args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per query/target pair [1]", {'n', "mappings"});
+    args::ValueFlag<std::string> segment_length(mapping_opts, "INT", "segment length for mapping [1k]", {'s', "segment-length"});
+    args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [3*segment-length]", {'l', "block-length"});
+    args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'o', "one-to-one"});
+    args::Flag lower_triangular(mapping_opts, "", "Only compute the lower triangular for all-vs-all mapping", {'L', "lower-triangular"});
+    args::ValueFlag<char> skip_prefix(mapping_opts, "C", "map between sequence groups with different prefix [#]", {'Y', "group-prefix"});
     args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
     args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
-    args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "use only queries whose names start with these prefixes (comma delimited)", {'Q', "query-prefix"});
+    args::ValueFlag<std::string> query_prefix(mapping_opts, "pfxs", "filter queries by comma-separated prefixes", {'Q', "query-prefix"});
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
-    args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
-    args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
-    args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 2k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "N", "maximum length of a single mapping before breaking (inf to unset) [default: 50k]", {'P', "max-mapping-length"});
-    args::Flag drop_low_map_pct_identity(mapping_opts, "K", "drop mappings with estimated identity below --map-pct-id=%", {'K', "drop-low-map-id"});
-    args::ValueFlag<double> overlap_threshold(mapping_opts, "F", "drop mappings overlapping more than fraction F with a higher scoring mapping [default: 0.5]", {'O', "overlap-threshold"});
-    args::Flag no_filter(mapping_opts, "MODE", "disable mapping filtering", {'f', "no-filter"});
-    args::ValueFlag<double> map_sparsification(mapping_opts, "FACTOR", "keep this fraction of mappings", {'x', "sparsify-mappings"});
-    //ToFix: args::Flag keep_ties(mapping_opts, "", "keep all mappings with equal score even if it results in more than n mappings", {'D', "keep-ties"});
-    args::ValueFlag<int64_t> sketch_size(mapping_opts, "N", "sketch size for sketching.", {'w', "sketch-size"});
-    args::ValueFlag<double> hg_numerator(mapping_opts, "N", 
-        "Set the numerator for the hypergeometric filter's Jaccard similarity calculation. "
-        "Higher values increase speed at the cost of sensitivity. [default: 1.0]", 
-        {"hg-numerator"});
-    args::ValueFlag<double> kmer_complexity(mapping_opts, "F", "Drop segments w/ predicted kmer complexity below this cutoff. Kmer complexity defined as #kmers / (s - k + 1)", {'J', "kmer-complexity"});
-    args::Flag no_hg_filter(mapping_opts, "", "Don't use the hypergeometric filtering and instead use the MashMap2 first pass filtering.", {"no-hg-filter"});
-    args::ValueFlag<double> hg_filter_ani_diff(mapping_opts, "%", "Filter out mappings unlikely to be this ANI less than the best mapping [default: 0.0]", {"hg-filter-ani-diff"});
-    args::ValueFlag<double> hg_filter_conf(mapping_opts, "%", "Confidence value for the hypergeometric filtering [default: 99.9%]", {"hg-filter-conf"});
+    args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
+    args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k]", {'P', "max-length"});
+    args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "maximum mapping overlap fraction [0.5]", {'O', "overlap"});
+    args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
+    args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
+    args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
+    args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1,0,99.9]", {"hg-filter"});
     //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
     //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
     //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
-    args::Flag no_merge(mapping_opts, "no-merge", "don't merge consecutive segment-level mappings", {'M', "no-merge"});
-    args::ValueFlag<std::string> mashmap_index(mapping_opts, "FILE", "Use MashMap index in FILE, create if it doesn't exist", {"mm-index"});
-    args::Flag create_mashmap_index_only(mapping_opts, "create-index-only", "Create only the index file without performing mapping", {"create-index-only"});
-    args::Flag overwrite_mashmap_index(mapping_opts, "overwrite-mm-index", "Overwrite MashMap index if it exists", {"overwrite-mm-index"});
-    args::ValueFlag<std::string> index_by(mapping_opts, "SIZE", "Set the target total size of sequences for each index subset", {"index-by"});
 
-    args::Group alignment_opts(parser, "[ Alignment Options ]");
-    args::ValueFlag<std::string> align_input_paf(alignment_opts, "FILE", "derive precise alignments for this input PAF", {'i', "input-paf"});
-    args::Flag force_wflign(alignment_opts, "force-wflign", "force alignment with WFLign instead of the default biWFA", {'I', "force-wflign"});
-    args::ValueFlag<uint16_t> wflambda_segment_length(alignment_opts, "N", "wflambda segment length: size (in bp) of segment mapped in hierarchical WFA problem [default: 256]", {'W', "wflamda-segment"});
-    args::ValueFlag<std::string> wfa_score_params(alignment_opts, "mismatch,gap1,ext1",
-												  "score parameters for the wfa alignment (affine); match score is fixed at 0 [default: 2,3,1]",
-												  {"wfa-params"});
-    args::ValueFlag<std::string> wfa_patching_score_params(alignment_opts, "mismatch,gap1,ext1,gap2,ext2",
-														   "score parameters for the wfa patching alignment (convex); match score is fixed at 0 [default: 3,4,2,24,1]",
-														   {"wfa-patching-params"});
-    //wflign parameters
-    args::ValueFlag<std::string> wflign_score_params(alignment_opts, "mismatch,gap1,ext1",
-													 "score parameters for the wflign alignment (affine); match score is fixed at 0 [default: 2,3,1]",
-													 {"wflign-params"});
-    args::ValueFlag<float> wflign_max_mash_dist(alignment_opts, "N", "maximum mash distance to perform the alignment in a wflambda segment [default: adaptive with respect to the estimated identity]", {'b', "max-mash-dist"});
-    args::ValueFlag<int> wflign_min_wavefront_length(alignment_opts, "N", "min wavefront length for heuristic WFlign [default: 1024]", {'j', "wflign-min-wf-len"});
-    args::ValueFlag<int> wflign_max_distance_threshold(alignment_opts, "N", "max distance threshold for heuristic WFlign [default: 2048/(estimated_identity^2)]", {'q', "wflign-max-distance"});
+    args::Group alignment_opts(options_group, "Alignment:");
+    args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF/SAM file for alignment", {'i', "input-mapping"});
+    args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
+        "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
-    // patching parameter
-    args::ValueFlag<std::string> wflign_max_len_major(alignment_opts, "N", "maximum length to patch in the major axis [default: 512*segment-length]", {'C', "max-patch-major"});
-    args::ValueFlag<std::string> wflign_max_len_minor(alignment_opts, "N", "maximum length to patch in the minor axis [default: 128*segment-length]", {'F', "max-patch-minor"});
-    args::ValueFlag<int> wflign_erode_k(alignment_opts, "N", "maximum length of match/mismatch islands to erode before patching [default: adaptive]", {'E', "erode-match-mismatch"});
-    args::ValueFlag<int> wflign_min_inv_patch_len(alignment_opts, "N", "minimum length of inverted patch for output [default: 23]", {'V', "min-inv-len"});
-    args::ValueFlag<int> wflign_max_patching_score(alignment_opts, "N", "maximum score allowed when patching [default: adaptive with respect to gap penalties and sequence length]", {"max-patching-score"});
+    args::Group output_opts(options_group, "Output Format:");
+    args::Flag sam_format(output_opts, "", "output in SAM format (PAF by default)", {'a', "sam"});
+    args::Flag emit_md_tag(output_opts, "", "output MD tag", {'d', "md-tag"});
+    args::Flag no_seq_in_sam(output_opts, "", "omit sequence field in SAM output", {'q', "no-seq-sam"});
 
-    args::Group output_opts(parser, "[ Output Format Options ]");
-    // format parameters
-    args::Flag emit_md_tag(output_opts, "N", "output the MD tag", {'d', "md-tag"});
-    // sam format
-    args::Flag sam_format(output_opts, "N", "output in the SAM format (PAF by default)", {'a', "sam-format"});
-    args::Flag no_seq_in_sam(output_opts, "N", "do not fill the sequence field in the SAM format", {'q', "no-seq-in-sam"});
 
-    args::Group general_opts(parser, "[ General Options ]");
-    args::ValueFlag<std::string> tmp_base(general_opts, "PATH", "base name for temporary files [default: `pwd`]", {'B', "tmp-base"});
-    args::Flag keep_temp_files(general_opts, "", "keep intermediate files", {'Z', "keep-temp"});
+
+    args::Group system_opts(options_group, "System:");
+    args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
+    args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "base directory for temporary files [pwd]", {'B', "tmp-base"});
+    args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
 
 #ifdef WFA_PNG_TSV_TIMING
     args::Group debugging_opts(parser, "[ Debugging Options ]");
@@ -153,29 +126,18 @@ void parse_args(int argc,
     args::ValueFlag<std::string> path_patching_info_in_tsv(parser, "FILE", " write patching information for each alignment in TSV format in FILE", {"path-patching-tsv"});
 #endif
 
-    args::Group threading_opts(parser, "[ Threading ]");
-    args::ValueFlag<int> thread_count(threading_opts, "N", "use this many threads during parallel steps", {'t', "threads"});
-
-    args::Group program_info_opts(parser, "[ Program Information ]");
-    args::Flag version(program_info_opts, "version", "show version number and github commit hash", {'v', "version"});
-    args::HelpFlag help(program_info_opts, "help", "display this help menu", {'h', "help"});
+    args::Flag version(system_opts, "version", "show version number and github commit hash", {'v', "version"});
+    args::HelpFlag help(system_opts, "help", "display this help menu", {'h', "help"});
 
     try {
         parser.ParseCLI(argc, argv);
     } catch (args::Help) {
         std::cout << parser;
         exit(0);
-        //return; // 0;
     } catch (args::ParseError e) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
         exit(1);
-        //return; // 1;
-    }
-    if (argc==1) {
-        std::cout << parser;
-        exit(1);
-        //return; // 1;
     }
 
     if (version) {
@@ -183,24 +145,21 @@ void parse_args(int argc,
         exit(0);
     }
 
-    if (skip_self) {
-        map_parameters.skip_self = true;
-    } else {
-        map_parameters.skip_self = false;
+    if (argc==1 || !target_sequence_file) {
+        std::cout << parser;
+        exit(1);
     }
 
-	if (lower_triangular) {
-		map_parameters.lower_triangular = true;
-	} else {
-		map_parameters.lower_triangular = false;
-	}
+    map_parameters.skip_self = false;
+    map_parameters.lower_triangular = args::get(lower_triangular);
+    map_parameters.keep_low_pct_id = true;
 
     if (skip_prefix) {
-        map_parameters.skip_prefix = true;
         map_parameters.prefix_delim = args::get(skip_prefix);
+        map_parameters.skip_prefix = map_parameters.prefix_delim != '\0';
     } else {
-        map_parameters.skip_prefix = false;
-        map_parameters.prefix_delim = '\0';
+        map_parameters.prefix_delim = '#';
+        map_parameters.skip_prefix = true;
     }
 
 	if (target_list) {
@@ -230,18 +189,10 @@ void parse_args(int argc,
         align_parameters.querySequences.push_back(args::get(query_sequence_file));
     }
 
-	if (target_sequence_file && map_parameters.querySequences.empty()
-		&& map_parameters.refSequences.size() == 1
-		&& !map_parameters.lower_triangular
-		&& map_parameters.target_list.empty()
-		&& map_parameters.target_prefix.empty()) {
-		std::cerr << "[wfmash] Warning: Detected single file all-vs-all mapping with no other options. "
-				  << "Consider adding -L, --lower-triangular for efficiency." << std::endl;
-	}
 
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
     if (target_sequence_file && map_parameters.querySequences.empty()) {
-        std::cerr << "[mashmap] Performing all-vs-all mapping including self mappings." << std::endl;
+        std::cerr << "[wfmash] Performing all-vs-all mapping including self mappings." << std::endl;
         map_parameters.querySequences.push_back(map_parameters.refSequences.back());
         align_parameters.querySequences.push_back(align_parameters.refSequences.back());
     }
@@ -258,6 +209,7 @@ void parse_args(int argc,
         }
     }
 
+    args::ValueFlag<double> map_sparsification(parser, "FLOAT", "sparsification factor [1.0]", {"sparsification"});
     if (map_sparsification) {
         if (args::get(map_sparsification) == 1) {
             // overflows
@@ -271,6 +223,7 @@ void parse_args(int argc,
             = std::numeric_limits<uint64_t>::max();
     }
 
+    args::ValueFlag<std::string> wfa_score_params(alignment_opts, "MISMATCH,GAP,EXT", "WFA scoring parameters [2,3,1]", {"wfa-params"});
     if (!args::get(wfa_score_params).empty()) {
         const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_score_params), ',');
         if (params_str.size() != 3) {
@@ -292,85 +245,24 @@ void parse_args(int argc,
         align_parameters.wfa_gap_extension_score = 1;
     }
 
-    if (!args::get(wfa_patching_score_params).empty()) {
-        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_patching_score_params), ',');
-        if (params_str.size() != 5) {
-            std::cerr << "[wfmash] ERROR error: 5 scoring parameters must be given to --wfa-patching-params"
-                      << std::endl;
-            exit(1);
-        }
+    align_parameters.wfa_patching_mismatch_score = 3;
+    align_parameters.wfa_patching_gap_opening_score1 = 4;
+    align_parameters.wfa_patching_gap_extension_score1 = 2;
+    align_parameters.wfa_patching_gap_opening_score2 = 24;
+    align_parameters.wfa_patching_gap_extension_score2 = 1;
 
-        std::vector<int> params(params_str.size());
-        std::transform(params_str.begin(), params_str.end(), params.begin(),
-                       [](const std::string &s) { return std::stoi(s); });
+    align_parameters.wflign_mismatch_score = 2;
+    align_parameters.wflign_gap_opening_score = 3;
+    align_parameters.wflign_gap_extension_score = 1;
 
-        align_parameters.wfa_patching_mismatch_score = params[0];
-        align_parameters.wfa_patching_gap_opening_score1 = params[1];
-        align_parameters.wfa_patching_gap_extension_score1 = params[2];
-        align_parameters.wfa_patching_gap_opening_score2 = params[3];
-        align_parameters.wfa_patching_gap_extension_score2 = params[4];
-    } else {
-        align_parameters.wfa_patching_mismatch_score = 3;
-        align_parameters.wfa_patching_gap_opening_score1 = 4;
-        align_parameters.wfa_patching_gap_extension_score1 = 2;
-        align_parameters.wfa_patching_gap_opening_score2 = 24;
-        align_parameters.wfa_patching_gap_extension_score2 = 1;
-    }
-
-    if (!args::get(wflign_score_params).empty()) {
-        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wflign_score_params), ',');
-        if (params_str.size() != 3) {
-            std::cerr << "[wfmash] ERROR error: 3 scoring parameters must be given to --wflign-params."
-                      << std::endl;
-            exit(1);
-        }
-
-        std::vector<int> params(params_str.size());
-        std::transform(params_str.begin(), params_str.end(), params.begin(),
-                       [](const std::string &s) { return std::stoi(s); });
-
-        align_parameters.wflign_mismatch_score = params[0];
-        align_parameters.wflign_gap_opening_score = params[1];
-        align_parameters.wflign_gap_extension_score = params[2];
-    } else {
-        align_parameters.wflign_mismatch_score = 2;
-        align_parameters.wflign_gap_opening_score = 3;
-        align_parameters.wflign_gap_extension_score = 1;
-    }
-
-    if (wflign_max_mash_dist) {
-        if (args::get(wflign_max_mash_dist) <= 0 || args::get(wflign_max_mash_dist) > 1) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, max mash distance must be greater than 0 and less than or equal to 1." << std::endl;
-            exit(1);
-        }
-        align_parameters.wflign_max_mash_dist = args::get(wflign_max_mash_dist);
-    } else {
-        align_parameters.wflign_max_mash_dist = -1;
-    }
-
-    if (wflign_min_wavefront_length) {
-        if (args::get(wflign_min_wavefront_length) <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, min wavefront length for heuristic WFlign must be greater than 0." << std::endl;
-            exit(1);
-        }
-        align_parameters.wflign_min_wavefront_length = args::get(wflign_min_wavefront_length);
-    } else {
-        align_parameters.wflign_min_wavefront_length = 1024;
-    }
-
-    if (wflign_max_distance_threshold) {
-        if (args::get(wflign_max_distance_threshold) <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, max distance threshold for heuristic WFlign must be greater than 0." << std::endl;
-            exit(1);
-        }
-        align_parameters.wflign_max_distance_threshold = args::get(wflign_max_distance_threshold);
-    } else {
-        align_parameters.wflign_max_distance_threshold = -1;
-    }
+    align_parameters.wflign_max_mash_dist = -1;
+    align_parameters.wflign_min_wavefront_length = 1024;
+    align_parameters.wflign_max_distance_threshold = -1;
 
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
+    args::Flag force_wflign(alignment_opts, "", "force WFlign alignment", {"force-wflign"});
     align_parameters.force_wflign = args::get(force_wflign);
     map_parameters.split = !args::get(no_split);
     map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
@@ -389,6 +281,13 @@ void parse_args(int argc,
         if (s < 100) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum segment length is required to be >= 100 bp." << std::endl
                       << "[wfmash] This is because Mashmap is not designed for computing short local alignments." << std::endl;
+            exit(1);
+        }
+
+        if (!yeet_parameters.approx_mapping && s > 10000) {
+            std::cerr << "[wfmash] ERROR: segment length (-s) must be <= 10kb when running alignment." << std::endl
+                      << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
+                      << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
             exit(1);
         }
         map_parameters.segLength = s;
@@ -414,6 +313,12 @@ void parse_args(int argc,
             exit(1);
         }
 
+        if (!yeet_parameters.approx_mapping && l > 30000) {
+            std::cerr << "[wfmash] ERROR: block length (-l) must be <= 30kb when running alignment." << std::endl
+                      << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
+                      << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
+            exit(1);
+        }
         map_parameters.block_length = l;
     } else {
         map_parameters.block_length = 3 * map_parameters.segLength;
@@ -439,6 +344,12 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
+        if (!yeet_parameters.approx_mapping && l > 100000) {
+            std::cerr << "[wfmash] ERROR: max mapping length (-P) must be <= 100kb when running alignment." << std::endl
+                      << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
+                      << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
+            exit(1);
+        }
         map_parameters.max_mapping_length = l;
     } else {
         map_parameters.max_mapping_length = 50000;
@@ -449,11 +360,6 @@ void parse_args(int argc,
         exit(1);
     }
 
-    if (drop_low_map_pct_identity) {
-        map_parameters.keep_low_pct_id = false;
-    } else {
-        map_parameters.keep_low_pct_id = true;
-    }
 
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
@@ -529,55 +435,18 @@ void parse_args(int argc,
 
     align_parameters.min_identity = 0; // disabled
 
+    args::ValueFlag<int> wflambda_segment_length(alignment_opts, "N", "WFlambda segment length [256]", {"wflambda-segment"});
     if (wflambda_segment_length) {
         align_parameters.wflambda_segment_length = args::get(wflambda_segment_length);
     } else {
         align_parameters.wflambda_segment_length = 256;
     }
 
-    if (wflign_max_len_major) {
-        const uint64_t wflign_max_len_major_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_major));
-
-        if (wflign_max_len_major_ <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the major axis has to be a float value greater than 0." << std::endl;
-            exit(1);
-        }
-
-        align_parameters.wflign_max_len_major = wflign_max_len_major_;
-    } else {
-        align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
-    }
-
-    if (wflign_max_len_minor) {
-        const uint64_t wflign_max_len_minor_ = (uint64_t)wfmash::handy_parameter(args::get(wflign_max_len_minor));
-
-        if (wflign_max_len_minor_ <= 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, maximum length to patch in the minor axis has to be a float value greater than 0." << std::endl;
-            exit(1);
-        }
-
-        align_parameters.wflign_max_len_minor = wflign_max_len_minor_;
-    } else {
-        align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
-    }
-
-    if (wflign_erode_k) {
-        align_parameters.wflign_erode_k = args::get(wflign_erode_k);
-    } else {
-        align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
-    }
-
-    if (wflign_min_inv_patch_len) {
-        align_parameters.wflign_min_inv_patch_len = args::get(wflign_min_inv_patch_len);
-    } else {
-        align_parameters.wflign_min_inv_patch_len = 23;
-    }
-
-    if (wflign_max_patching_score) {
-        align_parameters.wflign_max_patching_score = args::get(wflign_max_patching_score);
-    } else {
-        align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
-    }
+    align_parameters.wflign_max_len_major = map_parameters.segLength * 512;
+    align_parameters.wflign_max_len_minor = map_parameters.segLength * 128;
+    align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
+    align_parameters.wflign_min_inv_patch_len = 23;
+    align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
@@ -610,6 +479,7 @@ void parse_args(int argc,
         map_parameters.kmerComplexityThreshold = 0;
     }
 
+    args::ValueFlag<double> hg_numerator(mapping_opts, "FLOAT", "hypergeometric filter numerator [1.0]", {"hg-numerator"});
     if (hg_numerator) {
         double value = args::get(hg_numerator);
         if (value < 1.0) {
@@ -621,8 +491,18 @@ void parse_args(int argc,
         map_parameters.hgNumerator = 1.0;  // Default value
     }
 
-    // Set the total reference size
-    map_parameters.totalReferenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
+    // Create sequence ID manager for getting sequence info
+    std::unique_ptr<skch::SequenceIdManager> idManager = std::make_unique<skch::SequenceIdManager>(
+        map_parameters.querySequences,
+        map_parameters.refSequences,
+        std::vector<std::string>{map_parameters.query_prefix},
+        std::vector<std::string>{map_parameters.target_prefix},
+        std::string(1, map_parameters.prefix_delim),
+        map_parameters.query_list,
+        map_parameters.target_list);
+
+    // Get target sequence names
+    std::vector<std::string> targetSequenceNames = idManager->getTargetSequenceNames();
 
     // Estimate total unique k-mers using information theoretic approach
     map_parameters.estimatedUniqueKmers = skch::CommonFunc::estimateUniqueKmers(
@@ -630,16 +510,22 @@ void parse_args(int argc,
         map_parameters.kmerSize
     );
 
-    std::cerr << "[wfmash] Estimated unique " << map_parameters.kmerSize << "-mers: " 
-              << map_parameters.estimatedUniqueKmers 
-              << " (based on total reference size: " << map_parameters.totalReferenceSize << " bp)" 
-              << std::endl;
+    // Calculate total reference size from actual sequence lengths
+    map_parameters.totalReferenceSize = 0;
+    // Calculate total reference size silently
+    for (const auto& seqName : targetSequenceNames) {
+        skch::seqno_t seqId = idManager->getSequenceId(seqName);
+        skch::offset_t seqLen = idManager->getSequenceLength(seqId);
+        map_parameters.totalReferenceSize += seqLen;
+    }
 
     map_parameters.filterLengthMismatches = true;
 
+    args::Flag no_hg_filter(mapping_opts, "", "disable hypergeometric filter", {"no-hg-filter"});
     map_parameters.stage1_topANI_filter = !bool(no_hg_filter);
     map_parameters.stage2_full_scan = true;
 
+    args::ValueFlag<double> hg_filter_ani_diff(mapping_opts, "FLOAT", "hypergeometric filter ANI difference [0.0]", {"hg-filter-ani-diff"});
     if (hg_filter_ani_diff)
     {
         map_parameters.ANIDiff = args::get(hg_filter_ani_diff);
@@ -648,6 +534,7 @@ void parse_args(int argc,
         map_parameters.ANIDiff = skch::fixed::ANIDiff;
     }
 
+    args::ValueFlag<double> hg_filter_conf(mapping_opts, "FLOAT", "hypergeometric filter confidence [99.9]", {"hg-filter-conf"});
     if (hg_filter_conf)
     {
         map_parameters.ANIDiffConf = args::get(hg_filter_conf);
@@ -662,15 +549,15 @@ void parse_args(int argc,
         //map_parameters.world_minimizers = true;
     //}
 
-    if (mashmap_index)
+    if (read_index)
     {
-      map_parameters.indexFilename = args::get(mashmap_index);
+      map_parameters.indexFilename = args::get(read_index);
     } else {
       map_parameters.indexFilename = "";
     }
 
-    map_parameters.overwrite_index = overwrite_mashmap_index;
-    map_parameters.create_index_only = create_mashmap_index_only;
+    map_parameters.overwrite_index = false;
+    map_parameters.create_index_only = false;
 
     if (index_by) {
         const int64_t index_size = wfmash::handy_parameter(args::get(index_by));
@@ -702,11 +589,11 @@ void parse_args(int argc,
             }
         }
 
-        if (align_input_paf) {
+        if (input_mapping) {
             // directly use the input mapping file
             yeet_parameters.remapping = true;
-            map_parameters.outFileName = args::get(align_input_paf);
-            align_parameters.mashmapPafFile = args::get(align_input_paf);
+            map_parameters.outFileName = args::get(input_mapping);
+            align_parameters.mashmapPafFile = args::get(input_mapping);
         } else {
             // make a temporary mapping file
             map_parameters.outFileName = temp_file::create();
@@ -735,6 +622,7 @@ void parse_args(int argc,
     }
 #endif
 
+    args::ValueFlag<int> num_mappings_for_segments(mapping_opts, "N", "number of mappings per segment [1]", {"mappings-per-segment"});
     if (num_mappings_for_segments) {
         if (args::get(num_mappings_for_segments) > 0) {
             map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
@@ -746,21 +634,26 @@ void parse_args(int argc,
         map_parameters.numMappingsForSegment = 1;
     }
 
-    if (num_mappings_for_short_seq) {
-        if (args::get(num_mappings_for_short_seq) > 0) {
-            map_parameters.numMappingsForShortSequence = args::get(num_mappings_for_short_seq);
-        } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each sequence shorter than segment length has to be grater than 0." << std::endl;
-            exit(1);
-        }
-    } else {
-        map_parameters.numMappingsForShortSequence = 1;
-    }
+    map_parameters.numMappingsForShortSequence = 1;
 
 	map_parameters.legacy_output = false;
 
     //Check if files are valid
     skch::validateInputFiles(map_parameters.querySequences, map_parameters.refSequences);
+
+    std::cerr << "[wfmash] Parameters: k=" << map_parameters.kmerSize 
+              << ", w=" << map_parameters.sketchSize
+              << ", s=" << map_parameters.segLength << (map_parameters.split ? " (split)" : "")
+              << ", l=" << map_parameters.block_length
+              << ", c=" << map_parameters.chain_gap
+              << ", P=" << map_parameters.max_mapping_length
+              << ", n=" << map_parameters.numMappingsForSegment
+              << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
+              << ", t=" << map_parameters.threads << std::endl;
+    std::cerr << "[wfmash] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
+              << ", hg(Δ=" << map_parameters.ANIDiff << ",conf=" << map_parameters.ANIDiffConf << ")"
+              << ", mode=" << map_parameters.filterMode << " (1=map,2=1-to-1,3=none)" << std::endl;
+    std::cerr << "[wfmash] Output: " << map_parameters.outFileName << std::endl;
 
     temp_file::set_keep_temp(args::get(keep_temp_files));
 
