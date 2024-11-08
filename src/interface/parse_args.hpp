@@ -535,12 +535,17 @@ void parse_args(int argc,
     }
 
     args::ValueFlag<double> hg_filter_conf(mapping_opts, "FLOAT", "hypergeometric filter confidence [99.9]", {"hg-filter-conf"});
+    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {"min-hits"});
     if (hg_filter_conf)
     {
         map_parameters.ANIDiffConf = args::get(hg_filter_conf);
         map_parameters.ANIDiffConf /= 100;
     } else {
         map_parameters.ANIDiffConf = skch::fixed::ANIDiffConf;
+    }
+
+    if (min_hits) {
+        map_parameters.minimum_hits = args::get(min_hits);
     }
 
     //if (window_minimizers) {

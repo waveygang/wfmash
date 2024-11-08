@@ -1453,7 +1453,9 @@ namespace skch
 
           //3. Compute L1 windows
           int minimumHits;
-          if (Q.len == cached_segment_length) {
+          if (param.minimum_hits > 0) {
+              minimumHits = param.minimum_hits;
+          } else if (Q.len == cached_segment_length) {
               minimumHits = cached_minimum_hits;
           } else {
               minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
