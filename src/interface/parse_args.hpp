@@ -96,10 +96,7 @@ void parse_args(int argc,
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
-    args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1,0,99.9]", {"hg-filter"});
-    //args::Flag window_minimizers(mapping_opts, "", "Use window minimizers rather than world minimizers", {'U', "window-minimizers"});
-    //args::ValueFlag<std::string> path_high_frequency_kmers(mapping_opts, "FILE", " input file containing list of high frequency kmers", {'H', "high-freq-kmers"});
-    //args::ValueFlag<std::string> spaced_seed_params(mapping_opts, "spaced-seeds", "Params to generate spaced seeds <weight_of_seed> <number_of_seeds> <similarity> <region_length> e.g \"10 5 0.75 20\"", {'e', "spaced-seeds"});
+    args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF/SAM file for alignment", {'i', "input-mapping"});
@@ -521,28 +518,31 @@ void parse_args(int argc,
 
     map_parameters.filterLengthMismatches = true;
 
-    // OMG This must be rewritten to remove these args parsing flags, which are broken, and to correctly use the hg_filer comma-separated list above, and if it's not set, to use the defaults!!!!!!!!!
-    
-    args::Flag no_hg_filter(mapping_opts, "", "disable hypergeometric filter", {"no-hg-filter"});
-    map_parameters.stage1_topANI_filter = !bool(no_hg_filter);
+    // Parse hypergeometric filter parameters
+    map_parameters.stage1_topANI_filter = true;
     map_parameters.stage2_full_scan = true;
-
-    args::ValueFlag<double> hg_filter_ani_diff(mapping_opts, "FLOAT", "hypergeometric filter ANI difference [0.0]", {"hg-filter-ani-diff"});
-    if (hg_filter_ani_diff)
-    {
-        map_parameters.ANIDiff = args::get(hg_filter_ani_diff);
-        map_parameters.ANIDiff /= 100;
+    
+    if (hg_filter) {
+        std::string hg_params = args::get(hg_filter);
+        std::vector<std::string> params = skch::CommonFunc::split(hg_params, ',');
+        if (params.size() != 3) {
+            std::cerr << "[wfmash] ERROR: hypergeometric filter requires 3 comma-separated values: numerator,ani-diff,confidence" << std::endl;
+            exit(1);
+        }
+        // Parse numerator
+        map_parameters.hgNumerator = std::stod(params[0]);
+        if (map_parameters.hgNumerator < 1.0) {
+            std::cerr << "[wfmash] ERROR: hg-filter numerator must be >= 1.0" << std::endl;
+            exit(1);
+        }
+        // Parse ANI difference
+        map_parameters.ANIDiff = std::stod(params[1]) / 100.0;
+        // Parse confidence
+        map_parameters.ANIDiffConf = std::stod(params[2]) / 100.0;
     } else {
+        // Use defaults
+        map_parameters.hgNumerator = 1.0;
         map_parameters.ANIDiff = skch::fixed::ANIDiff;
-    }
-
-    args::ValueFlag<double> hg_filter_conf(mapping_opts, "FLOAT", "hypergeometric filter confidence [99.9]", {"hg-filter-conf"});
-    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {"min-hits"});
-    if (hg_filter_conf)
-    {
-        map_parameters.ANIDiffConf = args::get(hg_filter_conf);
-        map_parameters.ANIDiffConf /= 100;
-    } else {
         map_parameters.ANIDiffConf = skch::fixed::ANIDiffConf;
     }
 
