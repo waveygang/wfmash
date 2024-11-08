@@ -328,7 +328,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
             exit(1);
         }
-        map_parameters.chain_gap = l;p
+        map_parameters.chain_gap = l;
         align_parameters.chain_gap = l;
     } else {
         map_parameters.chain_gap = 2000;
