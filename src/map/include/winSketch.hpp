@@ -377,9 +377,21 @@ namespace skch
 
       void buildHandleThreadOutput(MI_Type* contigMinmerIndex)
       {
+          // Count k-mer frequencies first
+          std::unordered_map<hash_t, uint64_t> kmer_freqs;
+          for (const auto& mi : *contigMinmerIndex) {
+              kmer_freqs[mi.hash]++;
+          }
+
           // This function is kept for compatibility but should not be used
           // when parallel index building is enabled
           for (MinmerInfo& mi : *contigMinmerIndex) {
+              // Skip high-frequency k-mers
+              auto freq_it = kmer_freqs.find(mi.hash);
+              if (freq_it != kmer_freqs.end() && freq_it->second > param.max_kmer_freq) {
+                  continue;
+              }
+
               if (minmerPosLookupIndex[mi.hash].size() == 0 
                       || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
                       || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
@@ -390,10 +402,19 @@ namespace skch
               }
           }
 
+          // Only add k-mers that aren't too frequent
+          MI_Type filtered_minmers;
+          for (const auto& mi : *contigMinmerIndex) {
+              auto freq_it = kmer_freqs.find(mi.hash);
+              if (freq_it == kmer_freqs.end() || freq_it->second <= param.max_kmer_freq) {
+                  filtered_minmers.push_back(mi);
+              }
+          }
+
           this->minmerIndex.insert(
               this->minmerIndex.end(), 
-              std::make_move_iterator(contigMinmerIndex->begin()), 
-              std::make_move_iterator(contigMinmerIndex->end()));
+              std::make_move_iterator(filtered_minmers.begin()), 
+              std::make_move_iterator(filtered_minmers.end()));
 
           delete contigMinmerIndex;
       }
