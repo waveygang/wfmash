@@ -238,9 +238,15 @@ namespace skch
 
           // Count k-mer frequencies first
           std::unordered_map<hash_t, uint64_t> kmer_freqs;
+          uint64_t total_kmers = 0;
+          uint64_t filtered_kmers = 0;
           for (const auto& output : threadOutputs) {
               for (const auto& mi : *output) {
+                  total_kmers++;
                   kmer_freqs[mi.hash]++;
+                  if (kmer_freqs[mi.hash] > param.max_kmer_freq) {
+                      filtered_kmers++;
+                  }
               }
           }
 
@@ -250,8 +256,12 @@ namespace skch
           // Finish second progress meter
           index_progress.finish();
 
+          double filtered_pct = (filtered_kmers * 100.0) / total_kmers;
           std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
-                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl;
+                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
+                    << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
+                    << " k-mers (" << std::fixed << std::setprecision(2) << filtered_pct << "%) exceeding frequency threshold of " 
+                    << param.max_kmer_freq << std::endl;
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
@@ -337,7 +347,7 @@ namespace skch
                           } else {
                               local_index[mi.hash].back().pos = mi.wpos_end;
                           }
-                          progress.increment(1);
+                          progress.increment(1); // Always increment progress even when filtering
                       }
                   }
 
