@@ -317,7 +317,7 @@ namespace skch
           std::mutex index_mutex; // For thread-safe index updates
 
           for (size_t i = 0; i < num_threads; ++i) {
-              threads.emplace_back([this, &chunks, i, &progress, &index_mutex]() {
+              threads.emplace_back([this, &chunks, i, &progress, &index_mutex, &kmer_freqs]() {
                   MI_Map_t local_index; // Thread-local index
                   
                   // Process all outputs in this chunk
