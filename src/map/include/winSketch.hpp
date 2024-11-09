@@ -250,8 +250,8 @@ namespace skch
               }
           }
 
-          // Build index in parallel, respecting frequency threshold
-          buildIndexInParallel(threadOutputs, index_progress, param.threads, kmer_freqs);
+          // Build index serially, respecting frequency threshold
+          buildIndex(threadOutputs, index_progress, kmer_freqs);
           
           // Finish second progress meter
           index_progress.finish();
@@ -307,81 +307,43 @@ namespace skch
        * @param[in] output      thread local minmer output
        */
       /**
-       * @brief     Build the index from thread outputs in parallel
+       * @brief     Build the index from thread outputs serially
        * @param[in] threadOutputs    Vector of thread-local minmer indices
        * @param[in] progress         Progress meter for tracking
-       * @param[in] num_threads      Number of threads to use
+       * @param[in] kmer_freqs       Map of k-mer frequencies
        */
-      void buildIndexInParallel(std::vector<MI_Type*>& threadOutputs,
-                               progress_meter::ProgressMeter& progress,
-                               size_t num_threads,
-                               const std::unordered_map<hash_t, uint64_t>& kmer_freqs) {
-          // Split the thread outputs into chunks for parallel processing
-          std::vector<std::vector<MI_Type*>> chunks(num_threads);
-          for (size_t i = 0; i < threadOutputs.size(); ++i) {
-              chunks[i % num_threads].push_back(threadOutputs[i]);
-          }
-
-          // Create threads to process chunks
-          std::vector<std::thread> threads;
-          std::mutex index_mutex; // For thread-safe index updates
-
-          for (size_t i = 0; i < num_threads; ++i) {
-              threads.emplace_back([this, &chunks, i, &progress, &index_mutex, &kmer_freqs]() {
-                  MI_Map_t local_index; // Thread-local index
+      void buildIndex(std::vector<MI_Type*>& threadOutputs,
+                     progress_meter::ProgressMeter& progress,
+                     const std::unordered_map<hash_t, uint64_t>& kmer_freqs) {
+          // Process all outputs sequentially
+          for (auto* output : threadOutputs) {
+              for (MinmerInfo& mi : *output) {
+                  // Skip high-frequency k-mers
+                  auto freq_it = kmer_freqs.find(mi.hash);
+                  if (freq_it != kmer_freqs.end() && freq_it->second > param.max_kmer_freq) {
+                      progress.increment(1);
+                      continue;
+                  }
                   
-                  // Process all outputs in this chunk
-                  for (auto* output : chunks[i]) {
-                      for (MinmerInfo& mi : *output) {
-                          // Skip high-frequency k-mers
-                          auto freq_it = kmer_freqs.find(mi.hash);
-                          if (freq_it != kmer_freqs.end() && freq_it->second > param.max_kmer_freq) {
-                              continue;
-                          }
-                          
-                          if (local_index[mi.hash].size() == 0 
-                                  || local_index[mi.hash].back().hash != mi.hash 
-                                  || local_index[mi.hash].back().pos != mi.wpos) {
-                              local_index[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-                              local_index[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
-                          } else {
-                              local_index[mi.hash].back().pos = mi.wpos_end;
-                          }
-                          progress.increment(1); // Always increment progress even when filtering
-                      }
+                  // Add to minmerPosLookupIndex
+                  if (minmerPosLookupIndex[mi.hash].size() == 0 
+                          || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                          || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
+                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+                  } else {
+                      minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
                   }
-
-                  // Merge thread-local index into global index
-                  {
-                      std::lock_guard<std::mutex> lock(index_mutex);
-                      for (auto& [hash, points] : local_index) {
-                          auto& global_points = minmerPosLookupIndex[hash];
-                          global_points.insert(
-                              global_points.end(),
-                              std::make_move_iterator(points.begin()),
-                              std::make_move_iterator(points.end())
-                          );
-                      }
-                  }
-
-                  // Insert minmers into global minmerIndex
-                  {
-                      std::lock_guard<std::mutex> lock(index_mutex);
-                      for (auto* output : chunks[i]) {
-                          minmerIndex.insert(
-                              minmerIndex.end(),
-                              std::make_move_iterator(output->begin()),
-                              std::make_move_iterator(output->end())
-                          );
-                          delete output;
-                      }
-                  }
-              });
-          }
-
-          // Wait for all threads to complete
-          for (auto& thread : threads) {
-              thread.join();
+                  progress.increment(1);
+              }
+              
+              // Add to minmerIndex
+              minmerIndex.insert(
+                  minmerIndex.end(),
+                  std::make_move_iterator(output->begin()),
+                  std::make_move_iterator(output->end())
+              );
+              delete output;
           }
       }
 
