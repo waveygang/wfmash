@@ -97,8 +97,8 @@ void parse_args(int argc,
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
-    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {"min-hits"});
-    args::ValueFlag<uint64_t> max_kmer_freq(mapping_opts, "INT", "maximum allowed k-mer frequency [unlimited]", {"max-kmer-freq"});
+    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
+    args::ValueFlag<uint64_t> max_kmer_freq(mapping_opts, "INT", "maximum allowed k-mer frequency [unlimited]", {'F', "max-kmer-freq"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF/SAM file for alignment", {'i', "input-mapping"});
