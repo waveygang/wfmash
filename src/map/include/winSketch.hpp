@@ -236,22 +236,36 @@ namespace skch
               total_windows,
               "[wfmash::mashmap] building index");
 
-          // Count k-mer frequencies first
-          std::unordered_map<hash_t, uint64_t> kmer_freqs;
-          uint64_t total_kmers = 0;
-          uint64_t filtered_kmers = 0;
-          for (const auto& output : threadOutputs) {
-              for (const auto& mi : *output) {
-                  total_kmers++;
-                  kmer_freqs[mi.hash]++;
-                  if (kmer_freqs[mi.hash] > param.max_kmer_freq) {
-                      filtered_kmers++;
+          // First pass - build position lookup index
+          for (auto* output : threadOutputs) {
+              for (MinmerInfo& mi : *output) {
+                  if (minmerPosLookupIndex[mi.hash].size() == 0 
+                          || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
+                          || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
+                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+                  } else {
+                      minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
                   }
               }
           }
 
-          // Build index serially, respecting frequency threshold
-          buildIndex(threadOutputs, index_progress, kmer_freqs);
+          // Second pass - build minmer index, filtering by position list size
+          uint64_t total_kmers = 0;
+          uint64_t filtered_kmers = 0;
+          for (auto* output : threadOutputs) {
+              for (MinmerInfo& mi : *output) {
+                  total_kmers++;
+                  // Filter based on number of positions
+                  if (minmerPosLookupIndex[mi.hash].size() / 2 <= param.max_kmer_freq) {
+                      minmerIndex.push_back(mi);
+                  } else {
+                      filtered_kmers++;
+                  }
+                  progress.increment(1);
+              }
+              delete output;
+          }
           
           // Finish second progress meter
           index_progress.finish();
@@ -306,46 +320,6 @@ namespace skch
        * @brief                 routine to handle thread's local minmer index
        * @param[in] output      thread local minmer output
        */
-      /**
-       * @brief     Build the index from thread outputs serially
-       * @param[in] threadOutputs    Vector of thread-local minmer indices
-       * @param[in] progress         Progress meter for tracking
-       * @param[in] kmer_freqs       Map of k-mer frequencies
-       */
-      void buildIndex(std::vector<MI_Type*>& threadOutputs,
-                     progress_meter::ProgressMeter& progress,
-                     const std::unordered_map<hash_t, uint64_t>& kmer_freqs) {
-          // Process all outputs sequentially
-          for (auto* output : threadOutputs) {
-              for (MinmerInfo& mi : *output) {
-                  // Skip high-frequency k-mers
-                  auto freq_it = kmer_freqs.find(mi.hash);
-                  if (freq_it != kmer_freqs.end() && freq_it->second > param.max_kmer_freq) {
-                      progress.increment(1);
-                      continue;
-                  }
-                  
-                  // Add to minmerPosLookupIndex
-                  if (minmerPosLookupIndex[mi.hash].size() == 0 
-                          || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                          || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
-                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
-                  } else {
-                      minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
-                  }
-                  progress.increment(1);
-              }
-              
-              // Add to minmerIndex
-              minmerIndex.insert(
-                  minmerIndex.end(),
-                  std::make_move_iterator(output->begin()),
-                  std::make_move_iterator(output->end())
-              );
-              delete output;
-          }
-      }
 
       void buildHandleThreadOutput(MI_Type* contigMinmerIndex)
       {
