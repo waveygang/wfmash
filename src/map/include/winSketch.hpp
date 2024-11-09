@@ -236,32 +236,43 @@ namespace skch
               total_windows,
               "[wfmash::mashmap] building index");
 
-          // First pass - build position lookup index
-          for (auto* output : threadOutputs) {
-              for (MinmerInfo& mi : *output) {
-                  if (minmerPosLookupIndex[mi.hash].size() == 0 
-                          || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                          || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
-                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-                      minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
-                  } else {
-                      minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
-                  }
-              }
-          }
-
-          // Second pass - build minmer index, filtering by position list size
+          // Single pass - build position lookup index and minmer index with early filtering
           uint64_t total_kmers = 0;
           uint64_t filtered_kmers = 0;
           for (auto* output : threadOutputs) {
               for (MinmerInfo& mi : *output) {
                   total_kmers++;
-                  // Filter based on number of positions
-                  if (minmerPosLookupIndex[mi.hash].size() / 2 <= param.max_kmer_freq) {
-                      minmerIndex.push_back(mi);
-                  } else {
+                  
+                  // Skip if this hash was already marked as too frequent
+                  auto& pos_list = minmerPosLookupIndex[mi.hash];
+                  if (pos_list.empty() && pos_list.capacity() > 0) {
                       filtered_kmers++;
+                      continue;
                   }
+
+                  // Check if we need to add new interval points
+                  if (pos_list.size() == 0 
+                          || pos_list.back().hash != mi.hash 
+                          || pos_list.back().pos != mi.wpos) {
+                      
+                      // Add new interval points
+                      pos_list.push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                      pos_list.push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+                      
+                      // Check if we exceeded frequency threshold
+                      if (pos_list.size() / 2 > param.max_kmer_freq) {
+                          filtered_kmers++;
+                          pos_list.clear();  // Clear the vector
+                          pos_list.shrink_to_fit();  // Release memory
+                          pos_list.reserve(1);  // Mark as processed by setting capacity > 0
+                          continue;
+                      }
+                  } else {
+                      pos_list.back().pos = mi.wpos_end;
+                  }
+                  
+                  // Add to minmer index since frequency is still acceptable
+                  minmerIndex.push_back(mi);
                   progress.increment(1);
               }
               delete output;
