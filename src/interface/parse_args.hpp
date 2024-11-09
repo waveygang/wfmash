@@ -101,7 +101,7 @@ void parse_args(int argc,
     args::ValueFlag<uint64_t> max_kmer_freq(mapping_opts, "INT", "maximum allowed k-mer frequency [unlimited]", {'F', "max-kmer-freq"});
 
     args::Group alignment_opts(options_group, "Alignment:");
-    args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF/SAM file for alignment", {'i', "input-mapping"});
+    args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
@@ -607,7 +607,7 @@ void parse_args(int argc,
         }
 
         if (input_mapping) {
-            // directly use the input mapping file
+            // directly use the input PAF file
             yeet_parameters.remapping = true;
             map_parameters.outFileName = args::get(input_mapping);
             align_parameters.mashmapPafFile = args::get(input_mapping);
