@@ -170,11 +170,6 @@ namespace skch
               total_seq_length += idManager.getSequenceLength(seqId);
           }
 
-          // Initialize progress meter with known total
-          progress_meter::ProgressMeter progress(
-              total_seq_length,
-              "[wfmash::mashmap] computing sketch");
-
           // First progress meter for sketch computation
           progress_meter::ProgressMeter sketch_progress(
               total_seq_length,
@@ -273,7 +268,7 @@ namespace skch
                   
                   // Add to minmer index since frequency is still acceptable
                   minmerIndex.push_back(mi);
-                  progress.increment(1);
+                  index_progress.increment(1);
               }
               delete output;
           }
