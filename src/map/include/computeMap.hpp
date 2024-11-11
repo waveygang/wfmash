@@ -97,7 +97,11 @@ namespace skch
         return a.intersectionSize < b.intersectionSize;
       };
 
-      //Type for Stage L2's predicted mapping coordinate within each L1 candidate
+      //Cache for commonly used values
+      offset_t cached_segment_length;
+      int cached_minimum_hits;
+
+      //Type for Stage L2's predicted mapping coordinate within each L1 candidate  
       struct L2_mapLocus_t
       {
         seqno_t seqId;                    //sequence id where read is mapped
@@ -203,7 +207,9 @@ namespace skch
             std::vector<std::string>{p.target_prefix},
             std::string(1, p.prefix_delim),
             p.query_list,
-            p.target_list))
+            p.target_list)),
+        cached_segment_length(p.segLength),
+        cached_minimum_hits(p.minimum_hits > 0 ? p.minimum_hits : Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval))
           {
               // Initialize sequence names right after creating idManager
               this->querySequenceNames = idManager->getQuerySequenceNames();
@@ -481,6 +487,8 @@ namespace skch
 
       void mapQuery()
       {
+        std::cerr << "[wfmash::mashmap] L1 filtering parameters: cached_minimum_hits=" << cached_minimum_hits << std::endl;
+
         //Count of reads mapped by us
         //Some reads are dropped because of short length
         seqno_t totalReadsPickedForMapping = 0;
@@ -1444,7 +1452,12 @@ namespace skch
           getSeedIntervalPoints(Q, intervalPoints);
 
           //3. Compute L1 windows
-          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
+          // Always respect the minimum hits parameter if set
+          int minimumHits = param.minimum_hits > 0 ? 
+              param.minimum_hits : 
+              (Q.len == cached_segment_length ? 
+                  cached_minimum_hits : 
+                  Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval));
 
           // For each "group"
           auto ip_begin = intervalPoints.begin();
