@@ -78,7 +78,7 @@ namespace skch
 
       using MI_Type = std::vector< MinmerInfo >;
       using MIIter_t = MI_Type::const_iterator;
-      using HF_Map_t = MI_Map_t;
+      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
 
       public:
         uint64_t total_seq_length = 0;
@@ -336,7 +336,7 @@ namespace skch
       void buildHandleThreadOutput(MI_Type* contigMinmerIndex)
       {
           // Count k-mer frequencies first
-          MI_Map_t kmer_freqs;
+          HF_Map_t kmer_freqs;
           for (const auto& mi : *contigMinmerIndex) {
               kmer_freqs[mi.hash]++;
           }
