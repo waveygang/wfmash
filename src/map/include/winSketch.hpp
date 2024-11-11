@@ -264,8 +264,7 @@ namespace skch
                           filtered_kmers++;
                           pos_list.clear();  // Clear the vector
                           pos_list.shrink_to_fit();  // Release memory
-                          pos_list.reserve(1);  // Mark as processed by setting capacity > 0
-                      }
+                       }
                   }
                   
                   // Always add to minmer index
