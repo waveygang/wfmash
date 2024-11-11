@@ -231,44 +231,49 @@ namespace skch
               total_windows,
               "[wfmash::mashmap] building index");
 
-          // Single pass - build position lookup index and minmer index with early filtering
-          uint64_t total_kmers = 0;
-          uint64_t filtered_kmers = 0;
+          // First pass - build position lookup index
           for (auto* output : threadOutputs) {
               for (MinmerInfo& mi : *output) {
-                  total_kmers++;
-                  
-                  // Skip if this hash was already marked as too frequent
                   auto& pos_list = minmerPosLookupIndex[mi.hash];
-                  if (pos_list.empty() && pos_list.capacity() > 0) {
-                      filtered_kmers++;
-                      continue;
-                  }
-
+                  
                   // Check if we need to add new interval points
                   if (pos_list.size() == 0 
                           || pos_list.back().hash != mi.hash 
                           || pos_list.back().pos != mi.wpos) {
-                      
-                      // Add new interval points
                       pos_list.push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
                       pos_list.push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
-                      
-                      // Check if we exceeded frequency threshold
-                      if (pos_list.size() / 2 > param.max_kmer_freq) {
+                  } else {
+                      pos_list.back().pos = mi.wpos_end;
+                  }
+              }
+          }
+
+          // Second pass - filter frequent k-mers and build minmer index
+          uint64_t total_kmers = 0;
+          uint64_t filtered_kmers = 0;
+
+          for (auto* output : threadOutputs) {
+              for (MinmerInfo& mi : *output) {
+                  total_kmers++;
+                  
+                  auto& pos_list = minmerPosLookupIndex[mi.hash];
+                  
+                  // Skip if this hash is too frequent
+                  if (pos_list.size() / 2 > param.max_kmer_freq) {
+                      if (!pos_list.empty()) {
                           filtered_kmers++;
                           pos_list.clear();  // Clear the vector
                           pos_list.shrink_to_fit();  // Release memory
                           pos_list.reserve(1);  // Mark as processed by setting capacity > 0
-                          continue;
                       }
-                  } else {
-                      pos_list.back().pos = mi.wpos_end;
+                      continue;
                   }
                   
-                  // Add to minmer index since frequency is still acceptable
-                  minmerIndex.push_back(mi);
-                  index_progress.increment(1);
+                  // Add to minmer index if frequency is acceptable
+                  if (!pos_list.empty()) {
+                      minmerIndex.push_back(mi);
+                      index_progress.increment(1);
+                  }
               }
               delete output;
           }
