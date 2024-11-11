@@ -258,7 +258,7 @@ namespace skch
                   
                   auto& pos_list = minmerPosLookupIndex[mi.hash];
                   
-                  // Skip if this hash is too frequent
+                  // Check if this hash is too frequent and clear its position list if so
                   if (pos_list.size() / 2 > param.max_kmer_freq) {
                       if (!pos_list.empty()) {
                           filtered_kmers++;
@@ -266,14 +266,11 @@ namespace skch
                           pos_list.shrink_to_fit();  // Release memory
                           pos_list.reserve(1);  // Mark as processed by setting capacity > 0
                       }
-                      continue;
                   }
                   
-                  // Add to minmer index if frequency is acceptable
-                  if (!pos_list.empty()) {
-                      minmerIndex.push_back(mi);
-                      index_progress.increment(1);
-                  }
+                  // Always add to minmer index
+                  minmerIndex.push_back(mi);
+                  index_progress.increment(1);
               }
               delete output;
           }
