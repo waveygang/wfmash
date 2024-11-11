@@ -231,12 +231,38 @@ namespace skch
               total_windows,
               "[wfmash::mashmap] building index");
 
-          // First pass - build position lookup index
+          // First pass - count k-mer frequencies
+          HF_Map_t kmer_freqs;
           for (auto* output : threadOutputs) {
-              for (MinmerInfo& mi : *output) {
-                  auto& pos_list = minmerPosLookupIndex[mi.hash];
+              for (const MinmerInfo& mi : *output) {
+                  kmer_freqs[mi.hash]++;
+              }
+          }
+
+          // Second pass - build filtered indexes
+          uint64_t total_kmers = 0;
+          uint64_t filtered_kmers = 0;
+
+          // Clear existing indexes
+          minmerPosLookupIndex.clear();
+          minmerIndex.clear();
+
+          for (auto* output : threadOutputs) {
+              for (const MinmerInfo& mi : *output) {
+                  total_kmers++;
                   
-                  // Check if we need to add new interval points
+                  auto freq_it = kmer_freqs.find(mi.hash);
+                  if (freq_it == kmer_freqs.end()) {
+                      continue;  // Should never happen
+                  }
+
+                  if (freq_it->second > param.max_kmer_freq) {
+                      filtered_kmers++;
+                      continue;
+                  }
+
+                  // Add to position lookup index
+                  auto& pos_list = minmerPosLookupIndex[mi.hash];
                   if (pos_list.size() == 0 
                           || pos_list.back().hash != mi.hash 
                           || pos_list.back().pos != mi.wpos) {
@@ -245,29 +271,8 @@ namespace skch
                   } else {
                       pos_list.back().pos = mi.wpos_end;
                   }
-              }
-          }
 
-          // Second pass - filter frequent k-mers and build minmer index
-          uint64_t total_kmers = 0;
-          uint64_t filtered_kmers = 0;
-
-          for (auto* output : threadOutputs) {
-              for (MinmerInfo& mi : *output) {
-                  total_kmers++;
-                  
-                  auto& pos_list = minmerPosLookupIndex[mi.hash];
-                  
-                  // Check if this hash is too frequent and clear its position list if so
-                  if (pos_list.size() / 2 > param.max_kmer_freq) {
-                      if (!pos_list.empty()) {
-                          filtered_kmers++;
-                          pos_list.clear();  // Clear the vector
-                          pos_list.shrink_to_fit();  // Release memory
-                       }
-                  }
-                  
-                  // Always add to minmer index
+                  // Add to minmer index
                   minmerIndex.push_back(mi);
                   index_progress.increment(1);
               }
