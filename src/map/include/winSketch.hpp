@@ -301,7 +301,7 @@ namespace skch
                     << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
                     << " k-mers occurring > " << freq_cutoff << " times"
                     << " (target: " << (param.max_kmer_freq <= 1.0 ? 
-                                      std::to_string(param.max_kmer_freq * 100) + "%" :
+                                      (std::stringstream() << std::fixed << std::setprecision(2) << (param.max_kmer_freq * 100)).str() + "%" :
                                       ">" + std::to_string((int)param.max_kmer_freq) + " occurrences") 
                     << ")" << std::endl;
         }
