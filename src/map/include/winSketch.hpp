@@ -291,11 +291,17 @@ namespace skch
           index_progress.finish();
 
           double filtered_pct = (filtered_kmers * 100.0) / total_kmers;
+          uint64_t freq_cutoff;
+          if (param.max_kmer_freq <= 1.0) {
+              freq_cutoff = std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
+          } else {
+              freq_cutoff = (uint64_t)param.max_kmer_freq;
+          }
           std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
                     << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
                     << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
                     << " k-mers (" << std::fixed << std::setprecision(2) << filtered_pct << "%) exceeding frequency threshold of " 
-                    << param.max_kmer_freq << std::endl;
+                    << freq_cutoff << " occurrences (filter fraction: " << param.max_kmer_freq << ")" << std::endl;
         }
 
         std::chrono::duration<double> timeRefSketch = skch::Time::now() - t0;
