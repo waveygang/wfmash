@@ -256,7 +256,15 @@ namespace skch
                       continue;  // Should never happen
                   }
 
-                  if (freq_it->second > param.max_kmer_freq) {
+                  uint64_t freq_cutoff;
+                  if (param.max_kmer_freq <= 1.0) {
+                      // Calculate cutoff based on fraction of total windows
+                      freq_cutoff = std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
+                  } else {
+                      // Use direct count cutoff
+                      freq_cutoff = (uint64_t)param.max_kmer_freq;
+                  }
+                  if (freq_it->second > freq_cutoff) {
                       filtered_kmers++;
                       continue;
                   }

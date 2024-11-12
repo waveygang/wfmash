@@ -98,7 +98,7 @@ void parse_args(int argc,
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
     args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
-    args::ValueFlag<uint64_t> max_kmer_freq(mapping_opts, "INT", "maximum allowed k-mer frequency [unlimited]", {'F', "max-kmer-freq"});
+    args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter out top FLOAT fraction of repetitive minimizers [0.0002]", {'f', "filter-freq"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
@@ -557,7 +557,7 @@ void parse_args(int argc,
     if (max_kmer_freq) {
         map_parameters.max_kmer_freq = args::get(max_kmer_freq);
     } else {
-        map_parameters.max_kmer_freq = std::numeric_limits<uint64_t>::max(); // unlimited
+        map_parameters.max_kmer_freq = 0.0002; // default filter fraction
     }
 
     //if (window_minimizers) {
