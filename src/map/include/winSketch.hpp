@@ -257,15 +257,26 @@ namespace skch
                   }
 
                   uint64_t freq = freq_it->second;
-                  bool should_filter;
+                  uint64_t min_occ = 10;  // minimap2's minimum occurrence threshold
+                  uint64_t max_occ = 1000000;  // minimap2's maximum occurrence threshold
+                  uint64_t count_threshold;
+                  
                   if (param.max_kmer_freq <= 1.0) {
-                      // Filter if frequency exceeds fraction of total windows
-                      should_filter = freq > std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
+                      // Calculate threshold based on fraction, but respect min/max bounds
+                      count_threshold = std::min(max_occ, 
+                                               std::max(min_occ, 
+                                                      (uint64_t)(total_windows * param.max_kmer_freq)));
                   } else {
-                      // Filter if frequency exceeds absolute count
-                      should_filter = freq > (uint64_t)param.max_kmer_freq;
+                      // Use direct count threshold, but respect min/max bounds
+                      count_threshold = std::min(max_occ,
+                                               std::max(min_occ,
+                                                      (uint64_t)param.max_kmer_freq));
                   }
-                  if (should_filter) {
+
+                  // Filter only if BOTH conditions are met:
+                  // 1. Frequency exceeds the calculated threshold
+                  // 2. Count exceeds minimum occurrence threshold
+                  if (freq > count_threshold && freq > min_occ) {
                       filtered_kmers++;
                       continue;
                   }
