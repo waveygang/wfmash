@@ -65,6 +65,7 @@ void parse_args(int argc,
     parser.helpParams.flagindent = 2;
     parser.helpParams.helpindent = 35;
     parser.helpParams.eachgroupindent = 2;
+    parser.helpParams.optionsString = "";
 
     args::Group options_group(parser, "");
     args::Positional<std::string> target_sequence_file(options_group, "target.fa", "target sequences (required, default: self-map)");
