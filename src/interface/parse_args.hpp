@@ -364,7 +364,7 @@ void parse_args(int argc,
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
     } else {
-        map_parameters.overlap_threshold = 0.5;
+        map_parameters.overlap_threshold = 1.0;
     }
 
     if (kmer_size) {
