@@ -112,16 +112,19 @@ namespace skch
             }
             auto kit = it;
 
-            // Check for overlaps and mark bad if necessary
-            for ( ; it != L.end(); it++) {
-                if (it == L.begin()) continue;
-                int idx = *it;
-                for (auto it2 = L.begin(); it2 != kit; it2++) {
-                    double overlap = get_overlap(idx, *it2);
-                    if (overlap > overlapThreshold) {
-                        vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
-                        vec[idx].discard = 1;
-                        break;
+            // Skip overlap checking if threshold is 1.0 (allow all overlaps)
+            if (overlapThreshold < 1.0) {
+                // Check for overlaps and mark bad if necessary
+                for ( ; it != L.end(); it++) {
+                    if (it == L.begin()) continue;
+                    int idx = *it;
+                    for (auto it2 = L.begin(); it2 != kit; it2++) {
+                        double overlap = get_overlap(idx, *it2);
+                        if (overlap > overlapThreshold) {
+                            vec[idx].overlapped = 1;  // Mark as bad if overlaps more than threshold
+                            vec[idx].discard = 1;
+                            break;
+                        }
                     }
                 }
             }
@@ -393,15 +396,18 @@ namespace skch
             }
             auto kit = it;
 
-            // Check for overlaps and mark bad if necessary
-            for ( ; it != L.end(); it++) {
-                if (it == L.begin()) continue;
-                int idx = *it;
-                for (auto it2 = L.begin(); it2 != kit; it2++) {
-                    if (get_overlap(idx, *it2) > overlapThreshold) {
-                        vec[idx].overlapped = 1;  // Mark as bad if it overlaps >50% with the best mapping
-                        vec[idx].discard = 1;
-                        break;
+            // Skip overlap checking if threshold is 1.0 (allow all overlaps)
+            if (overlapThreshold < 1.0) {
+                // Check for overlaps and mark bad if necessary
+                for ( ; it != L.end(); it++) {
+                    if (it == L.begin()) continue;
+                    int idx = *it;
+                    for (auto it2 = L.begin(); it2 != kit; it2++) {
+                        if (get_overlap(idx, *it2) > overlapThreshold) {
+                            vec[idx].overlapped = 1;  // Mark as bad if overlaps more than threshold
+                            vec[idx].discard = 1;
+                            break;
+                        }
                     }
                 }
             }

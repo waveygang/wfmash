@@ -93,7 +93,7 @@ void parse_args(int argc,
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k]", {'P', "max-length"});
-    args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "maximum mapping overlap fraction [0.5]", {'O', "overlap"});
+    args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
@@ -364,7 +364,7 @@ void parse_args(int argc,
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
     } else {
-        map_parameters.overlap_threshold = 0.5;
+        map_parameters.overlap_threshold = 1.0;
     }
 
     if (kmer_size) {
