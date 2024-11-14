@@ -256,15 +256,27 @@ namespace skch
                       continue;  // Should never happen
                   }
 
-                  uint64_t freq_cutoff;
+                  uint64_t freq = freq_it->second;
+                  uint64_t min_occ = 10;  // minimum occurrence threshold to prevent over-filtering in small datasets
+                  uint64_t max_occ = std::numeric_limits<uint64_t>::max();  // no upper limit on occurrences
+                  uint64_t count_threshold;
+                  
                   if (param.max_kmer_freq <= 1.0) {
-                      // Calculate cutoff based on fraction of total windows
-                      freq_cutoff = std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
+                      // Calculate threshold based on fraction, but respect min/max bounds
+                      count_threshold = std::min(max_occ, 
+                                               std::max(min_occ, 
+                                                      (uint64_t)(total_windows * param.max_kmer_freq)));
                   } else {
-                      // Use direct count cutoff
-                      freq_cutoff = (uint64_t)param.max_kmer_freq;
+                      // Use direct count threshold, but respect min/max bounds
+                      count_threshold = std::min(max_occ,
+                                               std::max(min_occ,
+                                                      (uint64_t)param.max_kmer_freq));
                   }
-                  if (freq_it->second > freq_cutoff) {
+
+                  // Filter only if BOTH conditions are met:
+                  // 1. Frequency exceeds the calculated threshold
+                  // 2. Count exceeds minimum occurrence threshold
+                  if (freq > count_threshold && freq > min_occ) {
                       filtered_kmers++;
                       continue;
                   }

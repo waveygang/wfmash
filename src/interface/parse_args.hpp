@@ -65,6 +65,7 @@ void parse_args(int argc,
     parser.helpParams.flagindent = 2;
     parser.helpParams.helpindent = 35;
     parser.helpParams.eachgroupindent = 2;
+    parser.helpParams.optionsString = "";
 
     args::Group options_group(parser, "");
     args::Positional<std::string> target_sequence_file(options_group, "target.fa", "target sequences (required, default: self-map)");
@@ -98,7 +99,7 @@ void parse_args(int argc,
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
     args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
-    args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter out top FLOAT fraction of repetitive minimizers [0.0002]", {'F', "filter-freq"});
+    args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter minimizers occurring > FLOAT of total [0.0002]", {'F', "filter-freq"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
