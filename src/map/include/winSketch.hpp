@@ -258,7 +258,7 @@ namespace skch
 
                   uint64_t freq = freq_it->second;
                   uint64_t min_occ = 10;  // minimap2's minimum occurrence threshold
-                  uint64_t max_occ = 1000000;  // minimap2's maximum occurrence threshold
+                  uint64_t max_occ = std::numeric_limits<uint64_t>::max();  // no upper limit on occurrences
                   uint64_t count_threshold;
                   
                   if (param.max_kmer_freq <= 1.0) {
