@@ -582,12 +582,16 @@ void parse_args(int argc,
     map_parameters.create_index_only = false;
 
     if (index_by) {
-        const int64_t index_size = handy_parameter(args::get(index_by));
+        std::string index_by_str = args::get(index_by);
+        std::cerr << "[wfmash] DEBUG: Processing index-by parameter: '" << index_by_str << "'" << std::endl;
+        const int64_t index_size = handy_parameter(index_by_str);
+        std::cerr << "[wfmash] DEBUG: Parsed index size: " << index_size << std::endl;
         if (index_size < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, index-by size must be a positive integer." << std::endl;
             exit(1);
         }
         map_parameters.index_by_size = static_cast<size_t>(index_size);
+        std::cerr << "[wfmash] DEBUG: Final index_by_size: " << map_parameters.index_by_size << std::endl;
     } else {
         map_parameters.index_by_size = std::numeric_limits<size_t>::max(); // Default to indexing all sequences
     }
