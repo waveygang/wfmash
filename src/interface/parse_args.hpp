@@ -30,25 +30,44 @@ struct Parameters {
 };
 
 int64_t handy_parameter(const std::string& value) {
-    auto is_a_float = [](const std::string s) {
+    auto is_a_number = [](const std::string& s) {
         return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
     };
 
-    uint64_t str_len = value.length();
+    std::string tmp = value;
     uint8_t exp = 0;
-    if (value[str_len-1] == 'k' || value[str_len-1] == 'K') {
-        exp = 3;
-        --str_len;
-    } else if (value[str_len-1] == 'm' || value[str_len-1] == 'M') {
-        exp = 6;
-        --str_len;
-    } else if (value[str_len-1] == 'g' || value[str_len-1] == 'G') {
-        exp = 9;
-        --str_len;
+    
+    if (!tmp.empty()) {
+        char suffix = std::toupper(tmp.back());
+        if (suffix == 'K') {
+            exp = 3;
+            tmp.pop_back();
+        } else if (suffix == 'M') {
+            exp = 6;
+            tmp.pop_back();
+        } else if (suffix == 'G') {
+            exp = 9;
+            tmp.pop_back();
+        }
     }
 
-    const std::string tmp = value.substr(0, str_len);
-    return is_a_float(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
+    if (!is_a_number(tmp)) {
+        return -1;
+    }
+
+    try {
+        double val = std::stod(tmp);
+        if (val < 0) {
+            return -1;
+        }
+        double result = val * std::pow(10.0, exp);
+        if (result > static_cast<double>(std::numeric_limits<int64_t>::max())) {
+            return -1;
+        }
+        return static_cast<int64_t>(result);
+    } catch (const std::exception&) {
+        return -1;
+    }
 }
 
 void parse_args(int argc,
@@ -578,12 +597,12 @@ void parse_args(int argc,
     map_parameters.create_index_only = false;
 
     if (index_by) {
-        const int64_t index_size = wfmash::handy_parameter(args::get(index_by));
-        if (index_size <= 0) {
+        const int64_t index_size = handy_parameter(args::get(index_by));
+        if (index_size < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, index-by size must be a positive integer." << std::endl;
             exit(1);
         }
-        map_parameters.index_by_size = index_size;
+        map_parameters.index_by_size = static_cast<size_t>(index_size);
     } else {
         map_parameters.index_by_size = std::numeric_limits<size_t>::max(); // Default to indexing all sequences
     }
@@ -667,7 +686,8 @@ void parse_args(int argc,
               << ", P=" << map_parameters.max_mapping_length
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
-              << ", t=" << map_parameters.threads << std::endl;
+              << ", t=" << map_parameters.threads
+              << ", b=" << map_parameters.index_by_size << std::endl;
     std::cerr << "[wfmash] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
               << ", hg(Δ=" << map_parameters.ANIDiff << ",conf=" << map_parameters.ANIDiffConf << ")"
               << ", mode=" << map_parameters.filterMode << " (1=map,2=1-to-1,3=none)" << std::endl;
