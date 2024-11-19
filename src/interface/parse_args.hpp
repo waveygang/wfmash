@@ -30,29 +30,44 @@ struct Parameters {
 };
 
 int64_t handy_parameter(const std::string& value) {
-    auto is_a_number = [](const std::string s) {
+    auto is_a_number = [](const std::string& s) {
         return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
     };
 
-    uint64_t str_len = value.length();
+    std::string tmp = value;
     uint8_t exp = 0;
-    if (value[str_len-1] == 'k' || value[str_len-1] == 'K') {
-        exp = 3;
-        --str_len;
-    } else if (value[str_len-1] == 'm' || value[str_len-1] == 'M') {
-        exp = 6;
-        --str_len;
-    } else if (value[str_len-1] == 'g' || value[str_len-1] == 'G') {
-        exp = 9;
-        --str_len;
+    
+    if (!tmp.empty()) {
+        char suffix = std::toupper(tmp.back());
+        if (suffix == 'K') {
+            exp = 3;
+            tmp.pop_back();
+        } else if (suffix == 'M') {
+            exp = 6;
+            tmp.pop_back();
+        } else if (suffix == 'G') {
+            exp = 9;
+            tmp.pop_back();
+        }
     }
 
-    const std::string tmp = value.substr(0, str_len);
     if (!is_a_number(tmp)) {
         return -1;
     }
-    double val = std::stod(tmp);
-    return static_cast<int64_t>(val * std::pow(10, exp));
+
+    try {
+        double val = std::stod(tmp);
+        if (val < 0) {
+            return -1;
+        }
+        double result = val * std::pow(10.0, exp);
+        if (result > static_cast<double>(std::numeric_limits<int64_t>::max())) {
+            return -1;
+        }
+        return static_cast<int64_t>(result);
+    } catch (const std::exception&) {
+        return -1;
+    }
 }
 
 void parse_args(int argc,
