@@ -30,7 +30,7 @@ struct Parameters {
 };
 
 int64_t handy_parameter(const std::string& value) {
-    auto is_a_float = [](const std::string s) {
+    auto is_a_number = [](const std::string s) {
         return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
     };
 
@@ -48,7 +48,11 @@ int64_t handy_parameter(const std::string& value) {
     }
 
     const std::string tmp = value.substr(0, str_len);
-    return is_a_float(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
+    if (!is_a_number(tmp)) {
+        return -1;
+    }
+    double val = std::stod(tmp);
+    return static_cast<int64_t>(val * std::pow(10, exp));
 }
 
 void parse_args(int argc,
