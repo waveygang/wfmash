@@ -533,6 +533,19 @@ namespace skch
 
         std::vector<std::vector<std::string>> target_subsets = createTargetSubsets(targetSequenceNames);
 
+        // Calculate and log subset statistics
+        uint64_t total_subset_size = 0;
+        for (const auto& subset : target_subsets) {
+            for (const auto& seqName : subset) {
+                seqno_t seqId = idManager->getSequenceId(seqName);
+                total_subset_size += idManager->getSequenceLength(seqId);
+            }
+        }
+        double avg_subset_size = target_subsets.size() ? (double)total_subset_size / target_subsets.size() : 0;
+        std::cerr << "[wfmash::mashmap] Target subsets: " << target_subsets.size() 
+                  << ", target size: " << param.index_by_size << "bp"
+                  << ", average size: " << std::fixed << std::setprecision(0) << avg_subset_size << "bp" << std::endl;
+
         std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
         // Build index for the current subset
