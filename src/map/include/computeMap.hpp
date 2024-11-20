@@ -622,16 +622,16 @@ namespace skch
         std::atomic<bool> output_done(false);
         aggregate_atomic_queue_t aggregate_queue;
 
-        // Get total count of mappings
+        // Get total count of mappings (after subset filtering)
         uint64_t totalMappings = 0;
         for (const auto& [querySeqId, mappings] : combinedMappings) {
             totalMappings += mappings.size();
         }
 
-        // Initialize progress logger
+        // Initialize progress logger for final filtering
         progress_meter::ProgressMeter progress(
-            totalMappings * 2,
-            "[wfmash::mashmap] merging and filtering");
+            totalMappings,
+            "[wfmash::mashmap] final filtering");
 
         // Start worker threads
         std::vector<std::thread> workers;
@@ -717,6 +717,15 @@ namespace skch
 
           for (auto& worker : fragment_workers) {
               worker.join();
+          }
+
+          // Pre-filter mappings for this subset to reduce memory usage
+          for (auto& [querySeqId, mappings] : combinedMappings) {
+              if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                  MappingResultsVector_t filteredMappings;
+                  filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
+                  mappings = std::move(filteredMappings);
+              }
           }
 
           aggregator.join();
