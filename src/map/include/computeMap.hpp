@@ -719,16 +719,23 @@ namespace skch
               worker.join();
           }
 
-          // Pre-filter mappings for this subset to reduce memory usage
+          aggregator.join();
+
+          // Filter mappings for this subset to reduce memory usage
           for (auto& [querySeqId, mappings] : combinedMappings) {
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                   MappingResultsVector_t filteredMappings;
                   filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
                   mappings = std::move(filteredMappings);
+                  
+                  // Also apply length and identity filters
+                  filterWeakMappings(mappings, std::floor(param.block_length / param.segLength));
+                  if (param.filterLengthMismatches) {
+                      filterFalseHighIdentity(mappings);
+                  }
+                  sparsifyMappings(mappings);
               }
           }
-
-          aggregator.join();
 
           // Reset flags and clear aggregatedMappings for next iteration
           reader_done.store(false);
