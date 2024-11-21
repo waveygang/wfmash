@@ -2041,7 +2041,6 @@ namespace skch
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
               }
-              progress.increment(1);
           }
 
           // Assign the merged mapping ids
