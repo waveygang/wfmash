@@ -55,7 +55,8 @@ namespace skch
 {
   struct QueryMappingOutput {
       std::string queryName;
-      std::vector<MappingResult> results;
+      std::vector<MappingResult> results;        // Non-merged mappings
+      std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
       std::mutex mutex;
       progress_meter::ProgressMeter& progress;
   };
@@ -181,6 +182,10 @@ namespace skch
         {
             std::lock_guard<std::mutex> lock(fragment->output->mutex);
             fragment->output->results.insert(fragment->output->results.end(), l2Mappings.begin(), l2Mappings.end());
+            // Initialize mergedResults with same mappings
+            if (param.mergeMappings && param.split) {
+                fragment->output->mergedResults.insert(fragment->output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
+            }
         }
 
         // Update progress after processing the fragment
@@ -961,8 +966,10 @@ namespace skch
 
         mappingBoundarySanityCheck(input, output->results);
           
-        // Filter mappings within this subset
-        filterSubsetMappings(output->results, input->progress);
+        // Filter and get both merged and non-merged mappings
+        auto [nonMergedMappings, mergedMappings] = filterSubsetMappings(output->results, input->progress);
+        output->results = std::move(nonMergedMappings);
+        output->mergedResults = std::move(mergedMappings);
 
         return output;
       }
@@ -2192,13 +2199,17 @@ namespace skch
        * @param mappings Mappings to filter
        * @param param Algorithm parameters
        */
-      void filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
-          if (mappings.empty()) return;
+      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
+          if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
           
-          // Merge and filter chains within this subset
+          // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-          filterMaximallyMerged(maximallyMergedMappings, param, progress);
-          mappings = std::move(maximallyMergedMappings);
+          
+          // Update chain IDs consistently across both sets
+          updateChainIds(mappings);
+          updateChainIds(maximallyMergedMappings);
+          
+          return {std::move(mappings), std::move(maximallyMergedMappings)};
       }
 
       /**
