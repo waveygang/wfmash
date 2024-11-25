@@ -674,6 +674,25 @@ namespace skch
         }
         output_thread.join();
 
+        // Process both merged and non-merged mappings
+        for (auto& [querySeqId, mappings] : combinedMappings) {
+            if (param.mergeMappings && param.split) {
+                filterMaximallyMerged(mappings.mergedResults, param, progress);
+                robin_hood::unordered_set<offset_t> kept_chains;
+                for (auto &mapping : mappings.mergedResults) {
+                    kept_chains.insert(mapping.splitMappingId);
+                }
+                mappings.results.erase(
+                    std::remove_if(mappings.results.begin(), mappings.results.end(),
+                                 [&kept_chains](const MappingResult &mapping) {
+                                     return !kept_chains.count(mapping.splitMappingId);
+                                 }),
+                    mappings.results.end());
+            } else {
+                filterNonMergedMappings(mappings.results, param, progress);
+            }
+        }
+
         progress.finish();
 
       }
