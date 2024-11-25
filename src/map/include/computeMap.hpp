@@ -2190,22 +2190,23 @@ namespace skch
       void updateChainIds(MappingResultsVector_t& mappings) {
           if (mappings.empty()) return;
 
-          // Get current offset
-          offset_t offset = maxChainIdSeen.load(std::memory_order_relaxed);
-          
-          // Update all chain IDs in this subset
-          for (auto& mapping : mappings) {
-              mapping.splitMappingId += offset;
+          // Find maximum chain ID in this subset
+          offset_t max_subset_id = 0;
+          for (const auto& mapping : mappings) {
+              max_subset_id = std::max(max_subset_id, mapping.splitMappingId);
           }
 
-          // Update maximum seen if needed
-          if (!mappings.empty()) {
-              offset_t current_max = maxChainIdSeen.load(std::memory_order_relaxed);
-              offset_t new_max = mappings.back().splitMappingId;
-              while (new_max > current_max && 
-                     !maxChainIdSeen.compare_exchange_weak(current_max, new_max,
-                                                         std::memory_order_release,
-                                                         std::memory_order_relaxed));
+          // Get current offset and try to update with our max
+          offset_t current_max = maxChainIdSeen.load(std::memory_order_relaxed);
+          while (!maxChainIdSeen.compare_exchange_weak(current_max, current_max + max_subset_id + 1,
+                                                      std::memory_order_release,
+                                                      std::memory_order_relaxed)) {
+              // If CAS failed, current_max has the latest value
+          }
+          
+          // Update all chain IDs in this subset with the new offset
+          for (auto& mapping : mappings) {
+              mapping.splitMappingId += current_max;
           }
       }
 
