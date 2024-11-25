@@ -729,7 +729,9 @@ namespace skch
 
           // Filter mappings within this subset before merging with previous results
           for (auto& [querySeqId, mappings] : subsetMappings) {
+              // XXXXX this filtering should be done within each WORKER THREAD which runs once PER QUERY and is thus able to
               filterSubsetMappings(mappings, progress);
+              // XXXXX this should be done in the aggregator thread
               updateChainIds(mappings);
               
               // Merge with existing mappings for this query
