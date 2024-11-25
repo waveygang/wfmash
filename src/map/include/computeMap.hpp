@@ -684,6 +684,9 @@ namespace skch
               "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
+          // Create temporary storage for this subset's mappings
+          std::unordered_map<seqno_t, MappingResultsVector_t> subsetMappings;
+
           // Launch reader thread
           std::thread reader([&]() {
               reader_thread(input_queue, reader_done, progress, *idManager);
@@ -704,9 +707,9 @@ namespace skch
               });
           }
 
-          // Launch aggregator thread
+          // Launch aggregator thread with subset storage
           std::thread aggregator([&]() {
-              aggregator_thread(merged_queue, workers_done, combinedMappings);
+              aggregator_thread(merged_queue, workers_done, subsetMappings);
           });
 
           // Wait for all threads to complete
@@ -724,13 +727,24 @@ namespace skch
 
           aggregator.join();
 
-          // Filter mappings within this subset before aggregation
-          for (auto& [querySeqId, mappings] : combinedMappings) {
+          // Filter mappings within this subset before merging with previous results
+          for (auto& [querySeqId, mappings] : subsetMappings) {
               filterSubsetMappings(mappings, progress);
               updateChainIds(mappings);
+              
+              // Merge with existing mappings for this query
+              if (combinedMappings.find(querySeqId) == combinedMappings.end()) {
+                  combinedMappings[querySeqId] = std::move(mappings);
+              } else {
+                  combinedMappings[querySeqId].insert(
+                      combinedMappings[querySeqId].end(),
+                      std::make_move_iterator(mappings.begin()),
+                      std::make_move_iterator(mappings.end())
+                  );
+              }
           }
 
-          // Reset flags and clear aggregatedMappings for next iteration
+          // Reset flags for next iteration
           reader_done.store(false);
           workers_done.store(false);
           fragments_done.store(false);
