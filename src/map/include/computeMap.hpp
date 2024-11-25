@@ -729,10 +729,6 @@ namespace skch
 
           // Filter mappings within this subset before merging with previous results
           for (auto& [querySeqId, mappings] : subsetMappings) {
-              // XXXXX this filtering should be done within each WORKER THREAD which runs once PER QUERY and is thus able to
-              filterSubsetMappings(mappings, progress);
-              // XXXXX this should be done in the aggregator thread
-              updateChainIds(mappings);
               
               // Merge with existing mappings for this query
               if (combinedMappings.find(querySeqId) == combinedMappings.end()) {
@@ -964,6 +960,9 @@ namespace skch
         }
 
         mappingBoundarySanityCheck(input, output->results);
+          
+        // Filter mappings within this subset
+        filterSubsetMappings(output->results, input->progress);
 
         return output;
       }
@@ -1030,10 +1029,14 @@ namespace skch
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
+                  auto& mappings = output->results;
+                  // Update chain IDs before merging into combined mappings
+                  updateChainIds(mappings);
+                  
                   combinedMappings[querySeqId].insert(
                       combinedMappings[querySeqId].end(),
-                      output->results.begin(),
-                      output->results.end()
+                      mappings.begin(),
+                      mappings.end()
                   );
                   delete output;
               } else if (workers_done.load() && merged_queue.was_empty()) {
