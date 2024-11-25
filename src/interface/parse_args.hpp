@@ -105,7 +105,8 @@ void parse_args(int argc,
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'o', "one-to-one"});
     args::Flag lower_triangular(mapping_opts, "", "Only compute the lower triangular for all-vs-all mapping", {'L', "lower-triangular"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "map between sequence groups with different prefix [#]", {'Y', "group-prefix"});
-    args::Flag disable_grouping(mapping_opts, "", "disable sequence grouping (equivalent to -Y \\0)", {'G', "disable-grouping"});
+    args::Flag disable_grouping(mapping_opts, "", "disable sequence grouping and exclude self mappings", {'G', "disable-grouping"});
+    args::Flag enable_self_mappings(mapping_opts, "", "enable self mappings (overrides -G)", {'X', "self-maps"});
     args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
     args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
     args::ValueFlag<std::string> query_prefix(mapping_opts, "pfxs", "filter queries by comma-separated prefixes", {'Q', "query-prefix"});
@@ -170,13 +171,16 @@ void parse_args(int argc,
         exit(1);
     }
 
-    map_parameters.skip_self = false;
+    map_parameters.skip_self = !args::get(enable_self_mappings);
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
 
     if (disable_grouping) {
         map_parameters.prefix_delim = '\0';
         map_parameters.skip_prefix = false;
+        if (!args::get(enable_self_mappings)) {
+            map_parameters.skip_self = true;
+        }
     } else if (skip_prefix) {
         map_parameters.prefix_delim = args::get(skip_prefix);
         map_parameters.skip_prefix = map_parameters.prefix_delim != '\0';
