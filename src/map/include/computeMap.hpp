@@ -560,7 +560,12 @@ namespace skch
         std::cerr << ", average size: " << std::fixed << std::setprecision(0) << avg_subset_size << "bp" << std::endl;
 
         typedef std::vector<MappingResult> MappingResultsVector_t;
-        std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
+  
+        struct CombinedMappingResults {
+            MappingResultsVector_t results;
+            MappingResultsVector_t mergedResults;
+        };
+        std::unordered_map<seqno_t, CombinedMappingResults> combinedMappings;
 
         // Build index for the current subset
         // Open the index file once
@@ -637,7 +642,7 @@ namespace skch
         // Get total count of mappings
         uint64_t totalMappings = 0;
         for (const auto& [querySeqId, mappings] : combinedMappings) {
-            totalMappings += mappings.results.size() + mappings.mergedResults.size();
+            totalMappings += mappings.size();
         }
 
         // Initialize progress logger
@@ -656,7 +661,7 @@ namespace skch
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
-            auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings.results);
+            auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings);
             while (!aggregate_queue.try_push(task)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
@@ -681,19 +686,9 @@ namespace skch
         // Process both merged and non-merged mappings
         for (auto& [querySeqId, mappings] : combinedMappings) {
             if (param.mergeMappings && param.split) {
-                filterMaximallyMerged(mappings.mergedResults, param, progress);
-                robin_hood::unordered_set<offset_t> kept_chains;
-                for (auto &mapping : mappings.mergedResults) {
-                    kept_chains.insert(mapping.splitMappingId);
-                }
-                mappings.results.erase(
-                    std::remove_if(mappings.results.begin(), mappings.results.end(),
-                                 [&kept_chains](const MappingResult &mapping) {
-                                     return !kept_chains.count(mapping.splitMappingId);
-                                 }),
-                    mappings.results.end());
+                filterMaximallyMerged(mappings, param, progress);
             } else {
-                filterNonMergedMappings(mappings.results, param, progress);
+                filterNonMergedMappings(mappings, param, progress);
             }
         }
 
