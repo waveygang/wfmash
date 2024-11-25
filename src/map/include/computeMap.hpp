@@ -59,6 +59,9 @@ namespace skch
       std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
       std::mutex mutex;
       progress_meter::ProgressMeter& progress;
+      QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
+                        const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
+          : queryName(name), results(r), mergedResults(mr), progress(p) {}
   };
 
   struct FragmentData {
@@ -556,7 +559,11 @@ namespace skch
         }
         std::cerr << ", average size: " << std::fixed << std::setprecision(0) << avg_subset_size << "bp" << std::endl;
 
-        std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
+        struct CombinedMappingResults {
+            std::vector<MappingResult> results;
+            std::vector<MappingResult> mergedResults;
+        };
+        std::unordered_map<seqno_t, CombinedMappingResults> combinedMappings;
 
         // Build index for the current subset
         // Open the index file once
