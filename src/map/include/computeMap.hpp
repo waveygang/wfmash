@@ -560,12 +560,7 @@ namespace skch
         std::cerr << ", average size: " << std::fixed << std::setprecision(0) << avg_subset_size << "bp" << std::endl;
 
         typedef std::vector<MappingResult> MappingResultsVector_t;
-  
-        struct CombinedMappingResults {
-            MappingResultsVector_t results;
-            MappingResultsVector_t mergedResults;
-        };
-        std::unordered_map<seqno_t, CombinedMappingResults> combinedMappings;
+        std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
         // Build index for the current subset
         // Open the index file once
@@ -642,7 +637,7 @@ namespace skch
         // Get total count of mappings
         uint64_t totalMappings = 0;
         for (const auto& [querySeqId, mappings] : combinedMappings) {
-            totalMappings += mappings.size();
+            totalMappings += mappings.results.size() + mappings.mergedResults.size();
         }
 
         // Initialize progress logger
@@ -661,7 +656,7 @@ namespace skch
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
-            auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings);
+            auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings.results);
             while (!aggregate_queue.try_push(task)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
@@ -686,9 +681,9 @@ namespace skch
         // Process both merged and non-merged mappings
         for (auto& [querySeqId, mappings] : combinedMappings) {
             if (param.mergeMappings && param.split) {
-                filterMaximallyMerged(mappings, param, progress);
+                filterMaximallyMerged(mappings.results, param, progress);
             } else {
-                filterNonMergedMappings(mappings, param, progress);
+                filterNonMergedMappings(mappings.results, param, progress);
             }
         }
 
