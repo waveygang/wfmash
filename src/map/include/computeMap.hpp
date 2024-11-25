@@ -149,6 +149,9 @@ namespace skch
       typedef atomic_queue::AtomicQueue<std::string*, 1024> writer_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<FragmentData*, 8192, nullptr, true, true, false, false> fragment_atomic_queue_t;
+      
+      // Track maximum chain ID seen across all subsets
+      std::atomic<offset_t> maxChainIdSeen{0};
 
 
     void processFragment(FragmentData* fragment, 
@@ -720,6 +723,12 @@ namespace skch
           }
 
           aggregator.join();
+
+          // Filter mappings within this subset before aggregation
+          for (auto& [querySeqId, mappings] : combinedMappings) {
+              filterSubsetMappings(mappings, progress);
+              updateChainIds(mappings);
+          }
 
           // Reset flags and clear aggregatedMappings for next iteration
           reader_done.store(false);
@@ -2159,6 +2168,47 @@ namespace skch
        * @param begin Iterator to the start of the chain
        * @param end Iterator to the end of the chain
        */
+      /**
+       * @brief Filter mappings within a subset before aggregation
+       * @param mappings Mappings to filter
+       * @param param Algorithm parameters
+       */
+      void filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
+          if (mappings.empty()) return;
+          
+          // Merge and filter chains within this subset
+          auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
+          filterMaximallyMerged(maximallyMergedMappings, param, progress);
+          mappings = std::move(maximallyMergedMappings);
+      }
+
+      /**
+       * @brief Update chain IDs to prevent conflicts between subsets
+       * @param mappings Mappings whose chain IDs need updating
+       * @param maxId Current maximum chain ID seen
+       */
+      void updateChainIds(MappingResultsVector_t& mappings) {
+          if (mappings.empty()) return;
+
+          // Get current offset
+          offset_t offset = maxChainIdSeen.load(std::memory_order_relaxed);
+          
+          // Update all chain IDs in this subset
+          for (auto& mapping : mappings) {
+              mapping.splitMappingId += offset;
+          }
+
+          // Update maximum seen if needed
+          if (!mappings.empty()) {
+              offset_t current_max = maxChainIdSeen.load(std::memory_order_relaxed);
+              offset_t new_max = mappings.back().splitMappingId;
+              while (new_max > current_max && 
+                     !maxChainIdSeen.compare_exchange_weak(current_max, new_max,
+                                                         std::memory_order_release,
+                                                         std::memory_order_relaxed));
+          }
+      }
+
       void computeChainStatistics(std::vector<MappingResult>::iterator begin, std::vector<MappingResult>::iterator end) {
           offset_t chain_start_query = std::numeric_limits<offset_t>::max();
           offset_t chain_end_query = std::numeric_limits<offset_t>::min();
@@ -2297,8 +2347,14 @@ namespace skch
                   auto& mappings = *(task->second);
                   
                   std::string queryName = idManager->getSequenceName(querySeqId);
-                  processAggregatedMappings(queryName, mappings, progress);
-                  
+                  // Final filtering pass on pre-filtered mappings
+                  if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                      MappingResultsVector_t filteredMappings;
+                      filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
+                                  param.filterMode == filter::ONETOONE, *idManager, progress);
+                      mappings = std::move(filteredMappings);
+                  }
+
                   std::stringstream ss;
                   reportReadMappings(mappings, queryName, ss);
                   
