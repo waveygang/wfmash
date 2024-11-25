@@ -2233,24 +2233,22 @@ namespace skch
       void updateChainIds(MappingResultsVector_t& mappings) {
           if (mappings.empty()) return;
 
-          // Create a mapping of old IDs to new sequential IDs
-          std::unordered_map<offset_t, offset_t> id_map;
-          offset_t next_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
+          // Get current offset
+          offset_t base_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
           
-          // First pass: build mapping of old IDs to new sequential IDs
+          // Find the maximum chain ID in this subset
+          offset_t max_chain_id = 0;
           for (const auto& mapping : mappings) {
-              if (id_map.find(mapping.splitMappingId) == id_map.end()) {
-                  id_map[mapping.splitMappingId] = next_id++;
-              }
-          }
-          
-          // Second pass: update the IDs
-          for (auto& mapping : mappings) {
-              mapping.splitMappingId = id_map[mapping.splitMappingId];
+              max_chain_id = std::max(max_chain_id, mapping.splitMappingId);
           }
 
-          // Update maxChainIdSeen to reflect the actual number of new IDs used
-          maxChainIdSeen.store(next_id, std::memory_order_release);
+          // Only update IDs if they haven't been set yet (== position index)
+          // This preserves chain relationships from mergeMappingsInRange
+          for (auto& mapping : mappings) {
+              if (mapping.splitMappingId <= max_chain_id) {
+                  mapping.splitMappingId += base_id;
+              }
+          }
       }
 
       void computeChainStatistics(std::vector<MappingResult>::iterator begin, std::vector<MappingResult>::iterator end) {
