@@ -307,7 +307,7 @@ void parse_args(int argc,
             exit(1);
         }
 
-        if (!yeet_parameters.approx_mapping && s > 10000) {
+        if (!approx_mapping && s > 10000) {
             std::cerr << "[wfmash] ERROR: segment length (-s) must be <= 10kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
@@ -336,7 +336,7 @@ void parse_args(int argc,
             exit(1);
         }
 
-        if (!yeet_parameters.approx_mapping && l > 30000) {
+        if (!approx_mapping && l > 30000) {
             std::cerr << "[wfmash] ERROR: block length (-l) must be <= 30kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
@@ -367,7 +367,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
-        if (!yeet_parameters.approx_mapping && l > 100000) {
+        if (!approx_mapping && l > 100000) {
             std::cerr << "[wfmash] ERROR: max mapping length (-P) must be <= 100kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
