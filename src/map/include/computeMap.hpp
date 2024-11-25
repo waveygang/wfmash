@@ -2236,18 +2236,20 @@ namespace skch
           // Get current offset
           offset_t base_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
           
-          // Find the maximum chain ID in this subset
-          offset_t max_chain_id = 0;
+          // Build map of old chain IDs to dense range starting at 0
+          std::unordered_map<offset_t, offset_t> id_map;
+          offset_t next_id = 0;
+          
+          // First pass - build the mapping
           for (const auto& mapping : mappings) {
-              max_chain_id = std::max(max_chain_id, mapping.splitMappingId);
+              if (id_map.count(mapping.splitMappingId) == 0) {
+                  id_map[mapping.splitMappingId] = next_id++;
+              }
           }
 
-          // Only update IDs if they haven't been set yet (== position index)
-          // This preserves chain relationships from mergeMappingsInRange
+          // Second pass - update the IDs to dense range
           for (auto& mapping : mappings) {
-              if (mapping.splitMappingId <= max_chain_id) {
-                  mapping.splitMappingId += base_id;
-              }
+              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
           }
       }
 
