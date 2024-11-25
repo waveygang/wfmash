@@ -637,7 +637,7 @@ namespace skch
         // Get total count of mappings
         uint64_t totalMappings = 0;
         for (const auto& [querySeqId, mappings] : combinedMappings) {
-            totalMappings += mappings.results.size() + mappings.mergedResults.size();
+            totalMappings += mappings.size();
         }
 
         // Initialize progress logger
@@ -656,7 +656,7 @@ namespace skch
 
         // Enqueue tasks
         for (auto& [querySeqId, mappings] : combinedMappings) {
-            auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings.results);
+            auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings);
             while (!aggregate_queue.try_push(task)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
@@ -681,9 +681,9 @@ namespace skch
         // Process both merged and non-merged mappings
         for (auto& [querySeqId, mappings] : combinedMappings) {
             if (param.mergeMappings && param.split) {
-                filterMaximallyMerged(mappings.results, param, progress);
+                filterMaximallyMerged(mappings, param, progress);
             } else {
-                filterNonMergedMappings(mappings.results, param, progress);
+                filterNonMergedMappings(mappings, param, progress);
             }
         }
 
