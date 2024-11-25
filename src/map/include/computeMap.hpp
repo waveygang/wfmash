@@ -1050,9 +1050,7 @@ namespace skch
               if (merged_queue.try_pop(output)) {
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
                   auto& mappings = output->results;
-                  // Update chain IDs before merging into combined mappings
-                  updateChainIds(mappings);
-                  
+                  // Chain IDs are already compacted in mapModule
                   combinedMappings[querySeqId].insert(
                       combinedMappings[querySeqId].end(),
                       mappings.begin(),
@@ -2218,10 +2216,33 @@ namespace skch
           // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
           
-          // Update chain IDs consistently across both sets
-          updateChainIds(mappings);
-          updateChainIds(maximallyMergedMappings);
+          // Build dense chain ID mapping
+          std::unordered_map<offset_t, offset_t> id_map;
+          offset_t next_id = 0;
           
+          // First pass - build the mapping from both sets
+          for (const auto& mapping : mappings) {
+              if (id_map.count(mapping.splitMappingId) == 0) {
+                  id_map[mapping.splitMappingId] = next_id++;
+              }
+          }
+          for (const auto& mapping : maximallyMergedMappings) {
+              if (id_map.count(mapping.splitMappingId) == 0) {
+                  id_map[mapping.splitMappingId] = next_id++;
+              }
+          }
+
+          // Get atomic offset for this batch of chain IDs
+          offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
+          
+          // Apply compacted IDs with offset
+          for (auto& mapping : mappings) {
+              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+          }
+          for (auto& mapping : maximallyMergedMappings) {
+              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+          }
+
           return {std::move(mappings), std::move(maximallyMergedMappings)};
       }
 
@@ -2230,28 +2251,6 @@ namespace skch
        * @param mappings Mappings whose chain IDs need updating
        * @param maxId Current maximum chain ID seen
        */
-      void updateChainIds(MappingResultsVector_t& mappings) {
-          if (mappings.empty()) return;
-
-          // Get current offset
-          offset_t base_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
-          
-          // Build map of old chain IDs to dense range starting at 0
-          std::unordered_map<offset_t, offset_t> id_map;
-          offset_t next_id = 0;
-          
-          // First pass - build the mapping
-          for (const auto& mapping : mappings) {
-              if (id_map.count(mapping.splitMappingId) == 0) {
-                  id_map[mapping.splitMappingId] = next_id++;
-              }
-          }
-
-          // Second pass - update the IDs to dense range
-          for (auto& mapping : mappings) {
-              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
-          }
-      }
 
       void computeChainStatistics(std::vector<MappingResult>::iterator begin, std::vector<MappingResult>::iterator end) {
           offset_t chain_start_query = std::numeric_limits<offset_t>::max();
