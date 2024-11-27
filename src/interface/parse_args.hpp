@@ -99,7 +99,7 @@ void parse_args(int argc,
     args::Group mapping_opts(options_group, "Mapping:");
     args::Flag approx_mapping(mapping_opts, "", "output approximate mappings (no alignment)", {'m', "approx-mapping"});
     args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum mapping identity [70]", {'p', "map-pct-id"});
-    args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per query/target pair [1]", {'n', "mappings"});
+    args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "INT", "segment length for mapping [1k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [3*segment-length]", {'l', "block-length"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'o', "one-to-one"});
@@ -667,12 +667,11 @@ void parse_args(int argc,
     }
 #endif
 
-    args::ValueFlag<int> num_mappings_for_segments(mapping_opts, "N", "number of mappings per segment [1]", {"mappings-per-segment"});
-    if (num_mappings_for_segments) {
-        if (args::get(num_mappings_for_segments) > 0) {
-            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
+    if (num_mappings) {
+        if (args::get(num_mappings) > 0) {
+            map_parameters.numMappingsForSegment = args::get(num_mappings);
         } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be grater than 0." << std::endl;
+            std::cerr << "[wfmash] ERROR: the number of mappings to retain (-n) must be greater than 0." << std::endl;
             exit(1);
         }
     } else {
