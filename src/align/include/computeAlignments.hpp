@@ -194,10 +194,10 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
 
     // Compute padding
-    const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : currentRecord.rStartPos;
-    const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+    const uint64_t head_padding = std::min(currentRecord.rStartPos, 
+        std::max(param.wflign_max_len_minor, param.target_padding));
+    const uint64_t tail_padding = std::min(ref_size - currentRecord.rEndPos,
+        std::max(param.wflign_max_len_minor, param.target_padding));
 
     // Extract reference sequence
     int64_t ref_len;

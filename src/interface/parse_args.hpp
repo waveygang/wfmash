@@ -124,6 +124,7 @@ void parse_args(int argc,
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
+    args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [0]", {'E', "target-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
@@ -474,6 +475,17 @@ void parse_args(int argc,
     align_parameters.wflign_erode_k = -1; // will trigger estimation based on sequence divergence
     align_parameters.wflign_min_inv_patch_len = 23;
     align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
+
+    if (target_padding) {
+        const int64_t p = handy_parameter(args::get(target_padding));
+        if (p < 0) {
+            std::cerr << "[wfmash] ERROR: target padding must be >= 0" << std::endl;
+            exit(1);
+        }
+        align_parameters.target_padding = p;
+    } else {
+        align_parameters.target_padding = 0;
+    }
 
     if (thread_count) {
         map_parameters.threads = args::get(thread_count);
