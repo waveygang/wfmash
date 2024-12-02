@@ -149,7 +149,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
        * @param[in]   mappingRecordLine
        * @param[out]  currentRecord
        */
-      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord) {
+      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding) {
           std::stringstream ss(mappingRecordLine); // Insert the string into a stream
           std::string word; // Have a buffer string
 
@@ -180,14 +180,14 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               // Apply target padding while ensuring we don't go below 0 or above reference length
               uint64_t rStartPos = std::stoi(tokens[7]);
               uint64_t rEndPos = std::stoi(tokens[8]);
-              if (param.target_padding > 0) {
-                  if (rStartPos >= param.target_padding) {
-                      rStartPos -= param.target_padding;
+              if (target_padding > 0) {
+                  if (rStartPos >= target_padding) {
+                      rStartPos -= target_padding;
                   } else {
                       rStartPos = 0;
                   }
-                  if (rEndPos + param.target_padding <= ref_len) {
-                      rEndPos += param.target_padding;
+                  if (rEndPos + target_padding <= ref_len) {
+                      rEndPos += target_padding;
                   } else {
                       rEndPos = ref_len;
                   }
@@ -326,7 +326,7 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
         std::string* line_ptr = nullptr;
         if (line_queue.try_pop(line_ptr)) {
             MappingBoundaryRow currentRecord;
-            parseMashmapRow(*line_ptr, currentRecord);
+            parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
             
             // Process the record and create seq_record_t
             seq_record_t* rec = createSeqRecord(currentRecord, *line_ptr, local_ref_faidx, local_query_faidx);
