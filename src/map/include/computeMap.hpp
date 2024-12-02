@@ -55,9 +55,13 @@ namespace skch
 {
   struct QueryMappingOutput {
       std::string queryName;
-      std::vector<MappingResult> results;
+      std::vector<MappingResult> results;        // Non-merged mappings
+      std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
       std::mutex mutex;
       progress_meter::ProgressMeter& progress;
+      QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
+                        const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
+          : queryName(name), results(r), mergedResults(mr), progress(p) {}
   };
 
   struct FragmentData {
@@ -149,6 +153,9 @@ namespace skch
       typedef atomic_queue::AtomicQueue<std::string*, 1024> writer_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<QueryMappingOutput*, 1024, nullptr, true, true, false, false> query_output_atomic_queue_t;
       typedef atomic_queue::AtomicQueue<FragmentData*, 8192, nullptr, true, true, false, false> fragment_atomic_queue_t;
+      
+      // Track maximum chain ID seen across all subsets
+      std::atomic<offset_t> maxChainIdSeen{0};
 
 
     void processFragment(FragmentData* fragment, 
@@ -178,6 +185,10 @@ namespace skch
         {
             std::lock_guard<std::mutex> lock(fragment->output->mutex);
             fragment->output->results.insert(fragment->output->results.end(), l2Mappings.begin(), l2Mappings.end());
+            // Initialize mergedResults with same mappings
+            if (param.mergeMappings && param.split) {
+                fragment->output->mergedResults.insert(fragment->output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
+            }
         }
 
         // Update progress after processing the fragment
@@ -548,6 +559,7 @@ namespace skch
         }
         std::cerr << ", average size: " << std::fixed << std::setprecision(0) << avg_subset_size << "bp" << std::endl;
 
+        typedef std::vector<MappingResult> MappingResultsVector_t;
         std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
 
         // Build index for the current subset
@@ -666,6 +678,15 @@ namespace skch
         }
         output_thread.join();
 
+        // Process both merged and non-merged mappings
+        for (auto& [querySeqId, mappings] : combinedMappings) {
+            if (param.mergeMappings && param.split) {
+                filterMaximallyMerged(mappings, param, progress);
+            } else {
+                filterNonMergedMappings(mappings, param, progress);
+            }
+        }
+
         progress.finish();
 
       }
@@ -680,6 +701,9 @@ namespace skch
               total_seq_length,
               "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
+
+          // Create temporary storage for this subset's mappings
+          std::unordered_map<seqno_t, MappingResultsVector_t> subsetMappings;
 
           // Launch reader thread
           std::thread reader([&]() {
@@ -701,9 +725,9 @@ namespace skch
               });
           }
 
-          // Launch aggregator thread
+          // Launch aggregator thread with subset storage
           std::thread aggregator([&]() {
-              aggregator_thread(merged_queue, workers_done, combinedMappings);
+              aggregator_thread(merged_queue, workers_done, subsetMappings);
           });
 
           // Wait for all threads to complete
@@ -721,7 +745,22 @@ namespace skch
 
           aggregator.join();
 
-          // Reset flags and clear aggregatedMappings for next iteration
+          // Filter mappings within this subset before merging with previous results
+          for (auto& [querySeqId, mappings] : subsetMappings) {
+              
+              // Merge with existing mappings for this query
+              if (combinedMappings.find(querySeqId) == combinedMappings.end()) {
+                  combinedMappings[querySeqId] = std::move(mappings);
+              } else {
+                  combinedMappings[querySeqId].insert(
+                      combinedMappings[querySeqId].end(),
+                      std::make_move_iterator(mappings.begin()),
+                      std::make_move_iterator(mappings.end())
+                  );
+              }
+          }
+
+          // Reset flags for next iteration
           reader_done.store(false);
           workers_done.store(false);
           fragments_done.store(false);
@@ -939,6 +978,11 @@ namespace skch
         }
 
         mappingBoundarySanityCheck(input, output->results);
+          
+        // Filter and get both merged and non-merged mappings
+        auto [nonMergedMappings, mergedMappings] = filterSubsetMappings(output->results, input->progress);
+        output->results = std::move(nonMergedMappings);
+        output->mergedResults = std::move(mergedMappings);
 
         return output;
       }
@@ -1005,10 +1049,12 @@ namespace skch
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
+                  auto& mappings = output->results;
+                  // Chain IDs are already compacted in mapModule
                   combinedMappings[querySeqId].insert(
                       combinedMappings[querySeqId].end(),
-                      output->results.begin(),
-                      output->results.end()
+                      mappings.begin(),
+                      mappings.end()
                   );
                   delete output;
               } else if (workers_done.load() && merged_queue.was_empty()) {
@@ -2159,6 +2205,53 @@ namespace skch
        * @param begin Iterator to the start of the chain
        * @param end Iterator to the end of the chain
        */
+      /**
+       * @brief Filter mappings within a subset before aggregation
+       * @param mappings Mappings to filter
+       * @param param Algorithm parameters
+       */
+      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
+          if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+          
+          // Only merge once and keep both versions
+          auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
+          
+          // Build dense chain ID mapping
+          std::unordered_map<offset_t, offset_t> id_map;
+          offset_t next_id = 0;
+          
+          // First pass - build the mapping from both sets
+          for (const auto& mapping : mappings) {
+              if (id_map.count(mapping.splitMappingId) == 0) {
+                  id_map[mapping.splitMappingId] = next_id++;
+              }
+          }
+          for (const auto& mapping : maximallyMergedMappings) {
+              if (id_map.count(mapping.splitMappingId) == 0) {
+                  id_map[mapping.splitMappingId] = next_id++;
+              }
+          }
+
+          // Get atomic offset for this batch of chain IDs
+          offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
+          
+          // Apply compacted IDs with offset
+          for (auto& mapping : mappings) {
+              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+          }
+          for (auto& mapping : maximallyMergedMappings) {
+              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+          }
+
+          return {std::move(mappings), std::move(maximallyMergedMappings)};
+      }
+
+      /**
+       * @brief Update chain IDs to prevent conflicts between subsets
+       * @param mappings Mappings whose chain IDs need updating
+       * @param maxId Current maximum chain ID seen
+       */
+
       void computeChainStatistics(std::vector<MappingResult>::iterator begin, std::vector<MappingResult>::iterator end) {
           offset_t chain_start_query = std::numeric_limits<offset_t>::max();
           offset_t chain_end_query = std::numeric_limits<offset_t>::min();
@@ -2297,8 +2390,14 @@ namespace skch
                   auto& mappings = *(task->second);
                   
                   std::string queryName = idManager->getSequenceName(querySeqId);
-                  processAggregatedMappings(queryName, mappings, progress);
-                  
+                  // Final filtering pass on pre-filtered mappings
+                  if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+                      MappingResultsVector_t filteredMappings;
+                      filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
+                                  param.filterMode == filter::ONETOONE, *idManager, progress);
+                      mappings = std::move(filteredMappings);
+                  }
+
                   std::stringstream ss;
                   reportReadMappings(mappings, queryName, ss);
                   

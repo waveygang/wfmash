@@ -99,12 +99,14 @@ void parse_args(int argc,
     args::Group mapping_opts(options_group, "Mapping:");
     args::Flag approx_mapping(mapping_opts, "", "output approximate mappings (no alignment)", {'m', "approx-mapping"});
     args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum mapping identity [70]", {'p', "map-pct-id"});
-    args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per query/target pair [1]", {'n', "mappings"});
+    args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "INT", "segment length for mapping [1k]", {'s', "segment-length"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [3*segment-length]", {'l', "block-length"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'o', "one-to-one"});
     args::Flag lower_triangular(mapping_opts, "", "Only compute the lower triangular for all-vs-all mapping", {'L', "lower-triangular"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "map between sequence groups with different prefix [#]", {'Y', "group-prefix"});
+    args::Flag disable_grouping(mapping_opts, "", "disable sequence grouping and exclude self mappings", {'G', "disable-grouping"});
+    args::Flag enable_self_mappings(mapping_opts, "", "enable self mappings (overrides -G)", {'X', "self-maps"});
     args::ValueFlag<std::string> target_prefix(mapping_opts, "pfx", "use only targets whose names start with this prefix", {'T', "target-prefix"});
     args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
     args::ValueFlag<std::string> query_prefix(mapping_opts, "pfxs", "filter queries by comma-separated prefixes", {'Q', "query-prefix"});
@@ -169,11 +171,17 @@ void parse_args(int argc,
         exit(1);
     }
 
-    map_parameters.skip_self = false;
+    map_parameters.skip_self = !args::get(enable_self_mappings);
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
 
-    if (skip_prefix) {
+    if (disable_grouping) {
+        map_parameters.prefix_delim = '\0';
+        map_parameters.skip_prefix = false;
+        if (!args::get(enable_self_mappings)) {
+            map_parameters.skip_self = true;
+        }
+    } else if (skip_prefix) {
         map_parameters.prefix_delim = args::get(skip_prefix);
         map_parameters.skip_prefix = map_parameters.prefix_delim != '\0';
     } else {
@@ -303,7 +311,7 @@ void parse_args(int argc,
             exit(1);
         }
 
-        if (!yeet_parameters.approx_mapping && s > 10000) {
+        if (!approx_mapping && s > 10000) {
             std::cerr << "[wfmash] ERROR: segment length (-s) must be <= 10kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
@@ -332,7 +340,7 @@ void parse_args(int argc,
             exit(1);
         }
 
-        if (!yeet_parameters.approx_mapping && l > 30000) {
+        if (!approx_mapping && l > 30000) {
             std::cerr << "[wfmash] ERROR: block length (-l) must be <= 30kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
@@ -363,7 +371,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
-        if (!yeet_parameters.approx_mapping && l > 100000) {
+        if (!approx_mapping && l > 100000) {
             std::cerr << "[wfmash] ERROR: max mapping length (-P) must be <= 100kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
@@ -664,12 +672,11 @@ void parse_args(int argc,
     }
 #endif
 
-    args::ValueFlag<int> num_mappings_for_segments(mapping_opts, "N", "number of mappings per segment [1]", {"mappings-per-segment"});
-    if (num_mappings_for_segments) {
-        if (args::get(num_mappings_for_segments) > 0) {
-            map_parameters.numMappingsForSegment = args::get(num_mappings_for_segments) ;
+    if (num_mappings) {
+        if (args::get(num_mappings) > 0) {
+            map_parameters.numMappingsForSegment = args::get(num_mappings);
         } else {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, the number of mappings to retain for each segment has to be grater than 0." << std::endl;
+            std::cerr << "[wfmash] ERROR: the number of mappings to retain (-n) must be greater than 0." << std::endl;
             exit(1);
         }
     } else {
