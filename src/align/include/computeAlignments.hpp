@@ -176,8 +176,24 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.qEndPos = std::stoi(tokens[3]);
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = tokens[5];
-              currentRecord.rStartPos = std::stoi(tokens[7]);
-              currentRecord.rEndPos = std::stoi(tokens[8]);
+              const uint64_t ref_len = std::stoi(tokens[6]);
+              // Apply target padding while ensuring we don't go below 0 or above reference length
+              uint64_t rStartPos = std::stoi(tokens[7]);
+              uint64_t rEndPos = std::stoi(tokens[8]);
+              if (param.target_padding > 0) {
+                  if (rStartPos >= param.target_padding) {
+                      rStartPos -= param.target_padding;
+                  } else {
+                      rStartPos = 0;
+                  }
+                  if (rEndPos + param.target_padding <= ref_len) {
+                      rEndPos += param.target_padding;
+                  } else {
+                      rEndPos = ref_len;
+                  }
+              }
+              currentRecord.rStartPos = rStartPos;
+              currentRecord.rEndPos = rEndPos;
               currentRecord.mashmap_estimated_identity = mm_id;
           }
       }
