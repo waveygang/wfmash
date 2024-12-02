@@ -594,15 +594,20 @@ void parse_args(int argc,
         //map_parameters.world_minimizers = true;
     //}
 
-    if (read_index)
+    if (read_index || write_index)
     {
       map_parameters.indexFilename = args::get(read_index);
     } else {
       map_parameters.indexFilename = "";
     }
 
-    map_parameters.overwrite_index = false;
-    map_parameters.create_index_only = false;
+    if (write_index) {
+        map_parameters.overwrite_index = true;
+        map_parameters.create_index_only = true;
+    } else {
+        map_parameters.overwrite_index = false;
+        map_parameters.create_index_only = false;
+    }
 
     if (index_by) {
         const int64_t index_size = handy_parameter(args::get(index_by));
