@@ -530,7 +530,7 @@ void computeAlignments() {
 
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
-                parseMashmapRow(mappingRecordLine, currentRecord);
+                parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
             }
         }
