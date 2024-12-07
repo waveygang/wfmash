@@ -87,7 +87,7 @@ if (BUILD_DEPS)
   ExternalProject_Add(htslib
     URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/htslib
-    CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/htslib --disable-libcurl --disable-s3 
+    CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/htslib --disable-libcurl --disable-s3
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND $(MAKE) install
     BUILD_IN_SOURCE 1
@@ -171,6 +171,7 @@ target_link_libraries(wfmash
   Threads::Threads
 )
 
+# This is to disable tests defined in CTestCustom.cmake:
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
 add_test(
