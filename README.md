@@ -208,10 +208,10 @@ This will install the `wfmash` binary and any required libraries to the default 
 
 #### Tests
 
-To build and run tests:
+To build and run tests, change to build directory and
 
 ```sh
-cmake --build build --target test
+ctest .
 ```
 
 #### Notes for distribution
@@ -261,6 +261,8 @@ If you have `guix`:
 ```shell
 guix build -f guix.scm
 ```
+
+To build guix in a development container, see the instructions in the header of [guix.scm](./guix.scm).
 
 #### Docker and Singularity images with nix
 
