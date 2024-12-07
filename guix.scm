@@ -12,7 +12,7 @@
 ;;   mkdir build
 ;;   cd build
 ;;   cmake ..
-;;   make
+;;   make -j 12
 ;;
 ;; For the tests you may need /usr/bin/env. Inside the container:
 ;;
@@ -66,7 +66,7 @@
        ("gmp" ,gmp)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
-       ("jemalloc" ,jemalloc)
+       ; ("jemalloc" ,jemalloc)
        ("htslib" ,htslib)
        ("git" ,git)
        ; ("bc" ,bc)               ; for tests

@@ -17,7 +17,7 @@
 ;;
 ;;   mkdir -p /usr/bin ; ln -s $GUIX_ENVIRONMENT/bin/env /usr/bin/env
 ;;
-;; by Pjotr Prins (c) 2023
+;; by Pjotr Prins (c) 2023-2024
 
 (use-modules
  ((guix licenses) #:prefix license:)
@@ -74,7 +74,7 @@
        ;; ("clang" ,clang)      ; add this to test clang builds
        ;; ("lld" ,lld)          ; add this to test clang builds
        ("gcc" ,gcc-12)
-       ("gsl-static" ,gsl-static)
+       ("gsl-static" ,gsl "static")
        ("gmp" ,gmp)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
