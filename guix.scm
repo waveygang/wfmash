@@ -22,18 +22,16 @@
 
 (use-modules
  ((guix licenses) #:prefix license:)
- (guix gexp)
- (guix packages)
- (guix git-download)
  (guix build-system cmake)
-                                        ; (guix gexp)
+ (guix gexp)
+ (guix git-download)
+ (guix packages)
  (guix utils)
  (gnu packages algebra)
  (gnu packages base)
  (gnu packages bioinformatics)
  (gnu packages build-tools)
  (gnu packages compression)
-                                        ; (gnu packages curl)
  (gnu packages gcc)
  (gnu packages jemalloc)
  (gnu packages llvm)
@@ -54,32 +52,31 @@
 (define-public wfmash-git
   (package
     (name "wfmash-git")
-    (version (git-version "0.10.7" "HEAD" %git-commit))
+    (version (git-version "0.21" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
+    (arguments
+     `(#:tests? #f)) ; disable tests until I fix finding the binary wfmash
     (inputs
      `(
-       ;; ("clang" ,clang)      ; add this to test clang builds
-       ;; ("lld" ,lld)          ; add this to test clang builds
+       ("bzip2" ,bzip2)
+       ("coreutils" ,coreutils) ; for echo and env in tests
        ("gcc" ,gcc-12)
-       ("gsl" ,gsl)
+       ("git" ,git)
        ("gmp" ,gmp)
+       ("gsl" ,gsl)
+       ("htslib" ,htslib)
+       ("libdeflate" ,libdeflate)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
-       ; ("jemalloc" ,jemalloc)
-       ("htslib" ,htslib)
-       ("git" ,git)
-       ; ("bc" ,bc)               ; for tests
-       ("coreutils" ,coreutils) ; for echo and env in tests
-       ; ("curl" ,curl)
-       ; ("parallel" ,parallel) ; for wfmash-parallel
-       ("bzip2" ,bzip2)
        ("xz" ,xz)
-       ("zlib" ,zlib)
-       ("libdeflate" ,libdeflate)))
+       ("zlib" ,zlib)))
      (synopsis "wfmash")
      (description
-      "wfmash.")
+      "wfmash is an aligner for pangenomes that combines efficient homology
+mapping with base-level alignment. It uses MashMap to find approximate
+mappings between sequences, then applies WFA (Wave Front Alignment) to
+obtain base-level alignments.")
      (home-page "https://github.com/waveygang/wfmash")
      (license license:expat)))
 
