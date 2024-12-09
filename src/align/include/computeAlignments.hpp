@@ -106,6 +106,114 @@ typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, fals
  */
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
+std::string adjust_cigar_string(const std::string& cigar, const std::string& query_seq, const std::string& target_seq) {
+    std::vector<std::pair<int, char>> ops;
+    size_t i = 0;
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        ops.emplace_back(count, op);
+        i = j + 1;
+    }
+
+    size_t query_pos = 0;
+    size_t target_pos = 0;
+    std::vector<char> query_alignment;
+    std::vector<char> target_alignment;
+
+    for (const auto& op : ops) {
+        int count = op.first;
+        char code = op.second;
+        if (code == '=') {
+            for (int k = 0; k < count; ++k) {
+                query_alignment.push_back(query_seq[query_pos++]);
+                target_alignment.push_back(target_seq[target_pos++]);
+            }
+        } else if (code == 'X') {
+            for (int k = 0; k < count; ++k) {
+                query_alignment.push_back(query_seq[query_pos++]);
+                target_alignment.push_back(target_seq[target_pos++]);
+            }
+        } else if (code == 'I') {
+            for (int k = 0; k < count; ++k) {
+                query_alignment.push_back(query_seq[query_pos++]);
+                target_alignment.push_back('-');
+            }
+        } else if (code == 'D') {
+            for (int k = 0; k < count; ++k) {
+                query_alignment.push_back('-');
+                target_alignment.push_back(target_seq[target_pos++]);
+            }
+        }
+    }
+
+    size_t idx = 0;
+    while (idx < query_alignment.size() && (query_alignment[idx] == '-' || target_alignment[idx] == '-')) {
+        idx++;
+    }
+    if (idx > 0) {
+        for (size_t i = idx; i > 0; --i) {
+            if (query_alignment[i - 1] == '-' && target_alignment[i - 1] != '-') {
+                std::swap(query_alignment[i - 1], query_alignment[i]);
+                std::swap(target_alignment[i - 1], target_alignment[i]);
+            } else if (target_alignment[i - 1] == '-' && query_alignment[i - 1] != '-') {
+                std::swap(query_alignment[i - 1], query_alignment[i]);
+                std::swap(target_alignment[i - 1], target_alignment[i]);
+            }
+        }
+    }
+
+    idx = query_alignment.size() - 1;
+    while (idx > 0 && (query_alignment[idx] == '-' || target_alignment[idx] == '-')) {
+        idx--;
+    }
+    if (idx < query_alignment.size() - 1) {
+        for (size_t i = idx; i < query_alignment.size() - 1; ++i) {
+            if (query_alignment[i + 1] == '-' && target_alignment[i + 1] != '-') {
+                std::swap(query_alignment[i], query_alignment[i + 1]);
+                std::swap(target_alignment[i], target_alignment[i + 1]);
+            } else if (target_alignment[i + 1] == '-' && query_alignment[i + 1] != '-') {
+                std::swap(query_alignment[i], query_alignment[i + 1]);
+                std::swap(target_alignment[i], target_alignment[i + 1]);
+            }
+        }
+    }
+
+    std::string adjusted_cigar;
+    char prev_op = 0;
+    int count = 0;
+    for (size_t i = 0; i < query_alignment.size(); ++i) {
+        char q_char = query_alignment[i];
+        char t_char = target_alignment[i];
+        char op;
+        if (q_char == '-' && t_char != '-') {
+            op = 'D';
+        } else if (q_char != '-' && t_char == '-') {
+            op = 'I';
+        } else if (q_char == t_char) {
+            op = '=';
+        } else {
+            op = 'X';
+        }
+        if (op == prev_op) {
+            count++;
+        } else {
+            if (count > 0) {
+                adjusted_cigar += std::to_string(count) + prev_op;
+            }
+            prev_op = op;
+            count = 1;
+        }
+    }
+    if (count > 0) {
+        adjusted_cigar += std::to_string(count) + prev_op;
+    }
+
+    return adjusted_cigar;
+}
+
 
   /**
    * @class     align::Aligner
@@ -291,7 +399,25 @@ std::string processAlignment(seq_record_t* rec) {
         param.wflign_max_len_minor,
         rec->currentRecord.mashmap_estimated_identity);
 
-    return output.str();
+    // Get the alignment output as a string
+    std::string alignment_output = output.str();
+
+    // Extract and adjust the CIGAR string
+    size_t cg_pos = alignment_output.find("cg:Z:");
+    if (cg_pos != std::string::npos) {
+        size_t cigar_start = cg_pos + 5;
+        size_t cigar_end = alignment_output.find('\t', cigar_start);
+        if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
+        std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
+
+        // Adjust the CIGAR string
+        std::string adjusted_cigar = adjust_cigar_string(original_cigar, queryRegionStrand.data(), ref_seq_ptr);
+
+        // Replace the original CIGAR string with the adjusted one
+        alignment_output.replace(cigar_start, original_cigar.length(), adjusted_cigar);
+    }
+
+    return alignment_output;
 }
 
 void single_reader_thread(const std::string& input_file,
