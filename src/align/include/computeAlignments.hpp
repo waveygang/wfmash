@@ -119,65 +119,44 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         i = j + 1;
     }
 
-    // Initialize positions in query and target sequences
-    size_t query_pos = 0;
-    size_t target_pos = 0;
-
-    // Function to update positions based on CIGAR operation
-    auto update_positions = [](char op, int count, size_t& q_pos, size_t& t_pos) {
-        if (op == '=' || op == 'X') {
-            q_pos += count;
-            t_pos += count;
-        } else if (op == 'I') {
-            q_pos += count;
-        } else if (op == 'D') {
-            t_pos += count;
-        }
-    };
-
     // **Adjust initial deletions**
-    // Shift deletions that occur after initial matches to the start
-    size_t shift_index = 0;
-    while (shift_index + 1 < ops.size()) {
-        if ((ops[shift_index].second == '=' || ops[shift_index].second == 'X') &&
-            ops[shift_index + 1].second == 'D') {
-            // Swap the deletion with the preceding match/mismatch
-            // Only shift over initial matches
-            if (shift_index == 0) {
-                // Swap operations
-                std::swap(ops[shift_index], ops[shift_index + 1]);
-                shift_index++;
-            } else {
-                break;  // Stop shifting if not at the very start
-            }
+    // Shift deletions that occur immediately after initial matches to the start
+    while (ops.size() >= 2) {
+        if ((ops[0].second == '=' || ops[0].second == 'X') && ops[1].second == 'D') {
+            // Swap the match/mismatch with the following deletion
+            std::swap(ops[0], ops[1]);
         } else {
-            break;  // Stop if not a deletion after a match/mismatch
+            break;  // Stop if the pattern doesn't match or we've adjusted
         }
     }
 
     // **Adjust trailing deletions**
-    // Shift deletions that occur before trailing matches to the end
-    shift_index = ops.size() - 1;
-    while (shift_index > 0) {
-        if ((ops[shift_index].second == '=' || ops[shift_index].second == 'X') &&
-            ops[shift_index - 1].second == 'D') {
-            // Swap the deletion with the following match/mismatch
-            // Only shift over trailing matches
-            if (shift_index == ops.size() - 1) {
-                // Swap operations
-                std::swap(ops[shift_index - 1], ops[shift_index]);
-                shift_index--;
-            } else {
-                break;  // Stop shifting if not at the very end
-            }
+    // Shift deletions that occur immediately before trailing matches to the end
+    while (ops.size() >= 2) {
+        size_t n = ops.size();
+        if ((ops[n - 1].second == '=' || ops[n - 1].second == 'X') && ops[n - 2].second == 'D') {
+            // Swap the match/mismatch with the preceding deletion
+            std::swap(ops[n - 2], ops[n - 1]);
         } else {
-            break;  // Stop if not a deletion before a match/mismatch
+            break;  // Stop if the pattern doesn't match or we've adjusted
         }
     }
 
-    // Reconstruct the adjusted CIGAR string
-    std::string adjusted_cigar;
+    // **Merge successive operations of the same type**
+    std::vector<std::pair<int, char>> merged_ops;
     for (const auto& op : ops) {
+        if (!merged_ops.empty() && merged_ops.back().second == op.second) {
+            // Same operation type, merge counts
+            merged_ops.back().first += op.first;
+        } else {
+            // Different operation, add to merged_ops
+            merged_ops.push_back(op);
+        }
+    }
+
+    // Reconstruct the adjusted and merged CIGAR string
+    std::string adjusted_cigar;
+    for (const auto& op : merged_ops) {
         adjusted_cigar += std::to_string(op.first) + op.second;
     }
 
