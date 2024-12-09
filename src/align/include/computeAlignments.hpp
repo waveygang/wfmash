@@ -170,13 +170,14 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         idx--;
     }
     if (idx < query_alignment.size() - 1) {
-        for (size_t i = idx; i < query_alignment.size() - 1; ++i) {
-            if (query_alignment[i + 1] == '-' && target_alignment[i + 1] != '-') {
-                std::swap(query_alignment[i], query_alignment[i + 1]);
-                std::swap(target_alignment[i], target_alignment[i + 1]);
-            } else if (target_alignment[i + 1] == '-' && query_alignment[i + 1] != '-') {
-                std::swap(query_alignment[i], query_alignment[i + 1]);
-                std::swap(target_alignment[i], target_alignment[i + 1]);
+        // Move deletions to the right
+        for (size_t i = idx + 1; i < query_alignment.size(); ++i) {
+            if (query_alignment[i - 1] == '-' && target_alignment[i - 1] != '-') {
+                std::swap(query_alignment[i - 1], query_alignment[i]);
+                std::swap(target_alignment[i - 1], target_alignment[i]);
+            } else if (target_alignment[i - 1] == '-' && query_alignment[i - 1] != '-') {
+                std::swap(query_alignment[i - 1], query_alignment[i]);
+                std::swap(target_alignment[i - 1], target_alignment[i]);
             }
         }
     }
