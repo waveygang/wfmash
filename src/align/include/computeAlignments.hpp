@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 #include <zlib.h>
 #include <cassert>
 #include <thread>
@@ -124,11 +125,11 @@ void recompute_identity_metrics(const std::string& cigar,
     }
 
     int total_columns = matches + mismatches + insertions + deletions;
-    blast_identity = total_columns > 0 ? (double)matches / total_columns * 100.0 : 0.0;
+    blast_identity = total_columns > 0 ? (double)matches / total_columns : 0.0;
 
     int total_differences = mismatches + insertion_events + deletion_events;
     int total_bases = matches + total_differences;
-    gap_compressed_identity = total_bases > 0 ? (double)matches / total_bases * 100.0 : 0.0;
+    gap_compressed_identity = total_bases > 0 ? (double)matches / total_bases : 0.0;
 }
 
 long double float2phred(long double prob) {
@@ -516,23 +517,27 @@ std::string processAlignment(seq_record_t* rec) {
             fields[5] = adjusted_cigar;
         }
 
-        // Update or append 'gi' and 'bi' tags
+        // Update or replace 'gi:f:' and 'bi:f:' tags
         bool gi_found = false, bi_found = false;
+        std::ostringstream gi_stream, bi_stream;
+        gi_stream << std::fixed << std::setprecision(6) << "gi:f:" << gap_compressed_identity;
+        bi_stream << std::fixed << std::setprecision(6) << "bi:f:" << blast_identity;
+
         for (size_t i = 12; i < fields.size(); ++i) {
-            if (fields[i].substr(0, 5) == "gi:Z:") {
-                fields[i] = "gi:Z:" + std::to_string(gap_compressed_identity);
+            if (fields[i].substr(0, 5) == "gi:f:") {
+                fields[i] = gi_stream.str();
                 gi_found = true;
             }
-            if (fields[i].substr(0, 5) == "bi:Z:") {
-                fields[i] = "bi:Z:" + std::to_string(blast_identity);
+            if (fields[i].substr(0, 5) == "bi:f:") {
+                fields[i] = bi_stream.str();
                 bi_found = true;
             }
         }
         if (!gi_found) {
-            fields.push_back("gi:Z:" + std::to_string(gap_compressed_identity));
+            fields.push_back(gi_stream.str());
         }
         if (!bi_found) {
-            fields.push_back("bi:Z:" + std::to_string(blast_identity));
+            fields.push_back(bi_stream.str());
         }
 
         // Reconstruct the updated alignment output
