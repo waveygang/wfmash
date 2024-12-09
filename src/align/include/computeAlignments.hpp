@@ -161,7 +161,7 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         }
     }
 
-    idx = query_alignment.size() - 1;
+    size_t idx = query_alignment.size() - 1;
     while (idx > 0 && (query_alignment[idx] == '-' || target_alignment[idx] == '-')) {
         idx--;
     }
