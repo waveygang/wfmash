@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 #include <zlib.h>
 #include <cassert>
 #include <thread>
@@ -33,6 +34,103 @@
 
 namespace align
 {
+
+void trim_cigar_and_adjust_positions(std::string& cigar,
+                                   int64_t& target_start,
+                                   int64_t& target_end,
+                                   int64_t& query_start,
+                                   int64_t& query_end) {
+    std::vector<std::pair<int, char>> ops;
+    size_t i = 0;
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        ops.emplace_back(count, op);
+        i = j + 1;
+    }
+
+    size_t start_idx = 0;
+    while (start_idx < ops.size() && ops[start_idx].second == 'D') {
+        target_start += ops[start_idx].first;
+        start_idx++;
+    }
+
+    size_t end_idx = ops.size();
+    while (end_idx > start_idx && ops[end_idx - 1].second == 'D') {
+        target_end -= ops[end_idx - 1].first;
+        end_idx--;
+    }
+
+    while (start_idx < end_idx && ops[start_idx].second == 'I') {
+        query_start += ops[start_idx].first;
+        start_idx++;
+    }
+
+    while (end_idx > start_idx && ops[end_idx - 1].second == 'I') {
+        query_end -= ops[end_idx - 1].first;
+        end_idx--;
+    }
+
+    std::string trimmed_cigar;
+    for (size_t k = start_idx; k < end_idx; ++k) {
+        trimmed_cigar += std::to_string(ops[k].first) + ops[k].second;
+    }
+
+    cigar = trimmed_cigar;
+}
+
+void recompute_identity_metrics(const std::string& cigar,
+                              int& matches,
+                              int& mismatches,
+                              int& insertions,
+                              int& insertion_events,
+                              int& deletions,
+                              int& deletion_events,
+                              double& gap_compressed_identity,
+                              double& blast_identity) {
+    matches = mismatches = insertions = insertion_events = deletions = deletion_events = 0;
+
+    size_t i = 0;
+    char last_op = '\0';
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        i = j + 1;
+
+        switch (op) {
+            case '=':
+                matches += count;
+                break;
+            case 'X':
+                mismatches += count;
+                break;
+            case 'I':
+                insertions += count;
+                if (last_op != 'I') {
+                    insertion_events++;
+                }
+                break;
+            case 'D':
+                deletions += count;
+                if (last_op != 'D') {
+                    deletion_events++;
+                }
+                break;
+        }
+        last_op = op;
+    }
+
+    int total_columns = matches + mismatches + insertions + deletions;
+    blast_identity = total_columns > 0 ? (double)matches / total_columns : 0.0;
+
+    int total_differences = mismatches + insertion_events + deletion_events;
+    int total_bases = matches + total_differences;
+    gap_compressed_identity = total_bases > 0 ? (double)matches / total_bases : 0.0;
+}
 
 long double float2phred(long double prob) {
     if (prob == 1)
@@ -106,6 +204,63 @@ typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, fals
  */
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
+std::string adjust_cigar_string(const std::string& cigar, const std::string& query_seq, const std::string& target_seq) {
+    // Parse the CIGAR string into operations
+    std::vector<std::pair<int, char>> ops;
+    size_t i = 0;
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        ops.emplace_back(count, op);
+        i = j + 1;
+    }
+
+    // **Adjust initial deletions**
+    // Shift deletions that occur immediately after initial matches to the start
+    while (ops.size() >= 2) {
+        if ((ops[0].second == '=' || ops[0].second == 'X') && ops[1].second == 'D') {
+            // Swap the match/mismatch with the following deletion
+            std::swap(ops[0], ops[1]);
+        } else {
+            break;  // Stop if the pattern doesn't match or we've adjusted
+        }
+    }
+
+    // **Adjust trailing deletions**
+    // Shift deletions that occur immediately before trailing matches to the end
+    while (ops.size() >= 2) {
+        size_t n = ops.size();
+        if ((ops[n - 1].second == '=' || ops[n - 1].second == 'X') && ops[n - 2].second == 'D') {
+            // Swap the match/mismatch with the preceding deletion
+            std::swap(ops[n - 2], ops[n - 1]);
+        } else {
+            break;  // Stop if the pattern doesn't match or we've adjusted
+        }
+    }
+
+    // **Merge successive operations of the same type**
+    std::vector<std::pair<int, char>> merged_ops;
+    for (const auto& op : ops) {
+        if (!merged_ops.empty() && merged_ops.back().second == op.second) {
+            // Same operation type, merge counts
+            merged_ops.back().first += op.first;
+        } else {
+            // Different operation, add to merged_ops
+            merged_ops.push_back(op);
+        }
+    }
+
+    // Reconstruct the adjusted and merged CIGAR string
+    std::string adjusted_cigar;
+    for (const auto& op : merged_ops) {
+        adjusted_cigar += std::to_string(op.first) + op.second;
+    }
+
+    return adjusted_cigar;
+}
+
 
   /**
    * @class     align::Aligner
@@ -149,7 +304,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
        * @param[in]   mappingRecordLine
        * @param[out]  currentRecord
        */
-      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord) {
+      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding) {
           std::stringstream ss(mappingRecordLine); // Insert the string into a stream
           std::string word; // Have a buffer string
 
@@ -176,8 +331,24 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.qEndPos = std::stoi(tokens[3]);
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = tokens[5];
-              currentRecord.rStartPos = std::stoi(tokens[7]);
-              currentRecord.rEndPos = std::stoi(tokens[8]);
+              const uint64_t ref_len = std::stoi(tokens[6]);
+              // Apply target padding while ensuring we don't go below 0 or above reference length
+              uint64_t rStartPos = std::stoi(tokens[7]);
+              uint64_t rEndPos = std::stoi(tokens[8]);
+              if (target_padding > 0) {
+                  if (rStartPos >= target_padding) {
+                      rStartPos -= target_padding;
+                  } else {
+                      rStartPos = 0;
+                  }
+                  if (rEndPos + target_padding <= ref_len) {
+                      rEndPos += target_padding;
+                  } else {
+                      rEndPos = ref_len;
+                  }
+              }
+              currentRecord.rStartPos = rStartPos;
+              currentRecord.rEndPos = rEndPos;
               currentRecord.mashmap_estimated_identity = mm_id;
           }
       }
@@ -193,7 +364,7 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     // Get the query sequence length
     const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
 
-    // Compute padding
+    // Compute padding for sequence extraction
     const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
         ? param.wflign_max_len_minor : currentRecord.rStartPos;
     const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
@@ -241,6 +412,7 @@ std::string processAlignment(seq_record_t* rec) {
     } else {
         skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand.data(), query_seq.size());
     }
+    queryRegionStrand[query_seq.size()] = '\0';
 
     // Set up penalties for biWFA
     wflign_penalties_t wfa_penalties;
@@ -275,7 +447,110 @@ std::string processAlignment(seq_record_t* rec) {
         param.wflign_max_len_minor,
         rec->currentRecord.mashmap_estimated_identity);
 
-    return output.str();
+    // Get the alignment output as a string
+    std::string alignment_output = output.str();
+
+    // Extract and adjust the CIGAR string
+    size_t cg_pos = alignment_output.find("cg:Z:");
+    if (cg_pos != std::string::npos) {
+        size_t cigar_start = cg_pos + 5;
+        size_t cigar_end = alignment_output.find('\t', cigar_start);
+        if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
+        std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
+
+        // Adjust the CIGAR string
+        std::string adjusted_cigar = adjust_cigar_string(original_cigar, queryRegionStrand.data(), ref_seq_ptr);
+
+        // Trim leading/trailing deletions and adjust positions
+        int64_t target_start = rec->currentRecord.rStartPos;
+        int64_t target_end = rec->currentRecord.rEndPos;
+        int64_t query_start = rec->currentRecord.qStartPos;
+        int64_t query_end = rec->currentRecord.qEndPos;
+
+        trim_cigar_and_adjust_positions(adjusted_cigar, target_start, target_end, query_start, query_end);
+
+        // Recompute identity metrics
+        int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
+        double gap_compressed_identity, blast_identity;
+        recompute_identity_metrics(adjusted_cigar, matches, mismatches, insertions, insertion_events,
+                                   deletions, deletion_events, gap_compressed_identity, blast_identity);
+
+        // Update the alignment output with new positions and metrics
+        std::string updated_output;
+        std::istringstream iss(alignment_output);
+        std::string field;
+        std::vector<std::string> fields;
+        
+        while (std::getline(iss, field, '\t')) {
+            fields.push_back(field);
+        }
+
+        // Update positions based on format
+        if (!param.sam_format) {  // PAF format
+            // Query positions (0-based)
+            fields[2] = std::to_string(query_start);
+            fields[3] = std::to_string(query_end);
+            // Target positions (0-based)
+            fields[7] = std::to_string(target_start);
+            fields[8] = std::to_string(target_end);
+        } else {  // SAM format
+            // Target position (1-based)
+            fields[3] = std::to_string(target_start + 1);
+            // If necessary, adjust the query positions stored in optional fields
+        }
+
+        // Replace the original CIGAR with the adjusted one
+        if (!param.sam_format) {
+            // Replace the 'cg:Z:' tag
+            for (size_t i = 12; i < fields.size(); ++i) {
+                if (fields[i].substr(0, 5) == "cg:Z:") {
+                    fields[i] = "cg:Z:" + adjusted_cigar;
+                    break;
+                }
+            }
+        } else {
+            // Replace the CIGAR field
+            fields[5] = adjusted_cigar;
+        }
+
+        // Update or replace 'gi:f:' and 'bi:f:' tags
+        bool gi_found = false, bi_found = false;
+        std::ostringstream gi_stream, bi_stream;
+        gi_stream << std::fixed << std::setprecision(6) << "gi:f:" << gap_compressed_identity;
+        bi_stream << std::fixed << std::setprecision(6) << "bi:f:" << blast_identity;
+
+        for (size_t i = 12; i < fields.size(); ++i) {
+            if (fields[i].substr(0, 5) == "gi:f:") {
+                fields[i] = gi_stream.str();
+                gi_found = true;
+            }
+            if (fields[i].substr(0, 5) == "bi:f:") {
+                fields[i] = bi_stream.str();
+                bi_found = true;
+            }
+        }
+        if (!gi_found) {
+            fields.push_back(gi_stream.str());
+        }
+        if (!bi_found) {
+            fields.push_back(bi_stream.str());
+        }
+
+        // Reconstruct the updated alignment output
+        updated_output = fields[0];
+        for (size_t i = 1; i < fields.size(); ++i) {
+            updated_output += "\t" + fields[i];
+        }
+        // Add a newline only if one is not already present
+        if (!updated_output.empty() && updated_output.back() != '\n') {
+            updated_output += "\n";
+        }
+
+        return updated_output;
+    }
+
+    // If 'cg:Z:' tag is not found, return the original alignment output
+    return alignment_output;
 }
 
 void single_reader_thread(const std::string& input_file,
@@ -310,7 +585,7 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
         std::string* line_ptr = nullptr;
         if (line_queue.try_pop(line_ptr)) {
             MappingBoundaryRow currentRecord;
-            parseMashmapRow(*line_ptr, currentRecord);
+            parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
             
             // Process the record and create seq_record_t
             seq_record_t* rec = createSeqRecord(currentRecord, *line_ptr, local_ref_faidx, local_query_faidx);
@@ -514,7 +789,7 @@ void computeAlignments() {
 
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
-                parseMashmapRow(mappingRecordLine, currentRecord);
+                parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
             }
         }
