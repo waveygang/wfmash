@@ -124,7 +124,7 @@ void parse_args(int argc,
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
-    args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [0]", {'E', "target-padding"});
+    args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [100]", {'E', "target-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
 
@@ -484,7 +484,7 @@ void parse_args(int argc,
         }
         align_parameters.target_padding = p;
     } else {
-        align_parameters.target_padding = 0;
+        align_parameters.target_padding = 100;
     }
 
     if (thread_count) {
