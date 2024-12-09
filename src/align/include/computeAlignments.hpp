@@ -410,6 +410,10 @@ std::string processAlignment(seq_record_t* rec) {
         if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
         std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
 
+        // Print the original CIGAR string before editing
+        std::cerr << "Original CIGAR for alignment between " << rec->currentRecord.qId 
+                 << " and " << rec->currentRecord.refId << ": " << original_cigar << std::endl;
+
         // Adjust the CIGAR string
         std::string adjusted_cigar = adjust_cigar_string(original_cigar, queryRegionStrand.data(), ref_seq_ptr);
 
