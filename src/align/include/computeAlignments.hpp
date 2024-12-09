@@ -142,6 +142,58 @@ long double float2phred(long double prob) {
         return p;
 }
 
+void verify_cigar_alignment(const std::string& cigar,
+                           const char* query_seq,
+                           const char* target_seq,
+                           int64_t query_start,
+                           int64_t target_start) {
+    size_t q_pos = 0;  // position in query sequence
+    size_t t_pos = 0;  // position in target sequence
+
+    size_t i = 0;
+    while (i < cigar.size()) {
+        size_t j = i;
+        // Get the length of the operation
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int op_len = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        i = j + 1;
+
+        switch (op) {
+            case '=':  // match
+                // Verify that query_seq[q_pos .. q_pos + op_len] matches target_seq[t_pos .. t_pos + op_len]
+                for (int k = 0; k < op_len; ++k) {
+                    char q_char = query_seq[q_pos + k];
+                    char t_char = target_seq[t_pos + k];
+                    if (q_char != t_char) {
+                        std::cerr << "[wfmash::align] Error: Mismatch at position "
+                                  << "query pos " << query_start + q_pos + k
+                                  << " vs target pos " << target_start + t_pos + k
+                                  << ": query char '" << q_char
+                                  << "' vs target char '" << t_char << "' in '=' operation of CIGAR.\n";
+                        exit(1);
+                    }
+                }
+                q_pos += op_len;
+                t_pos += op_len;
+                break;
+            case 'X':  // mismatch
+                q_pos += op_len;
+                t_pos += op_len;
+                break;
+            case 'I':  // insertion in target; nucleotides present in query
+                q_pos += op_len;
+                break;
+            case 'D':  // deletion in target; nucleotides absent in query
+                t_pos += op_len;
+                break;
+            default:
+                std::cerr << "[wfmash::align] Error: Unsupported CIGAR operation '" << op << "'.\n";
+                exit(1);
+        }
+    }
+}
+
 struct seq_record_t {
     MappingBoundaryRow currentRecord;
     std::string mappingRecordLine;
@@ -468,6 +520,17 @@ std::string processAlignment(seq_record_t* rec) {
         int64_t query_end = rec->currentRecord.qEndPos;
 
         trim_cigar_and_adjust_positions(adjusted_cigar, target_start, target_end, query_start, query_end);
+
+        // Verify the alignment matches in '=' operations
+        // Adjust the query and target sequence pointers based on the new start positions
+        size_t query_seq_offset = query_start - rec->currentRecord.qStartPos;
+        size_t target_seq_offset = target_start - rec->currentRecord.rStartPos;
+
+        verify_cigar_alignment(adjusted_cigar,
+                              queryRegionStrand.data() + query_seq_offset,
+                              ref_seq_ptr + target_seq_offset,
+                              query_start,
+                              target_start);
 
         // Recompute identity metrics
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
