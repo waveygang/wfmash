@@ -541,7 +541,10 @@ std::string processAlignment(seq_record_t* rec) {
         for (size_t i = 1; i < fields.size(); ++i) {
             updated_output += "\t" + fields[i];
         }
-        updated_output += "\n";  // Ensure there is a newline at the end
+        // Add a newline only if one is not already present
+        if (!updated_output.empty() && updated_output.back() != '\n') {
+            updated_output += "\n";
+        }
 
         return updated_output;
     }
