@@ -107,6 +107,7 @@ typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, fals
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
 std::string adjust_cigar_string(const std::string& cigar, const std::string& query_seq, const std::string& target_seq) {
+    // Parse the CIGAR string into operations
     std::vector<std::pair<int, char>> ops;
     size_t i = 0;
     while (i < cigar.size()) {
@@ -118,6 +119,7 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         i = j + 1;
     }
 
+    // Build the alignment sequences
     size_t query_pos = 0;
     size_t target_pos = 0;
     std::vector<char> query_alignment;
@@ -126,12 +128,7 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
     for (const auto& op : ops) {
         int count = op.first;
         char code = op.second;
-        if (code == '=') {
-            for (int k = 0; k < count; ++k) {
-                query_alignment.push_back(query_seq[query_pos++]);
-                target_alignment.push_back(target_seq[target_pos++]);
-            }
-        } else if (code == 'X') {
+        if (code == '=' || code == 'X') {
             for (int k = 0; k < count; ++k) {
                 query_alignment.push_back(query_seq[query_pos++]);
                 target_alignment.push_back(target_seq[target_pos++]);
@@ -149,41 +146,52 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         }
     }
 
-    // Move any deletions to the start of the alignment
-    for (size_t i = 0; i < query_alignment.size(); ++i) {
-        if (query_alignment[i] == '-' && target_alignment[i] != '-') {
-            size_t j = i;
-            while (j > 0 && query_alignment[j - 1] != '-') {
-                std::swap(query_alignment[j], query_alignment[j - 1]);
-                std::swap(target_alignment[j], target_alignment[j - 1]);
-                j--;
+    // Move any deletions at the start to the very beginning
+    size_t start_idx = 0;
+    while (start_idx < query_alignment.size()) {
+        bool found_deletion = false;
+        for (size_t i = start_idx; i < query_alignment.size(); ++i) {
+            if (query_alignment[i] == '-' && target_alignment[i] != '-') {
+                // Found a deletion, move it to start_idx
+                for (size_t j = i; j > start_idx; --j) {
+                    std::swap(query_alignment[j], query_alignment[j-1]);
+                    std::swap(target_alignment[j], target_alignment[j-1]);
+                }
+                found_deletion = true;
+                start_idx++;
+                break;
             }
         }
+        if (!found_deletion) break;
     }
 
-    size_t idx = query_alignment.size() - 1;
-    while (idx > 0 && (query_alignment[idx] == '-' || target_alignment[idx] == '-')) {
-        idx--;
-    }
-    if (idx < query_alignment.size() - 1) {
-        // Move deletions to the right
-        for (size_t i = idx + 1; i < query_alignment.size(); ++i) {
-            if (query_alignment[i - 1] == '-' && target_alignment[i - 1] != '-') {
-                std::swap(query_alignment[i - 1], query_alignment[i]);
-                std::swap(target_alignment[i - 1], target_alignment[i]);
-            } else if (target_alignment[i - 1] == '-' && query_alignment[i - 1] != '-') {
-                std::swap(query_alignment[i - 1], query_alignment[i]);
-                std::swap(target_alignment[i - 1], target_alignment[i]);
+    // Move any deletions at the end to the very end
+    size_t end_idx = query_alignment.size() - 1;
+    while (end_idx > start_idx) {
+        bool found_deletion = false;
+        for (size_t i = end_idx; i >= start_idx; --i) {
+            if (query_alignment[i] == '-' && target_alignment[i] != '-') {
+                // Found a deletion, move it to end_idx
+                for (size_t j = i; j < end_idx; ++j) {
+                    std::swap(query_alignment[j], query_alignment[j+1]);
+                    std::swap(target_alignment[j], target_alignment[j+1]);
+                }
+                found_deletion = true;
+                end_idx--;
+                break;
             }
+            if (i == start_idx) break;
         }
+        if (!found_deletion) break;
     }
 
+    // Reconstruct the adjusted CIGAR string by comparing actual bases
     std::string adjusted_cigar;
     char prev_op = 0;
     int count = 0;
-    for (size_t i = 0; i < query_alignment.size(); ++i) {
-        char q_char = query_alignment[i];
-        char t_char = target_alignment[i];
+    for (size_t idx = 0; idx < query_alignment.size(); ++idx) {
+        char q_char = query_alignment[idx];
+        char t_char = target_alignment[idx];
         char op;
         if (q_char == '-' && t_char != '-') {
             op = 'D';
