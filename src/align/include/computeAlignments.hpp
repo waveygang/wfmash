@@ -146,43 +146,62 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         }
     }
 
-    // Move any deletions at the start to the very beginning
-    size_t start_idx = 0;
-    while (start_idx < query_alignment.size()) {
-        bool found_deletion = false;
-        for (size_t i = start_idx; i < query_alignment.size(); ++i) {
-            if (query_alignment[i] == '-' && target_alignment[i] != '-') {
-                // Found a deletion, move it to start_idx
-                for (size_t j = i; j > start_idx; --j) {
-                    std::swap(query_alignment[j], query_alignment[j-1]);
-                    std::swap(target_alignment[j], target_alignment[j-1]);
+    // Left-shift initial deletions while maintaining match correctness
+    size_t idx = 0;
+    while (idx < query_alignment.size()) {
+        if (query_alignment[idx] == '-' && target_alignment[idx] != '-') {
+            if (idx == 0) break; // Cannot shift further left
+            
+            // Check if swapping would maintain correct matches
+            bool can_swap = true;
+            if (idx > 0) {
+                // Verify the base we're swapping with matches in its new position
+                char q_base = query_alignment[idx - 1];
+                char t_base = target_alignment[idx];
+                if (q_base != '-' && q_base != t_base) {
+                    can_swap = false;
                 }
-                found_deletion = true;
-                start_idx++;
-                break;
             }
+            
+            if (can_swap) {
+                std::swap(query_alignment[idx], query_alignment[idx - 1]);
+                std::swap(target_alignment[idx], target_alignment[idx - 1]);
+                if (idx > 0) idx--; // Move back to check previous position
+            } else {
+                break; // Cannot shift without creating mismatches
+            }
+        } else {
+            idx++;
         }
-        if (!found_deletion) break;
     }
 
-    // Move any deletions at the end to the very end
-    size_t end_idx = query_alignment.size() - 1;
-    while (end_idx > start_idx) {
-        bool found_deletion = false;
-        for (size_t i = end_idx; i >= start_idx; --i) {
-            if (query_alignment[i] == '-' && target_alignment[i] != '-') {
-                // Found a deletion, move it to end_idx
-                for (size_t j = i; j < end_idx; ++j) {
-                    std::swap(query_alignment[j], query_alignment[j+1]);
-                    std::swap(target_alignment[j], target_alignment[j+1]);
+    // Right-shift trailing deletions while maintaining match correctness
+    idx = query_alignment.size() - 1;
+    while (idx > 0) {
+        if (query_alignment[idx] == '-' && target_alignment[idx] != '-') {
+            if (idx == query_alignment.size() - 1) break; // Cannot shift further right
+            
+            // Check if swapping would maintain correct matches
+            bool can_swap = true;
+            if (idx < query_alignment.size() - 1) {
+                // Verify the base we're swapping with matches in its new position
+                char q_base = query_alignment[idx + 1];
+                char t_base = target_alignment[idx];
+                if (q_base != '-' && q_base != t_base) {
+                    can_swap = false;
                 }
-                found_deletion = true;
-                end_idx--;
-                break;
             }
-            if (i == start_idx) break;
+            
+            if (can_swap) {
+                std::swap(query_alignment[idx], query_alignment[idx + 1]);
+                std::swap(target_alignment[idx], target_alignment[idx + 1]);
+                if (idx < query_alignment.size() - 1) idx++; // Move forward to check next position
+            } else {
+                break; // Cannot shift without creating mismatches
+            }
+        } else {
+            idx--;
         }
-        if (!found_deletion) break;
     }
 
     // Reconstruct the adjusted CIGAR string by comparing actual bases
