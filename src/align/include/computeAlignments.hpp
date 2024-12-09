@@ -411,6 +411,7 @@ std::string processAlignment(seq_record_t* rec) {
     } else {
         skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand.data(), query_seq.size());
     }
+    queryRegionStrand[query_seq.size()] = '\0';
 
     // Set up penalties for biWFA
     wflign_penalties_t wfa_penalties;
@@ -463,9 +464,6 @@ std::string processAlignment(seq_record_t* rec) {
         // Adjust the CIGAR string
         std::string adjusted_cigar = adjust_cigar_string(original_cigar, queryRegionStrand.data(), ref_seq_ptr);
 
-        // Replace the original CIGAR string with the adjusted one
-        alignment_output.replace(cigar_start, original_cigar.length(), adjusted_cigar);
-
         // Trim leading/trailing deletions and adjust positions
         int64_t target_start = rec->currentRecord.rStartPos;
         int64_t target_end = rec->currentRecord.rEndPos;
@@ -478,7 +476,7 @@ std::string processAlignment(seq_record_t* rec) {
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
         double gap_compressed_identity, blast_identity;
         recompute_identity_metrics(adjusted_cigar, matches, mismatches, insertions, insertion_events,
-                                 deletions, deletion_events, gap_compressed_identity, blast_identity);
+                                   deletions, deletion_events, gap_compressed_identity, blast_identity);
 
         // Update the alignment output with new positions and metrics
         std::string updated_output;
@@ -490,47 +488,64 @@ std::string processAlignment(seq_record_t* rec) {
             fields.push_back(field);
         }
 
+        // Update positions based on format
         if (!param.sam_format) {  // PAF format
-            // Update positions (0-based for PAF)
+            // Query positions (0-based)
             fields[2] = std::to_string(query_start);
             fields[3] = std::to_string(query_end);
+            // Target positions (0-based)
             fields[7] = std::to_string(target_start);
             fields[8] = std::to_string(target_end);
         } else {  // SAM format
-            // Update position (1-based for SAM)
+            // Target position (1-based)
             fields[3] = std::to_string(target_start + 1);
+            // If necessary, adjust the query positions stored in optional fields
         }
 
-        // Reconstruct output with updated fields
+        // Replace the original CIGAR with the adjusted one
+        if (!param.sam_format) {
+            // Replace the 'cg:Z:' tag
+            for (size_t i = 12; i < fields.size(); ++i) {
+                if (fields[i].substr(0, 5) == "cg:Z:") {
+                    fields[i] = "cg:Z:" + adjusted_cigar;
+                    break;
+                }
+            }
+        } else {
+            // Replace the CIGAR field
+            fields[5] = adjusted_cigar;
+        }
+
+        // Update or append 'gi' and 'bi' tags
+        bool gi_found = false, bi_found = false;
+        for (size_t i = 12; i < fields.size(); ++i) {
+            if (fields[i].substr(0, 5) == "gi:Z:") {
+                fields[i] = "gi:Z:" + std::to_string(gap_compressed_identity);
+                gi_found = true;
+            }
+            if (fields[i].substr(0, 5) == "bi:Z:") {
+                fields[i] = "bi:Z:" + std::to_string(blast_identity);
+                bi_found = true;
+            }
+        }
+        if (!gi_found) {
+            fields.push_back("gi:Z:" + std::to_string(gap_compressed_identity));
+        }
+        if (!bi_found) {
+            fields.push_back("bi:Z:" + std::to_string(blast_identity));
+        }
+
+        // Reconstruct the updated alignment output
         updated_output = fields[0];
         for (size_t i = 1; i < fields.size(); ++i) {
             updated_output += "\t" + fields[i];
         }
-
-        // Update or append identity metrics
-        size_t gi_pos = updated_output.find("gi:Z:");
-        if (gi_pos != std::string::npos) {
-            size_t gi_end = updated_output.find('\t', gi_pos);
-            if (gi_end == std::string::npos) gi_end = updated_output.length();
-            updated_output.replace(gi_pos, gi_end - gi_pos,
-                                 "gi:Z:" + std::to_string(gap_compressed_identity));
-        } else {
-            updated_output += "\tgi:Z:" + std::to_string(gap_compressed_identity);
-        }
-
-        size_t bi_pos = updated_output.find("bi:Z:");
-        if (bi_pos != std::string::npos) {
-            size_t bi_end = updated_output.find('\t', bi_pos);
-            if (bi_end == std::string::npos) bi_end = updated_output.length();
-            updated_output.replace(bi_pos, bi_end - bi_pos,
-                                 "bi:Z:" + std::to_string(blast_identity));
-        } else {
-            updated_output += "\tbi:Z:" + std::to_string(blast_identity);
-        }
+        updated_output += "\n";  // Ensure there is a newline at the end
 
         return updated_output;
     }
 
+    // If 'cg:Z:' tag is not found, return the original alignment output
     return alignment_output;
 }
 
