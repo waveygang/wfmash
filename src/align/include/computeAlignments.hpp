@@ -119,120 +119,124 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         i = j + 1;
     }
 
-    // Build the alignment sequences
+    // Initialize positions in query and target sequences
     size_t query_pos = 0;
     size_t target_pos = 0;
-    std::vector<char> query_alignment;
-    std::vector<char> target_alignment;
 
-    for (const auto& op : ops) {
-        int count = op.first;
-        char code = op.second;
-        if (code == '=' || code == 'X') {
-            for (int k = 0; k < count; ++k) {
-                query_alignment.push_back(query_seq[query_pos++]);
-                target_alignment.push_back(target_seq[target_pos++]);
-            }
-        } else if (code == 'I') {
-            for (int k = 0; k < count; ++k) {
-                query_alignment.push_back(query_seq[query_pos++]);
-                target_alignment.push_back('-');
-            }
-        } else if (code == 'D') {
-            for (int k = 0; k < count; ++k) {
-                query_alignment.push_back('-');
-                target_alignment.push_back(target_seq[target_pos++]);
-            }
+    // Function to update positions based on CIGAR operation
+    auto update_positions = [](char op, int count, size_t& q_pos, size_t& t_pos) {
+        if (op == '=' || op == 'X') {
+            q_pos += count;
+            t_pos += count;
+        } else if (op == 'I') {
+            q_pos += count;
+        } else if (op == 'D') {
+            t_pos += count;
         }
-    }
+    };
 
-    // Left-shift initial deletions while maintaining match correctness
-    size_t idx = 0;
-    while (idx < query_alignment.size()) {
-        if (query_alignment[idx] == '-' && target_alignment[idx] != '-') {
-            if (idx == 0) break; // Cannot shift further left
-            
-            // Check if swapping would maintain correct matches
-            bool can_swap = true;
-            if (idx > 0) {
-                // Verify the base we're swapping with matches in its new position
-                char q_base = query_alignment[idx - 1];
-                char t_base = target_alignment[idx];
-                if (q_base != '-' && q_base != t_base) {
-                    can_swap = false;
+    // Left-shift initial deletions
+    i = 0;
+    while (i < ops.size()) {
+        if (ops[i].second == 'D') {
+            size_t shift_pos = i;
+            while (shift_pos > 0) {
+                // Only shift over matching positions
+                char prev_op = ops[shift_pos - 1].second;
+                int prev_count = ops[shift_pos - 1].first;
+
+                // Check if we can swap with previous operation
+                if (prev_op == '=' || prev_op == 'X') {
+                    // Calculate positions before swapping
+                    size_t q_pos = 0, t_pos = 0;
+                    for (size_t k = 0; k < ops.size(); ++k) {
+                        if (k == shift_pos - 1 || k == shift_pos) break;
+                        update_positions(ops[k].second, ops[k].first, q_pos, t_pos);
+                    }
+
+                    // Get the positions to compare
+                    size_t q_idx = q_pos + ops[shift_pos - 1].first - 1;
+                    size_t t_idx = t_pos + ops[shift_pos - 1].first - 1;
+
+                    // Ensure indices are within bounds
+                    if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                        break;  // Cannot shift due to out-of-bounds
+                    }
+
+                    // Check if the bases match at these positions
+                    if (query_seq[q_idx] == target_seq[t_idx]) {
+                        // Swap the deletion with the previous operation
+                        std::swap(ops[shift_pos - 1], ops[shift_pos]);
+                        shift_pos--;
+                    } else {
+                        break;  // Cannot shift without introducing a mismatch
+                    }
+                } else {
+                    break;  // Cannot shift over non-match operations
                 }
             }
-            
-            if (can_swap) {
-                std::swap(query_alignment[idx], query_alignment[idx - 1]);
-                std::swap(target_alignment[idx], target_alignment[idx - 1]);
-                if (idx > 0) idx--; // Move back to check previous position
-            } else {
-                break; // Cannot shift without creating mismatches
-            }
-        } else {
-            idx++;
         }
+        // Update positions and move to next operation
+        update_positions(ops[i].second, ops[i].first, query_pos, target_pos);
+        i++;
     }
 
-    // Right-shift trailing deletions while maintaining match correctness
-    idx = query_alignment.size() - 1;
-    while (idx > 0) {
-        if (query_alignment[idx] == '-' && target_alignment[idx] != '-') {
-            if (idx == query_alignment.size() - 1) break; // Cannot shift further right
-            
-            // Check if swapping would maintain correct matches
-            bool can_swap = true;
-            if (idx < query_alignment.size() - 1) {
-                // Verify the base we're swapping with matches in its new position
-                char q_base = query_alignment[idx + 1];
-                char t_base = target_alignment[idx];
-                if (q_base != '-' && q_base != t_base) {
-                    can_swap = false;
+    // Right-shift trailing deletions
+    i = ops.size();
+    query_pos = 0;
+    target_pos = 0;
+    // First, accumulate positions up to each operation
+    std::vector<size_t> query_positions(ops.size() + 1, 0);
+    std::vector<size_t> target_positions(ops.size() + 1, 0);
+    for (size_t k = 0; k < ops.size(); ++k) {
+        query_positions[k + 1] = query_positions[k];
+        target_positions[k + 1] = target_positions[k];
+        update_positions(ops[k].second, ops[k].first, query_positions[k + 1], target_positions[k + 1]);
+    }
+
+    while (i > 0) {
+        i--;
+        if (ops[i].second == 'D') {
+            size_t shift_pos = i;
+            while (shift_pos + 1 < ops.size()) {
+                // Only shift over matching positions
+                char next_op = ops[shift_pos + 1].second;
+                int next_count = ops[shift_pos + 1].first;
+
+                // Check if we can swap with next operation
+                if (next_op == '=' || next_op == 'X') {
+                    // Calculate positions before swapping
+                    size_t q_pos = query_positions[shift_pos];
+                    size_t t_pos = target_positions[shift_pos];
+
+                    // Get the positions to compare
+                    size_t q_idx = q_pos;
+                    size_t t_idx = t_pos + ops[shift_pos].first;
+
+                    // Ensure indices are within bounds
+                    if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                        break;  // Cannot shift due to out-of-bounds
+                    }
+
+                    // Check if the bases match at these positions
+                    if (query_seq[q_idx] == target_seq[t_idx]) {
+                        // Swap the deletion with the next operation
+                        std::swap(ops[shift_pos], ops[shift_pos + 1]);
+                        shift_pos++;
+                    } else {
+                        break;  // Cannot shift without introducing a mismatch
+                    }
+                } else {
+                    break;  // Cannot shift over non-match operations
                 }
             }
-            
-            if (can_swap) {
-                std::swap(query_alignment[idx], query_alignment[idx + 1]);
-                std::swap(target_alignment[idx], target_alignment[idx + 1]);
-                if (idx < query_alignment.size() - 1) idx++; // Move forward to check next position
-            } else {
-                break; // Cannot shift without creating mismatches
-            }
-        } else {
-            idx--;
         }
     }
 
-    // Reconstruct the adjusted CIGAR string by comparing actual bases
+    // Reconstruct the adjusted CIGAR string
     std::string adjusted_cigar;
-    char prev_op = 0;
-    int count = 0;
-    for (size_t idx = 0; idx < query_alignment.size(); ++idx) {
-        char q_char = query_alignment[idx];
-        char t_char = target_alignment[idx];
-        char op;
-        if (q_char == '-' && t_char != '-') {
-            op = 'D';
-        } else if (q_char != '-' && t_char == '-') {
-            op = 'I';
-        } else if (q_char == t_char) {
-            op = '=';
-        } else {
-            op = 'X';
-        }
-        if (op == prev_op) {
-            count++;
-        } else {
-            if (count > 0) {
-                adjusted_cigar += std::to_string(count) + prev_op;
-            }
-            prev_op = op;
-            count = 1;
-        }
-    }
-    if (count > 0) {
-        adjusted_cigar += std::to_string(count) + prev_op;
+    for (const auto& op : ops) {
+        adjusted_cigar += std::to_string(op.first) + op.second;
     }
 
     return adjusted_cigar;
