@@ -34,6 +34,103 @@
 namespace align
 {
 
+void trim_cigar_and_adjust_positions(std::string& cigar,
+                                   int64_t& target_start,
+                                   int64_t& target_end,
+                                   int64_t& query_start,
+                                   int64_t& query_end) {
+    std::vector<std::pair<int, char>> ops;
+    size_t i = 0;
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        ops.emplace_back(count, op);
+        i = j + 1;
+    }
+
+    size_t start_idx = 0;
+    while (start_idx < ops.size() && ops[start_idx].second == 'D') {
+        target_start += ops[start_idx].first;
+        start_idx++;
+    }
+
+    size_t end_idx = ops.size();
+    while (end_idx > start_idx && ops[end_idx - 1].second == 'D') {
+        target_end -= ops[end_idx - 1].first;
+        end_idx--;
+    }
+
+    while (start_idx < end_idx && ops[start_idx].second == 'I') {
+        query_start += ops[start_idx].first;
+        start_idx++;
+    }
+
+    while (end_idx > start_idx && ops[end_idx - 1].second == 'I') {
+        query_end -= ops[end_idx - 1].first;
+        end_idx--;
+    }
+
+    std::string trimmed_cigar;
+    for (size_t k = start_idx; k < end_idx; ++k) {
+        trimmed_cigar += std::to_string(ops[k].first) + ops[k].second;
+    }
+
+    cigar = trimmed_cigar;
+}
+
+void recompute_identity_metrics(const std::string& cigar,
+                              int& matches,
+                              int& mismatches,
+                              int& insertions,
+                              int& insertion_events,
+                              int& deletions,
+                              int& deletion_events,
+                              double& gap_compressed_identity,
+                              double& blast_identity) {
+    matches = mismatches = insertions = insertion_events = deletions = deletion_events = 0;
+
+    size_t i = 0;
+    char last_op = '\0';
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        i = j + 1;
+
+        switch (op) {
+            case '=':
+                matches += count;
+                break;
+            case 'X':
+                mismatches += count;
+                break;
+            case 'I':
+                insertions += count;
+                if (last_op != 'I') {
+                    insertion_events++;
+                }
+                break;
+            case 'D':
+                deletions += count;
+                if (last_op != 'D') {
+                    deletion_events++;
+                }
+                break;
+        }
+        last_op = op;
+    }
+
+    int total_columns = matches + mismatches + insertions + deletions;
+    blast_identity = total_columns > 0 ? (double)matches / total_columns * 100.0 : 0.0;
+
+    int total_differences = mismatches + insertion_events + deletion_events;
+    int total_bases = matches + total_differences;
+    gap_compressed_identity = total_bases > 0 ? (double)matches / total_bases * 100.0 : 0.0;
+}
+
 long double float2phred(long double prob) {
     if (prob == 1)
         return 255;  // guards against "-0"
@@ -368,6 +465,70 @@ std::string processAlignment(seq_record_t* rec) {
 
         // Replace the original CIGAR string with the adjusted one
         alignment_output.replace(cigar_start, original_cigar.length(), adjusted_cigar);
+
+        // Trim leading/trailing deletions and adjust positions
+        int64_t target_start = rec->currentRecord.rStartPos;
+        int64_t target_end = rec->currentRecord.rEndPos;
+        int64_t query_start = rec->currentRecord.qStartPos;
+        int64_t query_end = rec->currentRecord.qEndPos;
+
+        trim_cigar_and_adjust_positions(adjusted_cigar, target_start, target_end, query_start, query_end);
+
+        // Recompute identity metrics
+        int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
+        double gap_compressed_identity, blast_identity;
+        recompute_identity_metrics(adjusted_cigar, matches, mismatches, insertions, insertion_events,
+                                 deletions, deletion_events, gap_compressed_identity, blast_identity);
+
+        // Update the alignment output with new positions and metrics
+        std::string updated_output;
+        std::istringstream iss(alignment_output);
+        std::string field;
+        std::vector<std::string> fields;
+        
+        while (std::getline(iss, field, '\t')) {
+            fields.push_back(field);
+        }
+
+        if (!param.sam_format) {  // PAF format
+            // Update positions (0-based for PAF)
+            fields[2] = std::to_string(query_start);
+            fields[3] = std::to_string(query_end);
+            fields[7] = std::to_string(target_start);
+            fields[8] = std::to_string(target_end);
+        } else {  // SAM format
+            // Update position (1-based for SAM)
+            fields[3] = std::to_string(target_start + 1);
+        }
+
+        // Reconstruct output with updated fields
+        updated_output = fields[0];
+        for (size_t i = 1; i < fields.size(); ++i) {
+            updated_output += "\t" + fields[i];
+        }
+
+        // Update or append identity metrics
+        size_t gi_pos = updated_output.find("gi:Z:");
+        if (gi_pos != std::string::npos) {
+            size_t gi_end = updated_output.find('\t', gi_pos);
+            if (gi_end == std::string::npos) gi_end = updated_output.length();
+            updated_output.replace(gi_pos, gi_end - gi_pos,
+                                 "gi:Z:" + std::to_string(gap_compressed_identity));
+        } else {
+            updated_output += "\tgi:Z:" + std::to_string(gap_compressed_identity);
+        }
+
+        size_t bi_pos = updated_output.find("bi:Z:");
+        if (bi_pos != std::string::npos) {
+            size_t bi_end = updated_output.find('\t', bi_pos);
+            if (bi_end == std::string::npos) bi_end = updated_output.length();
+            updated_output.replace(bi_pos, bi_end - bi_pos,
+                                 "bi:Z:" + std::to_string(blast_identity));
+        } else {
+            updated_output += "\tbi:Z:" + std::to_string(blast_identity);
+        }
+
+        return updated_output;
     }
 
     return alignment_output;
