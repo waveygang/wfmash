@@ -135,101 +135,43 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         }
     };
 
-    // Left-shift initial deletions
-    i = 0;
-    while (i < ops.size()) {
-        if (ops[i].second == 'D') {
-            size_t shift_pos = i;
-            while (shift_pos > 0) {
-                // Only shift over matching positions
-                char prev_op = ops[shift_pos - 1].second;
-                int prev_count = ops[shift_pos - 1].first;
-
-                // Check if we can swap with previous operation
-                if (prev_op == '=' || prev_op == 'X') {
-                    // Calculate positions before swapping
-                    size_t q_pos = 0, t_pos = 0;
-                    for (size_t k = 0; k < ops.size(); ++k) {
-                        if (k == shift_pos - 1 || k == shift_pos) break;
-                        update_positions(ops[k].second, ops[k].first, q_pos, t_pos);
-                    }
-
-                    // Get the positions to compare
-                    size_t q_idx = q_pos + ops[shift_pos - 1].first - 1;
-                    size_t t_idx = t_pos + ops[shift_pos - 1].first - 1;
-
-                    // Ensure indices are within bounds
-                    if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
-                        break;  // Cannot shift due to out-of-bounds
-                    }
-
-                    // Check if the bases match at these positions
-                    if (query_seq[q_idx] == target_seq[t_idx]) {
-                        // Swap the deletion with the previous operation
-                        std::swap(ops[shift_pos - 1], ops[shift_pos]);
-                        shift_pos--;
-                    } else {
-                        break;  // Cannot shift without introducing a mismatch
-                    }
-                } else {
-                    break;  // Cannot shift over non-match operations
-                }
+    // **Adjust initial deletions**
+    // Shift deletions that occur after initial matches to the start
+    size_t shift_index = 0;
+    while (shift_index + 1 < ops.size()) {
+        if ((ops[shift_index].second == '=' || ops[shift_index].second == 'X') &&
+            ops[shift_index + 1].second == 'D') {
+            // Swap the deletion with the preceding match/mismatch
+            // Only shift over initial matches
+            if (shift_index == 0) {
+                // Swap operations
+                std::swap(ops[shift_index], ops[shift_index + 1]);
+                shift_index++;
+            } else {
+                break;  // Stop shifting if not at the very start
             }
+        } else {
+            break;  // Stop if not a deletion after a match/mismatch
         }
-        // Update positions and move to next operation
-        update_positions(ops[i].second, ops[i].first, query_pos, target_pos);
-        i++;
     }
 
-    // Right-shift trailing deletions
-    i = ops.size();
-    query_pos = 0;
-    target_pos = 0;
-    // First, accumulate positions up to each operation
-    std::vector<size_t> query_positions(ops.size() + 1, 0);
-    std::vector<size_t> target_positions(ops.size() + 1, 0);
-    for (size_t k = 0; k < ops.size(); ++k) {
-        query_positions[k + 1] = query_positions[k];
-        target_positions[k + 1] = target_positions[k];
-        update_positions(ops[k].second, ops[k].first, query_positions[k + 1], target_positions[k + 1]);
-    }
-
-    while (i > 0) {
-        i--;
-        if (ops[i].second == 'D') {
-            size_t shift_pos = i;
-            while (shift_pos + 1 < ops.size()) {
-                // Only shift over matching positions
-                char next_op = ops[shift_pos + 1].second;
-                int next_count = ops[shift_pos + 1].first;
-
-                // Check if we can swap with next operation
-                if (next_op == '=' || next_op == 'X') {
-                    // Calculate positions before swapping
-                    size_t q_pos = query_positions[shift_pos];
-                    size_t t_pos = target_positions[shift_pos];
-
-                    // Get the positions to compare
-                    size_t q_idx = q_pos;
-                    size_t t_idx = t_pos + ops[shift_pos].first;
-
-                    // Ensure indices are within bounds
-                    if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
-                        break;  // Cannot shift due to out-of-bounds
-                    }
-
-                    // Check if the bases match at these positions
-                    if (query_seq[q_idx] == target_seq[t_idx]) {
-                        // Swap the deletion with the next operation
-                        std::swap(ops[shift_pos], ops[shift_pos + 1]);
-                        shift_pos++;
-                    } else {
-                        break;  // Cannot shift without introducing a mismatch
-                    }
-                } else {
-                    break;  // Cannot shift over non-match operations
-                }
+    // **Adjust trailing deletions**
+    // Shift deletions that occur before trailing matches to the end
+    shift_index = ops.size() - 1;
+    while (shift_index > 0) {
+        if ((ops[shift_index].second == '=' || ops[shift_index].second == 'X') &&
+            ops[shift_index - 1].second == 'D') {
+            // Swap the deletion with the following match/mismatch
+            // Only shift over trailing matches
+            if (shift_index == ops.size() - 1) {
+                // Swap operations
+                std::swap(ops[shift_index - 1], ops[shift_index]);
+                shift_index--;
+            } else {
+                break;  // Stop shifting if not at the very end
             }
+        } else {
+            break;  // Stop if not a deletion before a match/mismatch
         }
     }
 
