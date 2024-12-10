@@ -39,7 +39,9 @@ void trim_cigar_and_adjust_positions(std::string& cigar,
                                    int64_t& target_start,
                                    int64_t& target_end,
                                    int64_t& query_start,
-                                   int64_t& query_end) {
+                                   int64_t& query_end,
+                                   int64_t target_length,
+                                   int64_t query_length) {
     std::vector<std::pair<int, char>> ops;
     size_t i = 0;
     while (i < cigar.size()) {
@@ -79,6 +81,12 @@ void trim_cigar_and_adjust_positions(std::string& cigar,
     }
 
     cigar = trimmed_cigar;
+
+    // Ensure positions stay within sequence bounds
+    if (target_start < 0) target_start = 0;
+    if (target_end > target_length) target_end = target_length;
+    if (query_start < 0) query_start = 0;
+    if (query_end > query_length) query_end = query_length;
 }
 
 void recompute_identity_metrics(const std::string& cigar,
@@ -146,7 +154,9 @@ void verify_cigar_alignment(const std::string& cigar,
                            const char* query_seq,
                            const char* target_seq,
                            int64_t query_start,
-                           int64_t target_start) {
+                           int64_t target_start,
+                           int64_t query_length,
+                           int64_t target_length) {
     size_t q_pos = 0;  // position in query sequence
     size_t t_pos = 0;  // position in target sequence
 
@@ -165,6 +175,13 @@ void verify_cigar_alignment(const std::string& cigar,
                 for (int k = 0; k < op_len; ++k) {
                     char q_char = query_seq[q_pos + k];
                     char t_char = target_seq[t_pos + k];
+                    // Check bounds before comparing
+                    if (q_pos + k >= query_length || t_pos + k >= target_length) {
+                        std::cerr << "[wfmash::align] Error: Position out of bounds during alignment verification "
+                                  << "at query pos " << query_start + q_pos + k
+                                  << " vs target pos " << target_start + t_pos + k << "\n";
+                        exit(1);
+                    }
                     if (q_char != t_char) {
                         std::cerr << "[wfmash::align] Error: Mismatch at position "
                                   << "query pos " << query_start + q_pos + k
@@ -416,17 +433,28 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     // Get the query sequence length
     const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
 
-    // Compute padding for sequence extraction
-    const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : currentRecord.rStartPos;
-    const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+    // Calculate padded positions ensuring they stay within bounds
+    int64_t ref_fetch_start = static_cast<int64_t>(currentRecord.rStartPos) - 
+                             static_cast<int64_t>(param.wflign_max_len_minor);
+    uint64_t head_padding = param.wflign_max_len_minor;
+    if (ref_fetch_start < 0) {
+        head_padding += ref_fetch_start;  // Reduce padding
+        ref_fetch_start = 0;
+    }
 
-    // Extract reference sequence
+    int64_t ref_fetch_end = static_cast<int64_t>(currentRecord.rEndPos - 1) + 
+                           static_cast<int64_t>(param.wflign_max_len_minor);
+    uint64_t tail_padding = param.wflign_max_len_minor;
+    if (ref_fetch_end >= ref_size) {
+        tail_padding -= (ref_fetch_end - (ref_size - 1));
+        ref_fetch_end = ref_size - 1;
+    }
+
+    // Extract reference sequence with validated bounds
     int64_t ref_len;
     char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
-                                      currentRecord.rStartPos - head_padding, 
-                                      currentRecord.rEndPos - 1 + tail_padding, &ref_len);
+                                      ref_fetch_start,
+                                      ref_fetch_end, &ref_len);
 
     // Extract query sequence
     int64_t query_len;
@@ -519,7 +547,14 @@ std::string processAlignment(seq_record_t* rec) {
         int64_t query_start = rec->currentRecord.qStartPos;
         int64_t query_end = rec->currentRecord.qEndPos;
 
-        trim_cigar_and_adjust_positions(adjusted_cigar, target_start, target_end, query_start, query_end);
+        // Skip empty alignments after adjustment
+        if (adjusted_cigar.empty()) {
+            return "";
+        }
+
+        trim_cigar_and_adjust_positions(adjusted_cigar, target_start, target_end, 
+                                      query_start, query_end,
+                                      rec->refTotalLength, rec->queryTotalLength);
 
         // Verify the alignment matches in '=' operations
         // Adjust the query and target sequence pointers based on the new start positions
@@ -530,7 +565,9 @@ std::string processAlignment(seq_record_t* rec) {
                               queryRegionStrand.data() + query_seq_offset,
                               ref_seq_ptr + target_seq_offset,
                               query_start,
-                              target_start);
+                              target_start,
+                              rec->queryTotalLength - query_start,
+                              rec->refTotalLength - target_start);
 
         // Recompute identity metrics
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
