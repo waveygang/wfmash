@@ -326,8 +326,11 @@ typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, fals
  */
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
-std::string adjust_cigar_string(const std::string& cigar, const std::string& query_seq, const std::string& target_seq) {
-    // Parse the CIGAR string into operations
+std::string adjust_cigar_string(const std::string& cigar,
+                               const std::string& query_seq,
+                               const std::string& target_seq,
+                               int64_t query_start,
+                               int64_t target_start) {
     std::vector<std::pair<int, char>> ops;
     size_t i = 0;
     while (i < cigar.size()) {
@@ -339,26 +342,65 @@ std::string adjust_cigar_string(const std::string& cigar, const std::string& que
         i = j + 1;
     }
 
-    // **Adjust initial deletions**
-    // Shift deletions that occur immediately after initial matches to the start
+    // Initialize positions in the sequences
+    size_t query_pos = 0;
+    size_t target_pos = 0;
+
+    // Adjust initial deletions
     while (ops.size() >= 2) {
-        if ((ops[0].second == '=' || ops[0].second == 'X') && ops[1].second == 'D') {
-            // Swap the match/mismatch with the following deletion
-            std::swap(ops[0], ops[1]);
+        if ((ops[0].second == 'D') && (ops[1].second == '=' || ops[1].second == 'X')) {
+            int del_len = ops[0].first;
+            int match_len = ops[1].first;
+
+            bool sequences_match = true;
+            for (int i = 0; i < match_len; ++i) {
+                if (query_pos + i >= query_seq.size() ||
+                    target_pos + del_len + i >= target_seq.size() ||
+                    query_seq[query_pos + i] != target_seq[target_pos + del_len + i]) {
+                    sequences_match = false;
+                    break;
+                }
+            }
+
+            if (sequences_match) {
+                std::swap(ops[0], ops[1]);
+                target_pos += del_len;
+            } else {
+                break;
+            }
         } else {
-            break;  // Stop if the pattern doesn't match or we've adjusted
+            break;
         }
     }
 
-    // **Adjust trailing deletions**
-    // Shift deletions that occur immediately before trailing matches to the end
+    // Adjust trailing deletions
     while (ops.size() >= 2) {
         size_t n = ops.size();
-        if ((ops[n - 1].second == '=' || ops[n - 1].second == 'X') && ops[n - 2].second == 'D') {
-            // Swap the match/mismatch with the preceding deletion
-            std::swap(ops[n - 2], ops[n - 1]);
+        if ((ops[n-1].second == 'D') && (ops[n-2].second == '=' || ops[n-2].second == 'X')) {
+            int del_len = ops[n-1].first;
+            int match_len = ops[n-2].first;
+
+            size_t query_check_pos = query_pos + match_len;
+            size_t target_check_pos = target_pos + match_len;
+
+            bool sequences_match = true;
+            for (int i = 0; i < match_len; ++i) {
+                if (query_check_pos - match_len + i >= query_seq.size() ||
+                    target_check_pos - match_len + i >= target_seq.size() ||
+                    query_seq[query_check_pos - match_len + i] != target_seq[target_check_pos - match_len + i]) {
+                    sequences_match = false;
+                    break;
+                }
+            }
+
+            if (sequences_match) {
+                std::swap(ops[n-2], ops[n-1]);
+                target_pos += del_len;
+            } else {
+                break;
+            }
         } else {
-            break;  // Stop if the pattern doesn't match or we've adjusted
+            break;
         }
     }
 
@@ -600,7 +642,11 @@ std::string processAlignment(seq_record_t* rec) {
                   << ", end=" << rec->currentRecord.qEndPos << "\n";
 
         // Adjust the CIGAR string
-        std::string adjusted_cigar = adjust_cigar_string(original_cigar, queryRegionStrand.data(), ref_seq_ptr);
+        std::string adjusted_cigar = adjust_cigar_string(original_cigar,
+                                                       queryRegionStrand.data(),
+                                                       ref_seq_ptr,
+                                                       rec->queryStartPos,
+                                                       rec->currentRecord.rStartPos);
 
         // Trim leading/trailing deletions and adjust positions
         int64_t target_start = rec->currentRecord.rStartPos;
