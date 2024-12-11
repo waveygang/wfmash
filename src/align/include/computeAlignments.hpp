@@ -183,11 +183,38 @@ void verify_cigar_alignment(const std::string& cigar,
                         exit(1);
                     }
                     if (q_char != t_char) {
+                        // Print error message
                         std::cerr << "[wfmash::align] Error: Mismatch at position "
                                   << "query pos " << query_start + q_pos + k
                                   << " vs target pos " << target_start + t_pos + k
                                   << ": query char '" << q_char
                                   << "' vs target char '" << t_char << "' in '=' operation of CIGAR.\n";
+                        
+                        // Calculate context range for query sequence
+                        size_t query_context_start = (q_pos + k >= 5) ? q_pos + k - 5 : 0;
+                        size_t query_context_end = std::min(q_pos + k + 5, query_length - 1);
+                        
+                        // Calculate context range for target sequence
+                        size_t target_context_start = (t_pos + k >= 5) ? t_pos + k - 5 : 0;
+                        size_t target_context_end = std::min(t_pos + k + 5, target_length - 1);
+                        
+                        // Extract context sequences
+                        std::string query_context(query_seq + query_context_start, query_seq + query_context_end + 1);
+                        std::string target_context(target_seq + target_context_start, target_seq + target_context_end + 1);
+                        
+                        // Print the alignment state
+                        std::cerr << "[DEBUG] Alignment state at mismatch:\n";
+                        std::cerr << "CIGAR string: " << cigar << "\n";
+                        std::cerr << "Query sequence around mismatch (positions " << query_start + query_context_start
+                                 << "-" << query_start + query_context_end << "):\n"
+                                 << query_context << "\n";
+                        std::cerr << "Target sequence around mismatch (positions " << target_start + target_context_start
+                                 << "-" << target_start + target_context_end << "):\n"
+                                 << target_context << "\n";
+                        std::cerr << "q_pos: " << q_pos << ", t_pos: " << t_pos << ", k: " << k << "\n";
+                        std::cerr << "Query sequence length: " << query_length << ", Target sequence length: " << target_length << "\n";
+                        std::cerr << "Total query start: " << query_start << ", Total target start: " << target_start << "\n";
+                        
                         exit(1);
                     }
                 }
