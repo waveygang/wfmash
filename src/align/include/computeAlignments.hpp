@@ -35,6 +35,74 @@
 namespace align
 {
 
+bool left_align_leading_deletion(
+    const std::string& reference,
+    const std::string& query,
+    int& match_len,
+    int del_len)
+{
+    // If match length is zero, nothing to adjust
+    if (match_len == 0) {
+        return true;
+    }
+
+    int shifts = 0;
+    while (shifts < match_len) {
+        // Compare the base in query with the base after deletion in reference
+        char query_base = query[match_len - shifts - 1];
+        char ref_base = reference[match_len + del_len - shifts - 1];
+
+        if (query_base != ref_base) {
+            break;
+        }
+        shifts++;
+    }
+
+    // If no shifts occurred, cannot move deletion
+    if (shifts == 0) {
+        return false;
+    }
+
+    // Adjust match length
+    match_len -= shifts;
+    return true;
+}
+
+bool right_align_trailing_deletion(
+    const std::string& reference,
+    const std::string& query,
+    int& del_pos,
+    int del_len,
+    int& match_len)
+{
+    // If match length is zero, nothing to adjust
+    if (match_len == 0) {
+        return true;
+    }
+
+    int shifts = 0;
+    while (shifts < match_len) {
+        // Compare the base in query with the base before deletion in reference
+        char query_base = query[del_pos + shifts];
+        char ref_base = reference[del_pos + del_len + shifts];
+
+        if (query_base != ref_base) {
+            break;
+        }
+        shifts++;
+    }
+
+    // If no shifts occurred, cannot move deletion
+    if (shifts == 0) {
+        return false;
+    }
+
+    // Adjust deletion position and match length
+    del_pos += shifts;
+    match_len -= shifts;
+    return true;
+}
+
 void trim_cigar_and_adjust_positions(std::string& cigar,
                                    int64_t& target_start,
                                    int64_t& target_end,
@@ -345,27 +413,67 @@ std::string adjust_cigar_string(const std::string& cigar,
         i = j + 1;
     }
 
-    // Trim leading insertions and deletions
-    while (!ops.empty() && (ops.front().second == 'I' || ops.front().second == 'D')) {
-        auto& op = ops.front();
-        if (op.second == 'I') {
-            query_start += op.first;
-        } else if (op.second == 'D') {
-            target_start += op.first;
+    // Handle leading operations
+    if (!ops.empty()) {
+        // Attempt to left-align leading deletion if present
+        if (ops.size() >= 2 && ops[0].second == 'M' && ops[1].second == 'D') {
+            int match_len = ops[0].first;
+            int del_len = ops[1].first;
+
+            bool moved = left_align_leading_deletion(target_seq, query_seq, match_len, del_len);
+            if (moved) {
+                // Update operations
+                ops[0].first = match_len;
+                ops[1].first = del_len;
+            }
         }
-        ops.erase(ops.begin());
+
+        // Trim leading insertions and deletions
+        while (!ops.empty() && (ops.front().second == 'I' || ops.front().second == 'D')) {
+            auto& op = ops.front();
+            if (op.second == 'I') {
+                query_start += op.first;
+            } else if (op.second == 'D') {
+                target_start += op.first;
+            }
+            ops.erase(ops.begin());
+        }
     }
 
-    // Trim trailing insertions and deletions
-    while (!ops.empty() && (ops.back().second == 'I' || ops.back().second == 'D')) {
-        auto& op = ops.back();
-        if (op.second == 'I') {
-            query_end -= op.first;
-        } else if (op.second == 'D') {
-            target_end -= op.first;
+    // Handle trailing operations
+    if (!ops.empty()) {
+        // Attempt to right-align trailing deletion if present
+        if (ops.size() >= 2 && ops[ops.size() - 2].second == 'D' && ops.back().second == 'M') {
+            int del_pos = target_end - target_start - ops[ops.size() - 2].first - ops.back().first;
+            int del_len = ops[ops.size() - 2].first;
+            int match_len = ops.back().first;
+
+            bool moved = right_align_trailing_deletion(
+                target_seq, query_seq, del_pos, del_len, match_len);
+            if (moved) {
+                // Update operations
+                ops[ops.size() - 2].first = del_len;
+                ops.back().first = match_len;
+            }
         }
-        ops.pop_back();
+
+        // Trim trailing insertions and deletions
+        while (!ops.empty() && (ops.back().second == 'I' || ops.back().second == 'D')) {
+            auto& op = ops.back();
+            if (op.second == 'I') {
+                query_end -= op.first;
+            } else if (op.second == 'D') {
+                target_end -= op.first;
+            }
+            ops.pop_back();
+        }
     }
+
+    // Ensure positions stay within sequence bounds
+    if (target_start < 0) target_start = 0;
+    if (target_end > target_seq.length()) target_end = target_seq.length();
+    if (query_start < 0) query_start = 0;
+    if (query_end > query_seq.length()) query_end = query_seq.length();
 
     // Reconstruct the adjusted CIGAR string
     std::string adjusted_cigar;
