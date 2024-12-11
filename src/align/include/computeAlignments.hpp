@@ -406,7 +406,8 @@ std::string adjust_cigar_string(const std::string& cigar,
                                int64_t& query_start,
                                int64_t& query_end,
                                int64_t& target_start,
-                               int64_t& target_end) {
+                               int64_t& target_end,
+                               uint64_t max_shift) {
     // Parse the CIGAR string into operations
     std::vector<std::pair<int, char>> ops;
     size_t i = 0;
@@ -426,7 +427,7 @@ std::string adjust_cigar_string(const std::string& cigar,
             int match_len = ops[0].first;
             int del_len = ops[1].first;
 
-            bool moved = left_align_leading_deletion(target_seq, query_seq, match_len, del_len);
+            bool moved = left_align_leading_deletion(target_seq, query_seq, match_len, del_len, max_shift);
             if (moved) {
                 // Update operations
                 ops[0].first = match_len;
@@ -455,7 +456,7 @@ std::string adjust_cigar_string(const std::string& cigar,
             int match_len = ops.back().first;
 
             bool moved = right_align_trailing_deletion(
-                target_seq, query_seq, del_pos, del_len, match_len, param.target_padding);
+                target_seq, query_seq, del_pos, del_len, match_len, max_shift);
             if (moved) {
                 // Update operations
                 ops[ops.size() - 2].first = del_len;
@@ -713,7 +714,8 @@ std::string processAlignment(seq_record_t* rec) {
                                                        rec->currentRecord.qStartPos,
                                                        rec->currentRecord.qEndPos,
                                                        rec->currentRecord.rStartPos,
-                                                       rec->currentRecord.rEndPos);
+                                                       rec->currentRecord.rEndPos,
+                                                       param.target_padding);
 
         // Trim leading/trailing deletions and adjust positions
         int64_t target_start = rec->currentRecord.rStartPos;
