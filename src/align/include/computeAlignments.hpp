@@ -654,6 +654,14 @@ std::string processAlignment(seq_record_t* rec) {
             updated_output += "\n";
         }
 
+        // Add debug statements to show post-modification state
+        std::cerr << "[DEBUG] Adjusted CIGAR string: " << adjusted_cigar << "\n";
+        std::cerr << "[DEBUG] Updated target positions: start=" << target_start << ", end=" << target_end << "\n";
+        std::cerr << "[DEBUG] Updated query positions: start=" << query_start << ", end=" << query_end << "\n";
+        std::cerr << "[DEBUG] Gap-compressed identity (gi): " << gap_compressed_identity << "\n";
+        std::cerr << "[DEBUG] BLAST identity (bi): " << blast_identity << "\n";
+        std::cerr << "[DEBUG] Alignment output after modification:\n" << updated_output << "\n";
+
         return updated_output;
     }
 
