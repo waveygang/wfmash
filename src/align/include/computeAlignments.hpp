@@ -652,9 +652,9 @@ std::string processAlignment(seq_record_t* rec) {
                                       query_start, query_end,
                                       rec->refTotalLength, rec->queryTotalLength);
 
-        // Recompute sequence pointers after position adjustments
-        char* adjusted_ref_seq_ptr = &ref_seq[target_start - rec->refStartPos];
-        char* adjusted_query_seq_ptr = &queryRegionStrand[query_start - rec->currentRecord.qStartPos];
+        // Use original sequence pointers
+        char* adjusted_ref_seq_ptr = ref_seq_ptr;
+        char* adjusted_query_seq_ptr = queryRegionStrand.data();
 
         // Debug output for adjusted sequences
         std::cerr << "[DEBUG] Adjusted positions and sequences:\n"
@@ -713,14 +713,14 @@ std::string processAlignment(seq_record_t* rec) {
         // Update positions based on format
         if (!param.sam_format) {  // PAF format
             // Query positions (0-based)
-            fields[2] = std::to_string(query_start);
-            fields[3] = std::to_string(query_end);
+            fields[2] = std::to_string(rec->currentRecord.qStartPos);
+            fields[3] = std::to_string(rec->currentRecord.qEndPos);
             // Target positions (0-based)
-            fields[7] = std::to_string(target_start);
-            fields[8] = std::to_string(target_end);
+            fields[7] = std::to_string(rec->currentRecord.rStartPos);
+            fields[8] = std::to_string(rec->currentRecord.rEndPos);
         } else {  // SAM format
             // Target position (1-based)
-            fields[3] = std::to_string(target_start + 1);
+            fields[3] = std::to_string(rec->currentRecord.rStartPos + 1);
             // If necessary, adjust the query positions stored in optional fields
         }
 
