@@ -329,8 +329,11 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 std::string adjust_cigar_string(const std::string& cigar,
                                const std::string& query_seq,
                                const std::string& target_seq,
-                               int64_t query_start,
-                               int64_t target_start) {
+                               int64_t& query_start,
+                               int64_t& query_end,
+                               int64_t& target_start,
+                               int64_t& target_end) {
+    // Parse the CIGAR string into operations
     std::vector<std::pair<int, char>> ops;
     size_t i = 0;
     while (i < cigar.size()) {
@@ -342,83 +345,31 @@ std::string adjust_cigar_string(const std::string& cigar,
         i = j + 1;
     }
 
-    // Initialize positions in the sequences
-    size_t query_pos = 0;
-    size_t target_pos = 0;
-
-    // Adjust initial deletions
-    while (ops.size() >= 2) {
-        if ((ops[0].second == 'D') && (ops[1].second == '=' || ops[1].second == 'X')) {
-            int del_len = ops[0].first;
-            int match_len = ops[1].first;
-
-            bool sequences_match = true;
-            for (int i = 0; i < match_len; ++i) {
-                if (query_pos + i >= query_seq.size() ||
-                    target_pos + del_len + i >= target_seq.size() ||
-                    query_seq[query_pos + i] != target_seq[target_pos + del_len + i]) {
-                    sequences_match = false;
-                    break;
-                }
-            }
-
-            if (sequences_match) {
-                std::swap(ops[0], ops[1]);
-                target_pos += del_len;
-            } else {
-                break;
-            }
-        } else {
-            break;
+    // Trim leading insertions and deletions
+    while (!ops.empty() && (ops.front().second == 'I' || ops.front().second == 'D')) {
+        auto& op = ops.front();
+        if (op.second == 'I') {
+            query_start += op.first;
+        } else if (op.second == 'D') {
+            target_start += op.first;
         }
+        ops.erase(ops.begin());
     }
 
-    // Adjust trailing deletions
-    while (ops.size() >= 2) {
-        size_t n = ops.size();
-        if ((ops[n-1].second == 'D') && (ops[n-2].second == '=' || ops[n-2].second == 'X')) {
-            int del_len = ops[n-1].first;
-            int match_len = ops[n-2].first;
-
-            size_t query_check_pos = query_pos + match_len;
-            size_t target_check_pos = target_pos + match_len;
-
-            bool sequences_match = true;
-            for (int i = 0; i < match_len; ++i) {
-                if (query_check_pos - match_len + i >= query_seq.size() ||
-                    target_check_pos - match_len + i >= target_seq.size() ||
-                    query_seq[query_check_pos - match_len + i] != target_seq[target_check_pos - match_len + i]) {
-                    sequences_match = false;
-                    break;
-                }
-            }
-
-            if (sequences_match) {
-                std::swap(ops[n-2], ops[n-1]);
-                target_pos += del_len;
-            } else {
-                break;
-            }
-        } else {
-            break;
+    // Trim trailing insertions and deletions
+    while (!ops.empty() && (ops.back().second == 'I' || ops.back().second == 'D')) {
+        auto& op = ops.back();
+        if (op.second == 'I') {
+            query_end -= op.first;
+        } else if (op.second == 'D') {
+            target_end -= op.first;
         }
+        ops.pop_back();
     }
 
-    // **Merge successive operations of the same type**
-    std::vector<std::pair<int, char>> merged_ops;
-    for (const auto& op : ops) {
-        if (!merged_ops.empty() && merged_ops.back().second == op.second) {
-            // Same operation type, merge counts
-            merged_ops.back().first += op.first;
-        } else {
-            // Different operation, add to merged_ops
-            merged_ops.push_back(op);
-        }
-    }
-
-    // Reconstruct the adjusted and merged CIGAR string
+    // Reconstruct the adjusted CIGAR string
     std::string adjusted_cigar;
-    for (const auto& op : merged_ops) {
+    for (const auto& op : ops) {
         adjusted_cigar += std::to_string(op.first) + op.second;
     }
 
@@ -646,7 +597,9 @@ std::string processAlignment(seq_record_t* rec) {
                                                        queryRegionStrand.data(),
                                                        ref_seq_ptr,
                                                        rec->queryStartPos,
-                                                       rec->currentRecord.rStartPos);
+                                                       rec->queryEndPos,
+                                                       rec->currentRecord.rStartPos,
+                                                       rec->currentRecord.rEndPos);
 
         // Trim leading/trailing deletions and adjust positions
         int64_t target_start = rec->currentRecord.rStartPos;
