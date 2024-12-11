@@ -53,28 +53,41 @@ void trim_cigar_and_adjust_positions(std::string& cigar,
         i = j + 1;
     }
 
+    // Track adjustments separately
+    int64_t target_start_adj = 0;
+    int64_t target_end_adj = 0;
+    int64_t query_start_adj = 0;
+    int64_t query_end_adj = 0;
+
     size_t start_idx = 0;
     while (start_idx < ops.size() && ops[start_idx].second == 'D') {
-        target_start += ops[start_idx].first;
+        target_start_adj += ops[start_idx].first;
         start_idx++;
     }
 
     size_t end_idx = ops.size();
     while (end_idx > start_idx && ops[end_idx - 1].second == 'D') {
-        target_end -= ops[end_idx - 1].first;
+        target_end_adj += ops[end_idx - 1].first;
         end_idx--;
     }
 
     while (start_idx < end_idx && ops[start_idx].second == 'I') {
-        query_start += ops[start_idx].first;
+        query_start_adj += ops[start_idx].first;
         start_idx++;
     }
 
     while (end_idx > start_idx && ops[end_idx - 1].second == 'I') {
-        query_end -= ops[end_idx - 1].first;
+        query_end_adj += ops[end_idx - 1].first;
         end_idx--;
     }
 
+    // Apply adjustments
+    target_start += target_start_adj;
+    target_end -= target_end_adj;
+    query_start += query_start_adj;
+    query_end -= query_end_adj;
+
+    // Build trimmed CIGAR string
     std::string trimmed_cigar;
     for (size_t k = start_idx; k < end_idx; ++k) {
         trimmed_cigar += std::to_string(ops[k].first) + ops[k].second;
@@ -591,18 +604,18 @@ std::string processAlignment(seq_record_t* rec) {
                                       query_start, query_end,
                                       rec->refTotalLength, rec->queryTotalLength);
 
-        // Verify the alignment matches in '=' operations
-        // Adjust the query and target sequence pointers based on the new start positions
-        size_t query_seq_offset = query_start - rec->currentRecord.qStartPos;
-        size_t target_seq_offset = target_start - rec->currentRecord.rStartPos;
+        // Recompute sequence pointers after position adjustments
+        char* adjusted_ref_seq_ptr = &ref_seq[target_start - rec->refStartPos];
+        char* adjusted_query_seq_ptr = &queryRegionStrand[query_start - rec->currentRecord.qStartPos];
 
+        // Verify the alignment matches in '=' operations using adjusted pointers
         verify_cigar_alignment(adjusted_cigar,
-                              queryRegionStrand.data() + query_seq_offset,
-                              ref_seq_ptr + target_seq_offset,
-                              query_start,
-                              target_start,
-                              rec->queryTotalLength - query_start,
-                              rec->refTotalLength - target_start);
+                             adjusted_query_seq_ptr,
+                             adjusted_ref_seq_ptr,
+                             query_start,
+                             target_start,
+                             rec->queryTotalLength - query_start,
+                             rec->refTotalLength - target_start);
 
         // Recompute identity metrics
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
