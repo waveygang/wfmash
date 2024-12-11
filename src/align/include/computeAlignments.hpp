@@ -596,8 +596,8 @@ std::string processAlignment(seq_record_t* rec) {
         std::string adjusted_cigar = adjust_cigar_string(original_cigar,
                                                        queryRegionStrand.data(),
                                                        ref_seq_ptr,
-                                                       rec->queryStartPos,
-                                                       rec->queryEndPos,
+                                                       rec->currentRecord.qStartPos,
+                                                       rec->currentRecord.qEndPos,
                                                        rec->currentRecord.rStartPos,
                                                        rec->currentRecord.rEndPos);
 
