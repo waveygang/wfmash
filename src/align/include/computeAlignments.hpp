@@ -39,16 +39,21 @@ bool left_align_leading_deletion(
     const std::string& reference,
     const std::string& query,
     int& match_len,
-    int del_len)
+    int del_len,
+    int max_shifts)
 {
-    // If match length is zero, nothing to adjust
     if (match_len == 0) {
         return true;
     }
 
     int shifts = 0;
-    while (shifts < match_len) {
-        // Compare the base in query with the base after deletion in reference
+    int total_possible_shifts = std::min({match_len, max_shifts, 
+                                        static_cast<int>(query.size()), 
+                                        static_cast<int>(reference.size() - del_len)});
+    
+    while (shifts < total_possible_shifts && 
+           (match_len - shifts - 1) >= 0 &&
+           (match_len + del_len - shifts - 1) < reference.size()) {
         char query_base = query[match_len - shifts - 1];
         char ref_base = reference[match_len + del_len - shifts - 1];
 
@@ -58,12 +63,10 @@ bool left_align_leading_deletion(
         shifts++;
     }
 
-    // If no shifts occurred, cannot move deletion
     if (shifts == 0) {
         return false;
     }
 
-    // Adjust match length
     match_len -= shifts;
     return true;
 }
@@ -73,16 +76,21 @@ bool right_align_trailing_deletion(
     const std::string& query,
     int& del_pos,
     int del_len,
-    int& match_len)
+    int& match_len,
+    int max_shifts)
 {
-    // If match length is zero, nothing to adjust
     if (match_len == 0) {
         return true;
     }
 
     int shifts = 0;
-    while (shifts < match_len) {
-        // Compare the base in query with the base before deletion in reference
+    int total_possible_shifts = std::min({match_len, max_shifts,
+                                        static_cast<int>(query.size() - del_pos),
+                                        static_cast<int>(reference.size() - del_pos - del_len)});
+
+    while (shifts < total_possible_shifts &&
+           (del_pos + shifts) < query.size() &&
+           (del_pos + del_len + shifts) < reference.size()) {
         char query_base = query[del_pos + shifts];
         char ref_base = reference[del_pos + del_len + shifts];
 
@@ -92,12 +100,10 @@ bool right_align_trailing_deletion(
         shifts++;
     }
 
-    // If no shifts occurred, cannot move deletion
     if (shifts == 0) {
         return false;
     }
 
-    // Adjust deletion position and match length
     del_pos += shifts;
     match_len -= shifts;
     return true;
@@ -449,7 +455,7 @@ std::string adjust_cigar_string(const std::string& cigar,
             int match_len = ops.back().first;
 
             bool moved = right_align_trailing_deletion(
-                target_seq, query_seq, del_pos, del_len, match_len);
+                target_seq, query_seq, del_pos, del_len, match_len, param.target_padding);
             if (moved) {
                 // Update operations
                 ops[ops.size() - 2].first = del_len;
