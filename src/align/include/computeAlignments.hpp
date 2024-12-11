@@ -632,25 +632,13 @@ std::string processAlignment(seq_record_t* rec) {
                                                        queryRegionStrand.data(),
                                                        ref_seq_ptr,
                                                        rec->currentRecord.qStartPos,
-                                                       rec->currentRecord.qEndPos,
                                                        rec->currentRecord.rStartPos,
-                                                       rec->currentRecord.rEndPos,
                                                        param.target_padding);
 
-        // Trim leading/trailing deletions and adjust positions
-        int64_t target_start = rec->currentRecord.rStartPos;
-        int64_t target_end = rec->currentRecord.rEndPos;
-        int64_t query_start = rec->currentRecord.qStartPos;
-        int64_t query_end = rec->currentRecord.qEndPos;
-
-        // Skip empty alignments after adjustment
+        // Skip empty alignments
         if (adjusted_cigar.empty()) {
             return "";
         }
-
-        trim_cigar_and_adjust_positions(adjusted_cigar, target_start, target_end, 
-                                      query_start, query_end,
-                                      rec->refTotalLength, rec->queryTotalLength);
 
         // Use original sequence pointers
         char* adjusted_ref_seq_ptr = ref_seq_ptr;
