@@ -109,85 +109,6 @@ bool right_align_trailing_deletion(
     return true;
 }
 
-void trim_cigar_and_adjust_positions(std::string& cigar,
-                                   int64_t& target_start,
-                                   int64_t& target_end,
-                                   int64_t& query_start,
-                                   int64_t& query_end,
-                                   int64_t target_length,
-                                   int64_t query_length) {
-    std::cerr << "[DEBUG] Before trimming:\n"
-              << "Original CIGAR string: " << cigar << "\n"
-              << "Original positions: target_start=" << target_start
-              << ", target_end=" << target_end
-              << ", query_start=" << query_start
-              << ", query_end=" << query_end << "\n";
-    std::vector<std::pair<int, char>> ops;
-    size_t i = 0;
-    while (i < cigar.size()) {
-        size_t j = i;
-        while (j < cigar.size() && isdigit(cigar[j])) j++;
-        int count = std::stoi(cigar.substr(i, j - i));
-        char op = cigar[j];
-        ops.emplace_back(count, op);
-        i = j + 1;
-    }
-
-    // Track adjustments separately
-    int64_t target_start_adj = 0;
-    int64_t target_end_adj = 0;
-    int64_t query_start_adj = 0;
-    int64_t query_end_adj = 0;
-
-    size_t start_idx = 0;
-    while (start_idx < ops.size() && ops[start_idx].second == 'D') {
-        target_start_adj += ops[start_idx].first;
-        start_idx++;
-    }
-
-    size_t end_idx = ops.size();
-    while (end_idx > start_idx && ops[end_idx - 1].second == 'D') {
-        target_end_adj += ops[end_idx - 1].first;
-        end_idx--;
-    }
-
-    while (start_idx < end_idx && ops[start_idx].second == 'I') {
-        query_start_adj += ops[start_idx].first;
-        start_idx++;
-    }
-
-    while (end_idx > start_idx && ops[end_idx - 1].second == 'I') {
-        query_end_adj += ops[end_idx - 1].first;
-        end_idx--;
-    }
-
-    // Apply adjustments
-    target_start += target_start_adj;
-    target_end -= target_end_adj;
-    query_start += query_start_adj;
-    query_end -= query_end_adj;
-
-    // Build trimmed CIGAR string
-    std::string trimmed_cigar;
-    for (size_t k = start_idx; k < end_idx; ++k) {
-        trimmed_cigar += std::to_string(ops[k].first) + ops[k].second;
-    }
-
-    cigar = trimmed_cigar;
-
-    // Ensure positions stay within sequence bounds
-    if (target_start < 0) target_start = 0;
-    if (target_end > target_length) target_end = target_length;
-    if (query_start < 0) query_start = 0;
-    if (query_end > query_length) query_end = query_length;
-
-    std::cerr << "[DEBUG] After trimming:\n"
-              << "Trimmed CIGAR string: " << cigar << "\n"
-              << "Adjusted positions: target_start=" << target_start
-              << ", target_end=" << target_end
-              << ", query_start=" << query_start
-              << ", query_end=" << query_end << "\n";
-}
 
 void recompute_identity_metrics(const std::string& cigar,
                               int& matches,
@@ -403,11 +324,11 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 std::string adjust_cigar_string(const std::string& cigar,
                                const std::string& query_seq,
                                const std::string& target_seq,
-                               int64_t& query_start,
-                               int64_t& query_end,
-                               int64_t& target_start,
-                               int64_t& target_end,
+                               int64_t query_start,
+                               int64_t target_start,
                                uint64_t max_shift) {
+    std::cerr << "[DEBUG] Original CIGAR string: " << cigar << "\n";
+    
     // Parse the CIGAR string into operations
     std::vector<std::pair<int, char>> ops;
     size_t i = 0;
@@ -420,67 +341,66 @@ std::string adjust_cigar_string(const std::string& cigar,
         i = j + 1;
     }
 
-    // Handle leading operations
-    if (!ops.empty()) {
-        // Attempt to left-align leading deletion if present
-        if (ops.size() >= 2 && ops[0].second == 'M' && ops[1].second == 'D') {
-            int match_len = ops[0].first;
-            int del_len = ops[1].first;
+    std::cerr << "[DEBUG] Original CIGAR operations:\n";
+    for (const auto& op : ops) {
+        std::cerr << op.first << op.second << " ";
+    }
+    std::cerr << "\n";
 
-            bool moved = left_align_leading_deletion(target_seq, query_seq, match_len, del_len, max_shift);
-            if (moved) {
-                // Update operations
-                ops[0].first = match_len;
-                ops[1].first = del_len;
+    // Swap leading '=' and 'D' if possible
+    if (ops.size() >= 2 && ops[0].second == '=' && ops[1].second == 'D') {
+        int match_len = ops[0].first;
+        int del_len = ops[1].first;
+
+        // Check if swapping is valid
+        bool can_swap = true;
+        for (int k = 0; k < del_len && 
+             (query_start + match_len + k) < query_seq.size() && 
+             (target_start + match_len + k) < target_seq.size(); ++k) {
+            if (query_seq[query_start + match_len + k] != 
+                target_seq[target_start + match_len + k]) {
+                can_swap = false;
+                break;
             }
         }
 
-        // Trim leading insertions and deletions
-        while (!ops.empty() && (ops.front().second == 'I' || ops.front().second == 'D')) {
-            auto& op = ops.front();
-            if (op.second == 'I') {
-                query_start += op.first;
-            } else if (op.second == 'D') {
-                target_start += op.first;
-            }
-            ops.erase(ops.begin());
+        if (can_swap) {
+            std::swap(ops[0], ops[1]);
+            std::cerr << "[DEBUG] Swapped leading '=' and 'D' operations.\n";
         }
     }
 
-    // Handle trailing operations
-    if (!ops.empty()) {
-        // Attempt to right-align trailing deletion if present
-        if (ops.size() >= 2 && ops[ops.size() - 2].second == 'D' && ops.back().second == 'M') {
-            int del_pos = target_end - target_start - ops[ops.size() - 2].first - ops.back().first;
-            int del_len = ops[ops.size() - 2].first;
-            int match_len = ops.back().first;
+    // Swap trailing 'D' and '=' if possible
+    if (ops.size() >= 2 && ops[ops.size() - 2].second == 'D' && ops.back().second == '=') {
+        int match_len = ops.back().first;
+        int del_len = ops[ops.size() - 2].first;
 
-            bool moved = right_align_trailing_deletion(
-                target_seq, query_seq, del_pos, del_len, match_len, max_shift);
-            if (moved) {
-                // Update operations
-                ops[ops.size() - 2].first = del_len;
-                ops.back().first = match_len;
+        // Calculate positions
+        int query_pos = query_start + query_seq.size() - match_len - del_len;
+        int target_pos = target_start + target_seq.size() - match_len - del_len;
+
+        // Check if swapping is valid
+        bool can_swap = true;
+        for (int k = 0; k < del_len && 
+             (query_pos + k) < query_seq.size() && 
+             (target_pos + k) < target_seq.size(); ++k) {
+            if (query_seq[query_pos + k] != target_seq[target_pos + k]) {
+                can_swap = false;
+                break;
             }
         }
 
-        // Trim trailing insertions and deletions
-        while (!ops.empty() && (ops.back().second == 'I' || ops.back().second == 'D')) {
-            auto& op = ops.back();
-            if (op.second == 'I') {
-                query_end -= op.first;
-            } else if (op.second == 'D') {
-                target_end -= op.first;
-            }
-            ops.pop_back();
+        if (can_swap) {
+            std::swap(ops[ops.size() - 2], ops.back());
+            std::cerr << "[DEBUG] Swapped trailing 'D' and '=' operations.\n";
         }
     }
 
-    // Ensure positions stay within sequence bounds
-    if (target_start < 0) target_start = 0;
-    if (target_end > target_seq.length()) target_end = target_seq.length();
-    if (query_start < 0) query_start = 0;
-    if (query_end > query_seq.length()) query_end = query_seq.length();
+    std::cerr << "[DEBUG] Adjusted CIGAR operations:\n";
+    for (const auto& op : ops) {
+        std::cerr << op.first << op.second << " ";
+    }
+    std::cerr << "\n";
 
     // Reconstruct the adjusted CIGAR string
     std::string adjusted_cigar;
@@ -851,14 +771,16 @@ std::string processAlignment(seq_record_t* rec) {
             updated_output += "\n";
         }
 
-        // Add debug statements to show post-modification state
-        std::cerr << "[DEBUG] Adjusted CIGAR string: " << adjusted_cigar << "\n";
-        std::cerr << "[DEBUG] Updated target positions: start=" << target_start << ", end=" << target_end << "\n";
-        std::cerr << "[DEBUG] Updated query positions: start=" << query_start << ", end=" << query_end << "\n";
-        std::cerr << "[DEBUG] Gap-compressed identity (gi): " << gap_compressed_identity << "\n";
-        std::cerr << "[DEBUG] BLAST identity (bi): " << blast_identity << "\n";
-        std::cerr << "[DEBUG] Alignment output after modification:\n" << updated_output << "\n";
+        // Verify the alignment matches in '=' operations
+        verify_cigar_alignment(adjusted_cigar,
+                             queryRegionStrand.data(),
+                             ref_seq_ptr,
+                             rec->queryStartPos,
+                             rec->refStartPos,
+                             rec->queryLen,
+                             rec->refLen);
 
+        std::cerr << "[DEBUG] Alignment output after modification:\n" << updated_output << "\n";
         return updated_output;
     }
 
