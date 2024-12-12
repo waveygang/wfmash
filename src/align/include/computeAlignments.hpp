@@ -416,8 +416,6 @@ std::string adjust_cigar_string(const std::string& cigar,
                                int64_t query_start,
                                int64_t target_start,
                                uint64_t max_shift) {
-    std::cerr << "[DEBUG] Original CIGAR string: " << cigar << "\n";
-    
     // Find the first two operations
     size_t first_op_end = 0;
     while (first_op_end < cigar.size() && isdigit(cigar[first_op_end])) first_op_end++;
