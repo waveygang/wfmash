@@ -11,8 +11,8 @@
 ;;
 ;;   mkdir build
 ;;   cd build
-;;   cmake ..
-;;   make -j 12
+;;   cmake -DCMAKE_BUILD_TYPE=Release ..
+;;   make -j 12 VERBOSE=1
 ;;
 ;; For the tests you may need /usr/bin/env. Inside the container:
 ;;
@@ -55,13 +55,11 @@
     (version (git-version "0.21" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
-    (arguments
-     `(#:tests? #f)) ; disable tests until I fix finding the binary wfmash
     (inputs
      `(
        ("bzip2" ,bzip2)
        ("coreutils" ,coreutils) ; for echo and env in tests
-       ("gcc" ,gcc-12)
+       ("gcc" ,gcc-14)
        ("git" ,git)
        ("gmp" ,gmp)
        ("gsl" ,gsl)

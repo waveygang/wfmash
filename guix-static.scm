@@ -44,6 +44,7 @@
   (ice-9 popen)
   (ice-9 rdelim))
 
+;; Guix does not come with a static version of libdeflate
 (define-public libdeflate-static
   (package
     (inherit libdeflate)
@@ -54,7 +55,7 @@
            #~(list "-DLIBDEFLATE_BUILD_STATIC_LIB=YES"
                    "-DLIBDEFLATE_BUILD_TESTS=YES")))))
 
-;; A minimal version of htslib that does not depend on curl and openssl. This
+;; A minimal static version of htslib that does not depend on curl and openssl. This
 ;; reduces the number of higher order dependencies in static linking.
 (define-public htslib-static
   (package
@@ -83,14 +84,19 @@
 
 (define-public wfmash-git
   (package
-    (name "wfmash-git")
+    (name "wfmash-static-git")
     (version (git-version "0.21" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
     (arguments
-     `(#:configure-flags
-         ,#~(list "-DBUILD_STATIC=1" "-DCMAKE_INSTALL_RPATH=") ; force cmake static build and do not rewrite RPATH
-       #:tests? #f)) ; disable tests until I fix finding the binary wfmash
+     `(#:tests? #f
+       #:configure-flags
+       ,#~(list
+           "-DBUILD_STATIC=ON"
+           "-DBUILD_OPTIMIZED=ON"
+           "-DCMAKE_BUILD_TYPE=Release"
+           "-DCMAKE_INSTALL_RPATH="))) ; force cmake static build and do not rewrite RPATH
+         ;; ,#~(list "-DBUILD_STATIC=ON" "-DBUILD_RETARGETABLE=ON" "-DCMAKE_INSTALL_RPATH="))) ; force cmake static build and do not rewrite RPATH
     (inputs
      `(
        ("bzip2-static" ,bzip2 "static")    ; libz2 part of htslib for static builds
