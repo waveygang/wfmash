@@ -299,6 +299,12 @@ void verify_cigar_alignment(const std::string& cigar,
                            int64_t target_start,
                            int64_t query_length,
                            int64_t target_length) {
+    std::cerr << "[DEBUG] Starting CIGAR verification with:"
+              << "\n  Query start: " << query_start
+              << "\n  Target start: " << target_start
+              << "\n  Query length: " << query_length
+              << "\n  Target length: " << target_length
+              << "\n  CIGAR: " << cigar << std::endl;
     size_t q_pos = 0;  // position in query sequence
     size_t t_pos = 0;  // position in target sequence
 
@@ -497,8 +503,13 @@ std::string adjust_cigar_string(const std::string& cigar,
                 break;
             }
             
+            // Store the actual characters for debugging
             char q_char = query_seq[q_idx];
             char t_char = target_seq[t_idx];
+            std::cerr << "[DEBUG] Detailed position check - q_idx: " << q_idx 
+                      << ", t_idx: " << t_idx 
+                      << ", q_char: " << q_char 
+                      << ", t_char: " << t_char << std::endl;
             std::cerr << "[DEBUG] Comparing position " << k << ": Query[" << q_idx << "]=" 
                       << q_char << " vs Target[" << t_idx << "]=" << t_char << std::endl;
             
