@@ -347,13 +347,13 @@ std::string adjust_cigar_string(const std::string& cigar,
     
     // Check if we need to swap leading operations
     if (first_op == '=' && second_op == 'D') {
-        // Check if swapping is valid
+        // Check if swapping is valid by verifying sequence matches after the deletion
         bool can_swap = true;
-        for (int k = 0; k < second_count && 
-             (query_start + first_count + k) < query_seq.size() && 
-             (target_start + first_count + k) < target_seq.size(); ++k) {
-            if (query_seq[query_start + first_count + k] != 
-                target_seq[target_start + first_count + k]) {
+        for (int k = 0; k < first_count && 
+             (query_start + k) < query_seq.size() && 
+             (target_start + second_count + k) < target_seq.size(); ++k) {
+            if (query_seq[query_start + k] != 
+                target_seq[target_start + second_count + k]) {
                 can_swap = false;
                 break;
             }
