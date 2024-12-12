@@ -532,8 +532,8 @@ std::string adjust_cigar_string(const std::string& cigar,
         int query_pos = query_start + query_seq.size() - last_count - second_last_count;
         int target_pos = target_start + target_seq.size() - last_count - second_last_count;
         
-        std::cerr << "\n[DEBUG] Considering trailing swap of " << second_last_count << "D with " << last_count << "=" << std::endl;
-        std::cerr << "[DEBUG] Current positions - Query pos: " << query_pos << ", Target pos: " << target_pos << std::endl;
+        /* std::cerr << "\n[DEBUG] Considering trailing swap of " << second_last_count << "D with " << last_count << "=" << std::endl;
+        std::cerr << "[DEBUG] Current positions - Query pos: " << query_pos << ", Target pos: " << target_pos << std::endl; */
         
         bool can_swap = true;
         
@@ -543,9 +543,9 @@ std::string adjust_cigar_string(const std::string& cigar,
             int64_t t_idx = target_pos + k;
             
             if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
-                std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                /* std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
                           << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
-                          << " (max: " << target_seq.size() << ")" << std::endl;
+                          << " (max: " << target_seq.size() << ")" << std::endl; */
                 can_swap = false;
                 break;
             }
@@ -573,7 +573,7 @@ std::string adjust_cigar_string(const std::string& cigar,
             }
         }
 
-        std::cerr << "[DEBUG] Trailing swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl;
+        /* std::cerr << "[DEBUG] Trailing swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl; */
         
         if (can_swap) {
             // Directly construct the swapped string
