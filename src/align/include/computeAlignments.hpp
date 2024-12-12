@@ -1038,6 +1038,19 @@ void worker_thread(uint64_t tid,
         seq_record_t* rec = nullptr;
         if (seq_queue.try_pop(rec)) {
             is_working.store(true);
+            // Debug output for alignment record
+            std::cerr << "\n[DEBUG] Processing alignment record:" << std::endl
+                      << "Query ID: " << rec->currentRecord.qId << std::endl
+                      << "Query start-end: " << rec->currentRecord.qStartPos << "-" << rec->currentRecord.qEndPos << std::endl
+                      << "Query length: " << rec->queryLen << std::endl
+                      << "Query total length: " << rec->queryTotalLength << std::endl
+                      << "Strand: " << (rec->currentRecord.strand == skch::strnd::FWD ? "+" : "-") << std::endl
+                      << "Reference ID: " << rec->currentRecord.refId << std::endl
+                      << "Reference start-end: " << rec->currentRecord.rStartPos << "-" << rec->currentRecord.rEndPos << std::endl
+                      << "Reference length: " << rec->refLen << std::endl
+                      << "Reference total length: " << rec->refTotalLength << std::endl
+                      << "Estimated identity: " << rec->currentRecord.mashmap_estimated_identity << std::endl;
+
             std::string alignment_output = processAlignment(rec);
             
             // Push the alignment output to the paf_queue
