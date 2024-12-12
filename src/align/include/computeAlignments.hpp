@@ -309,8 +309,9 @@ void verify_cigar_alignment(const std::string& cigar,
     // Store initial positions for debugging
     int64_t initial_q_pos = 0;
     int64_t initial_t_pos = 0;
-    size_t q_pos = 0;  // position in query sequence
-    size_t t_pos = 0;  // position in target sequence
+    int64_t q_pos = 0;  // position in query sequence
+    int64_t t_pos = 0;  // position in target sequence
+    int64_t cigar_ref_pos = 0;  // track reference position through CIGAR
 
     size_t i = 0;
     while (i < cigar.size()) {
@@ -333,7 +334,8 @@ void verify_cigar_alignment(const std::string& cigar,
                     if (q_pos + k >= query_length || t_pos + k >= target_length) {
                         std::cerr << "[wfmash::align] Error: Position out of bounds during alignment verification "
                                   << "at query pos " << query_start + q_pos + k
-                                  << " vs target pos " << target_start + t_pos + k << "\n";
+                                  << " vs target pos " << target_start + t_pos + k 
+                                  << " (CIGAR ref pos: " << cigar_ref_pos + k << ")\n";
                         exit(1);
                     }
                     if (q_char != t_char) {
@@ -343,6 +345,7 @@ void verify_cigar_alignment(const std::string& cigar,
                                   << " (relative: " << q_pos + k << ")"
                                   << " vs target pos " << target_start + t_pos + k
                                   << " (relative: " << t_pos + k << ")"
+                                  << " (CIGAR ref pos: " << cigar_ref_pos + k << ")"
                                   << ": query char '" << q_char
                                   << "' vs target char '" << t_char << "' in '=' operation of CIGAR.\n";
                         
@@ -376,6 +379,7 @@ void verify_cigar_alignment(const std::string& cigar,
                 }
                 q_pos += op_len;
                 t_pos += op_len;
+                cigar_ref_pos += op_len;
                 break;
             case 'X':  // mismatch
                 q_pos += op_len;
