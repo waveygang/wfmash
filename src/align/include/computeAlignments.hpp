@@ -379,25 +379,39 @@ std::string adjust_cigar_string(const std::string& cigar,
         int query_pos = query_start + query_seq.size() - match_len - del_len;
         int target_pos = target_start + target_seq.size() - match_len - del_len;
 
-        // Check if swapping is valid by comparing the full affected sequence regions
+        // Check if swapping is valid by comparing the sequences
         bool can_swap = true;
-        // When swapping trailing D and =, we need to verify that moving the match
-        // region by del_len positions still results in matching sequences
+        
+        // For leading deletion+match: verify query[0:match_len] matches target[del_len:del_len+match_len]
+        // For trailing match+deletion: verify query[0:match_len] matches target[0:match_len]
         for (int k = 0; k < match_len && can_swap; ++k) {
             int64_t q_idx = query_pos + k;
             int64_t t_idx = target_pos + k;
-            int64_t t_idx_shifted = target_pos + del_len + k;
             
             // Check bounds
-            if (q_idx >= query_seq.size() || t_idx_shifted >= target_seq.size()) {
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
                 can_swap = false;
                 break;
             }
             
-            // Compare sequences at both possible positions
-            if (query_seq[q_idx] != target_seq[t_idx_shifted]) {
+            // Compare sequences at current positions
+            if (query_seq[q_idx] != target_seq[t_idx]) {
                 can_swap = false;
                 break;
+            }
+        }
+
+        // Debug output for sequence comparison
+        if (!can_swap) {
+            std::cerr << "[DEBUG] Sequence mismatch prevented CIGAR operation swap.\n";
+            std::cerr << "First mismatching position:\n";
+            for (int k = 0; k < std::min(10, match_len); ++k) {
+                int64_t q_idx = query_pos + k;
+                int64_t t_idx = target_pos + k;
+                if (q_idx < query_seq.size() && t_idx < target_seq.size()) {
+                    std::cerr << "Position " << k << ": query=" << query_seq[q_idx] 
+                              << " target=" << target_seq[t_idx] << "\n";
+                }
             }
         }
 
