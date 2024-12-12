@@ -710,13 +710,6 @@ std::string processAlignment(seq_record_t* rec) {
         if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
         std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
 
-        // Add debugging print statements
-        std::cerr << "[DEBUG] Alignment output before modification:\n" << alignment_output << "\n";
-        std::cerr << "[DEBUG] Original CIGAR string: " << original_cigar << "\n";
-        std::cerr << "[DEBUG] Target positions: start=" << rec->currentRecord.rStartPos 
-                  << ", end=" << rec->currentRecord.rEndPos << "\n";
-        std::cerr << "[DEBUG] Query positions: start=" << rec->currentRecord.qStartPos 
-                  << ", end=" << rec->currentRecord.qEndPos << "\n";
 
         // Adjust the CIGAR string
         std::string adjusted_cigar = adjust_cigar_string(original_cigar,
@@ -735,7 +728,6 @@ std::string processAlignment(seq_record_t* rec) {
         }
 
         // Initial validation before any modifications
-        std::cerr << "[DEBUG] Step 1: Performing initial validation of unmodified alignment\n";
         verify_cigar_alignment(adjusted_cigar,
                              queryRegionStrand.data(),
                              ref_seq_ptr,
@@ -751,11 +743,7 @@ std::string processAlignment(seq_record_t* rec) {
             rec->currentRecord.rEndPos
         );
         adjusted_cigar = trimmed_cigar;
-        std::cerr << "[DEBUG] Trimmed CIGAR string: " << adjusted_cigar << "\n";
-        std::cerr << "[DEBUG] New target positions: start=" << new_coords.first 
-                  << ", end=" << new_coords.second << "\n";
         auto target_offset = new_coords.first - rec->currentRecord.rStartPos;
-        std::cerr << "[DEBUG] Target offset: " << target_offset << "\n";
         rec->currentRecord.rStartPos = new_coords.first;
         rec->currentRecord.rEndPos = new_coords.second;
 
@@ -764,7 +752,6 @@ std::string processAlignment(seq_record_t* rec) {
         char* adjusted_query_seq_ptr = queryRegionStrand.data();
 
         // Verify alignment after trimming leading/trailing deletions
-        std::cerr << "[DEBUG] Step 2: Verifying alignment after trimming leading/trailing deletions\n";
         verify_cigar_alignment(adjusted_cigar,
                                adjusted_query_seq_ptr,
                                adjusted_ref_seq_ptr,
@@ -773,12 +760,6 @@ std::string processAlignment(seq_record_t* rec) {
                                rec->queryLen,
                                rec->refLen);
 
-        // Debug output for adjusted sequences
-        std::cerr << "[DEBUG] Adjusted positions and sequences:\n"
-                  << "Adjusted target_start: " << rec->currentRecord.rStartPos << "\n"
-                  << "Adjusted target_end: " << rec->currentRecord.rEndPos << "\n"
-                  << "Adjusted query_start: " << rec->currentRecord.qStartPos << "\n"
-                  << "Adjusted query_end: " << rec->currentRecord.qEndPos << "\n";
 
         // Recompute identity metrics
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
@@ -857,7 +838,6 @@ std::string processAlignment(seq_record_t* rec) {
             updated_output += "\n";
         }
 
-        std::cerr << "[DEBUG] Alignment output after modification:\n" << updated_output << "\n";
         return updated_output;
     }
 
