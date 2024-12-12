@@ -485,6 +485,18 @@ std::string adjust_cigar_string(const std::string& cigar,
                 break;
             }
             
+            // Calculate correct target position after deletion
+            int64_t t_idx = target_start + second_count + k;
+            int64_t q_idx = query_start + k;
+            
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                          << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
+                          << " (max: " << target_seq.size() << ")" << std::endl;
+                can_swap = false;
+                break;
+            }
+            
             char q_char = query_seq[q_idx];
             char t_char = target_seq[t_idx];
             std::cerr << "[DEBUG] Comparing position " << k << ": Query[" << q_idx << "]=" 
