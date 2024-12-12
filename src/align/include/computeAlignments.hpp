@@ -413,12 +413,12 @@ std::string adjust_cigar_string(const std::string& cigar,
                               << " target=" << target_seq[t_idx] << "\n";
                 }
             }
+            // Early return if we can't swap to prevent further processing
+            return original_cigar;
         }
 
-        if (can_swap) {
-            std::swap(ops[ops.size() - 2], ops.back());
-            std::cerr << "[DEBUG] Swapped trailing 'D' and '=' operations.\n";
-        }
+        std::swap(ops[ops.size() - 2], ops.back());
+        std::cerr << "[DEBUG] Swapped trailing 'D' and '=' operations.\n";
     }
 
     std::cerr << "[DEBUG] Adjusted CIGAR operations:\n";
