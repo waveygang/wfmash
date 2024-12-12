@@ -8,6 +8,9 @@
 #ifndef COMPUTE_ALIGNMENTS_HPP 
 #define COMPUTE_ALIGNMENTS_HPP
 
+// Define this to enable CIGAR validation checks
+#define VALIDATE_CIGAR 0
+
 #include <vector>
 #include <algorithm>
 #include <fstream>
@@ -752,6 +755,7 @@ std::string processAlignment(seq_record_t* rec) {
             return "";
         }
 
+#if VALIDATE_CIGAR
         // Initial validation before any modifications
         verify_cigar_alignment(adjusted_cigar,
                              queryRegionStrand.data(),
@@ -760,6 +764,7 @@ std::string processAlignment(seq_record_t* rec) {
                              rec->currentRecord.rStartPos,
                              rec->queryLen,
                              rec->refLen);
+#endif
 
         // Trim leading and trailing deletions
         auto [trimmed_cigar, new_coords] = trim_leading_trailing_deletions(
@@ -776,6 +781,7 @@ std::string processAlignment(seq_record_t* rec) {
         char* adjusted_ref_seq_ptr = ref_seq_ptr + target_offset;
         char* adjusted_query_seq_ptr = queryRegionStrand.data();
 
+#if VALIDATE_CIGAR
         // Verify alignment after trimming leading/trailing deletions
         verify_cigar_alignment(adjusted_cigar,
                                adjusted_query_seq_ptr,
@@ -784,7 +790,7 @@ std::string processAlignment(seq_record_t* rec) {
                                rec->currentRecord.rStartPos,
                                rec->queryLen,
                                rec->refLen);
-
+#endif
 
         // Recompute identity metrics
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
