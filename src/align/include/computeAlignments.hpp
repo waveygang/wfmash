@@ -493,19 +493,7 @@ std::string adjust_cigar_string(const std::string& cigar,
         // Check if sequences match at the new positions after potential swap
         for (int k = 0; k < first_count && can_swap; ++k) {
             int64_t q_idx = query_start + k;
-            int64_t t_idx = target_start + second_count + k;
-            
-            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
-                std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
-                          << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
-                          << " (max: " << target_seq.size() << ")" << std::endl;
-                can_swap = false;
-                break;
-            }
-            
-            // Calculate correct target position after deletion
-            q_idx = query_start + k;
-            t_idx = target_start + second_count + k;
+            int64_t t_idx = target_start + k; // Don't add second_count here
             
             if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
                 std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
@@ -522,8 +510,6 @@ std::string adjust_cigar_string(const std::string& cigar,
                       << ", t_idx: " << t_idx 
                       << ", q_char: " << q_char 
                       << ", t_char: " << t_char << std::endl;
-            std::cerr << "[DEBUG] Comparing position " << k << ": Query[" << q_idx << "]=" 
-                      << q_char << " vs Target[" << t_idx << "]=" << t_char << std::endl;
             
             if (q_char != t_char) {
                 std::cerr << "[DEBUG] Characters don't match at position " << k << std::endl;
@@ -532,23 +518,12 @@ std::string adjust_cigar_string(const std::string& cigar,
             }
         }
 
-        // Also verify the deletion region matches between query and target
-        if (can_swap) {
-            for (int k = 0; k < second_count && can_swap; ++k) {
-                int64_t t_idx = target_start + k;
-                if (t_idx >= target_seq.size()) {
-                    can_swap = false;
-                    break;
-                }
-            }
-        }
-
         std::cerr << "[DEBUG] Leading swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl;
         
         if (can_swap) {
-            // Directly construct the swapped string
-            return std::to_string(second_count) + 'D' + 
-                   std::to_string(first_count) + '=' +
+            // Don't swap, just convert the = to X since we found they don't match
+            return std::to_string(first_count) + 'X' + 
+                   std::to_string(second_count) + 'D' +
                    cigar.substr(second_op_end + 1);
         }
     }
