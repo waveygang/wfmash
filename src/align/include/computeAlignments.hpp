@@ -222,46 +222,71 @@ trim_leading_trailing_deletions(const std::string& cigar,
     }
 
     std::string result;
-    std::vector<std::pair<int, char>> ops;
+    result.reserve(cigar.length());
+    int64_t leading_del_length = 0;
+    int64_t trailing_del_length = 0;
+    
+    // Find leading deletions
     size_t i = 0;
-
-    // Parse CIGAR string into vector of operations
-    while (i < cigar.size()) {
+    while (i < cigar.length()) {
+        // Parse count
+        int count = 0;
         size_t j = i;
-        while (j < cigar.size() && isdigit(cigar[j])) j++;
-        int count = std::stoi(cigar.substr(i, j - i));
+        while (j < cigar.length() && isdigit(cigar[j])) {
+            count = count * 10 + (cigar[j] - '0');
+            j++;
+        }
         char op = cigar[j];
-        ops.push_back({count, op});
+        
+        if (op != 'D' || result.length() > 0) {
+            // Not a leading deletion, copy to result
+            result.append(cigar.substr(i, j - i + 1));
+        } else {
+            leading_del_length += count;
+        }
+        
         i = j + 1;
     }
-
-    // Find leading deletions
-    size_t leading_dels = 0;
-    int64_t leading_del_length = 0;
-    while (leading_dels < ops.size() && ops[leading_dels].second == 'D') {
-        leading_del_length += ops[leading_dels].first;
-        leading_dels++;
+    
+    // Find trailing deletions by scanning result from right to left
+    std::string final_result;
+    final_result.reserve(result.length());
+    i = 0;
+    size_t last_non_del_pos = std::string::npos;
+    
+    while (i < result.length()) {
+        size_t j = i;
+        while (j < result.length() && isdigit(result[j])) j++;
+        if (result[j] != 'D') {
+            last_non_del_pos = j;
+        }
+        i = j + 1;
     }
-
-    // Find trailing deletions
-    size_t trailing_dels = 0;
-    int64_t trailing_del_length = 0;
-    while (trailing_dels < ops.size() - leading_dels && 
-           ops[ops.size() - 1 - trailing_dels].second == 'D') {
-        trailing_del_length += ops[ops.size() - 1 - trailing_dels].first;
-        trailing_dels++;
+    
+    // If we found non-deletion operations
+    if (last_non_del_pos != std::string::npos) {
+        i = last_non_del_pos + 1;
+        while (i < result.length()) {
+            size_t j = i;
+            int count = 0;
+            while (j < result.length() && isdigit(result[j])) {
+                count = count * 10 + (result[j] - '0');
+                j++;
+            }
+            if (result[j] == 'D') {
+                trailing_del_length += count;
+            }
+            i = j + 1;
+        }
+        
+        // Copy everything up to the last non-deletion operation
+        final_result = result.substr(0, last_non_del_pos + 1);
+    } else {
+        // All operations were deletions
+        return {"", {target_start + leading_del_length, target_end - trailing_del_length}};
     }
-
-    // Build new CIGAR string without leading/trailing deletions
-    for (size_t k = leading_dels; k < ops.size() - trailing_dels; k++) {
-        result += std::to_string(ops[k].first) + ops[k].second;
-    }
-
-    // Adjust target coordinates
-    target_start += leading_del_length;
-    target_end -= trailing_del_length;
-
-    return {result, {target_start, target_end}};
+    
+    return {final_result, {target_start + leading_del_length, target_end - trailing_del_length}};
 }
 
 void verify_cigar_alignment(const std::string& cigar,
