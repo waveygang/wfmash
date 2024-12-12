@@ -466,6 +466,9 @@ std::string adjust_cigar_string(const std::string& cigar,
     
     // Check if we need to swap leading operations
     if (first_op == '=' && second_op == 'D') {
+        std::cerr << "\n[DEBUG] Considering leading swap of " << first_count << "= with " << second_count << "D" << std::endl;
+        std::cerr << "[DEBUG] Current positions - Query start: " << query_start << ", Target start: " << target_start << std::endl;
+        
         // Check if swapping is valid by verifying sequence matches both before and after
         bool can_swap = true;
         
@@ -474,8 +477,21 @@ std::string adjust_cigar_string(const std::string& cigar,
             int64_t q_idx = query_start + k;
             int64_t t_idx = target_start + second_count + k;
             
-            if (q_idx >= query_seq.size() || t_idx >= target_seq.size() ||
-                query_seq[q_idx] != target_seq[t_idx]) {
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                          << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
+                          << " (max: " << target_seq.size() << ")" << std::endl;
+                can_swap = false;
+                break;
+            }
+            
+            char q_char = query_seq[q_idx];
+            char t_char = target_seq[t_idx];
+            std::cerr << "[DEBUG] Comparing position " << k << ": Query[" << q_idx << "]=" 
+                      << q_char << " vs Target[" << t_idx << "]=" << t_char << std::endl;
+            
+            if (q_char != t_char) {
+                std::cerr << "[DEBUG] Characters don't match at position " << k << std::endl;
                 can_swap = false;
                 break;
             }
@@ -525,6 +541,9 @@ std::string adjust_cigar_string(const std::string& cigar,
         int query_pos = query_start + query_seq.size() - last_count - second_last_count;
         int target_pos = target_start + target_seq.size() - last_count - second_last_count;
         
+        std::cerr << "\n[DEBUG] Considering trailing swap of " << second_last_count << "D with " << last_count << "=" << std::endl;
+        std::cerr << "[DEBUG] Current positions - Query pos: " << query_pos << ", Target pos: " << target_pos << std::endl;
+        
         bool can_swap = true;
         
         // Check if sequences match at the new positions after potential swap
@@ -532,8 +551,21 @@ std::string adjust_cigar_string(const std::string& cigar,
             int64_t q_idx = query_pos + k;
             int64_t t_idx = target_pos + k;
             
-            if (q_idx >= query_seq.size() || t_idx >= target_seq.size() ||
-                query_seq[q_idx] != target_seq[t_idx]) {
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                          << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
+                          << " (max: " << target_seq.size() << ")" << std::endl;
+                can_swap = false;
+                break;
+            }
+            
+            char q_char = query_seq[q_idx];
+            char t_char = target_seq[t_idx];
+            std::cerr << "[DEBUG] Comparing position " << k << ": Query[" << q_idx << "]=" 
+                      << q_char << " vs Target[" << t_idx << "]=" << t_char << std::endl;
+            
+            if (q_char != t_char) {
+                std::cerr << "[DEBUG] Characters don't match at position " << k << std::endl;
                 can_swap = false;
                 break;
             }
