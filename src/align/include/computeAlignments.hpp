@@ -209,6 +209,57 @@ std::string merge_cigar_operations(const std::string& cigar) {
     return result;
 }
 
+std::pair<std::string, std::pair<int64_t, int64_t>> 
+trim_leading_trailing_deletions(const std::string& cigar,
+                              int64_t target_start,
+                              int64_t target_end) {
+    if (cigar.empty()) {
+        return {cigar, {target_start, target_end}};
+    }
+
+    std::string result;
+    std::vector<std::pair<int, char>> ops;
+    size_t i = 0;
+
+    // Parse CIGAR string into vector of operations
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        ops.push_back({count, op});
+        i = j + 1;
+    }
+
+    // Find leading deletions
+    size_t leading_dels = 0;
+    int64_t leading_del_length = 0;
+    while (leading_dels < ops.size() && ops[leading_dels].second == 'D') {
+        leading_del_length += ops[leading_dels].first;
+        leading_dels++;
+    }
+
+    // Find trailing deletions
+    size_t trailing_dels = 0;
+    int64_t trailing_del_length = 0;
+    while (trailing_dels < ops.size() - leading_dels && 
+           ops[ops.size() - 1 - trailing_dels].second == 'D') {
+        trailing_del_length += ops[ops.size() - 1 - trailing_dels].first;
+        trailing_dels++;
+    }
+
+    // Build new CIGAR string without leading/trailing deletions
+    for (size_t k = leading_dels; k < ops.size() - trailing_dels; k++) {
+        result += std::to_string(ops[k].first) + ops[k].second;
+    }
+
+    // Adjust target coordinates
+    target_start += leading_del_length;
+    target_end -= trailing_del_length;
+
+    return {result, {target_start, target_end}};
+}
+
 void verify_cigar_alignment(const std::string& cigar,
                            const char* query_seq,
                            const char* target_seq,
@@ -682,6 +733,34 @@ std::string processAlignment(seq_record_t* rec) {
         if (adjusted_cigar.empty()) {
             return "";
         }
+
+        // Verify the alignment before trimming deletions
+        verify_cigar_alignment(adjusted_cigar,
+                             queryRegionStrand.data(),
+                             ref_seq_ptr,
+                             rec->queryStartPos,
+                             rec->currentRecord.rStartPos,
+                             rec->queryLen,
+                             rec->refLen);
+
+        // Trim leading and trailing deletions
+        auto [trimmed_cigar, new_coords] = trim_leading_trailing_deletions(
+            adjusted_cigar,
+            rec->currentRecord.rStartPos,
+            rec->currentRecord.rEndPos
+        );
+        adjusted_cigar = trimmed_cigar;
+        rec->currentRecord.rStartPos = new_coords.first;
+        rec->currentRecord.rEndPos = new_coords.second;
+
+        // Verify the alignment after trimming deletions
+        verify_cigar_alignment(adjusted_cigar,
+                             queryRegionStrand.data(),
+                             ref_seq_ptr,
+                             rec->queryStartPos,
+                             rec->currentRecord.rStartPos,
+                             rec->queryLen,
+                             rec->refLen);
 
         // Use original sequence pointers
         char* adjusted_ref_seq_ptr = ref_seq_ptr;
