@@ -305,6 +305,10 @@ void verify_cigar_alignment(const std::string& cigar,
               << "\n  Query length: " << query_length
               << "\n  Target length: " << target_length
               << "\n  CIGAR: " << cigar << std::endl;
+    
+    // Store initial positions for debugging
+    int64_t initial_q_pos = 0;
+    int64_t initial_t_pos = 0;
     size_t q_pos = 0;  // position in query sequence
     size_t t_pos = 0;  // position in target sequence
 
@@ -319,6 +323,8 @@ void verify_cigar_alignment(const std::string& cigar,
 
         switch (op) {
             case '=':  // match
+                std::cerr << "[DEBUG] Processing '=' operation at q_pos: " << q_pos 
+                          << ", t_pos: " << t_pos << ", length: " << op_len << std::endl;
                 // Verify that query_seq[q_pos .. q_pos + op_len] matches target_seq[t_pos .. t_pos + op_len]
                 for (int k = 0; k < op_len; ++k) {
                     char q_char = query_seq[q_pos + k];
@@ -331,10 +337,12 @@ void verify_cigar_alignment(const std::string& cigar,
                         exit(1);
                     }
                     if (q_char != t_char) {
-                        // Print error message
+                        // Print error message with both relative and absolute positions
                         std::cerr << "[wfmash::align] Error: Mismatch at position "
                                   << "query pos " << query_start + q_pos + k
+                                  << " (relative: " << q_pos + k << ")"
                                   << " vs target pos " << target_start + t_pos + k
+                                  << " (relative: " << t_pos + k << ")"
                                   << ": query char '" << q_char
                                   << "' vs target char '" << t_char << "' in '=' operation of CIGAR.\n";
                         
