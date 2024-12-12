@@ -175,36 +175,40 @@ std::string merge_cigar_operations(const std::string& cigar) {
     if (cigar.empty()) return cigar;
     
     std::string result;
+    result.reserve(cigar.length());  // Preallocate to avoid reallocations
+    
     size_t i = 0;
+    char current_op = '\0';
+    int current_count = 0;
     
-    // Parse first operation
-    size_t j = i;
-    while (j < cigar.size() && isdigit(cigar[j])) j++;
-    int current_count = std::stoi(cigar.substr(i, j - i));
-    char current_op = cigar[j];
-    i = j + 1;
-    
-    // Process remaining operations
-    while (i < cigar.size()) {
-        j = i;
-        while (j < cigar.size() && isdigit(cigar[j])) j++;
-        int next_count = std::stoi(cigar.substr(i, j - i));
-        char next_op = cigar[j];
-        i = j + 1;
+    while (i < cigar.length()) {
+        // Parse the count
+        int count = 0;
+        while (i < cigar.length() && isdigit(cigar[i])) {
+            count = count * 10 + (cigar[i] - '0');
+            i++;
+        }
         
-        // If operations are the same, merge them
-        if (next_op == current_op) {
-            current_count += next_count;
+        // Get the operation
+        char op = cigar[i++];
+        
+        // If it's the same operation, add to current count
+        if (op == current_op) {
+            current_count += count;
         } else {
-            // Write out current operation and start new one
-            result += std::to_string(current_count) + current_op;
-            current_count = next_count;
-            current_op = next_op;
+            // Write out the previous operation if it exists
+            if (current_op != '\0') {
+                result += std::to_string(current_count) + current_op;
+            }
+            current_op = op;
+            current_count = count;
         }
     }
     
-    // Write final operation
-    result += std::to_string(current_count) + current_op;
+    // Write the final operation
+    if (current_op != '\0') {
+        result += std::to_string(current_count) + current_op;
+    }
     
     return result;
 }
