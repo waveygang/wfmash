@@ -734,7 +734,8 @@ std::string processAlignment(seq_record_t* rec) {
             return "";
         }
 
-        // Verify the alignment before trimming deletions
+        // Initial validation before any modifications
+        std::cerr << "[DEBUG] Step 1: Performing initial validation of unmodified alignment\n";
         verify_cigar_alignment(adjusted_cigar,
                              queryRegionStrand.data(),
                              ref_seq_ptr,
@@ -753,7 +754,8 @@ std::string processAlignment(seq_record_t* rec) {
         rec->currentRecord.rStartPos = new_coords.first;
         rec->currentRecord.rEndPos = new_coords.second;
 
-        // Verify the alignment after trimming deletions
+        // Verify alignment after trimming leading/trailing deletions
+        std::cerr << "[DEBUG] Step 2: Verifying alignment after trimming leading/trailing deletions\n";
         verify_cigar_alignment(adjusted_cigar,
                              queryRegionStrand.data(),
                              ref_seq_ptr,
@@ -881,7 +883,8 @@ std::string processAlignment(seq_record_t* rec) {
             updated_output += "\n";
         }
 
-        // Verify the alignment matches in '=' operations
+        // Final verification of alignment with adjusted sequences
+        std::cerr << "[DEBUG] Step 3: Performing final validation with adjusted sequences\n";
         verify_cigar_alignment(adjusted_cigar,
                              queryRegionStrand.data(),
                              ref_seq_ptr,
