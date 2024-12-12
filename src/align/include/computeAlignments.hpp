@@ -171,6 +171,44 @@ long double float2phred(long double prob) {
         return p;
 }
 
+std::string merge_cigar_operations(const std::string& cigar) {
+    if (cigar.empty()) return cigar;
+    
+    std::string result;
+    size_t i = 0;
+    
+    // Parse first operation
+    size_t j = i;
+    while (j < cigar.size() && isdigit(cigar[j])) j++;
+    int current_count = std::stoi(cigar.substr(i, j - i));
+    char current_op = cigar[j];
+    i = j + 1;
+    
+    // Process remaining operations
+    while (i < cigar.size()) {
+        j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int next_count = std::stoi(cigar.substr(i, j - i));
+        char next_op = cigar[j];
+        i = j + 1;
+        
+        // If operations are the same, merge them
+        if (next_op == current_op) {
+            current_count += next_count;
+        } else {
+            // Write out current operation and start new one
+            result += std::to_string(current_count) + current_op;
+            current_count = next_count;
+            current_op = next_op;
+        }
+    }
+    
+    // Write final operation
+    result += std::to_string(current_count) + current_op;
+    
+    return result;
+}
+
 void verify_cigar_alignment(const std::string& cigar,
                            const char* query_seq,
                            const char* target_seq,
@@ -636,6 +674,9 @@ std::string processAlignment(seq_record_t* rec) {
                                                        rec->currentRecord.qStartPos,
                                                        rec->currentRecord.rStartPos,
                                                        param.target_padding);
+
+        // Merge any equivalent successive operations
+        adjusted_cigar = merge_cigar_operations(adjusted_cigar);
 
         // Skip empty alignments
         if (adjusted_cigar.empty()) {
