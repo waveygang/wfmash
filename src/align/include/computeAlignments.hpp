@@ -739,6 +739,8 @@ std::string processAlignment(seq_record_t* rec) {
         size_t cigar_end = alignment_output.find('\t', cigar_start);
         if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
         std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
+        std::cerr << "[DEBUG] Original CIGAR: " << original_cigar << std::endl;
+        
         // Adjust the CIGAR string
         std::string adjusted_cigar = adjust_cigar_string(original_cigar,
                                                        queryRegionStrand.data(),
@@ -746,9 +748,12 @@ std::string processAlignment(seq_record_t* rec) {
                                                        rec->currentRecord.qStartPos,
                                                        rec->currentRecord.rStartPos,
                                                        param.target_padding);
+        
+        std::cerr << "[DEBUG] After adjust_cigar_string: " << adjusted_cigar << std::endl;
 
         // Merge any equivalent successive operations
         adjusted_cigar = merge_cigar_operations(adjusted_cigar);
+        std::cerr << "[DEBUG] After merge_cigar_operations: " << adjusted_cigar << std::endl;
 
         // Skip empty alignments
         if (adjusted_cigar.empty()) {
@@ -756,6 +761,12 @@ std::string processAlignment(seq_record_t* rec) {
         }
 
 #if VALIDATE_CIGAR
+        std::cerr << "[DEBUG] Validating CIGAR after merge_cigar_operations" << std::endl;
+        std::cerr << "[DEBUG] Query start: " << rec->queryStartPos 
+                  << ", Target start: " << rec->currentRecord.rStartPos << std::endl;
+        std::cerr << "[DEBUG] Query len: " << rec->queryLen 
+                  << ", Target len: " << rec->refLen << std::endl;
+        
         // Initial validation before any modifications
         verify_cigar_alignment(adjusted_cigar,
                              queryRegionStrand.data(),
@@ -764,6 +775,8 @@ std::string processAlignment(seq_record_t* rec) {
                              rec->currentRecord.rStartPos,
                              rec->queryLen,
                              rec->refLen);
+        
+        std::cerr << "[DEBUG] Initial CIGAR validation passed" << std::endl;
 #endif
 
         // Trim leading and trailing deletions
@@ -782,6 +795,12 @@ std::string processAlignment(seq_record_t* rec) {
         char* adjusted_query_seq_ptr = queryRegionStrand.data();
 
 #if VALIDATE_CIGAR
+        std::cerr << "[DEBUG] Validating CIGAR after trimming deletions" << std::endl;
+        std::cerr << "[DEBUG] New target offset: " << target_offset << std::endl;
+        std::cerr << "[DEBUG] New target start: " << rec->currentRecord.rStartPos << std::endl;
+        std::cerr << "[DEBUG] New target end: " << rec->currentRecord.rEndPos << std::endl;
+        std::cerr << "[DEBUG] Trimmed CIGAR: " << adjusted_cigar << std::endl;
+        
         // Verify alignment after trimming leading/trailing deletions
         verify_cigar_alignment(adjusted_cigar,
                                adjusted_query_seq_ptr,
@@ -790,6 +809,8 @@ std::string processAlignment(seq_record_t* rec) {
                                rec->currentRecord.rStartPos,
                                rec->queryLen,
                                rec->refLen);
+        
+        std::cerr << "[DEBUG] Final CIGAR validation passed" << std::endl;
 #endif
 
         // Recompute identity metrics
