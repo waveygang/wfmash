@@ -709,8 +709,6 @@ std::string processAlignment(seq_record_t* rec) {
         size_t cigar_end = alignment_output.find('\t', cigar_start);
         if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
         std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
-
-
         // Adjust the CIGAR string
         std::string adjusted_cigar = adjust_cigar_string(original_cigar,
                                                        queryRegionStrand.data(),
