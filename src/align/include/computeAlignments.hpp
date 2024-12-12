@@ -824,45 +824,29 @@ std::string processAlignment(seq_record_t* rec) {
         
         std::cerr << "[DEBUG] After adjust_cigar_string: " << adjusted_cigar << std::endl;
 
-#if VALIDATE_CIGAR
-        std::cerr << "[DEBUG] Validating CIGAR after adjust_cigar_string" << std::endl;
-        verify_cigar_alignment(adjusted_cigar,
-                             queryRegionStrand.data(),
-                             ref_seq_ptr,
-                             rec->queryStartPos,
-                             rec->currentRecord.rStartPos,
-                             rec->queryLen,
-                             rec->refLen);
-        std::cerr << "[DEBUG] CIGAR validation after adjust_cigar_string passed" << std::endl;
-#endif
-
         // Merge any equivalent successive operations
         adjusted_cigar = merge_cigar_operations(adjusted_cigar);
-        std::cerr << "[DEBUG] After merge_cigar_operations: " << adjusted_cigar << std::endl;
 
         // Skip empty alignments
         if (adjusted_cigar.empty()) {
             return "";
         }
 
-#if VALIDATE_CIGAR
-        std::cerr << "[DEBUG] Validating CIGAR after merge_cigar_operations" << std::endl;
-        std::cerr << "[DEBUG] Query start: " << rec->queryStartPos 
-                  << ", Target start: " << rec->currentRecord.rStartPos << std::endl;
-        std::cerr << "[DEBUG] Query len: " << rec->queryLen 
-                  << ", Target len: " << rec->refLen << std::endl;
-        
-        // Initial validation before any modifications
-        verify_cigar_alignment(adjusted_cigar,
-                             queryRegionStrand.data(),
-                             ref_seq_ptr,
-                             rec->queryStartPos,
-                             rec->currentRecord.rStartPos,
-                             rec->queryLen,
-                             rec->refLen);
-        
-        std::cerr << "[DEBUG] Initial CIGAR validation passed" << std::endl;
-#endif
+        // Always verify the final CIGAR string
+        try {
+            verify_cigar_alignment(adjusted_cigar,
+                                 queryRegionStrand.data(),
+                                 ref_seq_ptr,
+                                 rec->queryStartPos,
+                                 rec->currentRecord.rStartPos,
+                                 rec->queryLen,
+                                 rec->refLen);
+        } catch (const std::runtime_error& e) {
+            std::cerr << "Error validating CIGAR string. Original mapping record:\n"
+                      << rec->mappingRecordLine << "\n"
+                      << e.what() << std::endl;
+            throw;
+        }
 
         // Trim leading and trailing deletions
         auto [trimmed_cigar, new_coords] = trim_leading_trailing_deletions(
