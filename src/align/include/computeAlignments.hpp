@@ -472,8 +472,8 @@ std::string adjust_cigar_string(const std::string& cigar,
     
     // Check if we need to swap leading operations
     if (first_op == '=' && second_op == 'D') {
-        std::cerr << "\n[DEBUG] Considering leading swap of " << first_count << "= with " << second_count << "D" << std::endl;
-        std::cerr << "[DEBUG] Current positions - Query start: " << query_start << ", Target start: " << target_start << std::endl;
+        /* std::cerr << "\n[DEBUG] Considering leading swap of " << first_count << "= with " << second_count << "D" << std::endl;
+        std::cerr << "[DEBUG] Current positions - Query start: " << query_start << ", Target start: " << target_start << std::endl; */
         
         // Check if swapping is valid by verifying sequence matches both before and after
         bool can_swap = true;
@@ -484,9 +484,9 @@ std::string adjust_cigar_string(const std::string& cigar,
             int64_t t_idx = target_start + k; // Don't add second_count here
             
             if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
-                std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                /* std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
                           << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
-                          << " (max: " << target_seq.size() << ")" << std::endl;
+                          << " (max: " << target_seq.size() << ")" << std::endl; */
                 can_swap = false;
                 break;
             }
@@ -499,7 +499,7 @@ std::string adjust_cigar_string(const std::string& cigar,
             }
         }
 
-        std::cerr << "[DEBUG] Leading swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl;
+        /* std::cerr << "[DEBUG] Leading swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl; */
         
         if (can_swap) {
             // Don't swap, just convert the = to X since we found they don't match
