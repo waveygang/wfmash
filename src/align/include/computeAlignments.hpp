@@ -751,6 +751,18 @@ std::string processAlignment(seq_record_t* rec) {
         
         std::cerr << "[DEBUG] After adjust_cigar_string: " << adjusted_cigar << std::endl;
 
+#if VALIDATE_CIGAR
+        std::cerr << "[DEBUG] Validating CIGAR after adjust_cigar_string" << std::endl;
+        verify_cigar_alignment(adjusted_cigar,
+                             queryRegionStrand.data(),
+                             ref_seq_ptr,
+                             rec->queryStartPos,
+                             rec->currentRecord.rStartPos,
+                             rec->queryLen,
+                             rec->refLen);
+        std::cerr << "[DEBUG] CIGAR validation after adjust_cigar_string passed" << std::endl;
+#endif
+
         // Merge any equivalent successive operations
         adjusted_cigar = merge_cigar_operations(adjusted_cigar);
         std::cerr << "[DEBUG] After merge_cigar_operations: " << adjusted_cigar << std::endl;
