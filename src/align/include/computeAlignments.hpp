@@ -486,8 +486,8 @@ std::string adjust_cigar_string(const std::string& cigar,
             }
             
             // Calculate correct target position after deletion
-            int64_t t_idx = target_start + second_count + k;
-            int64_t q_idx = query_start + k;
+            q_idx = query_start + k;
+            t_idx = target_start + second_count + k;
             
             if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
                 std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
