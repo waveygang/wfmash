@@ -299,16 +299,6 @@ void verify_cigar_alignment(const std::string& cigar,
                            int64_t target_start,
                            int64_t query_length,
                            int64_t target_length) {
-    std::cerr << "[DEBUG] Starting CIGAR verification with:"
-              << "\n  Query start: " << query_start
-              << "\n  Target start: " << target_start
-              << "\n  Query length: " << query_length
-              << "\n  Target length: " << target_length
-              << "\n  CIGAR: " << cigar << std::endl;
-    
-    // Store initial positions for debugging
-    int64_t initial_q_pos = 0;
-    int64_t initial_t_pos = 0;
     int64_t q_pos = 0;  // position in query sequence
     int64_t t_pos = 0;  // position in target sequence
     int64_t cigar_ref_pos = 0;  // track reference position through CIGAR
@@ -324,8 +314,6 @@ void verify_cigar_alignment(const std::string& cigar,
 
         switch (op) {
             case '=':  // match
-                std::cerr << "[DEBUG] Processing '=' operation at q_pos: " << q_pos 
-                          << ", t_pos: " << t_pos << ", length: " << op_len << std::endl;
                 // Verify that query_seq[q_pos .. q_pos + op_len] matches target_seq[t_pos .. t_pos + op_len]
                 for (int k = 0; k < op_len; ++k) {
                     char q_char = query_seq[q_pos + k];
