@@ -379,12 +379,23 @@ std::string adjust_cigar_string(const std::string& cigar,
         int query_pos = query_start + query_seq.size() - match_len - del_len;
         int target_pos = target_start + target_seq.size() - match_len - del_len;
 
-        // Check if swapping is valid
+        // Check if swapping is valid by comparing the full affected sequence regions
         bool can_swap = true;
-        for (int k = 0; k < del_len && 
-             (query_pos + k) < query_seq.size() && 
-             (target_pos + k) < target_seq.size(); ++k) {
-            if (query_seq[query_pos + k] != target_seq[target_pos + k]) {
+        // When swapping trailing D and =, we need to verify that moving the match
+        // region by del_len positions still results in matching sequences
+        for (int k = 0; k < match_len && can_swap; ++k) {
+            int64_t q_idx = query_pos + k;
+            int64_t t_idx = target_pos + k;
+            int64_t t_idx_shifted = target_pos + del_len + k;
+            
+            // Check bounds
+            if (q_idx >= query_seq.size() || t_idx_shifted >= target_seq.size()) {
+                can_swap = false;
+                break;
+            }
+            
+            // Compare sequences at both possible positions
+            if (query_seq[q_idx] != target_seq[t_idx_shifted]) {
                 can_swap = false;
                 break;
             }
