@@ -414,7 +414,7 @@ std::string adjust_cigar_string(const std::string& cigar,
                 }
             }
             // Early return if we can't swap to prevent further processing
-            return original_cigar;
+            return cigar;
         }
 
         std::swap(ops[ops.size() - 2], ops.back());
