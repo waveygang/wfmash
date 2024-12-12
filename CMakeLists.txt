@@ -4,7 +4,7 @@ project(wfmash)
 enable_testing()
 
 include(CheckIPOSupported) # adds lto
-check_ipo_supported(RESULT ipo_supported OUTPUT output)
+check_ipo_supported(RESULT ipo_supported OUTPUT output) # lto
 
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
@@ -16,12 +16,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(BUILD_STATIC "Build static binary" OFF)
 option(BUILD_DEPS "Build external dependencies" OFF)
-option(BUILD_RETARGETABLE "Build retargetable binary" OFF)
+option(BUILD_OPTIMIZED "Build optimized binary" OFF)
 
 if (BUILD_STATIC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
   set(BUILD_SHARED_LIBS OFF)
   set(CMAKE_EXE_LINKER_FLAGS "-static")
+  set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
+else ()
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif ()
 
 find_package(PkgConfig REQUIRED)
@@ -40,23 +43,28 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
-  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
-  if (NOT EXTRA_FLAGS)
-    if (BUILD_RETARGETABLE)
-      set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -flto")
-    else()
-      set(EXTRA_FLAGS "-Ofast -march=native -flto")
-    endif()
+  if (BUILD_OPTIMIZED)
+    # set(EXTRA_FLAGS "-Ofast -march=native -pipe -msse4.2 -funroll-all-loops") #  -fprofile-generate=../pgo")
+    # set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -funroll-all-loops")
+    set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops")
+    # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-generate=${CMAKE_BINARY_DIR}/../pgo")
+    # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-use=${CMAKE_BINARY_DIR}/../pgo")
+
+    if( ipo_supported )
+      message(STATUS "IPO / LTO enabled")
+      set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${ipo_supported})
+      # by target set_property(TARGET wfmash PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif( ipo_supported )
+  else()
+    set(EXTRA_FLAGS "-Ofast -march=native -flto")
   endif()
+  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG ${EXTRA_FLAGS}")
+  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG ${EXTRA_FLAGS}")
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Generic)
   set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
   set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
-  if (NOT EXTRA_FLAGS)
-    set(EXTRA_FLAGS "-Ofast -flto")
-  endif()
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
@@ -64,13 +72,13 @@ if (${CMAKE_BUILD_TYPE} MATCHES Debug)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -g -fsanitize=address -fno-omit-frame-pointer")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -fsanitize=address -fno-omit-frame-pointer")
     # Ensure that ASan is linked explicitly
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-else()
-    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+else ()
+    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS}")
 endif ()
 
-if(WFA_PNG_AND_TSV)
+if (WFA_PNG_AND_TSV)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWFA_PNG_TSV_TIMING")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWFA_PNG_TSV_TIMING")
 endif ()
@@ -145,12 +153,14 @@ else()
   #)
 
   target_link_libraries(wfmash
-  gsl
-  gslcblas
-  hts
-  deflate
+    gsl
+    gslcblas
+    hts
+    deflate
   )
 endif()
+
+
 
 target_include_directories(wfmash PRIVATE
   src
@@ -162,14 +172,24 @@ target_include_directories(wfmash PRIVATE
 target_link_libraries(wfmash
   m
   pthread
-  libwflign_static
   rt
-  wfa2cpp_static
   lzma
   bz2
   z
   Threads::Threads
 )
+
+if (BUILD_STATIC)
+  target_link_libraries(wfmash
+    libwflign_static
+    wfa2cpp_static
+  )
+else()
+  target_link_libraries(wfmash
+    libwflign
+    wfa2cpp
+  )
+endif()
 
 # This is to disable tests defined in CTestCustom.cmake:
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
