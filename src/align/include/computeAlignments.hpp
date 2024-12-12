@@ -329,111 +329,88 @@ std::string adjust_cigar_string(const std::string& cigar,
                                uint64_t max_shift) {
     std::cerr << "[DEBUG] Original CIGAR string: " << cigar << "\n";
     
-    // Parse the CIGAR string into operations
-    std::vector<std::pair<int, char>> ops;
-    size_t i = 0;
-    while (i < cigar.size()) {
-        size_t j = i;
-        while (j < cigar.size() && isdigit(cigar[j])) j++;
-        int count = std::stoi(cigar.substr(i, j - i));
-        char op = cigar[j];
-        ops.emplace_back(count, op);
-        i = j + 1;
-    }
-
-    std::cerr << "[DEBUG] Original CIGAR operations:\n";
-    for (const auto& op : ops) {
-        std::cerr << op.first << op.second << " ";
-    }
-    std::cerr << "\n";
-
-    // Swap leading '=' and 'D' if possible
-    if (ops.size() >= 2 && ops[0].second == '=' && ops[1].second == 'D') {
-        int match_len = ops[0].first;
-        int del_len = ops[1].first;
-
+    // Find the first two operations
+    size_t first_op_end = 0;
+    while (first_op_end < cigar.size() && isdigit(cigar[first_op_end])) first_op_end++;
+    if (first_op_end >= cigar.size()) return cigar;
+    
+    size_t second_op_start = first_op_end + 1;
+    size_t second_op_end = second_op_start;
+    while (second_op_end < cigar.size() && isdigit(cigar[second_op_end])) second_op_end++;
+    if (second_op_end >= cigar.size()) return cigar;
+    
+    // Extract the operations
+    int first_count = std::stoi(cigar.substr(0, first_op_end));
+    char first_op = cigar[first_op_end];
+    int second_count = std::stoi(cigar.substr(second_op_start, second_op_end - second_op_start));
+    char second_op = cigar[second_op_end];
+    
+    // Check if we need to swap leading operations
+    if (first_op == '=' && second_op == 'D') {
         // Check if swapping is valid
         bool can_swap = true;
-        for (int k = 0; k < del_len && 
-             (query_start + match_len + k) < query_seq.size() && 
-             (target_start + match_len + k) < target_seq.size(); ++k) {
-            if (query_seq[query_start + match_len + k] != 
-                target_seq[target_start + match_len + k]) {
+        for (int k = 0; k < second_count && 
+             (query_start + first_count + k) < query_seq.size() && 
+             (target_start + first_count + k) < target_seq.size(); ++k) {
+            if (query_seq[query_start + first_count + k] != 
+                target_seq[target_start + first_count + k]) {
                 can_swap = false;
                 break;
             }
         }
-
+        
         if (can_swap) {
-            std::swap(ops[0], ops[1]);
-            std::cerr << "[DEBUG] Swapped leading '=' and 'D' operations.\n";
+            // Directly construct the swapped string
+            return std::to_string(second_count) + 'D' + 
+                   std::to_string(first_count) + '=' +
+                   cigar.substr(second_op_end + 1);
         }
     }
-
-    // Swap trailing 'D' and '=' if possible
-    if (ops.size() >= 2 && ops[ops.size() - 2].second == 'D' && ops.back().second == '=') {
-        int match_len = ops.back().first;
-        int del_len = ops[ops.size() - 2].first;
-
-        // Calculate positions
-        int query_pos = query_start + query_seq.size() - match_len - del_len;
-        int target_pos = target_start + target_seq.size() - match_len - del_len;
-
-        // Check if swapping is valid by comparing the sequences
-        bool can_swap = true;
+    
+    // Find and check the last two operations
+    size_t last_op_end = cigar.size() - 1;
+    size_t last_op_start = last_op_end;
+    while (last_op_start > 0 && isdigit(cigar[last_op_start - 1])) last_op_start--;
+    
+    size_t second_last_op_end = last_op_start - 1;
+    if (second_last_op_end <= 0) return cigar;
+    size_t second_last_op_start = second_last_op_end;
+    while (second_last_op_start > 0 && isdigit(cigar[second_last_op_start - 1])) second_last_op_start--;
+    
+    if (second_last_op_start == 0) return cigar;
+    
+    // Extract the last operations
+    int last_count = std::stoi(cigar.substr(last_op_start, last_op_end - last_op_start));
+    char last_op = cigar[last_op_end];
+    int second_last_count = std::stoi(cigar.substr(second_last_op_start, second_last_op_end - second_last_op_start));
+    char second_last_op = cigar[second_last_op_end];
+    
+    // Check if we need to swap trailing operations
+    if (second_last_op == 'D' && last_op == '=') {
+        int query_pos = query_start + query_seq.size() - last_count - second_last_count;
+        int target_pos = target_start + target_seq.size() - last_count - second_last_count;
         
-        // For leading deletion+match: verify query[0:match_len] matches target[del_len:del_len+match_len]
-        // For trailing match+deletion: verify query[0:match_len] matches target[0:match_len]
-        for (int k = 0; k < match_len && can_swap; ++k) {
+        bool can_swap = true;
+        for (int k = 0; k < last_count && can_swap; ++k) {
             int64_t q_idx = query_pos + k;
             int64_t t_idx = target_pos + k;
             
-            // Check bounds
-            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
-                can_swap = false;
-                break;
-            }
-            
-            // Compare sequences at current positions
-            if (query_seq[q_idx] != target_seq[t_idx]) {
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size() ||
+                query_seq[q_idx] != target_seq[t_idx]) {
                 can_swap = false;
                 break;
             }
         }
-
-        // Debug output for sequence comparison
-        if (!can_swap) {
-            std::cerr << "[DEBUG] Sequence mismatch prevented CIGAR operation swap.\n";
-            std::cerr << "First mismatching position:\n";
-            for (int k = 0; k < std::min(10, match_len); ++k) {
-                int64_t q_idx = query_pos + k;
-                int64_t t_idx = target_pos + k;
-                if (q_idx < query_seq.size() && t_idx < target_seq.size()) {
-                    std::cerr << "Position " << k << ": query=" << query_seq[q_idx] 
-                              << " target=" << target_seq[t_idx] << "\n";
-                }
-            }
-            // Early return if we can't swap to prevent further processing
-            return cigar;
+        
+        if (can_swap) {
+            // Directly construct the swapped string
+            return cigar.substr(0, second_last_op_start) +
+                   std::to_string(last_count) + '=' +
+                   std::to_string(second_last_count) + 'D';
         }
-
-        std::swap(ops[ops.size() - 2], ops.back());
-        std::cerr << "[DEBUG] Swapped trailing 'D' and '=' operations.\n";
     }
-
-    std::cerr << "[DEBUG] Adjusted CIGAR operations:\n";
-    for (const auto& op : ops) {
-        std::cerr << op.first << op.second << " ";
-    }
-    std::cerr << "\n";
-
-    // Reconstruct the adjusted CIGAR string
-    std::string adjusted_cigar;
-    for (const auto& op : ops) {
-        adjusted_cigar += std::to_string(op.first) + op.second;
-    }
-
-    return adjusted_cigar;
+    
+    return cigar;
 }
 
 
