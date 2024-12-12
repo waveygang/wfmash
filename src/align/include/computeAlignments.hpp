@@ -751,22 +751,27 @@ std::string processAlignment(seq_record_t* rec) {
             rec->currentRecord.rEndPos
         );
         adjusted_cigar = trimmed_cigar;
+        std::cerr << "[DEBUG] Trimmed CIGAR string: " << adjusted_cigar << "\n";
+        std::cerr << "[DEBUG] New target positions: start=" << new_coords.first 
+                  << ", end=" << new_coords.second << "\n";
+        auto target_offset = new_coords.first - rec->currentRecord.rStartPos;
+        std::cerr << "[DEBUG] Target offset: " << target_offset << "\n";
         rec->currentRecord.rStartPos = new_coords.first;
         rec->currentRecord.rEndPos = new_coords.second;
+
+        // Use original sequence pointers
+        char* adjusted_ref_seq_ptr = ref_seq_ptr + target_offset;
+        char* adjusted_query_seq_ptr = queryRegionStrand.data();
 
         // Verify alignment after trimming leading/trailing deletions
         std::cerr << "[DEBUG] Step 2: Verifying alignment after trimming leading/trailing deletions\n";
         verify_cigar_alignment(adjusted_cigar,
-                             queryRegionStrand.data(),
-                             ref_seq_ptr,
-                             rec->queryStartPos,
-                             rec->currentRecord.rStartPos,
-                             rec->queryLen,
-                             rec->refLen);
-
-        // Use original sequence pointers
-        char* adjusted_ref_seq_ptr = ref_seq_ptr;
-        char* adjusted_query_seq_ptr = queryRegionStrand.data();
+                               adjusted_query_seq_ptr,
+                               adjusted_ref_seq_ptr,
+                               rec->queryStartPos,
+                               rec->currentRecord.rStartPos,
+                               rec->queryLen,
+                               rec->refLen);
 
         // Debug output for adjusted sequences
         std::cerr << "[DEBUG] Adjusted positions and sequences:\n"
@@ -774,37 +779,6 @@ std::string processAlignment(seq_record_t* rec) {
                   << "Adjusted target_end: " << rec->currentRecord.rEndPos << "\n"
                   << "Adjusted query_start: " << rec->currentRecord.qStartPos << "\n"
                   << "Adjusted query_end: " << rec->currentRecord.qEndPos << "\n";
-
-        // Print reference sequence context
-        int ref_context_size = 10;
-        int64_t ref_seq_offset = rec->currentRecord.rStartPos - rec->refStartPos;
-        std::string ref_context = ref_seq.substr(
-            std::max<int64_t>(0, ref_seq_offset - ref_context_size),
-            std::min<size_t>(ref_seq.size() - ref_seq_offset + ref_context_size, 2 * ref_context_size)
-        );
-        std::cerr << "Reference sequence around adjusted target_start (positions "
-                  << rec->currentRecord.rStartPos - ref_context_size << " to " << rec->currentRecord.rStartPos + ref_context_size << "):\n"
-                  << ref_context << "\n";
-
-        // Print query sequence context
-        int query_context_size = 10;
-        int64_t query_seq_offset = rec->currentRecord.qStartPos - rec->currentRecord.qStartPos;
-        std::string query_context = std::string(queryRegionStrand.data()).substr(
-            std::max<int64_t>(0, query_seq_offset - query_context_size),
-            std::min<size_t>(queryRegionStrand.size() - query_seq_offset + query_context_size, 2 * query_context_size)
-        );
-        std::cerr << "Query sequence around adjusted query_start (positions "
-                  << rec->currentRecord.qStartPos - query_context_size << " to " << rec->currentRecord.qStartPos + query_context_size << "):\n"
-                  << query_context << "\n";
-
-        // Verify the alignment matches in '=' operations using adjusted pointers
-        verify_cigar_alignment(adjusted_cigar,
-                             adjusted_query_seq_ptr,
-                             adjusted_ref_seq_ptr,
-                             rec->currentRecord.qStartPos,
-                             rec->currentRecord.rStartPos,
-                             rec->queryLen,
-                             rec->refLen);
 
         // Recompute identity metrics
         int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
@@ -882,16 +856,6 @@ std::string processAlignment(seq_record_t* rec) {
         if (!updated_output.empty() && updated_output.back() != '\n') {
             updated_output += "\n";
         }
-
-        // Final verification of alignment with adjusted sequences
-        std::cerr << "[DEBUG] Step 3: Performing final validation with adjusted sequences\n";
-        verify_cigar_alignment(adjusted_cigar,
-                             queryRegionStrand.data(),
-                             ref_seq_ptr,
-                             rec->queryStartPos,
-                             rec->refStartPos,
-                             rec->queryLen,
-                             rec->refLen);
 
         std::cerr << "[DEBUG] Alignment output after modification:\n" << updated_output << "\n";
         return updated_output;
