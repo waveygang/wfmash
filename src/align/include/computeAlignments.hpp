@@ -351,11 +351,11 @@ void verify_cigar_alignment(const std::string& cigar,
                         
                         // Calculate context range for query sequence
                         size_t query_context_start = (q_pos + k >= 5) ? q_pos + k - 5 : 0;
-                        size_t query_context_end = std::min(q_pos + k + 5, static_cast<size_t>(query_length - 1));
+                        size_t query_context_end = std::min(static_cast<size_t>(q_pos + k + 5), static_cast<size_t>(query_length - 1));
                 
                         // Calculate context range for target sequence
                         size_t target_context_start = (t_pos + k >= 5) ? t_pos + k - 5 : 0;
-                        size_t target_context_end = std::min(t_pos + k + 5, static_cast<size_t>(target_length - 1));
+                        size_t target_context_end = std::min(static_cast<size_t>(t_pos + k + 5), static_cast<size_t>(target_length - 1));
                         
                         // Extract context sequences
                         std::string query_context(query_seq + query_context_start, query_seq + query_context_end + 1);
