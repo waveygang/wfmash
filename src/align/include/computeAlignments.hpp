@@ -779,7 +779,7 @@ std::string processAlignment(seq_record_t* rec) {
             fields[2] = std::to_string(rec->currentRecord.qStartPos);
             fields[3] = std::to_string(rec->currentRecord.qEndPos);
             // Target positions (0-based)
-            fields[7] = std::to_string(rec->currentRecord.rStartPos + target_offset);
+            fields[7] = std::to_string(rec->currentRecord.rStartPos);
             fields[8] = std::to_string(rec->currentRecord.rEndPos);
         } else {  // SAM format
             // Target position (1-based)
