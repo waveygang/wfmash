@@ -504,14 +504,7 @@ std::string adjust_cigar_string(const std::string& cigar,
             }
             
             // Store the actual characters for debugging
-            char q_char = query_seq[q_idx];
-            char t_char = target_seq[t_idx];
-            std::cerr << "[DEBUG] Detailed position check - q_idx: " << q_idx 
-                      << ", t_idx: " << t_idx 
-                      << ", q_char: " << q_char 
-                      << ", t_char: " << t_char << std::endl;
-            
-            if (q_char != t_char) {
+            if (query_seq[q_idx] != target_seq[t_idx]) {
                 std::cerr << "[DEBUG] Characters don't match at position " << k << std::endl;
                 can_swap = false;
                 break;
