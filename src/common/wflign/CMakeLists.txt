@@ -21,7 +21,7 @@ message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
     #set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -flto -fno-fat-lto-objects")
-    set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -g")
+    # set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -g")
     #set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG") # reset CXX_FLAGS to replace -O3 with -Ofast
 endif ()
 
@@ -31,8 +31,8 @@ if (${CMAKE_BUILD_TYPE} MATCHES Debug)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address")
 else()
     # Use all standard-compliant optimizations - always add these:
-    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    # set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    # set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
 endif ()
 
 if(WFA_PNG_AND_TSV)
@@ -72,21 +72,43 @@ target_include_directories(
 # WFling library
 #
 target_link_libraries(wflign rt z)
-add_library(
-        libwflign_static STATIC
-        deps/atomic_image.cpp
-        deps/lodepng/lodepng.cpp
-        deps/atomic_image.cpp
-        src/wflign.cpp
-        src/wflign_alignment.cpp
-        src/wflign_patch.cpp
-        src/rkmh.cpp
-        src/murmur3.cpp)
-set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
-target_include_directories(
-        libwflign_static PRIVATE
-        deps/
-        deps/lodepng
-        deps/PicoSHA2
-        deps/robin-hood-hashing
-        deps/WFA2-lib)
+if (BUILD_STATIC)
+  add_library(
+    libwflign_static STATIC
+    deps/atomic_image.cpp
+    deps/lodepng/lodepng.cpp
+    deps/atomic_image.cpp
+    src/wflign.cpp
+    src/wflign_alignment.cpp
+    src/wflign_patch.cpp
+    src/rkmh.cpp
+    src/murmur3.cpp)
+  set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
+  target_include_directories(
+    libwflign_static PRIVATE
+    deps/
+    deps/lodepng
+    deps/PicoSHA2
+    deps/robin-hood-hashing
+    deps/WFA2-lib)
+else ()
+  add_library(
+    libwflign
+    deps/atomic_image.cpp
+    deps/lodepng/lodepng.cpp
+    deps/atomic_image.cpp
+    src/wflign.cpp
+    src/wflign_alignment.cpp
+    src/wflign_patch.cpp
+    src/rkmh.cpp
+    src/murmur3.cpp)
+  set_target_properties(libwflign PROPERTIES OUTPUT_NAME "wflign")
+
+  target_include_directories(
+    libwflign PRIVATE
+    deps/
+    deps/lodepng
+    deps/PicoSHA2
+    deps/robin-hood-hashing
+    deps/WFA2-lib)
+endif()
