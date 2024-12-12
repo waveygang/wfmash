@@ -9,7 +9,7 @@
 #define COMPUTE_ALIGNMENTS_HPP
 
 // Define this to enable CIGAR validation checks
-#define VALIDATE_CIGAR 0
+#define VALIDATE_CIGAR 1
 
 #include <vector>
 #include <algorithm>
