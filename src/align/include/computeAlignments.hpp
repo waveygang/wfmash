@@ -466,17 +466,33 @@ std::string adjust_cigar_string(const std::string& cigar,
     
     // Check if we need to swap leading operations
     if (first_op == '=' && second_op == 'D') {
-        // Check if swapping is valid by verifying sequence matches after the deletion
+        // Check if swapping is valid by verifying sequence matches both before and after
         bool can_swap = true;
-        for (int k = 0; k < first_count && 
-             (query_start + k) < query_seq.size() && 
-             (target_start + second_count + k) < target_seq.size(); ++k) {
-            if (query_seq[query_start + k] != 
-                target_seq[target_start + second_count + k]) {
+        
+        // Check if sequences match at the new positions after potential swap
+        for (int k = 0; k < first_count && can_swap; ++k) {
+            int64_t q_idx = query_start + k;
+            int64_t t_idx = target_start + second_count + k;
+            
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size() ||
+                query_seq[q_idx] != target_seq[t_idx]) {
                 can_swap = false;
                 break;
             }
         }
+
+        // Also verify the deletion region matches between query and target
+        if (can_swap) {
+            for (int k = 0; k < second_count && can_swap; ++k) {
+                int64_t t_idx = target_start + k;
+                if (t_idx >= target_seq.size()) {
+                    can_swap = false;
+                    break;
+                }
+            }
+        }
+
+        std::cerr << "[DEBUG] Leading swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl;
         
         if (can_swap) {
             // Directly construct the swapped string
@@ -510,6 +526,8 @@ std::string adjust_cigar_string(const std::string& cigar,
         int target_pos = target_start + target_seq.size() - last_count - second_last_count;
         
         bool can_swap = true;
+        
+        // Check if sequences match at the new positions after potential swap
         for (int k = 0; k < last_count && can_swap; ++k) {
             int64_t q_idx = query_pos + k;
             int64_t t_idx = target_pos + k;
@@ -520,6 +538,19 @@ std::string adjust_cigar_string(const std::string& cigar,
                 break;
             }
         }
+
+        // Also verify the deletion region matches between query and target
+        if (can_swap) {
+            for (int k = 0; k < second_last_count && can_swap; ++k) {
+                int64_t t_idx = target_pos + last_count + k;
+                if (t_idx >= target_seq.size()) {
+                    can_swap = false;
+                    break;
+                }
+            }
+        }
+
+        std::cerr << "[DEBUG] Trailing swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl;
         
         if (can_swap) {
             // Directly construct the swapped string
