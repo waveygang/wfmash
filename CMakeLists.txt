@@ -1,10 +1,14 @@
+# Usage:
+#
+#   mkdir build ; cd build
+#   cmake -DCMAKE_BUILD_TYPE=DEBUG ..
+#   make -j 8 VERBOSE=1
+#
+
 cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 project(wfmash)
 
 enable_testing()
-
-include(CheckIPOSupported) # adds lto
-check_ipo_supported(RESULT ipo_supported OUTPUT output) # lto
 
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
@@ -17,6 +21,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_STATIC "Build static binary" OFF)
 option(BUILD_DEPS "Build external dependencies" OFF)
 option(BUILD_OPTIMIZED "Build optimized binary" OFF)
+option(GPROF "Enable gprof profiling" OFF)
+option(DISABLE_LTO "Disable IPO/LTO" OFF)
+
+if (NOT DISABLE_LTO)
+  include(CheckIPOSupported) # adds lto
+  check_ipo_supported(RESULT ipo_supported OUTPUT output) # lto
+endif()
 
 if (BUILD_STATIC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
@@ -50,13 +61,8 @@ if (${CMAKE_BUILD_TYPE} MATCHES Release)
     # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-generate=${CMAKE_BINARY_DIR}/../pgo")
     # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-use=${CMAKE_BINARY_DIR}/../pgo")
 
-    if( ipo_supported )
-      message(STATUS "IPO / LTO enabled")
-      set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${ipo_supported})
-      # by target set_property(TARGET wfmash PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-    endif( ipo_supported )
   else()
-    set(EXTRA_FLAGS "-Ofast -march=native -flto")
+    set(EXTRA_FLAGS "-Ofast -march=native")
   endif()
   set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG ${EXTRA_FLAGS}")
   set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG ${EXTRA_FLAGS}")
@@ -77,6 +83,16 @@ else ()
     set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS}")
 endif ()
+
+if( NOT DISABLE_LTO AND ipo_supported )
+  message(STATUS "IPO / LTO enabled")
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${ipo_supported})
+endif()
+
+if(GPROF)
+  set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -g -pg")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pg")
+endif(GPROF)
 
 if (WFA_PNG_AND_TSV)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWFA_PNG_TSV_TIMING")
