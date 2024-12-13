@@ -96,7 +96,6 @@
            "-DBUILD_OPTIMIZED=ON"
            "-DCMAKE_BUILD_TYPE=Release"
            "-DCMAKE_INSTALL_RPATH="))) ; force cmake static build and do not rewrite RPATH
-         ;; ,#~(list "-DBUILD_STATIC=ON" "-DBUILD_RETARGETABLE=ON" "-DCMAKE_INSTALL_RPATH="))) ; force cmake static build and do not rewrite RPATH
     (inputs
      `(
        ("bzip2-static" ,bzip2 "static")    ; libz2 part of htslib for static builds
