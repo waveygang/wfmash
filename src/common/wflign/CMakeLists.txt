@@ -50,65 +50,32 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA2-lib)
 
 #
-# WFling
+# WFlign library
 #
-add_executable(
-        wflign
-        deps/atomic_image.cpp
-        deps/lodepng/lodepng.cpp
-        deps/atomic_image.cpp
-        src/wflign.cpp
-        src/wflign_alignment.cpp
-        src/wflign_patch.cpp
-        src/rkmh.cpp
-        src/murmur3.cpp)
-target_include_directories(
-        wflign PRIVATE deps/
-        deps/
-        deps/robin-hood-hashing
-        deps/WFA2-lib)
+# target_link_libraries(wflign rt z)
 
-#
-# WFling library
-#
-target_link_libraries(wflign rt z)
-if (BUILD_STATIC)
-  add_library(
-    libwflign_static STATIC
-    deps/atomic_image.cpp
-    deps/lodepng/lodepng.cpp
-    deps/atomic_image.cpp
-    src/wflign.cpp
-    src/wflign_alignment.cpp
-    src/wflign_patch.cpp
-    src/rkmh.cpp
-    src/murmur3.cpp)
-  set_target_properties(libwflign_static PROPERTIES OUTPUT_NAME "wflign")
-  target_include_directories(
-    libwflign_static PRIVATE
+set(wflign_SOURCE
+  deps/atomic_image.cpp
+  deps/lodepng/lodepng.cpp
+  deps/atomic_image.cpp
+  src/wflign.cpp
+  src/wflign_alignment.cpp
+  src/wflign_patch.cpp
+  src/rkmh.cpp
+  src/murmur3.cpp
+)
+
+set(wflign_INCLUDE
     deps/
     deps/lodepng
     deps/PicoSHA2
     deps/robin-hood-hashing
     deps/WFA2-lib)
-else ()
-  add_library(
-    libwflign
-    deps/atomic_image.cpp
-    deps/lodepng/lodepng.cpp
-    deps/atomic_image.cpp
-    src/wflign.cpp
-    src/wflign_alignment.cpp
-    src/wflign_patch.cpp
-    src/rkmh.cpp
-    src/murmur3.cpp)
-  set_target_properties(libwflign PROPERTIES OUTPUT_NAME "wflign")
 
-  target_include_directories(
-    libwflign PRIVATE
-    deps/
-    deps/lodepng
-    deps/PicoSHA2
-    deps/robin-hood-hashing
-    deps/WFA2-lib)
-endif()
+add_library(wflign_static STATIC ${wflign_SOURCE})
+add_library(wflign SHARED ${wflign_SOURCE})
+set_target_properties(wflign_static PROPERTIES OUTPUT_NAME wflign)
+set_target_properties(wflign PROPERTIES OUTPUT_NAME wflign)
+
+target_include_directories(wflign_static PRIVATE ${wflign_INCLUDE})
+target_include_directories(wflign PRIVATE ${wflign_INCLUDE})
