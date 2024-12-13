@@ -89,7 +89,7 @@
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
     (arguments
-     `(#:tests? #f
+     `(;; #:tests? #f
        #:configure-flags
        ,#~(list
            "-DBUILD_STATIC=ON"
