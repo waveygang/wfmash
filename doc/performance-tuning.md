@@ -111,6 +111,37 @@ sys     0m0.684s
 
 shows the difference is not too bad. O3 and Ofast appear to be similar. march=native does best on Ryzen.
 
+# Profiling
+
+Running a profiler I added support to cmake:
+
+
+```
+cmake -DCMAKE_BUILD_TYPE=DEBUG -DGPROF=ON ..
+%   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 17.16      0.64     0.64    10199     0.06     0.06  skch::CommonFunc::makeUpperCaseAndValidDNA(char*, long)
+  7.51      0.92     0.28 160148709     0.00     0.00  atomic_queue::spin_loop_pause()
+  4.83      1.10     0.18                             _init
+  3.49      1.23     0.13   195352     0.00     0.00  skch::CommonFunc::reverseComplement(char const*, char*, int)
+  1.88      1.30     0.07 160309680     0.00     0.00  std::atomic<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >*>::load(std::memory_order) const
+```
+
+Using aggressive optimizations `makeUpperCaseAndValidDNA` gets inlined and
+
+```
+cmake -DDISABLE_LTO=1 -DGPROF=1 ..
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 82.20      3.74     3.74                             skch::Sketch::writeIndex(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, std::
+__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool)
+  6.37      4.03     0.29       51     5.69     6.27  std::thread::_State_impl<std::thread::_Invoker<std::tuple<align::Aligner::computeAlignme
+nts()::{lambda()#3}> > >::_M_run()
+  4.40      4.23     0.20        5    40.00    46.66  void skch::CommonFunc::addMinmers<skch::MinmerInfo>(std::vector<skch::MinmerInfo, std::allocator<skch::MinmerInfo> >&, char*, long, int, int, int, int, int, progress_meter::ProgressMeter*)
+```
+
+According to the profiler `MurmurHash3_x64_128` gets hit often. I tried the optimization in this [patch](https://github.com/aappleby/smhasher/pull/87/files), but it did not appear to make any difference on Ryzen. Probably too narrow an impact.
+
 # Conclusion
 
 With a bit of tweaking a 10-20% speed gain is easily possible on my Ryzen. Native compilation, openmp, lto and the static build appears to have the largest impact. PGO is, somewhat surprisingly, detrimental. Running outside a container is faster than running inside a container.
