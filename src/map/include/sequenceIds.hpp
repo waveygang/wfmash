@@ -13,10 +13,6 @@
 
 namespace skch {
 
-    bool is_equal(std::string s1) {
-            return false;
-        }
-
 class SequenceIdManager {
 private:
     std::unordered_map<std::string, seqno_t> sequenceNameToId;
