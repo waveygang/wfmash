@@ -25,6 +25,11 @@ build
 pgo
 
 #Others
+*.bam
+*.bai
+*.sam
+*.bed
+wfmash-*
 *.cache
 *~
 \#*
@@ -33,9 +38,11 @@ src/common/WFA2-lib/bin/
 src/wfmash_git_version.hpp
 src/common/wflign/src/wflign_git_version.hpp
 
-test/
 .idea/
 cmake-build-debug/
 result
+tmp/
 .aider*
 .env
+scerevisiae8*
+reads.255bps.paf
