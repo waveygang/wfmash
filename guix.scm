@@ -5,18 +5,15 @@
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
-;;   guix shell -C -D -f guix.scm
+;;   guix shell -C -D -F -f guix.scm
 ;;
 ;; and inside the container
 ;;
 ;;   mkdir build
 ;;   cd build
-;;   cmake -DCMAKE_BUILD_TYPE=Release ..
+;;   cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_OPTIMIZED=1 ..
 ;;   make -j 12 VERBOSE=1
-;;
-;; For the tests you may need /usr/bin/env. Inside the container:
-;;
-;;   mkdir -p /usr/bin ; ln -s $GUIX_ENVIRONMENT/bin/env /usr/bin/env
+;;   ctest . --verbose
 ;;
 ;; by Pjotr Prins & Andrea Guarracino (c) 2023-2024
 
@@ -29,11 +26,13 @@
  (guix utils)
  (gnu packages algebra)
  (gnu packages base)
+ (gnu packages bash)
  (gnu packages bioinformatics)
  (gnu packages build-tools)
  (gnu packages compression)
  (gnu packages gcc)
  (gnu packages jemalloc)
+ (gnu packages linux) ; for util-linux column
  (gnu packages llvm)
  (gnu packages maths)
  (gnu packages multiprecision)
@@ -49,17 +48,20 @@
 (define %git-commit
     (read-string (open-pipe "git show HEAD | head -1 | cut -d ' ' -f 2" OPEN_READ)))
 
-(define-public wfmash-git
+(define-public wfmash-base-git
   (package
-    (name "wfmash-git")
+    (name "wfmash-base-git")
     (version (git-version "0.21" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
     (inputs
      `(
+       ("bash" ,bash) ; for testing
+       ("bedtools" ,bedtools) ; for testing
+       ("util-linux" ,util-linux) ; for testing
+       ("samtools" ,samtools) ; for testing
        ("bzip2" ,bzip2)
        ("coreutils" ,coreutils) ; for echo and env in tests
-       ("gcc" ,gcc-14)
        ("git" ,git)
        ("gmp" ,gmp)
        ("gsl" ,gsl)
@@ -78,4 +80,30 @@ obtain base-level alignments.")
      (home-page "https://github.com/waveygang/wfmash")
      (license license:expat)))
 
-wfmash-git
+(define-public wfmash-gcc-git
+  (package
+    (inherit wfmash-base-git)
+    (name "wfmash-gcc-git")
+    (version (git-version "0.21" "HEAD" %git-commit))
+    (inputs
+     (modify-inputs (package-inputs wfmash-base-git)
+         (append gcc-14
+                 )))
+    ))
+
+(define-public wfmash-clang-git
+  (package
+    (inherit wfmash-base-git)
+    (name "wfmash-clang-git")
+    (version (git-version "0.21" "HEAD" %git-commit))
+    (inputs
+     (modify-inputs (package-inputs wfmash-base-git)
+         (append clang-toolchain-17
+                 lld
+                 libomp
+                 )))
+    ))
+
+
+wfmash-gcc-git
+;; wfmash-clang-git
