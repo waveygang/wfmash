@@ -1,9 +1,10 @@
 # Usage:
 #
 #   mkdir build ; cd build
-#   cmake -DCMAKE_BUILD_TYPE=DEBUG ..
+#   cmake -DCMAKE_BUILD_TYPE=Debug ..
 #   make -j 8 VERBOSE=1
 #
+#   Build types are Release (default), Debug, Generic, RelWithDebInfo
 
 cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 project(wfmash)
@@ -14,19 +15,26 @@ include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
 
 set(CMAKE_CXX_STANDARD 17)
+# set(CMAKE_CXX_STANDARD 20) # because of sequenceIds.hpp:101:23: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard is not allowed.
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 
 option(BUILD_STATIC "Build static binary" OFF)
 option(BUILD_DEPS "Build external dependencies" OFF)
 option(BUILD_OPTIMIZED "Build optimized binary" OFF)
 option(GPROF "Enable gprof profiling" OFF)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
+option(STOP_ON_ERROR "Stop compiling on first error" OFF)
 
 if (NOT DISABLE_LTO)
   include(CheckIPOSupported) # adds lto
   check_ipo_supported(RESULT ipo_supported OUTPUT output) # lto
+endif()
+
+if (STOP_ON_ERROR)
+  add_definitions( -Wfatal-errors )
 endif()
 
 if (BUILD_STATIC)
@@ -48,7 +56,7 @@ find_package(OpenMP REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
-            "Choose the type of build, options are: Release Debug Generic." FORCE)
+            "Choose the type of build, options are: Release|Debug|Generic|RelWithDebInfo (for distros)." FORCE)
 endif()
 
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
@@ -210,9 +218,32 @@ endif()
 # This is to disable tests defined in CTestCustom.cmake:
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
+set(INVOKE "ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 ${CMAKE_BINARY_DIR}/bin/wfmash")
+set(REGRESSION_TEST_DIR "test/data/regression")
+
 add_test(
-  NAME wfmash-test
-  COMMAND wfmash data/LPA.subset.fa.gz -p 80 -n 5 -t 8
+  NAME wfmash-time-LPA
+  COMMAND bash -c "${INVOKE} data/LPA.subset.fa.gz -p 80 -n 5 -t 8 > wfmash-time-LPA.output"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+  NAME wfmash-subset-LPA-to-SAM
+  COMMAND bash -c "${INVOKE} data/LPA.subset.fa.gz -N -a -L > LPA.subset.sam && samtools view LPA.subset.sam -bS | samtools sort > LPA.subset.bam && samtools index LPA.subset.bam && samtools view LPA.subset.bam | head | cut -f 1-9"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+  NAME wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y \\# > scerevisiae8.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai scerevisiae8.paf 0.92 && head -3000 scerevisiae8.paf > scerevisiae8.paf.output && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/scerevisiae8.paf.output scerevisiae8.paf.output"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+  NAME wfmash-short-reads-500bps-to-SAM
+  COMMAND bash -c "${INVOKE} data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head > wfmash-short-reads-500bps-to-SAM.output && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/wfmash-short-reads-500bps-to-SAM.output wfmash-short-reads-500bps-to-SAM.output"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+  NAME wfmash-short-reads-255bps-to-PAF
+  COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/reads.255bps.paf reads.255bps.paf"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
