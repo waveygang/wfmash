@@ -142,6 +142,10 @@ nts()::{lambda()#3}> > >::_M_run()
 
 According to the profiler `MurmurHash3_x64_128` gets hit often. I tried the optimization in this [patch](https://github.com/aappleby/smhasher/pull/87/files), but it did not appear to make any difference on Ryzen. Probably too narrow an impact.
 
+Above gprof results are puzzling. In the next step I am going to use perf instead on top of clang.
+
+=> https://www.brendangregg.com/perf.html
+
 # Conclusion
 
 With a bit of tweaking a 10-20% speed gain is easily possible on my Ryzen. Native compilation, openmp, lto and the static build appears to have the largest impact. PGO is, somewhat surprisingly, detrimental. Running outside a container is faster than running inside a container.

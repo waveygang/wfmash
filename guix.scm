@@ -1,6 +1,5 @@
 ;; To use this file to build a version of wfmash using git HEAD:
 ;;
-;;  rm -rf build/*
 ;;  guix build -f guix.scm
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
@@ -11,15 +10,21 @@
 ;;
 ;;   mkdir build
 ;;   cd build
+;;   rm -rf ../build/*
 ;;   cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_OPTIMIZED=1 ..
 ;;   make -j 12 VERBOSE=1
 ;;   ctest . --verbose
+;;
+;; alternative builds are
+;;
+;;   cmake -DBUILD_STATIC=1 ..
 ;;
 ;; by Pjotr Prins & Andrea Guarracino (c) 2023-2024
 
 (use-modules
  ((guix licenses) #:prefix license:)
  (guix build-system cmake)
+ (guix download)
  (guix gexp)
  (guix git-download)
  (guix packages)
@@ -66,6 +71,7 @@
        ("gmp" ,gmp)
        ("gsl" ,gsl)
        ("htslib" ,htslib)
+       ("jemalloc" ,jemalloc)
        ("libdeflate" ,libdeflate)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
@@ -104,6 +110,70 @@ obtain base-level alignments.")
                  )))
     ))
 
+;; ==== The following is for static binary builds using gcc - used mostly for deployment ===
 
-wfmash-gcc-git
+;; Guix does not come with a static version of libdeflate
+(define-public libdeflate-static
+  (package
+    (inherit libdeflate)
+    (name "libdeflate-static")
+    (version "1.19")
+    (arguments
+     (list #:configure-flags
+           #~(list "-DLIBDEFLATE_BUILD_STATIC_LIB=YES"
+                   "-DLIBDEFLATE_BUILD_TESTS=YES")))))
+
+;; A minimal static version of htslib that does not depend on curl and openssl. This
+;; reduces the number of higher order dependencies in static linking.
+(define-public htslib-static
+  (package
+    (inherit htslib)
+    (name "htslib-static")
+    (version "1.19")
+    (source (origin
+            (method url-fetch)
+            (uri (string-append
+                  "https://github.com/samtools/htslib/releases/download/"
+                  version "/htslib-" version ".tar.bz2"))
+            (sha256
+             (base32
+              "0dh79lwpspwwfbkmllrrhbk8nkvlfc5b5ib4d0xg5ld79w6c8lc7"))))
+    (arguments
+     (substitute-keyword-arguments (package-arguments htslib)
+       ((#:configure-flags flags ''())
+        ''())))
+    (inputs
+     (list bzip2 xz))))
+
+(define %source-dir (dirname (current-filename)))
+
+(define %git-commit
+    (read-string (open-pipe "git show HEAD | head -1 | cut -d ' ' -f 2" OPEN_READ)))
+
+(define-public wfmash-static-gcc-git
+  (package
+    (inherit wfmash-base-git)
+    (name "wfmash-static-gcc-git")
+    (version (git-version "0.21" "HEAD" %git-commit))
+    (arguments
+     `(;; #:tests? #f
+       #:configure-flags
+       ,#~(list
+           "-DBUILD_STATIC=ON"
+           "-DBUILD_OPTIMIZED=ON"
+           "-DCMAKE_BUILD_TYPE=Release"
+           "-DCMAKE_INSTALL_RPATH="))) ; force cmake static build and do not rewrite RPATH
+    (inputs
+     (modify-inputs (package-inputs wfmash-gcc-git)
+                    (prepend
+                     `(,bzip2 "static")
+                     `(,zlib "static")
+                     `(,gsl "static")
+                     `(,xz "static")
+                     libdeflate-static
+                     htslib-static
+                     )))))
+
+wfmash-static-gcc-git ;; default deployment build
+;; wfmash-gcc-git
 ;; wfmash-clang-git
