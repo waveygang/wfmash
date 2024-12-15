@@ -1,10 +1,16 @@
 ;; To use this file to build a version of wfmash using git HEAD:
 ;;
-;;  guix build -f guix.scm
+;;  guix build -f guix.scm                # default build
+;;  guix build -L . wfmash-gcc-git        # gcc build
+;;  guix build -L . wfmash-static-gcc-git # gcc static build (default)
+;;  guix build -L . wfmash-clang-git      # clang build
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
-;;   guix shell -C -D -F -f guix.scm
+;;   guix shell -C -D -F -f guix.scm      # default build
+;;   guix shell -L . -C -D -F wfmash-gcc-git
+;;   guix shell -L . -C -D -F wfmash-gcc-static-git
+;;   guix shell -L . -C -D -F wfmash-clang-git
 ;;
 ;; and inside the container
 ;;
@@ -15,38 +21,42 @@
 ;;   make -j 12 VERBOSE=1
 ;;   ctest . --verbose
 ;;
-;; alternative builds are
+;; alternative build for static
 ;;
 ;;   cmake -DBUILD_STATIC=1 ..
 ;;
+;; list packages
+;;
+;;   guix package -L . -A|grep wfm
+
 ;; by Pjotr Prins & Andrea Guarracino (c) 2023-2024
 
-(use-modules
- ((guix licenses) #:prefix license:)
- (guix build-system cmake)
- (guix download)
- (guix gexp)
- (guix git-download)
- (guix packages)
- (guix utils)
- (gnu packages algebra)
- (gnu packages base)
- (gnu packages bash)
- (gnu packages bioinformatics)
- (gnu packages build-tools)
- (gnu packages compression)
- (gnu packages gcc)
- (gnu packages jemalloc)
- (gnu packages linux) ; for util-linux column
- (gnu packages llvm)
- (gnu packages maths)
- (gnu packages multiprecision)
- (gnu packages pkg-config)
- (gnu packages python)
- (gnu packages version-control)
- (srfi srfi-1)
- (ice-9 popen)
- (ice-9 rdelim))
+(define-module (guix)
+  #:use-module ((guix licenses) #:prefix license:)
+  #:use-module (guix build-system cmake)
+  #:use-module (guix download)
+  #:use-module (guix gexp)
+  #:use-module (guix git-download)
+  #:use-module (guix packages)
+  #:use-module (guix utils)
+  #:use-module (gnu packages algebra)
+  #:use-module (gnu packages base)
+  #:use-module (gnu packages bash)
+  #:use-module (gnu packages bioinformatics)
+  #:use-module (gnu packages build-tools)
+  #:use-module (gnu packages compression)
+  #:use-module (gnu packages gcc)
+  #:use-module (gnu packages jemalloc)
+  #:use-module (gnu packages linux) ; for util-linux column
+  #:use-module (gnu packages llvm)
+  #:use-module (gnu packages maths)
+  #:use-module (gnu packages multiprecision)
+  #:use-module (gnu packages pkg-config)
+  #:use-module (gnu packages python)
+  #:use-module (gnu packages version-control)
+  #:use-module (srfi srfi-1)
+  #:use-module (ice-9 popen)
+  #:use-module (ice-9 rdelim))
 
 (define %source-dir (dirname (current-filename)))
 
@@ -104,7 +114,7 @@ obtain base-level alignments.")
     (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
-         (append clang-toolchain-17
+         (append clang-toolchain-18
                  lld
                  libomp
                  )))
@@ -174,6 +184,4 @@ obtain base-level alignments.")
                      htslib-static
                      )))))
 
-wfmash-static-gcc-git ;; default deployment build
-;; wfmash-gcc-git
-;; wfmash-clang-git
+wfmash-static-gcc-git ;; default optimized static deployment build
