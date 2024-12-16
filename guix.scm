@@ -7,8 +7,8 @@
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
-;;   guix shell -C -D -F -f guix.scm      # default build
-;;   guix shell -L . -C -D -F wfmash-gcc-git
+;;   guix shell -C -D -F -f guix.scm         # default build
+;;   guix shell -L . -C -D -F wfmash-gcc-git # preferred development container
 ;;   guix shell -L . -C -D -F wfmash-gcc-static-git
 ;;   guix shell -L . -C -D -F wfmash-clang-git
 ;;
@@ -21,9 +21,11 @@
 ;;   make -j 12 VERBOSE=1
 ;;   ctest . --verbose
 ;;
-;; alternative build for static
+;; alternative builds
 ;;
-;;   cmake -DBUILD_STATIC=1 ..
+;;   cmake -DCMAKE_BUILD_TYPE=Debug ..           # for development (use wfmash-gcc-git)
+;;   cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..  # for distros including Debian (use wfmash-gcc-git)
+;;   cmake -DBUILD_STATIC=1 ..                   # static binary (use wfmash-gcc-static-git)
 ;;
 ;; list packages
 ;;
