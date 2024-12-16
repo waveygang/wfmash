@@ -84,8 +84,6 @@ if (${CMAKE_BUILD_TYPE} MATCHES Generic)
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
-  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -g")
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
   if (ASAN)
     # Enable debug symbols and ASan with no optimizations
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address  -fno-omit-frame-pointer -fno-common")
