@@ -25,6 +25,7 @@ option(BUILD_STATIC "Build static binary" OFF)
 option(BUILD_DEPS "Build external dependencies" OFF)
 option(BUILD_OPTIMIZED "Build optimized binary" OFF)
 option(GPROF "Enable gprof profiling" OFF)
+option(ASAN "Use address sanitiser (in Debug builds)" ON)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
 
@@ -82,11 +83,13 @@ if (${CMAKE_BUILD_TYPE} MATCHES Generic)
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
+  if (ASAN)
     # Enable debug symbols and ASan with no optimizations
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -g -fsanitize=address -fno-omit-frame-pointer")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -fsanitize=address -fno-omit-frame-pointer")
     # Ensure that ASan is linked explicitly
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+  endif (ASAN)
 else ()
     set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS}")
@@ -218,7 +221,12 @@ endif()
 # This is to disable tests defined in CTestCustom.cmake:
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
-set(INVOKE "ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1 ${CMAKE_BINARY_DIR}/bin/wfmash")
+if (ASAN)
+  set(INVOKE "ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1:suppressions=${CMAKE_SOURCE_DIR}/test/libasan-suppress.txt ${CMAKE_BINARY_DIR}/bin/wfmash")
+else ()
+  set(INVOKE "${CMAKE_BINARY_DIR}/bin/wfmash")
+endif()
+
 set(REGRESSION_TEST_DIR "test/data/regression")
 
 add_test(
@@ -244,6 +252,13 @@ add_test(
 add_test(
   NAME wfmash-short-reads-255bps-to-PAF
   COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/reads.255bps.paf reads.255bps.paf"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+  NAME wfmash-input-mapping
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -T S288C -Q SK1 -m > mappings.paf && \
+${INVOKE} data/scerevisiae8.fa.gz -i mappings.paf|sort > aligned.paf.output && \
+${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/aligned.paf.output aligned.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
