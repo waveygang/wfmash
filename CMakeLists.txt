@@ -1,10 +1,12 @@
 # Usage:
 #
 #   mkdir build ; cd build
-#   cmake -DCMAKE_BUILD_TYPE=Debug ..
+#   cmake -DCMAKE_BUILD_TYPE=Debug -DASAN=ON ..
 #   make -j 8 VERBOSE=1
 #
 #   Build types are Release (default), Debug, Generic, RelWithDebInfo
+#
+#   See also the header of ./guix.scm
 
 cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 project(wfmash)
@@ -25,7 +27,7 @@ option(BUILD_STATIC "Build static binary" OFF)
 option(BUILD_DEPS "Build external dependencies" OFF)
 option(BUILD_OPTIMIZED "Build optimized binary" OFF)
 option(GPROF "Enable gprof profiling" OFF)
-option(ASAN "Use address sanitiser (in Debug builds)" ON)
+option(ASAN "Use address sanitiser (in Debug builds only)" OFF)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
 
@@ -57,7 +59,7 @@ find_package(OpenMP REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
-            "Choose the type of build, options are: Release|Debug|Generic|RelWithDebInfo (for distros)." FORCE)
+            "Choose the type of build, options are: Release|Debug|Generic|RelWithDebInfo (default for distros)." FORCE)
 endif()
 
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
@@ -69,7 +71,6 @@ if (${CMAKE_BUILD_TYPE} MATCHES Release)
     set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops")
     # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-generate=${CMAKE_BINARY_DIR}/../pgo")
     # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-use=${CMAKE_BINARY_DIR}/../pgo")
-
   else()
     set(EXTRA_FLAGS "-Ofast -march=native")
   endif()
@@ -83,12 +84,14 @@ if (${CMAKE_BUILD_TYPE} MATCHES Generic)
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
+  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -g")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
   if (ASAN)
     # Enable debug symbols and ASan with no optimizations
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -g -fsanitize=address -fno-omit-frame-pointer")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -fsanitize=address -fno-omit-frame-pointer")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address  -fno-omit-frame-pointer -fno-common")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address  -fno-omit-frame-pointer -fno-common")
     # Ensure that ASan is linked explicitly
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+    # set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
   endif (ASAN)
 else ()
     set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS}")
@@ -222,7 +225,7 @@ endif()
 configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
 if (ASAN)
-  set(INVOKE "ASAN_OPTIONS=detect_leaks=1:symbolize=1 LSAN_OPTIONS=verbosity=0:log_threads=1:suppressions=${CMAKE_SOURCE_DIR}/test/libasan-suppress.txt ${CMAKE_BINARY_DIR}/bin/wfmash")
+  set(INVOKE "ASAN_OPTIONS=detect_leaks=1:symbolize=1:verify_asan_link_order=0 LSAN_OPTIONS=verbosity=0:log_threads=1:suppressions=${CMAKE_SOURCE_DIR}/test/libasan-suppress.txt ${CMAKE_BINARY_DIR}/bin/wfmash")
 else ()
   set(INVOKE "${CMAKE_BINARY_DIR}/bin/wfmash")
 endif()

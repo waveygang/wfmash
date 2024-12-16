@@ -1,7 +1,8 @@
 ;; To use this file to build a version of wfmash using git HEAD:
 ;;
 ;;  guix build -f guix.scm                # default build
-;;  guix build -L . wfmash-gcc-git        # gcc build
+;;  guix build -L . wfmash-gcc-git        # stanard gcc build
+;;  guix build -L . wfmash-gcc-debug-git  # gcc build with debug and ASAN
 ;;  guix build -L . wfmash-static-gcc-git # gcc static build (default)
 ;;  guix build -L . wfmash-clang-git      # clang build
 ;;
@@ -99,6 +100,7 @@ obtain base-level alignments.")
      (license license:expat)))
 
 (define-public wfmash-gcc-git
+  "Default build with gcc - as is used in distros"
   (package
     (inherit wfmash-base-git)
     (name "wfmash-gcc-git")
@@ -109,7 +111,24 @@ obtain base-level alignments.")
                  )))
     ))
 
+(define-public wfmash-gcc-debug-git
+  "Build with debug options"
+  (package
+    (inherit wfmash-gcc-git)
+    (name "wfmash-gcc-debug-git")
+    (version (git-version "0.21" "HEAD" %git-commit))
+    (arguments
+     `(;; #:tests? #f
+       #:configure-flags
+       ,#~(list
+           "-DASAN=ON"
+           "-DDISABLE_LTO=ON"
+           "-DCMAKE_BUILD_TYPE=DEBUG"))) ; force cmake static build and do not rewrite RPATH
+
+    ))
+
 (define-public wfmash-clang-git
+  "Clang+LLVM build"
   (package
     (inherit wfmash-base-git)
     (name "wfmash-clang-git")
@@ -121,6 +140,7 @@ obtain base-level alignments.")
                  libomp
                  )))
     ))
+
 
 ;; ==== The following is for static binary builds using gcc - used mostly for deployment ===
 
@@ -163,6 +183,8 @@ obtain base-level alignments.")
     (read-string (open-pipe "git show HEAD | head -1 | cut -d ' ' -f 2" OPEN_READ)))
 
 (define-public wfmash-static-gcc-git
+  "Optimized for latest AMD architecture build and static deployment.
+These binaries can be copied to HPC."
   (package
     (inherit wfmash-base-git)
     (name "wfmash-static-gcc-git")
