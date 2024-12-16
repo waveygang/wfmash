@@ -46,3 +46,5 @@ tmp/
 .env
 scerevisiae8*
 reads.255bps.paf
+mappings.paf
+aligned.paf.output
