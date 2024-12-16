@@ -123,7 +123,7 @@ obtain base-level alignments.")
        ,#~(list
            "-DASAN=ON"
            "-DDISABLE_LTO=ON"
-           "-DCMAKE_BUILD_TYPE=DEBUG"))) ; force cmake static build and do not rewrite RPATH
+           "-DCMAKE_BUILD_TYPE=Debug"))) ; force cmake static build and do not rewrite RPATH
 
     ))
 
