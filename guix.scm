@@ -48,6 +48,7 @@
   #:use-module (gnu packages bioinformatics)
   #:use-module (gnu packages build-tools)
   #:use-module (gnu packages compression)
+  #:use-module (gnu packages cpp)
   #:use-module (gnu packages gcc)
   #:use-module (gnu packages jemalloc)
   #:use-module (gnu packages linux) ; for util-linux column
@@ -124,6 +125,10 @@ obtain base-level alignments.")
            "-DASAN=ON"
            "-DDISABLE_LTO=ON"
            "-DCMAKE_BUILD_TYPE=Debug"))) ; force cmake static build and do not rewrite RPATH
+    (inputs
+     (modify-inputs (package-inputs wfmash-gcc-git)
+         (append gperftools
+                 )))
 
     ))
 

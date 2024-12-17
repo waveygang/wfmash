@@ -13,6 +13,7 @@
 # Log files
 *.log
 *.status
+*.prof
 
 #Executables
 mashmap

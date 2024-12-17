@@ -6,6 +6,11 @@
 #
 #   Build types are Release (default), Debug, Generic, RelWithDebInfo
 #
+#   Debug builds have options:
+#
+#      cmake -DCMAKE_BUILD_TYPE=Debug -DASAN=ON     - check for memory leaks
+#      cmake -DCMAKE_BUILD_TYPE=Debug -DPROFILER=ON - optionally use profiler
+#
 #   See also the header of ./guix.scm
 
 cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
@@ -26,8 +31,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_STATIC "Build static binary" OFF)
 option(BUILD_DEPS "Build external dependencies" OFF)
 option(BUILD_OPTIMIZED "Build optimized binary" OFF)
-option(GPROF "Enable gprof profiling" OFF)
-option(ASAN "Use address sanitiser (in Debug builds only)" OFF)
+option(PROFILER "Enable profiling (Debug build only)" OFF)
+option(ASAN "Use address sanitiser (Debug build only)" OFF)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
 
@@ -85,12 +90,10 @@ endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
   if (ASAN)
-    # Enable debug symbols and ASan with no optimizations
+    # Enable ASan
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address  -fno-omit-frame-pointer -fno-common")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address  -fno-omit-frame-pointer -fno-common")
-    # Ensure that ASan is linked explicitly
-    # set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-  endif (ASAN)
+  endif ()
 else ()
     set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS}")
@@ -101,7 +104,7 @@ if( NOT DISABLE_LTO AND ipo_supported )
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${ipo_supported})
 endif()
 
-if(GPROF)
+if(GPROF) # for the GNU profiler
   set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -g -pg")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pg")
 endif(GPROF)
@@ -207,6 +210,10 @@ target_link_libraries(wfmash
   Threads::Threads
 )
 
+if (PROFILER)
+  target_link_libraries(wfmash profiler)
+endif()
+
 if (BUILD_STATIC)
   target_link_libraries(wfmash
     wflign_static
@@ -226,6 +233,10 @@ if (ASAN)
   set(INVOKE "ASAN_OPTIONS=detect_leaks=1:symbolize=1:verify_asan_link_order=0 LSAN_OPTIONS=verbosity=0:log_threads=1:suppressions=${CMAKE_SOURCE_DIR}/test/libasan-suppress.txt ${CMAKE_BINARY_DIR}/bin/wfmash")
 else ()
   set(INVOKE "${CMAKE_BINARY_DIR}/bin/wfmash")
+endif()
+
+if (PROFILER)
+  set(INVOKE "CPUPROFILE=wfmash.prof ${INVOKE}")
 endif()
 
 set(REGRESSION_TEST_DIR "test/data/regression")

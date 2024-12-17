@@ -113,47 +113,51 @@ shows the difference is not too bad. O3 and Ofast appear to be similar. march=na
 
 # Profiling
 
-Running a profiler I added support to cmake:
-
-
-```
-cmake -DCMAKE_BUILD_TYPE=DEBUG -DGPROF=ON ..
-%   cumulative   self              self     total
- time   seconds   seconds    calls  ms/call  ms/call  name
- 17.16      0.64     0.64    10199     0.06     0.06  skch::CommonFunc::makeUpperCaseAndValidDNA(char*, long)
-  7.51      0.92     0.28 160148709     0.00     0.00  atomic_queue::spin_loop_pause()
-  4.83      1.10     0.18                             _init
-  3.49      1.23     0.13   195352     0.00     0.00  skch::CommonFunc::reverseComplement(char const*, char*, int)
-  1.88      1.30     0.07 160309680     0.00     0.00  std::atomic<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >*>::load(std::memory_order) const
-```
-
-Using aggressive optimizations `makeUpperCaseAndValidDNA` gets inlined and
+You can use the guix shell with
 
 ```
-cmake -DDISABLE_LTO=1 -DGPROF=1 ..
-  %   cumulative   self              self     total
- time   seconds   seconds    calls  ms/call  ms/call  name
- 82.20      3.74     3.74                             skch::Sketch::writeIndex(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, std::
-__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool)
-  6.37      4.03     0.29       51     5.69     6.27  std::thread::_State_impl<std::thread::_Invoker<std::tuple<align::Aligner::computeAlignme
-nts()::{lambda()#3}> > >::_M_run()
-  4.40      4.23     0.20        5    40.00    46.66  void skch::CommonFunc::addMinmers<skch::MinmerInfo>(std::vector<skch::MinmerInfo, std::allocator<skch::MinmerInfo> >&, char*, long, int, int, int, int, int, progress_meter::ProgressMeter*)
+guix shell -L . -C -D -F wfmash-gcc-debug-git
 ```
 
-According to the profiler `MurmurHash3_x64_128` gets hit often. I tried the optimization in this [patch](https://github.com/aappleby/smhasher/pull/87/files), but it did not appear to make any difference on Ryzen. Probably too narrow an impact.
+Running a profiler I added gperftools support to cmake with `-DPROFILER=ON`. Run CMake in Debug mode with that switch
 
-Above gprof results are puzzling. In the next step I am going to use perf instead on top of clang.
+```
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug -DPROFILER=ON ..
+make -j 12
+```
 
-=> https://www.brendangregg.com/perf.html
+and run the profiler on a test case with
+
+```
+ctest --verbose -R wfmash-time-LPA
+pprof --text ./bin/wfmash ../wfmash.prof
+Using local file ./bin/wfmash.
+Using local file ../wfmash.prof.
+Total: 8435 samples
+    3019  35.8%  35.8%     3019  35.8% wavefront_bialign_breakpoint_indel2indel
+    2228  26.4%  62.2%     2228  26.4% wavefront_compute_affine2p_idm
+     560   6.6%  68.8%      560   6.6% wavefront_bialign_breakpoint_m2m
+     537   6.4%  75.2%      537   6.4% wavefront_extend_matches_packed_kernel (inline)
+     496   5.9%  81.1%      872  10.3% wavefront_extend_matches_packed_end2end_max
+     134   1.6%  82.7%      134   1.6% _mm_pause (inline)
+     122   1.4%  84.1%      122   1.4% wavefront_compute_trim_ends
+      99   1.2%  85.3%       99   1.2% wavefront_compute_init_ends_wf_higher
+      78   0.9%  86.2%       78   0.9% wavefront_compute_init_ends_wf_lower
+      76   0.9%  87.1%      215   2.5% errmod_cal@@HTSLIB_1.4
+      76   0.9%  88.0%       76   0.9% skch::CommonFunc::makeUpperCaseAndValidDNA
+```
 
 # Conclusion
 
 With a bit of tweaking a 10-20% speed gain is easily possible on my Ryzen. Native compilation, openmp, lto and the static build appears to have the largest impact. PGO is, somewhat surprisingly, detrimental. Running outside a container is faster than running inside a container.
 
+From above profiler work we can see most of the time is spent in wavefront.
+
 For future work:
 
-1. We ought to run a profiler to validate all the effort is going into wfa's kernels.
-1. We could look at clang+LLVM performance because their optimizations are a bit different from gcc. But I don't expect much difference.
+1. DONE: We ought to run a profiler to validate all the effort is going into wfa's kernels.
+1. DONE: We could look at clang+LLVM performance because their optimizations are a bit different from gcc. But I don't expect much difference.
 1. The AMD Genoa's we have in Octopus have AVX512. WFA is not yet optimized for that target! There could be some gains.
 1. Probably is worth trying the GPU version too - at least for the supercomputers.
 1. As we are pumping data has anyone looked at mmap support?
