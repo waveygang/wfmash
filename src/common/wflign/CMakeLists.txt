@@ -26,9 +26,9 @@ if (${CMAKE_BUILD_TYPE} MATCHES Release)
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
-    # Debug use the defaults - so commenting out:
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -g -fsanitize=address")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address")
+    # Debug use the defaults from parent - so commenting out:
+    # set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -g -fsanitize=address")
+    # set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address")
 else()
     # Use all standard-compliant optimizations - always add these:
     # set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
