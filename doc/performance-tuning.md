@@ -151,6 +151,8 @@ Total: 8435 samples
 And -- more relevant -- with optimizations:
 
 ```
+rm ../wfmash.prof
+ctest --verbose -R wfmash-time-LPA
 pprof --text ./bin/wfmash ../wfmash.prof
 Using local file ./bin/wfmash.
 Using local file ../wfmash.prof.
@@ -173,7 +175,9 @@ Total: 3754 samples
 And for the 8 yeast genomes
 
 ```
-wrk@napoli /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build [env]$ pprof --text ./bin/wfmash ../wfmash.prof
+rm ../wfmash.prof
+ctest --verbose -R wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
+pprof --text ./bin/wfmash ../wfmash.prof
 Using local file ./bin/wfmash.
 Using local file ../wfmash.prof.
 Total: 2910 samples
