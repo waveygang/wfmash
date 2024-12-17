@@ -8,10 +8,14 @@
 #ifndef COMPUTE_ALIGNMENTS_HPP 
 #define COMPUTE_ALIGNMENTS_HPP
 
+// Define this to enable CIGAR validation checks
+#define VALIDATE_CIGAR 1
+
 #include <vector>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 #include <zlib.h>
 #include <cassert>
 #include <thread>
@@ -34,6 +38,132 @@
 namespace align
 {
 
+bool left_align_leading_deletion(
+    const std::string& reference,
+    const std::string& query,
+    int& match_len,
+    int del_len,
+    int max_shifts)
+{
+    if (match_len == 0) {
+        return true;
+    }
+
+    int shifts = 0;
+    int total_possible_shifts = std::min({match_len, max_shifts, 
+                                        static_cast<int>(query.size()), 
+                                        static_cast<int>(reference.size() - del_len)});
+    
+    while (shifts < total_possible_shifts && 
+           (match_len - shifts - 1) >= 0 &&
+           (match_len + del_len - shifts - 1) < reference.size()) {
+        char query_base = query[match_len - shifts - 1];
+        char ref_base = reference[match_len + del_len - shifts - 1];
+
+        if (query_base != ref_base) {
+            break;
+        }
+        shifts++;
+    }
+
+    if (shifts == 0) {
+        return false;
+    }
+
+    match_len -= shifts;
+    return true;
+}
+
+bool right_align_trailing_deletion(
+    const std::string& reference,
+    const std::string& query,
+    int& del_pos,
+    int del_len,
+    int& match_len,
+    int max_shifts)
+{
+    if (match_len == 0) {
+        return true;
+    }
+
+    int shifts = 0;
+    int total_possible_shifts = std::min({match_len, max_shifts,
+                                        static_cast<int>(query.size() - del_pos),
+                                        static_cast<int>(reference.size() - del_pos - del_len)});
+
+    while (shifts < total_possible_shifts &&
+           (del_pos + shifts) < query.size() &&
+           (del_pos + del_len + shifts) < reference.size()) {
+        char query_base = query[del_pos + shifts];
+        char ref_base = reference[del_pos + del_len + shifts];
+
+        if (query_base != ref_base) {
+            break;
+        }
+        shifts++;
+    }
+
+    if (shifts == 0) {
+        return false;
+    }
+
+    del_pos += shifts;
+    match_len -= shifts;
+    return true;
+}
+
+
+void recompute_identity_metrics(const std::string& cigar,
+                              int& matches,
+                              int& mismatches,
+                              int& insertions,
+                              int& insertion_events,
+                              int& deletions,
+                              int& deletion_events,
+                              double& gap_compressed_identity,
+                              double& blast_identity) {
+    matches = mismatches = insertions = insertion_events = deletions = deletion_events = 0;
+
+    size_t i = 0;
+    char last_op = '\0';
+    while (i < cigar.size()) {
+        size_t j = i;
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int count = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        i = j + 1;
+
+        switch (op) {
+            case '=':
+                matches += count;
+                break;
+            case 'X':
+                mismatches += count;
+                break;
+            case 'I':
+                insertions += count;
+                if (last_op != 'I') {
+                    insertion_events++;
+                }
+                break;
+            case 'D':
+                deletions += count;
+                if (last_op != 'D') {
+                    deletion_events++;
+                }
+                break;
+        }
+        last_op = op;
+    }
+
+    int total_columns = matches + mismatches + insertions + deletions;
+    blast_identity = total_columns > 0 ? (double)matches / total_columns : 0.0;
+
+    int total_differences = mismatches + insertion_events + deletion_events;
+    int total_bases = matches + total_differences;
+    gap_compressed_identity = total_bases > 0 ? (double)matches / total_bases : 0.0;
+}
+
 long double float2phred(long double prob) {
     if (prob == 1)
         return 255;  // guards against "-0"
@@ -42,6 +172,218 @@ long double float2phred(long double prob) {
         return 255;
     else
         return p;
+}
+
+std::string merge_cigar_operations(const std::string& cigar) {
+    if (cigar.empty()) return cigar;
+    
+    std::string result;
+    result.reserve(cigar.length());  // Preallocate to avoid reallocations
+    
+    size_t i = 0;
+    char current_op = '\0';
+    int current_count = 0;
+    
+    while (i < cigar.length()) {
+        // Parse the count
+        int count = 0;
+        while (i < cigar.length() && isdigit(cigar[i])) {
+            count = count * 10 + (cigar[i] - '0');
+            i++;
+        }
+        
+        // Get the operation
+        char op = cigar[i++];
+        
+        // If it's the same operation, add to current count
+        if (op == current_op) {
+            current_count += count;
+        } else {
+            // Write out the previous operation if it exists
+            if (current_op != '\0') {
+                result += std::to_string(current_count) + current_op;
+            }
+            current_op = op;
+            current_count = count;
+        }
+    }
+    
+    // Write the final operation
+    if (current_op != '\0') {
+        result += std::to_string(current_count) + current_op;
+    }
+    
+    return result;
+}
+
+std::pair<std::string, std::pair<int64_t, int64_t>> 
+trim_leading_trailing_deletions(const std::string& cigar,
+                              int64_t target_start,
+                              int64_t target_end) {
+    if (cigar.empty()) {
+        return {cigar, {target_start, target_end}};
+    }
+
+    std::string result;
+    result.reserve(cigar.length());
+    int64_t leading_del_length = 0;
+    int64_t trailing_del_length = 0;
+    
+    // Find leading deletions
+    size_t i = 0;
+    while (i < cigar.length()) {
+        // Parse count
+        int count = 0;
+        size_t j = i;
+        while (j < cigar.length() && isdigit(cigar[j])) {
+            count = count * 10 + (cigar[j] - '0');
+            j++;
+        }
+        char op = cigar[j];
+        
+        if (op != 'D' || result.length() > 0) {
+            // Not a leading deletion, copy to result
+            result.append(cigar.substr(i, j - i + 1));
+        } else {
+            leading_del_length += count;
+        }
+        
+        i = j + 1;
+    }
+    
+    // Find trailing deletions by scanning result from right to left
+    std::string final_result;
+    final_result.reserve(result.length());
+    i = 0;
+    size_t last_non_del_pos = std::string::npos;
+    
+    while (i < result.length()) {
+        size_t j = i;
+        while (j < result.length() && isdigit(result[j])) j++;
+        if (result[j] != 'D') {
+            last_non_del_pos = j;
+        }
+        i = j + 1;
+    }
+    
+    // If we found non-deletion operations
+    if (last_non_del_pos != std::string::npos) {
+        i = last_non_del_pos + 1;
+        while (i < result.length()) {
+            size_t j = i;
+            int count = 0;
+            while (j < result.length() && isdigit(result[j])) {
+                count = count * 10 + (result[j] - '0');
+                j++;
+            }
+            if (result[j] == 'D') {
+                trailing_del_length += count;
+            }
+            i = j + 1;
+        }
+        
+        // Copy everything up to the last non-deletion operation
+        final_result = result.substr(0, last_non_del_pos + 1);
+    } else {
+        // All operations were deletions
+        return {"", {target_start + leading_del_length, target_end - trailing_del_length}};
+    }
+    
+    return {final_result, {target_start + leading_del_length, target_end - trailing_del_length}};
+}
+
+void verify_cigar_alignment(const std::string& cigar,
+                           const char* query_seq,
+                           const char* target_seq,
+                           int64_t query_start,
+                           int64_t target_start,
+                           int64_t query_length,
+                           int64_t target_length) {
+    int64_t q_pos = 0;  // position in query sequence
+    int64_t t_pos = 0;  // position in target sequence
+    int64_t cigar_ref_pos = 0;  // track reference position through CIGAR
+
+    size_t i = 0;
+    while (i < cigar.size()) {
+        size_t j = i;
+        // Get the length of the operation
+        while (j < cigar.size() && isdigit(cigar[j])) j++;
+        int op_len = std::stoi(cigar.substr(i, j - i));
+        char op = cigar[j];
+        i = j + 1;
+
+        switch (op) {
+            case '=':  // match
+                // Verify that query_seq[q_pos .. q_pos + op_len] matches target_seq[t_pos .. t_pos + op_len]
+                for (int k = 0; k < op_len; ++k) {
+                    char q_char = query_seq[q_pos + k];
+                    char t_char = target_seq[t_pos + k];
+                    // Check bounds before comparing
+                    if (q_pos + k >= query_length || t_pos + k >= target_length) {
+                        std::cerr << "[wfmash::align] Error: Position out of bounds during alignment verification "
+                                  << "at query pos " << query_start + q_pos + k
+                                  << " vs target pos " << target_start + t_pos + k 
+                                  << " (CIGAR ref pos: " << cigar_ref_pos + k << ")\n";
+                        exit(1);
+                    }
+                    if (q_char != t_char) {
+                        // Print error message with both relative and absolute positions
+                        std::cerr << "[wfmash::align] Error: Mismatch at position "
+                                  << "query pos " << query_start + q_pos + k
+                                  << " (relative: " << q_pos + k << ")"
+                                  << " vs target pos " << target_start + t_pos + k
+                                  << " (relative: " << t_pos + k << ")"
+                                  << " (CIGAR ref pos: " << cigar_ref_pos + k << ")"
+                                  << ": query char '" << q_char
+                                  << "' vs target char '" << t_char << "' in '=' operation of CIGAR.\n";
+                        
+                        // Calculate context range for query sequence
+                        size_t query_context_start = (q_pos + k >= 5) ? q_pos + k - 5 : 0;
+                        size_t query_context_end = std::min(static_cast<size_t>(q_pos + k + 5), static_cast<size_t>(query_length - 1));
+                
+                        // Calculate context range for target sequence
+                        size_t target_context_start = (t_pos + k >= 5) ? t_pos + k - 5 : 0;
+                        size_t target_context_end = std::min(static_cast<size_t>(t_pos + k + 5), static_cast<size_t>(target_length - 1));
+                        
+                        // Extract context sequences
+                        std::string query_context(query_seq + query_context_start, query_seq + query_context_end + 1);
+                        std::string target_context(target_seq + target_context_start, target_seq + target_context_end + 1);
+                        
+                        // Print the alignment state
+                        std::cerr << "[DEBUG] Alignment state at mismatch:\n";
+                        std::cerr << "CIGAR string: " << cigar << "\n";
+                        std::cerr << "Query sequence around mismatch (positions " << query_start + query_context_start
+                                 << "-" << query_start + query_context_end << "):\n"
+                                 << query_context << "\n";
+                        std::cerr << "Target sequence around mismatch (positions " << target_start + target_context_start
+                                 << "-" << target_start + target_context_end << "):\n"
+                                 << target_context << "\n";
+                        std::cerr << "q_pos: " << q_pos << ", t_pos: " << t_pos << ", k: " << k << "\n";
+                        std::cerr << "Query sequence length: " << query_length << ", Target sequence length: " << target_length << "\n";
+                        std::cerr << "Total query start: " << query_start << ", Total target start: " << target_start << "\n";
+                        
+                        exit(1);
+                    }
+                }
+                q_pos += op_len;
+                t_pos += op_len;
+                cigar_ref_pos += op_len;
+                break;
+            case 'X':  // mismatch
+                q_pos += op_len;
+                t_pos += op_len;
+                break;
+            case 'I':  // insertion in target; nucleotides present in query
+                q_pos += op_len;
+                break;
+            case 'D':  // deletion in target; nucleotides absent in query
+                t_pos += op_len;
+                break;
+            default:
+                std::cerr << "[wfmash::align] Error: Unsupported CIGAR operation '" << op << "'.\n";
+                exit(1);
+        }
+    }
 }
 
 struct seq_record_t {
@@ -106,6 +448,144 @@ typedef atomic_queue::AtomicQueue<seq_record_t*, 1024, nullptr, true, true, fals
  */
 typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false, false> paf_atomic_queue_t;
 
+std::string adjust_cigar_string(const std::string& cigar,
+                               const std::string& query_seq,
+                               const std::string& target_seq,
+                               int64_t query_start,
+                               int64_t target_start,
+                               uint64_t max_shift) {
+    // Find the first two operations
+    size_t first_op_end = 0;
+    while (first_op_end < cigar.size() && isdigit(cigar[first_op_end])) first_op_end++;
+    if (first_op_end >= cigar.size()) return cigar;
+    
+    size_t second_op_start = first_op_end + 1;
+    size_t second_op_end = second_op_start;
+    while (second_op_end < cigar.size() && isdigit(cigar[second_op_end])) second_op_end++;
+    if (second_op_end >= cigar.size()) return cigar;
+    
+    // Extract the operations
+    int first_count = std::stoi(cigar.substr(0, first_op_end));
+    char first_op = cigar[first_op_end];
+    int second_count = std::stoi(cigar.substr(second_op_start, second_op_end - second_op_start));
+    char second_op = cigar[second_op_end];
+    
+    // Check if we need to swap leading operations
+    if (first_op == '=' && second_op == 'D') {
+        /* std::cerr << "\n[DEBUG] Considering leading swap of " << first_count << "= with " << second_count << "D" << std::endl;
+        std::cerr << "[DEBUG] Current positions - Query start: " << query_start << ", Target start: " << target_start << std::endl; */
+        
+        // Check if swapping is valid by verifying sequence matches both before and after
+        bool can_swap = true;
+        
+        // Check if sequences match at the new positions after potential swap
+        for (int k = 0; k < first_count && can_swap; ++k) {
+            int64_t q_idx = query_start + k;
+            int64_t t_idx = target_start + k; // Don't add second_count here
+            
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                /* std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                          << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
+                          << " (max: " << target_seq.size() << ")" << std::endl; */
+                can_swap = false;
+                break;
+            }
+            
+            // Store the actual characters for debugging
+            if (query_seq[q_idx] != target_seq[t_idx]) {
+                std::cerr << "[DEBUG] Characters don't match at position " << k << std::endl;
+                can_swap = false;
+                break;
+            }
+        }
+
+        /* std::cerr << "[DEBUG] Leading swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl; */
+        
+        if (can_swap) {
+            // Don't swap, just convert the = to X since we found they don't match
+            return std::to_string(first_count) + 'X' + 
+                   std::to_string(second_count) + 'D' +
+                   cigar.substr(second_op_end + 1);
+        }
+    }
+    
+    // Find and check the last two operations
+    size_t last_op_end = cigar.size() - 1;
+    size_t last_op_start = last_op_end;
+    while (last_op_start > 0 && isdigit(cigar[last_op_start - 1])) last_op_start--;
+    
+    size_t second_last_op_end = last_op_start - 1;
+    if (second_last_op_end <= 0) return cigar;
+    size_t second_last_op_start = second_last_op_end;
+    while (second_last_op_start > 0 && isdigit(cigar[second_last_op_start - 1])) second_last_op_start--;
+    
+    if (second_last_op_start == 0) return cigar;
+    
+    // Extract the last operations
+    int last_count = std::stoi(cigar.substr(last_op_start, last_op_end - last_op_start));
+    char last_op = cigar[last_op_end];
+    int second_last_count = std::stoi(cigar.substr(second_last_op_start, second_last_op_end - second_last_op_start));
+    char second_last_op = cigar[second_last_op_end];
+    
+    // Check if we need to swap trailing operations
+    if (second_last_op == 'D' && last_op == '=') {
+        int query_pos = query_start + query_seq.size() - last_count - second_last_count;
+        int target_pos = target_start + target_seq.size() - last_count - second_last_count;
+        
+        /* std::cerr << "\n[DEBUG] Considering trailing swap of " << second_last_count << "D with " << last_count << "=" << std::endl;
+        std::cerr << "[DEBUG] Current positions - Query pos: " << query_pos << ", Target pos: " << target_pos << std::endl; */
+        
+        bool can_swap = true;
+        
+        // Check if sequences match at the new positions after potential swap
+        for (int k = 0; k < last_count && can_swap; ++k) {
+            int64_t q_idx = query_pos + k;
+            int64_t t_idx = target_pos + k;
+            
+            if (q_idx >= query_seq.size() || t_idx >= target_seq.size()) {
+                /* std::cerr << "[DEBUG] Position out of bounds - q_idx: " << q_idx 
+                          << " (max: " << query_seq.size() << "), t_idx: " << t_idx 
+                          << " (max: " << target_seq.size() << ")" << std::endl; */
+                can_swap = false;
+                break;
+            }
+            
+            char q_char = query_seq[q_idx];
+            char t_char = target_seq[t_idx];
+            std::cerr << "[DEBUG] Comparing position " << k << ": Query[" << q_idx << "]=" 
+                      << q_char << " vs Target[" << t_idx << "]=" << t_char << std::endl;
+            
+            if (q_char != t_char) {
+                std::cerr << "[DEBUG] Characters don't match at position " << k << std::endl;
+                can_swap = false;
+                break;
+            }
+        }
+
+        // Also verify the deletion region matches between query and target
+        if (can_swap) {
+            for (int k = 0; k < second_last_count && can_swap; ++k) {
+                int64_t t_idx = target_pos + last_count + k;
+                if (t_idx >= target_seq.size()) {
+                    can_swap = false;
+                    break;
+                }
+            }
+        }
+
+        /* std::cerr << "[DEBUG] Trailing swap validation - can_swap: " << (can_swap ? "true" : "false") << std::endl; */
+        
+        if (can_swap) {
+            // Directly construct the swapped string
+            return cigar.substr(0, second_last_op_start) +
+                   std::to_string(last_count) + '=' +
+                   std::to_string(second_last_count) + 'D';
+        }
+    }
+    
+    return cigar;
+}
+
 
   /**
    * @class     align::Aligner
@@ -149,7 +629,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
        * @param[in]   mappingRecordLine
        * @param[out]  currentRecord
        */
-      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord) {
+      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding) {
           std::stringstream ss(mappingRecordLine); // Insert the string into a stream
           std::string word; // Have a buffer string
 
@@ -176,8 +656,24 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.qEndPos = std::stoi(tokens[3]);
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = tokens[5];
-              currentRecord.rStartPos = std::stoi(tokens[7]);
-              currentRecord.rEndPos = std::stoi(tokens[8]);
+              const uint64_t ref_len = std::stoi(tokens[6]);
+              // Apply target padding while ensuring we don't go below 0 or above reference length
+              uint64_t rStartPos = std::stoi(tokens[7]);
+              uint64_t rEndPos = std::stoi(tokens[8]);
+              if (target_padding > 0) {
+                  if (rStartPos >= target_padding) {
+                      rStartPos -= target_padding;
+                  } else {
+                      rStartPos = 0;
+                  }
+                  if (rEndPos + target_padding <= ref_len) {
+                      rEndPos += target_padding;
+                  } else {
+                      rEndPos = ref_len;
+                  }
+              }
+              currentRecord.rStartPos = rStartPos;
+              currentRecord.rEndPos = rEndPos;
               currentRecord.mashmap_estimated_identity = mm_id;
           }
       }
@@ -193,17 +689,28 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     // Get the query sequence length
     const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
 
-    // Compute padding
-    const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : currentRecord.rStartPos;
-    const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+    // Calculate padded positions ensuring they stay within bounds
+    int64_t ref_fetch_start = static_cast<int64_t>(currentRecord.rStartPos) - 
+                             static_cast<int64_t>(param.wflign_max_len_minor);
+    uint64_t head_padding = param.wflign_max_len_minor;
+    if (ref_fetch_start < 0) {
+        head_padding += ref_fetch_start;  // Reduce padding
+        ref_fetch_start = 0;
+    }
 
-    // Extract reference sequence
+    int64_t ref_fetch_end = static_cast<int64_t>(currentRecord.rEndPos - 1) + 
+                           static_cast<int64_t>(param.wflign_max_len_minor);
+    uint64_t tail_padding = param.wflign_max_len_minor;
+    if (ref_fetch_end >= ref_size) {
+        tail_padding -= (ref_fetch_end - (ref_size - 1));
+        ref_fetch_end = ref_size - 1;
+    }
+
+    // Extract reference sequence with validated bounds
     int64_t ref_len;
     char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
-                                      currentRecord.rStartPos - head_padding, 
-                                      currentRecord.rEndPos - 1 + tail_padding, &ref_len);
+                                      ref_fetch_start,
+                                      ref_fetch_end, &ref_len);
 
     // Extract query sequence
     int64_t query_len;
@@ -241,6 +748,7 @@ std::string processAlignment(seq_record_t* rec) {
     } else {
         skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand.data(), query_seq.size());
     }
+    queryRegionStrand[query_seq.size()] = '\0';
 
     // Set up penalties for biWFA
     wflign_penalties_t wfa_penalties;
@@ -275,7 +783,156 @@ std::string processAlignment(seq_record_t* rec) {
         param.wflign_max_len_minor,
         rec->currentRecord.mashmap_estimated_identity);
 
-    return output.str();
+    // Get the alignment output as a string
+    std::string alignment_output = output.str();
+
+    // Extract and adjust the CIGAR string
+    size_t cg_pos = alignment_output.find("cg:Z:");
+    if (cg_pos != std::string::npos) {
+        size_t cigar_start = cg_pos + 5;
+        size_t cigar_end = alignment_output.find('\t', cigar_start);
+        if (cigar_end == std::string::npos) cigar_end = alignment_output.length();
+        std::string original_cigar = alignment_output.substr(cigar_start, cigar_end - cigar_start);
+        // Adjust the CIGAR string
+        std::string adjusted_cigar = adjust_cigar_string(original_cigar,
+                                                       queryRegionStrand.data(),
+                                                       ref_seq_ptr,
+                                                       rec->currentRecord.qStartPos,
+                                                       rec->currentRecord.rStartPos,
+                                                       param.target_padding);
+
+        // Merge any equivalent successive operations
+        adjusted_cigar = merge_cigar_operations(adjusted_cigar);
+
+        // Skip empty alignments
+        if (adjusted_cigar.empty()) {
+            return "";
+        }
+
+        // Always verify the final CIGAR string
+        try {
+            verify_cigar_alignment(adjusted_cigar,
+                                 queryRegionStrand.data(),
+                                 ref_seq_ptr,
+                                 rec->queryStartPos,
+                                 rec->currentRecord.rStartPos,
+                                 rec->queryLen,
+                                 rec->refLen);
+        } catch (const std::runtime_error& e) {
+            std::cerr << "Error validating CIGAR string. Original mapping record:\n"
+                      << rec->mappingRecordLine << "\n"
+                      << e.what() << std::endl;
+            throw;
+        }
+
+        // Trim leading and trailing deletions
+        auto [trimmed_cigar, new_coords] = trim_leading_trailing_deletions(
+            adjusted_cigar,
+            rec->currentRecord.rStartPos,
+            rec->currentRecord.rEndPos
+        );
+        adjusted_cigar = trimmed_cigar;
+        auto target_offset = new_coords.first - rec->currentRecord.rStartPos;
+        rec->currentRecord.rStartPos = new_coords.first;
+        rec->currentRecord.rEndPos = new_coords.second;
+
+        // Use original sequence pointers
+        char* adjusted_ref_seq_ptr = ref_seq_ptr + target_offset;
+        char* adjusted_query_seq_ptr = queryRegionStrand.data();
+
+#if VALIDATE_CIGAR
+        // Verify alignment after trimming leading/trailing deletions
+        verify_cigar_alignment(adjusted_cigar,
+                             adjusted_query_seq_ptr,
+                             adjusted_ref_seq_ptr,
+                             rec->queryStartPos,
+                             rec->currentRecord.rStartPos,
+                             rec->queryLen,
+                             rec->refLen);
+#endif
+
+        // Recompute identity metrics
+        int matches, mismatches, insertions, insertion_events, deletions, deletion_events;
+        double gap_compressed_identity, blast_identity;
+        recompute_identity_metrics(adjusted_cigar, matches, mismatches, insertions, insertion_events,
+                                   deletions, deletion_events, gap_compressed_identity, blast_identity);
+
+        // Update the alignment output with new positions and metrics
+        std::string updated_output;
+        std::istringstream iss(alignment_output);
+        std::string field;
+        std::vector<std::string> fields;
+        
+        while (std::getline(iss, field, '\t')) {
+            fields.push_back(field);
+        }
+
+        // Update positions based on format
+        if (!param.sam_format) {  // PAF format
+            // Query positions (0-based)
+            fields[2] = std::to_string(rec->currentRecord.qStartPos);
+            fields[3] = std::to_string(rec->currentRecord.qEndPos);
+            // Target positions (0-based)
+            fields[7] = std::to_string(rec->currentRecord.rStartPos);
+            fields[8] = std::to_string(rec->currentRecord.rEndPos);
+        } else {  // SAM format
+            // Target position (1-based)
+            fields[3] = std::to_string(rec->currentRecord.rStartPos + 1 + target_offset);
+            // If necessary, adjust the query positions stored in optional fields
+        }
+
+        // Replace the original CIGAR with the adjusted one
+        if (!param.sam_format) {
+            // Replace the 'cg:Z:' tag
+            for (size_t i = 12; i < fields.size(); ++i) {
+                if (fields[i].substr(0, 5) == "cg:Z:") {
+                    fields[i] = "cg:Z:" + adjusted_cigar;
+                    break;
+                }
+            }
+        } else {
+            // Replace the CIGAR field
+            fields[5] = adjusted_cigar;
+        }
+
+        // Update or replace 'gi:f:' and 'bi:f:' tags
+        bool gi_found = false, bi_found = false;
+        std::ostringstream gi_stream, bi_stream;
+        gi_stream << std::fixed << std::setprecision(6) << "gi:f:" << gap_compressed_identity;
+        bi_stream << std::fixed << std::setprecision(6) << "bi:f:" << blast_identity;
+
+        for (size_t i = 12; i < fields.size(); ++i) {
+            if (fields[i].substr(0, 5) == "gi:f:") {
+                fields[i] = gi_stream.str();
+                gi_found = true;
+            }
+            if (fields[i].substr(0, 5) == "bi:f:") {
+                fields[i] = bi_stream.str();
+                bi_found = true;
+            }
+        }
+        if (!gi_found) {
+            fields.push_back(gi_stream.str());
+        }
+        if (!bi_found) {
+            fields.push_back(bi_stream.str());
+        }
+
+        // Reconstruct the updated alignment output
+        updated_output = fields[0];
+        for (size_t i = 1; i < fields.size(); ++i) {
+            updated_output += "\t" + fields[i];
+        }
+        // Add a newline only if one is not already present
+        if (!updated_output.empty() && updated_output.back() != '\n') {
+            updated_output += "\n";
+        }
+
+        return updated_output;
+    }
+
+    // If 'cg:Z:' tag is not found, return the original alignment output
+    return alignment_output;
 }
 
 void single_reader_thread(const std::string& input_file,
@@ -310,7 +967,7 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
         std::string* line_ptr = nullptr;
         if (line_queue.try_pop(line_ptr)) {
             MappingBoundaryRow currentRecord;
-            parseMashmapRow(*line_ptr, currentRecord);
+            parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
             
             // Process the record and create seq_record_t
             seq_record_t* rec = createSeqRecord(currentRecord, *line_ptr, local_ref_faidx, local_query_faidx);
@@ -407,6 +1064,7 @@ void worker_thread(uint64_t tid,
         seq_record_t* rec = nullptr;
         if (seq_queue.try_pop(rec)) {
             is_working.store(true);
+
             std::string alignment_output = processAlignment(rec);
             
             // Push the alignment output to the paf_queue
@@ -514,7 +1172,7 @@ void computeAlignments() {
 
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
-                parseMashmapRow(mappingRecordLine, currentRecord);
+                parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
             }
         }
