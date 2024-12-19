@@ -148,9 +148,12 @@ Total: 8435 samples
       76   0.9%  88.0%       76   0.9% skch::CommonFunc::makeUpperCaseAndValidDNA
 ```
 
-And -- more relevant -- with optimizations:
+And -- more relevant -- with optimizations `-fopenmp -g  -DNDEBUG -Ofast -march=native -flto=auto -fno-fat-lto-objects -fPIC -MD -MT`
 
 ```
+cmake -DCMAKE_BUILD_TYPE=Release -DPROFILER=ON ..
+make clean
+make -j 12 VERBOSE=1
 rm ../wfmash.prof
 ctest --verbose -R wfmash-time-LPA
 pprof --text ./bin/wfmash ../wfmash.prof
@@ -172,26 +175,26 @@ Total: 3754 samples
       33   0.9%  91.2%       33   0.9% crc32_z@@ZLIB_1.2.9
 ```
 
-And for the 8 yeast genomes
+Basic all2all, test test runs as `wfmash -t 8 data/scerevisiae8.fa.gz > all2all.paf`.
+Optimizations `-fopenmp -g  -DNDEBUG -Ofast -march=native -flto=auto -fno-fat-lto-objects -fPIC -MD -MT`
 
 ```
-rm ../wfmash.prof
-ctest --verbose -R wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
+cmake -DCMAKE_BUILD_TYPE=Release -DPROFILER=ON ..
+make clean
+make -j 12 VERBOSE=1
+rm ../wfmash.prof # remove older runs
+ctest --verbose -R all2all # writes to ../wfmash.prof
 pprof --text ./bin/wfmash ../wfmash.prof
 Using local file ./bin/wfmash.
 Using local file ../wfmash.prof.
-Total: 2910 samples
-     977  33.6%  33.6%     1351  46.4% skch::CommonFunc::addMinmers
-     349  12.0%  45.6%      349  12.0% MurmurHash3_x64_128 [clone .constprop.0]
-     331  11.4%  56.9%      331  11.4% std::__adjust_heap [clone .isra.0]
-     245   8.4%  65.4%     1207  41.5% std::thread::_State_impl::_M_run
-     212   7.3%  72.6%      212   7.3% std::__push_heap [clone .isra.0]
-      98   3.4%  76.0%      130   4.5% std::thread::_State_impl::_M_run [clone .lto_priv.0]
-      84   2.9%  78.9%      542  18.6% skch::Map::getSeedIntervalPoints
-      82   2.8%  81.7%       89   3.1% skch::Map::computeL2MappedRegions
-      56   1.9%  83.6%      165   5.7% errmod_cal@@HTSLIB_1.4
-      52   1.8%  85.4%       52   1.8% inflateBackEnd@@ZLIB_1.2.0
-      40   1.4%  86.8%       97   3.3% bgzf_getc@@HTSLIB_1.0
+Total: 58878 samples
+   18686  31.7%  31.7%    18693  31.7% align::Aligner::single_reader_thread
+   16577  28.2%  59.9%    16577  28.2% wavefront_bialign_breakpoint_indel2indel.localalias
+    6573  11.2%  71.1%     6573  11.2% wavefront_extend_matches_packed_end2end_max.localalias
+    2871   4.9%  75.9%     2871   4.9% wavefront_compute_affine2p_idm.localalias
+    2841   4.8%  80.8%     2841   4.8% wavefront_bialign_breakpoint_m2m.localalias
+    1223   2.1%  82.8%     1223   2.1% wavefront_extend_matches_packed_end2end.localalias
+    1042   1.8%  84.6%     1333   2.3% skch::CommonFunc::addMinmers
 ```
 
 # Conclusion

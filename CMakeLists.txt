@@ -29,9 +29,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 
 option(BUILD_STATIC "Build static binary" OFF)
-option(BUILD_DEPS "Build external dependencies" OFF)
+option(BUILD_DEPS "Build external dependencies (not recommended)" OFF)
 option(BUILD_OPTIMIZED "Build optimized binary" OFF)
-option(PROFILER "Enable profiling (Debug build only)" OFF)
+option(PROFILER "Enable profiling" OFF)
 option(ASAN "Use address sanitiser (Debug build only)" OFF)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
@@ -102,6 +102,11 @@ endif ()
 if( NOT DISABLE_LTO AND ipo_supported )
   message(STATUS "IPO / LTO enabled")
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${ipo_supported})
+endif()
+
+if(PROFILER)
+  set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -g") # add debug switch for resolution
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 endif()
 
 if(GPROF) # for the GNU profiler
@@ -271,6 +276,13 @@ add_test(
   COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -T S288C -Q SK1 -m > mappings.paf && \
 ${INVOKE} data/scerevisiae8.fa.gz -i mappings.paf|sort > aligned.paf.output && \
 ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/aligned.paf.output aligned.paf.output"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(
+  NAME wfmash-all2all
+  COMMAND bash -c "${INVOKE} -t 8 data/scerevisiae8.fa.gz > all2all.paf && \
+  sort all2all.paf | head -300 > all2all-300.paf.output && \
+  ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/all2all-300.paf.output all2all-300.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
