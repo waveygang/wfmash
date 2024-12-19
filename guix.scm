@@ -31,6 +31,22 @@
 ;; list packages
 ;;
 ;;   guix package -L . -A|grep wfm
+;;
+;; Installing guix (note that Debian comes with guix). Once installed update as a normal user with:
+;;
+;;   mkdir ~/opt
+;;   guix pull -p ~/opt/guix # update guix takes a while - don't do this often!
+;;
+;; Use the update guix to build wfmash:
+;;
+;;   ~/opt/guix/bin/guix build -f guix.scm
+;;
+;; Or get a shell
+;;
+;;   ~/opt/guix/gin/guix build -f guix.scm
+;;
+;; If things do not work you may also have to update the guix-daemon in systemd. Guix mostly downloads binary
+;; substitutes. If it wants to build a lot of software you probably have substitutes misconfigured.
 
 ;; by Pjotr Prins & Andrea Guarracino (c) 2023-2024
 
@@ -145,7 +161,6 @@ obtain base-level alignments.")
                  libomp
                  )))
     ))
-
 
 ;; ==== The following is for static binary builds using gcc - used mostly for deployment ===
 
