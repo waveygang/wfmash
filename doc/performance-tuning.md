@@ -175,7 +175,7 @@ Total: 3754 samples
       33   0.9%  91.2%       33   0.9% crc32_z@@ZLIB_1.2.9
 ```
 
-Basic all2all, test test runs as `wfmash -t 8 data/scerevisiae8.fa.gz > all2all.paf`.
+Next basic all2all test runs as `wfmash -t 8 data/scerevisiae8.fa.gz > all2all.paf`.
 Optimizations `-fopenmp -g  -DNDEBUG -Ofast -march=native -flto=auto -fno-fat-lto-objects -fPIC -MD -MT`
 
 ```
@@ -196,6 +196,43 @@ Total: 58878 samples
     1223   2.1%  82.8%     1223   2.1% wavefront_extend_matches_packed_end2end.localalias
     1042   1.8%  84.6%     1333   2.3% skch::CommonFunc::addMinmers
 ```
+
+When we profile all tests together we get
+
+```
+ctest
+Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
+    Start 1: wfmash-time-LPA
+1/7 Test #1: wfmash-time-LPA .......................................   Passed   10.17 sec
+    Start 2: wfmash-subset-LPA-to-SAM
+2/7 Test #2: wfmash-subset-LPA-to-SAM ..............................   Passed   14.14 sec
+    Start 3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
+3/7 Test #3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF ...   Passed   29.08 sec
+    Start 4: wfmash-short-reads-500bps-to-SAM
+4/7 Test #4: wfmash-short-reads-500bps-to-SAM ......................   Passed   73.20 sec
+    Start 5: wfmash-short-reads-255bps-to-PAF
+5/7 Test #5: wfmash-short-reads-255bps-to-PAF ......................   Passed    0.92 sec
+    Start 6: wfmash-input-mapping
+6/7 Test #6: wfmash-input-mapping ..................................   Passed   11.21 sec
+    Start 7: wfmash-all2all
+7/7 Test #7: wfmash-all2all ........................................   Passed  131.95 sec
+
+100% tests passed, 0 tests failed out of 7
+
+Total Test time (real) = 270.68 sec
+wrk@napoli /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build [env]$ pprof --text ./bin/wfmash ../wfmash.prof
+Using local file ./bin/wfmash.
+Using local file ../wfmash.prof.
+Total: 52257 samples
+   15850  30.3%  30.3%    15850  30.3% wavefront_bialign_breakpoint_indel2indel.localalias
+    9844  18.8%  49.2%     9844  18.8% std::__atomic_base::load (inline)
+    3804   7.3%  56.4%     6340  12.1% wavefront_extend_matches_packed_end2end_max.localalias
+    3526   6.7%  63.2%     3526   6.7% wavefront_extend_matches_packed_kernel (inline)
+    2846   5.4%  68.6%     2846   5.4% wavefront_bialign_breakpoint_m2m.localalias
+    2753   5.3%  73.9%     2753   5.3% wavefront_compute_affine2p_idm.localalias
+```
+
+which is not that different from all2all.
 
 # Conclusion
 
