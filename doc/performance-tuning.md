@@ -234,6 +234,38 @@ Total: 52257 samples
 
 which is not that different from all2all.
 
+# Automatically running the profiler
+
+If you use Guix you can simply run the profiler for all2all from a checked out git repo with the command:
+
+```
+guix build -L . wfmash-gcc-profile-git
+```
+
+This will build wfmash with optimization flags and run the profiler automatically.
+The tests run for a minute or two.
+If you scroll a bit up in the output you can see
+
+```
+[wfmash] Performing all-vs-all mapping including self mappings.
+1/1 Test #7: wfmash-all2all ...................   Passed  121.70 sec
+(...)
+Total: 45863 samples
+   11809  25.7%  25.7%    11814  25.8% align::Aligner::single_reader_thread
+   11529  25.1%  50.9%    11529  25.1% wavefront_bialign_breakpoint_indel2indel
+    6363  13.9%  64.8%     6363  13.9% wavefront_extend_matches_packed_end2end_max
+    2837   6.2%  70.9%     2837   6.2% wavefront_compute_affine2p_idm
+    2040   4.4%  75.4%     2040   4.4% wavefront_bialign_breakpoint_m2m
+    1275   2.8%  78.2%     1275   2.8% wavefront_extend_matches_packed_end2end
+    1186   2.6%  80.8%     1485   3.2% skch::CommonFunc::addMinmers
+     784   1.7%  82.5%      784   1.7% wavefront_compute_trim_ends
+     627   1.4%  83.8%      627   1.4% inflateBackEnd@@ZLIB_1.2.0
+```
+
+Update the sources and simply run again! It is the coolest thing.
+
+For more information on installing and running Guix see the header of [guix.scm](../guix.scm). Guix is distribution agnostic and runs on, for example, Debian. That is what we do.
+
 # Conclusion
 
 With a bit of tweaking a 10-20% speed gain is easily possible on my Ryzen. Native compilation, openmp, lto and the static build appears to have the largest impact. PGO is, somewhat surprisingly, detrimental. Running outside a container is faster than running inside a container.

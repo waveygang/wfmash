@@ -1,10 +1,11 @@
 ;; To use this file to build a version of wfmash using git HEAD:
 ;;
-;;  guix build -f guix.scm                # default build
-;;  guix build -L . wfmash-gcc-git        # stanard gcc build
-;;  guix build -L . wfmash-gcc-debug-git  # gcc build with debug and ASAN
-;;  guix build -L . wfmash-static-gcc-git # gcc static build (default)
-;;  guix build -L . wfmash-clang-git      # clang build
+;;   guix build -f guix.scm                  # default build
+;;   guix build -L . wfmash-gcc-git          # stanard gcc build
+;;   guix build -L . wfmash-gcc-debug-git    # gcc build with debug and ASAN
+;;   guix build -L . wfmash-gcc-profile-git  # run the profiler!
+;;   guix build -L . wfmash-static-gcc-git   # gcc static build (default)
+;;   guix build -L . wfmash-clang-git        # clang build
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
@@ -135,7 +136,7 @@ obtain base-level alignments.")
     (name "wfmash-gcc-debug-git")
     (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
-     `(;; #:tests? #f
+     `(;; #:tests? #f ;; skip tests, this is mostly to run a shell
        #:configure-flags
        ,#~(list
            "-DASAN=ON"
@@ -145,7 +146,6 @@ obtain base-level alignments.")
      (modify-inputs (package-inputs wfmash-gcc-git)
          (append gperftools
                  )))
-
     ))
 
 (define-public wfmash-clang-git
@@ -159,6 +159,35 @@ obtain base-level alignments.")
          (append clang-toolchain-18
                  lld
                  libomp
+                 )))
+    ))
+
+(define-public wfmash-gcc-profile-git
+  "Build wfmash optimally and automatically run profiler on all tests"
+  (package
+    (inherit wfmash-gcc-git)
+    (name "wfmash-gcc-profile-git")
+    (version (git-version "0.21" "HEAD" %git-commit))
+    (arguments
+     `(#:tests? #f ;; running tests as profiler
+       #:configure-flags
+         ,#~(list
+             "-DCMAKE_BUILD_TYPE=Release"
+             "-DBUILD_OPTIMIZED=ON"
+             "-DPROFILER=ON")
+       #:phases
+         ,#~(modify-phases %standard-phases
+            (add-after 'install 'run-profiler-on-all2all
+                       (lambda* (#:key outputs #:allow-other-keys)
+                         (invoke "ctest" "--verbose" "-R" "all2all") ; only run all2all test
+                         (invoke "ls" "-l" "bin/wfmash")
+                         (invoke "ls" "-l")
+                         (invoke "pprof" "--text" "bin/wfmash" "wfmash.prof")
+                         (mkdir-p (string-append #$output:doc "/share")))))))
+    (inputs
+     (modify-inputs (package-inputs wfmash-gcc-git)
+                    (append gperftools
+                            coreutils ;; for ls
                  )))
     ))
 
