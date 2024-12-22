@@ -241,7 +241,7 @@ else ()
 endif()
 
 if (PROFILER)
-  set(INVOKE "CPUPROFILE=wfmash.prof ${INVOKE}")
+  set(INVOKE "CPUPROFILE=${CMAKE_BINARY_DIR}/wfmash.prof ${INVOKE}")
 endif()
 
 set(REGRESSION_TEST_DIR "test/data/regression")
