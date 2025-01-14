@@ -1049,7 +1049,7 @@ namespace skch
               QueryMappingOutput* output = nullptr;
               if (merged_queue.try_pop(output)) {
                   seqno_t querySeqId = idManager->getSequenceId(output->queryName);
-                  auto& mappings = output->results;
+                  auto& mappings = param.mergeMappings && param.split ? output->mergedResults : output->results;
                   // Chain IDs are already compacted in mapModule
                   combinedMappings[querySeqId].insert(
                       combinedMappings[querySeqId].end(),
