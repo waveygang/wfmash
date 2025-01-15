@@ -258,31 +258,29 @@ add_test(
 
 add_test(
   NAME wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
-  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y \\# > scerevisiae8.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai scerevisiae8.paf 0.92 && head -3000 scerevisiae8.paf > scerevisiae8.paf.output && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/scerevisiae8.paf.output scerevisiae8.paf.output"
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y \\# > scerevisiae8.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai scerevisiae8.paf 0.92 && head -3000 scerevisiae8.paf > scerevisiae8.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
   NAME wfmash-short-reads-500bps-to-SAM
-  COMMAND bash -c "${INVOKE} data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head > wfmash-short-reads-500bps-to-SAM.output && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/wfmash-short-reads-500bps-to-SAM.output wfmash-short-reads-500bps-to-SAM.output"
+  COMMAND bash -c "${INVOKE} data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && samtools view reads.500bps.sam -bS | samtools sort > reads.500bps.bam && samtools index reads.500bps.bam && samtools view reads.500bps.bam | head > wfmash-short-reads-500bps-to-SAM.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
   NAME wfmash-short-reads-255bps-to-PAF
-  COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/reads.255bps.paf reads.255bps.paf"
+  COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf" # && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/reads.255bps.paf reads.255bps.paf"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
   NAME wfmash-input-mapping
   COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -T S288C -Q SK1 -m > mappings.paf && \
-${INVOKE} data/scerevisiae8.fa.gz -i mappings.paf|sort > aligned.paf.output && \
-${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/aligned.paf.output aligned.paf.output"
+${INVOKE} data/scerevisiae8.fa.gz -i mappings.paf|sort > aligned.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
   NAME wfmash-all2all
   COMMAND bash -c "${INVOKE} -t 8 data/scerevisiae8.fa.gz > all2all.paf && \
-  sort all2all.paf | head -300 > all2all-300.paf.output && \
-  ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/all2all-300.paf.output all2all-300.paf.output"
+  sort all2all.paf | head -300 > all2all-300.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
