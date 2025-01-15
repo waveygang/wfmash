@@ -2096,8 +2096,16 @@ namespace skch
               MappingResult mergedMapping = *it;  // Copy all fields from the first mapping in the chain
               mergedMapping.queryStartPos = it->queryStartPos;
               mergedMapping.queryEndPos = std::prev(it_end)->queryEndPos;
-              mergedMapping.refStartPos = it->refStartPos;
-              mergedMapping.refEndPos = std::prev(it_end)->refEndPos;
+              // Handle reference coordinates based on strand
+              if (mergedMapping.strand == strnd::FWD) {
+                  // Forward strand - use first mapping's start and last mapping's end
+                  mergedMapping.refStartPos = it->refStartPos;
+                  mergedMapping.refEndPos = std::prev(it_end)->refEndPos;
+              } else {
+                  // Reverse strand - use last mapping's start (highest coordinate) and first mapping's end (lowest coordinate)
+                  mergedMapping.refStartPos = std::prev(it_end)->refStartPos;
+                  mergedMapping.refEndPos = it->refEndPos;
+              }
               mergedMapping.blockLength = std::max(mergedMapping.refEndPos - mergedMapping.refStartPos,
                                                    mergedMapping.queryEndPos - mergedMapping.queryStartPos);
               mergedMapping.n_merged = std::distance(it, it_end);
