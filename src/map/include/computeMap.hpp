@@ -678,15 +678,6 @@ namespace skch
         }
         output_thread.join();
 
-        // Process both merged and non-merged mappings
-        for (auto& [querySeqId, mappings] : combinedMappings) {
-            if (param.mergeMappings && param.split) {
-                filterMaximallyMerged(mappings, param, progress);
-            } else {
-                filterNonMergedMappings(mappings, param, progress);
-            }
-        }
-
         progress.finish();
 
       }
@@ -2224,6 +2215,13 @@ namespace skch
           // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
           
+          // Process both merged and non-merged mappings
+          if (param.mergeMappings && param.split) {
+              filterMaximallyMerged(maximallyMergedMappings, param, progress);
+          } else {
+              filterNonMergedMappings(mappings, param, progress);
+          }
+
           // Build dense chain ID mapping
           std::unordered_map<offset_t, offset_t> id_map;
           offset_t next_id = 0;
