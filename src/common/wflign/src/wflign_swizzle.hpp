@@ -4,7 +4,7 @@
 #include <cctype>
 #include <utility>
 #include <vector>
-#include "common/wflign/deps/WFA2-lib/bindings/cpp/WFAligner.hpp"
+#include "../deps/WFA2-lib/bindings/cpp/WFAligner.hpp"
 
 namespace wflign {
 
