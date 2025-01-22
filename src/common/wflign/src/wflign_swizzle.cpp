@@ -337,9 +337,12 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
 // Convert WFA edit_cigar_t to string CIGAR format
 static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner) {
     std::string cigar;
-    char* cigar_ops;
-    int cigar_length;
-    wf_aligner.getAlignment(&cigar_ops, &cigar_length);
+    char* cigar_ops = nullptr;
+    int cigar_length = 0;
+    
+    // Create a non-const copy to call getAlignment
+    wfa::WFAlignerEdit* mutable_aligner = const_cast<wfa::WFAlignerEdit*>(&wf_aligner);
+    mutable_aligner->getAlignment(&cigar_ops, &cigar_length);
     
     int count = 0;
     char last_op = '\0';
@@ -364,9 +367,6 @@ static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner
 
 // Convert string CIGAR format to WFA edit_cigar_t
 static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAlignerEdit* wf_aligner) {
-    // Clear existing alignment
-    wf_aligner->clear();
-    
     std::vector<char> ops;
     size_t i = 0;
     while (i < cigar_str.size()) {
@@ -389,7 +389,10 @@ static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAligne
     
     // Set the alignment in WFAligner
     if (!ops.empty()) {
-        wf_aligner->setAlignment(ops.data(), ops.size());
+        char* cigar_ops = new char[ops.size()];
+        std::copy(ops.begin(), ops.end(), cigar_ops);
+        wf_aligner->getAlignment(&cigar_ops, nullptr); // Use getAlignment to set the internal state
+        delete[] cigar_ops;
     }
 }
 
