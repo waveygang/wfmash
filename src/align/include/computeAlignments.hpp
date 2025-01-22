@@ -44,6 +44,21 @@ long double float2phred(long double prob) {
         return p;
 }
 
+// Chain metadata for tracking alignment chunks
+struct MappingBoundaryRow {
+    std::string qId;
+    uint64_t qStartPos, qEndPos;
+    skch::strnd strand;
+    std::string refId;
+    uint64_t rStartPos, rEndPos;
+    float mashmap_estimated_identity;
+    
+    // Chain metadata
+    int32_t chain_id;      // Unique ID for this chain
+    int32_t chain_length;  // Total segments in chain  
+    int32_t chain_pos;     // Position in chain (1-based)
+};
+
 struct seq_record_t {
     MappingBoundaryRow currentRecord;
     std::string mappingRecordLine;
@@ -169,6 +184,19 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           // if the estimated identity is missing, avoid assuming too low values
           const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
+          // Parse chain info if present (expecting format "chain:id:len:pos" in tokens[13])
+          int32_t chain_id = -1;
+          int32_t chain_length = 1;
+          int32_t chain_pos = 1;
+          if (tokens.size() > 13) {
+              const vector<string> chain_vec = skch::CommonFunc::split(tokens[13], ':');
+              if (chain_vec.size() == 4 && chain_vec[0] == "chain") {
+                  chain_id = std::stoi(chain_vec[1]);
+                  chain_length = std::stoi(chain_vec[2]);
+                  chain_pos = std::stoi(chain_vec[3]);
+              }
+          }
+
           // Save words into currentRecord
           {
               currentRecord.qId = tokens[0];
@@ -177,6 +205,9 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = tokens[5];
               const uint64_t ref_len = std::stoi(tokens[6]);
+              currentRecord.chain_id = chain_id;
+              currentRecord.chain_length = chain_length;
+              currentRecord.chain_pos = chain_pos;
               // Apply target padding while ensuring we don't go below 0 or above reference length
               uint64_t rStartPos = std::stoi(tokens[7]);
               uint64_t rEndPos = std::stoi(tokens[8]);
