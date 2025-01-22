@@ -4,6 +4,7 @@
 
 #include "wflign.hpp"
 #include "wflign_patch.hpp"
+#include "wflign_swizzle.hpp"
 
 
 // Namespaces
@@ -470,7 +471,8 @@ void WFlign::wflign_affine_wavefront(
             query_name, query, query_total_length, query_offset, query_length, query_is_rev,
             target_name, target, target_total_length, target_offset, target_length,
             *out, wfa_convex_penalties, emit_md_tag, paf_format_else_sam, no_seq_in_sam,
-            min_identity, wflign_max_len_minor, mashmap_estimated_identity);
+            min_identity, wflign_max_len_minor, mashmap_estimated_identity,
+            -1, 1, 1); // Not part of a chain when using direct biWFA
         return;
     }
 
