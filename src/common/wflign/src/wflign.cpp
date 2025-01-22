@@ -34,7 +34,8 @@ void do_biwfa_alignment(
     const bool no_seq_in_sam,
     const float min_identity,
     const uint64_t wflign_max_len_minor,
-    const float mashmap_estimated_identity) {
+    const float mashmap_estimated_identity,
+    const align::MappingBoundaryRow& currentRecord) {
     
     // Create WFA aligner with the provided penalties
     wfa::WFAlignerGapAffine2Pieces wf_aligner(

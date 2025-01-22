@@ -4,8 +4,11 @@
 #include <cctype>
 #include <utility>
 #include <vector>
+#include "common/wflign/deps/WFA2-lib/bindings/cpp/WFAligner.hpp"
 
 namespace wflign {
+
+using edit_cigar_t = wfa::WFAlignerEdit;
 
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(
