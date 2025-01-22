@@ -274,14 +274,14 @@ add_test(
 add_test(
   NAME wfmash-input-mapping
   COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -T S288C -Q SK1 -m > mappings.paf && \
-${INVOKE} data/scerevisiae8.fa.gz -i mappings.paf|sort > aligned.paf.output && \
+${INVOKE} data/scerevisiae8.fa.gz -i mappings.paf | LC_ALL=C sort > aligned.paf.output && \
 ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/aligned.paf.output aligned.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
   NAME wfmash-all2all
   COMMAND bash -c "${INVOKE} -t 8 data/scerevisiae8.fa.gz > all2all.paf && \
-  sort all2all.paf | head -300 > all2all-300.paf.output && \
+  LC_ALL=C sort all2all.paf | head -300 > all2all-300.paf.output && \
   ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/all2all-300.paf.output all2all-300.paf.output"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
