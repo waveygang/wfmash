@@ -54,7 +54,7 @@ namespace wflign {
             const float min_identity,
             const uint64_t wflign_max_len_minor,
             const float mashmap_estimated_identity,
-            const align::MappingBoundaryRow& currentRecord);
+            const struct align::MappingBoundaryRow& currentRecord);
 
         class WFlign {
         public:

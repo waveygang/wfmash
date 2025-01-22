@@ -33,8 +33,8 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
     const std::string &cigar);
 
 // Helper functions for CIGAR format conversion
-static std::string wfa_edit_cigar_to_string(const edit_cigar_t& edit_cigar);
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, edit_cigar_t* edit_cigar);
+static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner);
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAlignerEdit* wf_aligner);
 
 // Helper functions
 static std::string merge_cigar_ops(const std::string &cigar);
