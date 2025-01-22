@@ -2080,61 +2080,85 @@ namespace skch
                       < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
               });
 
-          // Create maximallyMergedMappings
+          // Create maximallyMergedMappings with length restrictions
           MappingResultsVector_t maximallyMergedMappings;
           for(auto it = readMappings.begin(); it != readMappings.end();) {
+              // Find the end of the current chain
               auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
-              MappingResult mergedMapping = *it;  // Copy all fields from the first mapping in the chain
-              mergedMapping.queryStartPos = it->queryStartPos;
-              mergedMapping.queryEndPos = std::prev(it_end)->queryEndPos;
-              // Handle reference coordinates based on strand
-              if (mergedMapping.strand == strnd::FWD) {
-                  // Forward strand - use first mapping's start and last mapping's end
-                  mergedMapping.refStartPos = it->refStartPos;
-                  mergedMapping.refEndPos = std::prev(it_end)->refEndPos;
-              } else {
-                  // Reverse strand - use last mapping's start (highest coordinate) and first mapping's end (lowest coordinate)
-                  mergedMapping.refStartPos = std::prev(it_end)->refStartPos;
-                  mergedMapping.refEndPos = it->refEndPos;
+              
+              // Process the chain into fragments that respect max_mapping_length
+              auto fragment_start = it;
+              while (fragment_start != it_end) {
+                  MappingResult mergedMapping = *fragment_start;
+                  auto fragment_end = fragment_start;
+                  auto next = std::next(fragment_end);
+                  
+                  // Always try to merge enough mappings to satisfy minimum block length
+                  offset_t current_length = fragment_start->queryEndPos - fragment_start->queryStartPos;
+                  
+                  while (next != it_end) {
+                      offset_t potential_length = next->queryEndPos - fragment_start->queryStartPos;
+
+                      if (potential_length > param.max_mapping_length) {
+                          break;
+                      }
+                      fragment_end = next;
+                      current_length = potential_length;
+                      next = std::next(next);
+                  }
+
+                  // Create merged mapping for this fragment
+                  mergedMapping.queryStartPos = fragment_start->queryStartPos;
+                  mergedMapping.queryEndPos = fragment_end->queryEndPos;
+                  
+                  // Handle reference coordinates based on strand
+                  if (mergedMapping.strand == strnd::FWD) {
+                      // Forward strand - use first mapping's start and last mapping's end
+                      mergedMapping.refStartPos = fragment_start->refStartPos;
+                      mergedMapping.refEndPos = fragment_end->refEndPos;
+                  } else {
+                      // Reverse strand - use last mapping's start (highest coordinate) and first mapping's end (lowest coordinate)
+                      mergedMapping.refStartPos = fragment_end->refStartPos;
+                      mergedMapping.refEndPos = fragment_start->refEndPos;
+                  }
+                  mergedMapping.blockLength = std::max(
+                      mergedMapping.refEndPos - mergedMapping.refStartPos,
+                      mergedMapping.queryEndPos - mergedMapping.queryStartPos
+                  );
+                  
+                  // Calculate averages for the fragment
+                  double totalNucIdentity = 0.0;
+                  double totalKmerComplexity = 0.0;
+                  int totalConservedSketches = 0;
+                  int totalSketchSize = 0;
+                  int fragment_size = 0;
+                  
+                  for (auto subIt = fragment_start; subIt != std::next(fragment_end); ++subIt) {
+                      totalNucIdentity += subIt->nucIdentity;
+                      totalKmerComplexity += subIt->kmerComplexity;
+                      totalConservedSketches += subIt->conservedSketches;
+                      totalSketchSize += subIt->sketchSize;
+                      fragment_size++;
+                  }
+    
+                  mergedMapping.n_merged = fragment_size;
+                  mergedMapping.nucIdentity = totalNucIdentity / fragment_size;
+                  mergedMapping.kmerComplexity = totalKmerComplexity / fragment_size;
+                  mergedMapping.conservedSketches = totalConservedSketches;
+                  mergedMapping.sketchSize = totalSketchSize;
+                  mergedMapping.blockNucIdentity = mergedMapping.nucIdentity;
+                  mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
+                  mergedMapping.discard = 0;
+                  mergedMapping.overlapped = false;
+                  mergedMapping.chainPairScore = std::numeric_limits<double>::max();
+                  mergedMapping.chainPairId = std::numeric_limits<int64_t>::min();
+                  
+                  maximallyMergedMappings.push_back(mergedMapping);
+                  
+                  // Move to next fragment
+                  fragment_start = std::next(fragment_end);
               }
-              mergedMapping.blockLength = std::max(mergedMapping.refEndPos - mergedMapping.refStartPos,
-                                                   mergedMapping.queryEndPos - mergedMapping.queryStartPos);
-              mergedMapping.n_merged = std::distance(it, it_end);
               
-              // Recalculate average values for the merged mapping
-              double totalNucIdentity = 0.0;
-              double totalKmerComplexity = 0.0;
-              int totalConservedSketches = 0;
-              int totalSketchSize = 0;
-              for (auto subIt = it; subIt != it_end; ++subIt) {
-                  totalNucIdentity += subIt->nucIdentity;
-                  totalKmerComplexity += subIt->kmerComplexity;
-                  totalConservedSketches += subIt->conservedSketches;
-                  totalSketchSize += subIt->sketchSize;
-              }
-              mergedMapping.nucIdentity = totalNucIdentity / mergedMapping.n_merged;
-              mergedMapping.kmerComplexity = totalKmerComplexity / mergedMapping.n_merged;
-              mergedMapping.conservedSketches = totalConservedSketches;
-              mergedMapping.sketchSize = totalSketchSize;
-              
-              // Calculate blockNucIdentity
-              mergedMapping.blockNucIdentity = mergedMapping.nucIdentity;
-              
-              // Ensure other fields are properly set
-              mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
-              mergedMapping.discard = 0;
-              mergedMapping.overlapped = false;
-              mergedMapping.chainPairScore = std::numeric_limits<double>::max();
-              mergedMapping.chainPairId = std::numeric_limits<int64_t>::min();
-
-              maximallyMergedMappings.push_back(mergedMapping);
-              it = it_end;
-          }
-
-          for(auto it = readMappings.begin(); it != readMappings.end();) {
-              //Bucket by each chain
-              auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
-
               // Process the chain into chunks defined by max_mapping_length
               processChainWithSplits(it, it_end);
 
