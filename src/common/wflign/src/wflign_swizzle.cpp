@@ -342,12 +342,6 @@ static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar) {
     
     for (int i = edit_cigar.begin_offset; i < edit_cigar.end_offset; ++i) {
         char op = edit_cigar.cigar_ops[i];
-    
-    int count = 0;
-    char last_op = '\0';
-    
-    for (int i = 0; i < cigar_length; ++i) {
-        char op = cigar_ops[i];
         if (op == last_op) {
             count++;
         } else {
