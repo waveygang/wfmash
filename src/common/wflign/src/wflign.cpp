@@ -4,7 +4,6 @@
 
 #include "wflign.hpp"
 #include "wflign_patch.hpp"
-#include "align/include/align_types.hpp"
 
 
 // Namespaces
@@ -36,7 +35,9 @@ void do_biwfa_alignment(
     const float min_identity,
     const uint64_t wflign_max_len_minor,
     const float mashmap_estimated_identity,
-    const align::MappingBoundaryRow& currentRecord) {
+    const int32_t chain_id,
+    const int32_t chain_length,
+    const int32_t chain_pos) {
     
     // Create WFA aligner with the provided penalties
     wfa::WFAlignerGapAffine2Pieces wf_aligner(
@@ -68,9 +69,9 @@ void do_biwfa_alignment(
         wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
 
         // If this is an internal chunk in a chain, try swizzling the CIGAR
-        if (currentRecord.chain_length > 1 && 
-            currentRecord.chain_pos > 1 && 
-            currentRecord.chain_pos < currentRecord.chain_length) {
+        if (chain_length > 1 && 
+            chain_pos > 1 && 
+            chain_pos < chain_length) {
         
             // Convert WFA CIGAR to string format
             std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
