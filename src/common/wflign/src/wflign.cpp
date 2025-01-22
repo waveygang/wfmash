@@ -64,7 +64,23 @@ void do_biwfa_alignment(
         
         // Copy alignment CIGAR
         wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
+
+        // If this is an internal chunk in a chain, try swizzling the CIGAR
+        if (currentRecord.chain_length > 1 && 
+            currentRecord.chain_pos > 1 && 
+            currentRecord.chain_pos < currentRecord.chain_length) {
         
+            // Convert WFA CIGAR to string format
+            std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
+        
+            // Try swizzling the CIGAR
+            cigar_str = try_swap_start_pattern(cigar_str, query, target, 0, 0);
+            cigar_str = try_swap_end_pattern(cigar_str, query, target, 0, 0);
+        
+            // Convert back to WFA format and update alignment
+            wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
+        }
+    
         // Write alignment
         if (paf_format_else_sam) {
             write_alignment_paf(

@@ -334,4 +334,53 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
     return out;
 }
 
+// Convert WFA edit_cigar_t to string CIGAR format
+static std::string wfa_edit_cigar_to_string(const edit_cigar_t& edit_cigar) {
+    std::string cigar;
+    int count = 0;
+    char last_op = '\0';
+    
+    for (int i = edit_cigar.begin_offset; i < edit_cigar.end_offset; ++i) {
+        char op = edit_cigar.cigar_ops[i];
+        if (op == last_op) {
+            count++;
+        } else {
+            if (last_op != '\0') {
+                cigar += std::to_string(count) + last_op;
+            }
+            last_op = op;
+            count = 1;
+        }
+    }
+    if (last_op != '\0') {
+        cigar += std::to_string(count) + last_op;
+    }
+    return cigar;
+}
+
+// Convert string CIGAR format to WFA edit_cigar_t
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, edit_cigar_t* edit_cigar) {
+    // Clear existing cigar
+    edit_cigar_clear(edit_cigar);
+    
+    size_t i = 0;
+    while (i < cigar_str.size()) {
+        // Parse count
+        int count = 0;
+        while (i < cigar_str.size() && std::isdigit(static_cast<unsigned char>(cigar_str[i]))) {
+            count = count * 10 + (cigar_str[i] - '0');
+            i++;
+        }
+        if (i >= cigar_str.size()) break;
+        
+        // Get operation
+        char op = cigar_str[i++];
+        
+        // Add to edit_cigar count times
+        for (int j = 0; j < count; j++) {
+            edit_cigar_push_back(edit_cigar, op);
+        }
+    }
+}
+
 } // namespace wflign
