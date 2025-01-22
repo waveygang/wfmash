@@ -8,7 +8,11 @@
 
 namespace wflign {
 
-using edit_cigar_t = wfa::WFAlignerEdit;
+struct edit_cigar_t {
+    char* cigar_ops;
+    int begin_offset;
+    int end_offset;
+};
 
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(

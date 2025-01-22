@@ -335,13 +335,17 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
 }
 
 // Convert WFA edit_cigar_t to string CIGAR format
-static std::string wfa_edit_cigar_to_string(const edit_cigar_t& edit_cigar) {
+static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner) {
     std::string cigar;
+    char* cigar_ops;
+    int cigar_length;
+    wf_aligner.getAlignment(&cigar_ops, &cigar_length);
+    
     int count = 0;
     char last_op = '\0';
     
-    for (int i = edit_cigar.begin_offset; i < edit_cigar.end_offset; ++i) {
-        char op = edit_cigar.cigar_ops[i];
+    for (int i = 0; i < cigar_length; ++i) {
+        char op = cigar_ops[i];
         if (op == last_op) {
             count++;
         } else {
@@ -359,10 +363,11 @@ static std::string wfa_edit_cigar_to_string(const edit_cigar_t& edit_cigar) {
 }
 
 // Convert string CIGAR format to WFA edit_cigar_t
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, edit_cigar_t* edit_cigar) {
-    // Clear existing cigar
-    edit_cigar_clear(edit_cigar);
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAlignerEdit* wf_aligner) {
+    // Clear existing alignment
+    wf_aligner->clear();
     
+    std::vector<char> ops;
     size_t i = 0;
     while (i < cigar_str.size()) {
         // Parse count
@@ -376,10 +381,15 @@ static void wfa_string_to_edit_cigar(const std::string& cigar_str, edit_cigar_t*
         // Get operation
         char op = cigar_str[i++];
         
-        // Add to edit_cigar count times
+        // Add operation count times
         for (int j = 0; j < count; j++) {
-            edit_cigar_push_back(edit_cigar, op);
+            ops.push_back(op);
         }
+    }
+    
+    // Set the alignment in WFAligner
+    if (!ops.empty()) {
+        wf_aligner->setAlignment(ops.data(), ops.size());
     }
 }
 

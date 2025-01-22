@@ -4,7 +4,7 @@
 
 #include "wflign.hpp"
 #include "wflign_patch.hpp"
-#include "../../align/include/align_types.hpp"
+#include "align/include/align_types.hpp"
 
 
 // Namespaces
