@@ -386,7 +386,10 @@ void parse_args(int argc,
         std::cerr << "[wfmash] ERROR, skch::parseandSave, segment length should not be larger than max mapping length." << std::endl;
         exit(1);
     }
-
+    if (map_parameters.block_length >= map_parameters.max_mapping_length) {
+        std::cerr << "[wfmash] ERROR, skch::parseandSave, block length should not be larger than max mapping length." << std::endl;
+        exit(1);
+    }
 
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
