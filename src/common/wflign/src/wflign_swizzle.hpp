@@ -8,9 +8,9 @@
 
 namespace wflign {
 
-// Forward declare WFAlignerEdit functions we'll use
-static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner);
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAlignerEdit* wf_aligner);
+// Forward declare CIGAR conversion functions
+static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar);
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar);
 
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(

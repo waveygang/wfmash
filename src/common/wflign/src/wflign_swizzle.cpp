@@ -334,15 +334,14 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
     return out;
 }
 
-// Convert WFA edit_cigar_t to string CIGAR format
-static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner) {
+// Convert edit_cigar_t to string CIGAR format
+static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar) {
     std::string cigar;
-    char* cigar_ops = nullptr;
-    int cigar_length = 0;
+    int count = 0;
+    char last_op = '\0';
     
-    // Create a non-const copy to call getAlignment
-    wfa::WFAlignerEdit* mutable_aligner = const_cast<wfa::WFAlignerEdit*>(&wf_aligner);
-    mutable_aligner->getAlignment(&cigar_ops, &cigar_length);
+    for (int i = edit_cigar.begin_offset; i < edit_cigar.end_offset; ++i) {
+        char op = edit_cigar.cigar_ops[i];
     
     int count = 0;
     char last_op = '\0';
@@ -365,8 +364,12 @@ static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner
     return cigar;
 }
 
-// Convert string CIGAR format to WFA edit_cigar_t
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAlignerEdit* wf_aligner) {
+// Convert string CIGAR format to edit_cigar_t
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar) {
+    // Clear existing cigar
+    edit_cigar->begin_offset = 0;
+    edit_cigar->end_offset = 0;
+    
     std::vector<char> ops;
     size_t i = 0;
     while (i < cigar_str.size()) {
@@ -383,16 +386,8 @@ static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAligne
         
         // Add operation count times
         for (int j = 0; j < count; j++) {
-            ops.push_back(op);
+            edit_cigar->cigar_ops[edit_cigar->end_offset++] = op;
         }
-    }
-    
-    // Set the alignment in WFAligner
-    if (!ops.empty()) {
-        char* cigar_ops = new char[ops.size()];
-        std::copy(ops.begin(), ops.end(), cigar_ops);
-        wf_aligner->getAlignment(&cigar_ops, nullptr); // Use getAlignment to set the internal state
-        delete[] cigar_ops;
     }
 }
 
