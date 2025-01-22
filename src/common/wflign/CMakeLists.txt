@@ -61,6 +61,7 @@ set(wflign_SOURCE
   src/wflign.cpp
   src/wflign_alignment.cpp
   src/wflign_patch.cpp
+  src/wflign_swizzle.cpp
   src/rkmh.cpp
   src/murmur3.cpp
 )
