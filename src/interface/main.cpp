@@ -1,4 +1,6 @@
 /**
+ * This is the main entry point for wfmash
+ *
  * @file    align.cpp
  * @ingroup src
  * @author  Chirag Jain <cjain7@gatech.edu>
@@ -32,7 +34,7 @@
 
 int main(int argc, char** argv) {
     /*
-     * Make sure env variable MALLOC_ARENA_MAX is unset 
+     * Make sure env variable MALLOC_ARENA_MAX is unset
      * for efficient multi-thread execution
      */
     unsetenv((char *)"MALLOC_ARENA_MAX");

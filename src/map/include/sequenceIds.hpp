@@ -29,7 +29,7 @@ public:
                       const std::vector<std::string>& targetPrefixes,
                       const std::string& prefixDelim,
                       const std::string& queryList = "",
-                      const std::string& targetList = "") 
+                      const std::string& targetList = "")
         : prefixDelim(prefixDelim) {
         allPrefixes = queryPrefixes;
         allPrefixes.insert(allPrefixes.end(), targetPrefixes.begin(), targetPrefixes.end());
@@ -79,6 +79,7 @@ public:
     }
 
 private:
+
     void buildRefGroups() {
         std::vector<std::tuple<std::string, size_t>> seqInfoWithIndex;
         size_t totalSeqs = metadata.size();
@@ -97,11 +98,15 @@ private:
 
             if (!allPrefixes.empty()) {
                 // Check if the sequence matches any of the specified prefixes
-                auto it = std::find_if(allPrefixes.begin(), allPrefixes.end(),
-                    [&seqName](const std::string& prefix) { return seqName.compare(0, prefix.length(), prefix) == 0; });
-                
-                if (it != allPrefixes.end()) {
-                    groupKey = *it;
+                // The original commented out version breaks in clang with an OpenMP capture error
+                // auto it = std::find_if(allPrefixes.begin(), allPrefixes.end(), is_equal(prefix));
+                    // [&seqName](const std::string& prefix) { return seqName.compare(0, prefix.length(), prefix) == 0; });
+
+                for(auto prefix : allPrefixes) {
+                    if (seqName.compare(0, prefix.length(), prefix) == 0) {
+                        groupKey = prefix;
+                        break;
+                    }
                 }
             }
 
@@ -167,8 +172,8 @@ private:
         }
     }
 
-    void readFAI(const std::string& fileName, 
-                 const std::vector<std::string>& prefixes, 
+    void readFAI(const std::string& fileName,
+                 const std::vector<std::string>& prefixes,
                  const std::string& prefixDelim,
                  const std::unordered_set<std::string>& allowedNames,
                  bool isQuery) {

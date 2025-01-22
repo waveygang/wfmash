@@ -39,7 +39,7 @@ if(OPENMP)
 endif(OPENMP)
 
 if(EXTRA_FLAGS)
-  set(OPTIMIZE_FLAGS "${OPTIMIZE_FLAGS} ${EXTRA_FLAGS}")
+  # set(OPTIMIZE_FLAGS "${OPTIMIZE_FLAGS} ${EXTRA_FLAGS}")
 endif(EXTRA_FLAGS)
 
 find_package(Threads)
@@ -55,7 +55,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-  set(OPTIMIZE_FLAGS "${OPTIMIZE_FLAGS} -march=x86-64-v3")
+  # set(OPTIMIZE_FLAGS "${OPTIMIZE_FLAGS} -march=x86-64-v3")
 endif()
 
 if ((${CMAKE_BUILD_TYPE} MATCHES Release) OR (${CMAKE_BUILD_TYPE} MATCHES RelWithDebInfo))
