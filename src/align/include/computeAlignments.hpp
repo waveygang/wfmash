@@ -44,21 +44,6 @@ long double float2phred(long double prob) {
         return p;
 }
 
-// Chain metadata for tracking alignment chunks
-struct MappingBoundaryRow {
-    std::string qId;
-    uint64_t qStartPos, qEndPos;
-    skch::strnd strand;
-    std::string refId;
-    uint64_t rStartPos, rEndPos;
-    float mashmap_estimated_identity;
-    
-    // Chain metadata
-    int32_t chain_id;      // Unique ID for this chain
-    int32_t chain_length;  // Total segments in chain  
-    int32_t chain_pos;     // Position in chain (1-based)
-};
-
 struct seq_record_t {
     MappingBoundaryRow currentRecord;
     std::string mappingRecordLine;
