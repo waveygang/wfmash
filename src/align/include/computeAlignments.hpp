@@ -169,13 +169,13 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           // if the estimated identity is missing, avoid assuming too low values
           const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
-          // Parse chain info if present (expecting format "chain:i:id.pos.len" in tokens[13])
+          // Parse chain info if present (expecting format "chain:i:id.pos.len" in tokens[14])
           int32_t chain_id = -1;
           int32_t chain_length = 1;
           int32_t chain_pos = 1;
-          if (tokens.size() > 13) {
-              std::cerr << "[debug] Parsing chain info from: " << tokens[13] << std::endl;
-              const vector<string> chain_vec = skch::CommonFunc::split(tokens[13], ':');
+          if (tokens.size() > 14) {
+              std::cerr << "[debug] Parsing chain info from: " << tokens[14] << std::endl;
+              const vector<string> chain_vec = skch::CommonFunc::split(tokens[14], ':');
               if (chain_vec.size() == 3 && chain_vec[0] == "chain" && chain_vec[1] == "i") {
                   // Split the id.pos.len format
                   const vector<string> chain_parts = skch::CommonFunc::split(chain_vec[2], '.');
