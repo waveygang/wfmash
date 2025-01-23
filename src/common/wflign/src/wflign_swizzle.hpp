@@ -8,16 +8,18 @@
 
 namespace wflign {
 
-// Define CIGAR type
-struct wflign_cigar_t {
-    char* cigar_ops;
-    int begin_offset;
-    int end_offset;
-};
+namespace wflign {
+    // Define CIGAR type
+    struct wflign_cigar_t {
+        char* cigar_ops;
+        int begin_offset;
+        int end_offset;
+    };
+}
 
 // Forward declare CIGAR conversion functions
-static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar);
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar);
+static std::string wfa_edit_cigar_to_string(const wflign::wflign_cigar_t& edit_cigar);
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign::wflign_cigar_t* edit_cigar);
 
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(
@@ -38,10 +40,6 @@ static std::string try_swap_end_pattern(
 // Drop leading/trailing deletions if the rest is purely '='
 static std::string drop_leading_trailing_deletions_if_all_eq(
     const std::string &cigar);
-
-// Helper functions for CIGAR format conversion
-static std::string wfa_edit_cigar_to_string(const wfa::WFAlignerEdit& wf_aligner);
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wfa::WFAlignerEdit* wf_aligner);
 
 // Helper functions
 static std::string merge_cigar_ops(const std::string &cigar);
