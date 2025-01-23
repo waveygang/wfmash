@@ -303,16 +303,17 @@ std::string try_swap_start_pattern(
                       << " target_size=" << target_seq.size() << std::endl;
             
             // Print just the relevant portions (100 chars) around where we're trying to match
+            // Note: target_seq is already offset by the padding, so we use 0-based coords
             std::cerr << "[swizzle-debug] query region ["
                       << query_start << ".." << (query_start + std::min(N, 100)) << "]: "
                       << query_seq.substr(query_start, std::min(N, 100)) << std::endl;
             std::cerr << "[swizzle-debug] target region ["
-                      << (target_start + Dlen) << ".." << (target_start + Dlen + std::min(N, 100)) << "]: "
-                      << target_seq.substr(target_start + Dlen, std::min(N, 100)) << std::endl;
+                      << "0.." << std::min(N, 100) << "]: "
+                      << target_seq.substr(0, std::min(N, 100)) << std::endl;
         }
 
-        // Check if we can match the sequences after shifting by Dlen
-        if (sequences_match(query_seq, target_seq, query_start, target_start + Dlen, N, debug)) {
+        // Note: target_seq is already offset by the padding, so we use 0-based coords
+        if (sequences_match(query_seq, target_seq, query_start, 0, N, debug)) {
             std::string remainder = cigar.substr(second_op_end);
             std::string swapped = std::to_string(Dlen) + "D" +
                                 std::to_string(N) + "=" +
