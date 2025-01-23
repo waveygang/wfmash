@@ -11,8 +11,6 @@
 namespace wflign {
 namespace wavefront {
 
-using namespace wflign;  // Add access to wflign_cigar_t
-
 /*
 * Configuration
 */
