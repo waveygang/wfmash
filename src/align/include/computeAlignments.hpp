@@ -526,8 +526,16 @@ void worker_thread(uint64_t tid,
                     uint64_t ref_start = std::stoull(fields[7]);
                     uint64_t ref_end = std::stoull(fields[8]);
 
+                    std::cerr << "[trim-debug] Before trimming: ref_start=" << ref_start 
+                             << " ref_end=" << ref_end 
+                             << " cigar=" << cigar << std::endl;
+
                     // Trim deletions and get new coordinates
                     auto [trimmed_cigar, new_ref_start, new_ref_end] = trim_deletions(cigar, ref_start, ref_end);
+
+                    std::cerr << "[trim-debug] After trimming: ref_start=" << new_ref_start 
+                             << " ref_end=" << new_ref_end
+                             << " cigar=" << trimmed_cigar << std::endl;
 
                     // Update the fields with new values
                     fields[7] = std::to_string(new_ref_start);
