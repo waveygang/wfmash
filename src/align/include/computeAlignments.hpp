@@ -306,7 +306,9 @@ std::string processAlignment(seq_record_t* rec) {
         param.min_identity,
         param.wflign_max_len_minor,
         rec->currentRecord.mashmap_estimated_identity,
-        rec->currentRecord);
+        rec->currentRecord.chain_id,
+        rec->currentRecord.chain_length,
+        rec->currentRecord.chain_pos);
 
     return output.str();
 }
