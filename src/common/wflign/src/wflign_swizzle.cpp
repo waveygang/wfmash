@@ -205,7 +205,7 @@ static std::pair<int64_t,int64_t> alignment_end_coords(
     return {qPos, tPos};
 }
 
-static std::string try_swap_start_pattern(
+std::string try_swap_start_pattern(
     const std::string &cigar,
     const std::string &query_seq,
     const std::string &target_seq,
@@ -238,7 +238,7 @@ static std::string try_swap_start_pattern(
     return cigar;
 }
 
-static std::string try_swap_end_pattern(
+std::string try_swap_end_pattern(
     const std::string &cigar,
     const std::string &query_seq,
     const std::string &target_seq,
@@ -335,7 +335,7 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
 }
 
 // Convert edit_cigar_t to string CIGAR format
-static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar) {
+std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar) {
     std::string cigar;
     int count = 0;
     char last_op = '\0';
@@ -359,7 +359,7 @@ static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar) {
 }
 
 // Convert string CIGAR format to edit_cigar_t
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar) {
+void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar) {
     // Clear existing cigar
     edit_cigar->begin_offset = 0;
     edit_cigar->end_offset = 0;
