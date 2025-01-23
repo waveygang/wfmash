@@ -75,6 +75,9 @@ void do_biwfa_alignment(
             chain_pos < chain_length) {
         
             std::cerr << "[debug] Processing internal chain chunk " << chain_pos << " of " << chain_length << std::endl;
+            std::cerr << "[debug] Chain ID: " << chain_id << std::endl;
+            std::cerr << "[debug] Original query coords: " << query_offset << "-" << (query_offset + query_length) << std::endl;
+            std::cerr << "[debug] Original target coords: " << target_offset << "-" << (target_offset + target_length) << std::endl;
             
             // Convert WFA CIGAR to string format
             std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
