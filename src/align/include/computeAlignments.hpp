@@ -139,6 +139,60 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
       /**
        * @brief                 compute alignments
        */
+      /**
+       * @brief      Trim leading and trailing deletions from CIGAR string and adjust coordinates
+       * @param[in]  cigar       The CIGAR string to trim
+       * @param[in]  ref_start   Reference start position
+       * @param[in]  ref_end     Reference end position
+       * @return     Tuple of (trimmed_cigar, new_ref_start, new_ref_end)
+       */
+      static std::tuple<std::string, uint64_t, uint64_t> trim_deletions(
+              const std::string& cigar,
+              uint64_t ref_start,
+              uint64_t ref_end) {
+          
+          std::string trimmed_cigar;
+          uint64_t new_ref_start = ref_start;
+          uint64_t new_ref_end = ref_end;
+
+          // Parse CIGAR string
+          std::vector<std::pair<int, char>> cigar_ops;
+          size_t i = 0;
+          while (i < cigar.size()) {
+              int count = 0;
+              while (i < cigar.size() && std::isdigit(static_cast<unsigned char>(cigar[i]))) {
+                  count = count * 10 + (cigar[i] - '0');
+                  i++;
+              }
+              if (i < cigar.size()) {
+                  cigar_ops.push_back({count, cigar[i]});
+                  i++;
+              }
+          }
+
+          // Find leading deletions
+          size_t leading_dels = 0;
+          while (leading_dels < cigar_ops.size() && cigar_ops[leading_dels].second == 'D') {
+              new_ref_start += cigar_ops[leading_dels].first;
+              leading_dels++;
+          }
+
+          // Find trailing deletions
+          size_t trailing_dels = 0;
+          while (trailing_dels < cigar_ops.size() - leading_dels && 
+                 cigar_ops[cigar_ops.size() - 1 - trailing_dels].second == 'D') {
+              new_ref_end -= cigar_ops[cigar_ops.size() - 1 - trailing_dels].first;
+              trailing_dels++;
+          }
+
+          // Build new CIGAR string without leading/trailing deletions
+          for (size_t j = leading_dels; j < cigar_ops.size() - trailing_dels; j++) {
+              trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
+          }
+
+          return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end);
+      }
+
       void compute()
       {
         this->computeAlignments();
