@@ -53,6 +53,13 @@ void do_biwfa_alignment(
     
     wf_aligner.setHeuristicNone();
     
+    // Debug initial coordinates
+    std::cerr << "[wflign::debug] Starting alignment:"
+              << " query_offset=" << query_offset
+              << " query_length=" << query_length
+              << " target_offset=" << target_offset
+              << " target_length=" << target_length << std::endl;
+
     // Perform the alignment
     const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
     

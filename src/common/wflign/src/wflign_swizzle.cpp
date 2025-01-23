@@ -275,6 +275,13 @@ std::string try_swap_start_pattern(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start) {
+    
+    std::cerr << "[swizzle-debug] Before start/end indel trimming:"
+              << " query_start=" << query_start
+              << " target_start=" << target_start
+              << " query_size=" << query_seq.size()
+              << " target_size=" << target_seq.size()
+              << " cigar=" << cigar << std::endl;
     /*
     if (!verify_cigar_alignment(cigar, query_seq, target_seq, query_start, target_start, true)) {
         std::cerr << "[swizzle-debug] verification failed" << std::endl;
