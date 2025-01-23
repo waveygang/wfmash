@@ -74,7 +74,7 @@ void do_biwfa_alignment(
         // Try swizzling the CIGAR at both ends with debug enabled
         std::cerr << "[wflign::debug] Original CIGAR: " << cigar_str << std::endl;
         
-        std::string swizzled = try_swap_start_pattern(cigar_str, query, target, query_offset, target_offset);
+        std::string swizzled = try_swap_start_pattern(cigar_str, query, target, 0, 0);
         if (swizzled != cigar_str) {
             std::cerr << "[wflign::debug] Start pattern swizzled from " << cigar_str << " to " << swizzled << std::endl;
             cigar_str = swizzled;
@@ -82,7 +82,7 @@ void do_biwfa_alignment(
             std::cerr << "[wflign::debug] Start pattern swizzle attempt failed" << std::endl;
         }
 
-        swizzled = try_swap_end_pattern(cigar_str, query, target, query_offset, target_offset);
+        swizzled = try_swap_end_pattern(cigar_str, query, target, 0, 0);
         if (swizzled != cigar_str) {
             std::cerr << "[wflign::debug] End pattern swizzled from " << cigar_str << " to " << swizzled << std::endl;
             cigar_str = swizzled;

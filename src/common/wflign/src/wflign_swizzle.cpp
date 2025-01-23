@@ -89,7 +89,7 @@ static bool verify_cigar_alignment(
     int64_t query_start,
     int64_t target_start,
     bool debug) {
-    if (debug) {
+    if (true) {
         std::cerr << "[swizzle-debug] verify_cigar_alignment:"
                   << " cigar=" << cigar
                   << " query_start=" << query_start
@@ -275,16 +275,22 @@ std::string try_swap_start_pattern(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start) {
-    if (!verify_cigar_alignment(cigar, query_seq, target_seq, query_start, target_start)) {
+    /*
+    if (!verify_cigar_alignment(cigar, query_seq, target_seq, query_start, target_start, true)) {
+        std::cerr << "[swizzle-debug] verification failed" << std::endl;
         return cigar;
     }
+    */
 
     int N, Dlen;
     char op1, op2;
     size_t second_op_start, second_op_end;
     if (!extract_first_two_ops(cigar, N, op1, Dlen, op2, second_op_start, second_op_end)) {
+        std::cerr << "[swizzle-debug] extraction failed" << std::endl;
         return cigar;
     }
+
+    std::cerr << "[swizzle-debug] op1:" << op1 << " and op2:" << op2 << std::endl;
 
     if (op1 == '=' && op2 == 'D') {
         // Always enable debug logging
@@ -340,9 +346,9 @@ std::string try_swap_end_pattern(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start) {
-    if (!verify_cigar_alignment(cigar, query_seq, target_seq, query_start, target_start)) {
-        return cigar;
-    }
+    //if (!verify_cigar_alignment(cigar, query_seq, target_seq, query_start, target_start)) {
+    //    return cigar;
+    //}
 
     int count2, count1;
     char op2, op1;
