@@ -40,7 +40,8 @@ static bool sequences_match(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start,
-    int N);
+    int N,
+    bool debug = false);
 static bool extract_first_two_ops(
     const std::string &cigar,
     int &count1, char &op1,
@@ -62,6 +63,7 @@ static bool verify_cigar_alignment(
     const std::string &query_seq,
     const std::string &target_seq,
     int64_t query_start,
-    int64_t target_start);
+    int64_t target_start,
+    bool debug = false);
 
 } // namespace wflign

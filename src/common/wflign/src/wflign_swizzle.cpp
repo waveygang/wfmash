@@ -1,4 +1,5 @@
 #include "wflign_swizzle.hpp"
+#include <iostream>
 
 namespace wflign {
 
