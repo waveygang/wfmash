@@ -493,7 +493,6 @@ void processor_manager(seq_atomic_queue_t& seq_queue,
 void worker_thread(uint64_t tid,
                    std::atomic<bool>& is_working,
                    seq_atomic_queue_t& seq_queue,
-                   paf_atomic_queue_t& paf_queue,
                    std::atomic<bool>& reader_done,
                    std::atomic<bool>& processor_done,
                    progress_meter::ProgressMeter& progress,
@@ -543,11 +542,11 @@ void worker_thread(uint64_t tid,
                     }
                     new_line += '\n';
                     
-                    // Push the modified alignment output to the paf_queue
-                    paf_queue.push(new std::string(std::move(new_line)));
+                    // Write directly to stderr
+                    std::cerr << new_line;
                 } else {
                     // If no CIGAR string found, output the line unchanged
-                    paf_queue.push(new std::string(line + '\n'));
+                    std::cerr << line << '\n';
                 }
             }
             
@@ -682,8 +681,8 @@ void computeAlignments() {
     std::vector<std::thread> workers;
     std::vector<std::atomic<bool>> worker_working(param.threads);
     for (uint64_t t = 0; t < param.threads; ++t) {
-        workers.emplace_back([this, t, &worker_working, &seq_queue, &paf_queue, &reader_done, &processor_done, &progress, &processed_alignment_length]() {
-            this->worker_thread(t, worker_working[t], seq_queue, paf_queue, reader_done, processor_done, progress, processed_alignment_length);
+        workers.emplace_back([this, t, &worker_working, &seq_queue, &reader_done, &processor_done, &progress, &processed_alignment_length]() {
+            this->worker_thread(t, worker_working[t], seq_queue, reader_done, processor_done, progress, processed_alignment_length);
         });
     }
 
