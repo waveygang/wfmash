@@ -268,7 +268,7 @@ add_test(
 
 add_test(
   NAME wfmash-short-reads-255bps-to-PAF
-  COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -L > reads.255bps.paf && head reads.255bps.paf && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/reads.255bps.paf reads.255bps.paf"
+  COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -l 200 -L > reads.255bps.paf && head reads.255bps.paf && ${CMAKE_COMMAND} -E compare_files ${REGRESSION_TEST_DIR}/reads.255bps.paf reads.255bps.paf"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
