@@ -69,38 +69,45 @@ void do_biwfa_alignment(
         // Copy alignment CIGAR
         wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
 
-        std::cerr << "[debug] Checking chain status: length=" << chain_length 
-                  << " pos=" << chain_pos 
-                  << " id=" << chain_id << std::endl;
+        // Convert WFA CIGAR to string format for potential swizzling
+        std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
+        std::cerr << "[debug] Original CIGAR: " << cigar_str << std::endl;
 
         // If this is an internal chunk in a chain, try swizzling the CIGAR
         if (chain_length > 1 && 
             chain_pos > 1 && 
             chain_pos < chain_length) {
-        
+            
             std::cerr << "[debug] Processing internal chain chunk " << chain_pos << " of " << chain_length << std::endl;
             std::cerr << "[debug] Chain ID: " << chain_id << std::endl;
             std::cerr << "[debug] Original query coords: " << query_offset << "-" << (query_offset + query_length) << std::endl;
             std::cerr << "[debug] Original target coords: " << target_offset << "-" << (target_offset + target_length) << std::endl;
-        } else {
-            std::cerr << "[debug] Skipping swizzle - not an internal chain chunk" << std::endl;
-            
-            // Convert WFA CIGAR to string format
-            std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
-            std::cerr << "[debug] Original CIGAR: " << cigar_str << std::endl;
-        
-            // Try swizzling the CIGAR
-            std::string swizzled = try_swap_start_pattern(cigar_str, query, target, 0, 0);
+
+            // Try swizzling the CIGAR - for internal chunks we want to pull indels inward
+            std::string swizzled = try_swap_start_pattern(cigar_str, query, target, query_offset, target_offset);
             if (swizzled != cigar_str) {
                 std::cerr << "[debug] After start swap: " << swizzled << std::endl;
+                cigar_str = swizzled;
             }
-            swizzled = try_swap_end_pattern(swizzled, query, target, 0, 0);
+
+            swizzled = try_swap_end_pattern(cigar_str, query, target, query_offset, target_offset);
             if (swizzled != cigar_str) {
                 std::cerr << "[debug] After end swap: " << swizzled << std::endl;
+                cigar_str = swizzled;
             }
-        
-            // Convert back to WFA format and update alignment
-            wfa_string_to_edit_cigar(swizzled, &aln.edit_cigar);
+
+            // If the CIGAR changed, update coordinates and alignment
+            if (cigar_str != wfa_edit_cigar_to_string(aln.edit_cigar)) {
+                // Update coordinates based on swizzled CIGAR
+                auto new_coords = alignment_end_coords(cigar_str, query_offset, target_offset);
+                aln.j = new_coords.first;  // new query start
+                aln.i = new_coords.second; // new target start
+                
+                // Convert back to WFA format
+                wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
+            }
+        } else {
+            std::cerr << "[debug] Skipping swizzle - not an internal chain chunk" << std::endl;
         }
     
         // Write alignment
