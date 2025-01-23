@@ -9,17 +9,17 @@
 namespace wflign {
 
 namespace wflign {
-    // Define CIGAR type
-    struct wflign_cigar_t {
-        char* cigar_ops;
-        int begin_offset;
-        int end_offset;
-    };
-}
+
+// Define CIGAR type
+struct wflign_cigar_t {
+    char* cigar_ops;
+    int begin_offset;
+    int end_offset;
+};
 
 // Forward declare CIGAR conversion functions
-static std::string wfa_edit_cigar_to_string(const wflign::wflign_cigar_t& edit_cigar);
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign::wflign_cigar_t* edit_cigar);
+static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar);
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar);
 
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(
