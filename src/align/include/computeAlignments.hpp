@@ -218,6 +218,8 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               throw std::runtime_error("[wfmash::align::parseMashmapRow] Error! Invalid mashmap mapping record: " + mappingRecordLine);
           }
 
+          std::cerr << "[parse-debug] Processing record: " << mappingRecordLine << std::endl;
+
           // Extract the mashmap identity from the string
           const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
           // if the estimated identity is missing, avoid assuming too low values
@@ -256,6 +258,11 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               uint64_t rStartPos = std::stoi(tokens[7]);
               uint64_t rEndPos = std::stoi(tokens[8]);
               
+              std::cerr << "[parse-debug] Before padding: ref_len=" << ref_len 
+                       << " rStartPos=" << rStartPos 
+                       << " rEndPos=" << rEndPos 
+                       << " target_padding=" << target_padding << std::endl;
+              
               // Always apply target padding
               if (target_padding > 0) {
                   if (rStartPos >= target_padding) {
@@ -269,6 +276,18 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
                       rEndPos = ref_len;
                   }
               }
+
+              std::cerr << "[parse-debug] After padding: rStartPos=" << rStartPos 
+                       << " rEndPos=" << rEndPos << std::endl;
+
+              // Validate coordinates against reference length
+              if (rStartPos >= ref_len || rEndPos > ref_len) {
+                  std::cerr << "[parse-debug] ERROR: Coordinates exceed reference length!" << std::endl;
+                  throw std::runtime_error("[wfmash::align::parseMashmapRow] Error! Coordinates exceed reference length: " 
+                                         + std::to_string(rStartPos) + "-" + std::to_string(rEndPos) 
+                                         + " (ref_len=" + std::to_string(ref_len) + ")");
+              }
+              
               currentRecord.rStartPos = rStartPos;
               currentRecord.rEndPos = rEndPos;
               currentRecord.mashmap_estimated_identity = mm_id;
