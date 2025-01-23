@@ -287,8 +287,9 @@ std::string try_swap_start_pattern(
     }
 
     if (op1 == '=' && op2 == 'D') {
-        // Enable debug logging for troubleshooting
+        // Always enable debug logging
         const bool debug = true;
+        std::cerr << "\n[swizzle-debug] Starting swizzle attempt..." << std::endl;
 
         if (debug) {
             std::cerr << "[swizzle-debug] try_swap_start_pattern:"

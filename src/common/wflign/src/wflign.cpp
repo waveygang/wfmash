@@ -71,9 +71,10 @@ void do_biwfa_alignment(
 
         // Convert WFA CIGAR to string format for potential swizzling
         std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
-        // Try swizzling the CIGAR at both ends
+        // Try swizzling the CIGAR at both ends with debug enabled
         std::string swizzled = try_swap_start_pattern(cigar_str, query, target, query_offset, target_offset);
         if (swizzled != cigar_str) {
+            std::cerr << "[wflign::debug] Start pattern swizzled from " << cigar_str << " to " << swizzled << std::endl;
             cigar_str = swizzled;
         }
 
