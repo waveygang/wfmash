@@ -289,7 +289,8 @@ std::string try_swap_start_pattern(
     if (op1 == '=' && op2 == 'D') {
         // Always enable debug logging
         const bool debug = true;
-        std::cerr << "\n[swizzle-debug] Starting swizzle attempt..." << std::endl;
+        std::cerr << "\n[swizzle-debug] Starting start pattern swizzle attempt..." << std::endl;
+        std::cerr << "[swizzle-debug] Found pattern: " << N << op1 << " followed by " << Dlen << op2 << std::endl;
 
         if (debug) {
             std::cerr << "[swizzle-debug] try_swap_start_pattern:"
@@ -342,6 +343,8 @@ std::string try_swap_end_pattern(
     }
 
     if (op1 == 'D' && op2 == '=') {
+        std::cerr << "\n[swizzle-debug] Starting end pattern swizzle attempt..." << std::endl;
+        std::cerr << "[swizzle-debug] Found pattern: " << count1 << op1 << " followed by " << count2 << op2 << std::endl;
         int N = count2;
         int Dlen = count1;
         auto endCoords = alignment_end_coords(cigar, query_start, target_start);
