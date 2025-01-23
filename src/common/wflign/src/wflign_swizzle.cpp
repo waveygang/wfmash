@@ -42,7 +42,7 @@ static bool sequences_match(
     int64_t query_start,
     int64_t target_start,
     int N,
-    bool debug = false) {
+    bool debug) {
     if (query_start < 0 || target_start < 0) {
         if (debug) {
             std::cerr << "[swizzle-debug] sequences_match failed: negative start position"
@@ -88,7 +88,7 @@ static bool verify_cigar_alignment(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start,
-    bool debug = false) {
+    bool debug) {
     if (debug) {
         std::cerr << "[swizzle-debug] verify_cigar_alignment:"
                   << " cigar=" << cigar
