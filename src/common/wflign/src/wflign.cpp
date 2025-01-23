@@ -69,6 +69,10 @@ void do_biwfa_alignment(
         // Copy alignment CIGAR
         wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
 
+        std::cerr << "[debug] Checking chain status: length=" << chain_length 
+                  << " pos=" << chain_pos 
+                  << " id=" << chain_id << std::endl;
+
         // If this is an internal chunk in a chain, try swizzling the CIGAR
         if (chain_length > 1 && 
             chain_pos > 1 && 
@@ -78,6 +82,8 @@ void do_biwfa_alignment(
             std::cerr << "[debug] Chain ID: " << chain_id << std::endl;
             std::cerr << "[debug] Original query coords: " << query_offset << "-" << (query_offset + query_length) << std::endl;
             std::cerr << "[debug] Original target coords: " << target_offset << "-" << (target_offset + target_length) << std::endl;
+        } else {
+            std::cerr << "[debug] Skipping swizzle - not an internal chain chunk" << std::endl;
             
             // Convert WFA CIGAR to string format
             std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
