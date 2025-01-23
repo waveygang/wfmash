@@ -431,6 +431,9 @@ std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar) {
     
     for (int i = edit_cigar.begin_offset; i < edit_cigar.end_offset; ++i) {
         char op = edit_cigar.cigar_ops[i];
+        if (op == 'M') {
+            op = '=';  // Convert any M to = since these are exact matches
+        }
         if (op == last_op) {
             count++;
         } else {
@@ -464,8 +467,11 @@ void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit
         }
         if (i >= cigar_str.size()) break;
         
-        // Get operation
+        // Get operation and convert M to = since we know these are exact matches
         char op = cigar_str[i++];
+        if (op == 'M') {
+            op = '=';  // Convert M to = since we're dealing with exact matches
+        }
         
         // Add operation count times
         for (int j = 0; j < count; j++) {
