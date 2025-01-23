@@ -5,19 +5,13 @@
 #include <utility>
 #include <vector>
 #include "../deps/WFA2-lib/bindings/cpp/WFAligner.hpp"
+#include "wflign_alignment.hpp"
 
 namespace wflign {
 
-// Define CIGAR type
-struct wflign_cigar_t {
-    char* cigar_ops;
-    int begin_offset;
-    int end_offset;
-};
-
 // Forward declare CIGAR conversion functions
-static std::string wfa_edit_cigar_to_string(const struct wflign_cigar_t& edit_cigar);
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, struct wflign_cigar_t* edit_cigar);
+static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar);
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar);
 
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(
