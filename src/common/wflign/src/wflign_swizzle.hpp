@@ -8,8 +8,6 @@
 
 namespace wflign {
 
-namespace wflign {
-
 // Define CIGAR type
 struct wflign_cigar_t {
     char* cigar_ops;
