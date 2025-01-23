@@ -450,9 +450,52 @@ void worker_thread(uint64_t tid,
         if (seq_queue.try_pop(rec)) {
             is_working.store(true);
             std::string alignment_output = processAlignment(rec);
-            
-            // Push the alignment output to the paf_queue
-            paf_queue.push(new std::string(std::move(alignment_output)));
+
+            // Parse the alignment output to find CIGAR string and coordinates
+            std::stringstream ss(alignment_output);
+            std::string line;
+            while (std::getline(ss, line)) {
+                if (line.empty()) continue;
+                
+                std::vector<std::string> fields;
+                std::stringstream field_ss(line);
+                std::string field;
+                while (field_ss >> field) {
+                    fields.push_back(field);
+                }
+
+                // Find the CIGAR string field (should be after cg:Z:)
+                auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                    [](const std::string& s) { return s.substr(0, 5) == "cg:Z:"; });
+                
+                if (cigar_it != fields.end()) {
+                    std::string cigar = cigar_it->substr(5); // Remove cg:Z: prefix
+                    uint64_t ref_start = std::stoull(fields[7]);
+                    uint64_t ref_end = std::stoull(fields[8]);
+
+                    // Trim deletions and get new coordinates
+                    auto [trimmed_cigar, new_ref_start, new_ref_end] = trim_deletions(cigar, ref_start, ref_end);
+
+                    // Update the fields with new values
+                    fields[7] = std::to_string(new_ref_start);
+                    fields[8] = std::to_string(new_ref_end);
+                    *cigar_it = "cg:Z:" + trimmed_cigar;
+
+                    // Reconstruct the line
+                    std::string new_line;
+                    for (const auto& f : fields) {
+                        if (!new_line.empty()) new_line += '\t';
+                        new_line += f;
+                    }
+                    new_line += '\n';
+                    
+                    // Push the modified alignment output to the paf_queue
+                    paf_queue.push(new std::string(std::move(new_line)));
+                } else {
+                    // If no CIGAR string found, output the line unchanged
+                    paf_queue.push(new std::string(line + '\n'));
+                }
+            }
             
             // Update progress meter and processed alignment length
             uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
