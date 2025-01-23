@@ -71,24 +71,14 @@ void do_biwfa_alignment(
 
         // Convert WFA CIGAR to string format for potential swizzling
         std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
-        std::cerr << "[debug] Original CIGAR: " << cigar_str << std::endl;
-
-        // Always try swizzling the CIGAR
-        std::cerr << "[debug] Processing chunk " << chain_pos << " of " << chain_length << std::endl;
-        std::cerr << "[debug] Chain ID: " << chain_id << std::endl;
-        std::cerr << "[debug] Original query coords: " << query_offset << "-" << (query_offset + query_length) << std::endl;
-        std::cerr << "[debug] Original target coords: " << target_offset << "-" << (target_offset + target_length) << std::endl;
-
         // Try swizzling the CIGAR at both ends
         std::string swizzled = try_swap_start_pattern(cigar_str, query, target, query_offset, target_offset);
         if (swizzled != cigar_str) {
-            std::cerr << "[debug] After start swap: " << swizzled << std::endl;
             cigar_str = swizzled;
         }
 
         swizzled = try_swap_end_pattern(cigar_str, query, target, query_offset, target_offset);
         if (swizzled != cigar_str) {
-            std::cerr << "[debug] After end swap: " << swizzled << std::endl;
             cigar_str = swizzled;
         }
 
