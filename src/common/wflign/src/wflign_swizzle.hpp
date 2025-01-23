@@ -56,7 +56,27 @@ static bool extract_last_two_ops(
 static std::pair<int64_t,int64_t> alignment_end_coords(
     const std::string &cigar,
     int64_t query_start,
-    int64_t target_start);
+    int64_t target_start) {
+    int64_t qPos = query_start;
+    int64_t tPos = target_start;
+    size_t i = 0;
+    while (i < cigar.size()) {
+        int val = 0;
+        while (i < cigar.size() && std::isdigit(static_cast<unsigned char>(cigar[i]))) {
+            val = val * 10 + (cigar[i] - '0');
+            i++;
+        }
+        if (i >= cigar.size()) break;
+        char op = cigar[i++];
+        if (op == '=') {
+            qPos += val;
+            tPos += val;
+        } else if (op == 'D') {
+            tPos += val;
+        }
+    }
+    return {qPos, tPos};
+}
 static bool verify_cigar_alignment(
     const std::string &cigar,
     const std::string &query_seq,
