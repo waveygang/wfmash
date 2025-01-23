@@ -1154,6 +1154,17 @@ namespace skch
           std::sort(l2Mappings.begin(), l2Mappings.end(), [](const auto& a, const auto& b) 
               { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
 
+          // Add chain information
+          // All mappings in this batch form a chain
+          int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
+          int32_t chain_length = l2Mappings.size();
+          int32_t chain_pos = 1;
+          for (auto& mapping : l2Mappings) {
+              mapping.chain_id = chain_id;
+              mapping.chain_length = chain_length;
+              mapping.chain_pos = chain_pos++;
+          }
+
 #ifdef ENABLE_TIME_PROFILE_L1_L2
           {
             std::chrono::duration<double> timeSpentL2 = skch::Time::now() - t1;
