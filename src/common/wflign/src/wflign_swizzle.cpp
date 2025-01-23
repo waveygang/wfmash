@@ -335,7 +335,7 @@ static std::string drop_leading_trailing_deletions_if_all_eq(
 }
 
 // Convert edit_cigar_t to string CIGAR format
-static std::string wfa_edit_cigar_to_string(const wflign::wflign_cigar_t& edit_cigar) {
+static std::string wfa_edit_cigar_to_string(const struct wflign_cigar_t& edit_cigar) {
     std::string cigar;
     int count = 0;
     char last_op = '\0';
@@ -359,7 +359,7 @@ static std::string wfa_edit_cigar_to_string(const wflign::wflign_cigar_t& edit_c
 }
 
 // Convert string CIGAR format to edit_cigar_t
-static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign::wflign_cigar_t* edit_cigar) {
+static void wfa_string_to_edit_cigar(const std::string& cigar_str, struct wflign_cigar_t* edit_cigar) {
     // Clear existing cigar
     edit_cigar->begin_offset = 0;
     edit_cigar->end_offset = 0;
