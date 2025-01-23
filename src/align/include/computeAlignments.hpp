@@ -202,8 +202,8 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               uint64_t rStartPos = std::stoi(tokens[7]);
               uint64_t rEndPos = std::stoi(tokens[8]);
               
-              // Only apply padding to internal chain segments
-              if (target_padding > 0 && chain_length > 1 && chain_pos > 1 && chain_pos < chain_length) {
+              // Always apply target padding
+              if (target_padding > 0) {
                   if (rStartPos >= target_padding) {
                       rStartPos -= target_padding;
                   } else {
