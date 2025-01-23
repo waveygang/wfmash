@@ -174,6 +174,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           int32_t chain_length = 1;
           int32_t chain_pos = 1;
           if (tokens.size() > 13) {
+              std::cerr << "[debug] Parsing chain info from: " << tokens[13] << std::endl;
               const vector<string> chain_vec = skch::CommonFunc::split(tokens[13], ':');
               if (chain_vec.size() == 3 && chain_vec[0] == "chain" && chain_vec[1] == "i") {
                   // Split the id.pos.len format
@@ -182,7 +183,16 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
                       chain_id = std::stoi(chain_parts[0]);
                       chain_pos = std::stoi(chain_parts[1]); 
                       chain_length = std::stoi(chain_parts[2]);
+                      std::cerr << "[debug] Parsed chain info - id: " << chain_id 
+                                << " pos: " << chain_pos 
+                                << " len: " << chain_length << std::endl;
+                  } else {
+                      std::cerr << "[debug] Failed to parse chain parts. Found " 
+                                << chain_parts.size() << " parts." << std::endl;
                   }
+              } else {
+                  std::cerr << "[debug] Failed to parse chain vector. Found " 
+                            << chain_vec.size() << " parts." << std::endl;
               }
           }
 
