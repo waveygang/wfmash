@@ -2374,6 +2374,41 @@ namespace skch
       void reportReadMappings(MappingResultsVector_t &readMappings, const std::string &queryName,
           std::ostream &outstrm)
       {
+        // Sort mappings by chain ID and query position
+        std::sort(readMappings.begin(), readMappings.end(),
+            [](const MappingResult &a, const MappingResult &b) {
+                return std::tie(a.splitMappingId, a.queryStartPos)
+                    < std::tie(b.splitMappingId, b.queryStartPos);
+            });
+
+        // Assign chain positions within each chain
+        int current_chain = -1;
+        int chain_pos = 0;
+        int chain_length = 0;
+        
+        // First pass - count chain lengths
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            if (readMappings[i].splitMappingId != current_chain) {
+                current_chain = readMappings[i].splitMappingId;
+                chain_length = 1;
+                // Count forward to find chain length
+                for (size_t j = i + 1; j < readMappings.size(); ++j) {
+                    if (readMappings[j].splitMappingId == current_chain) {
+                        chain_length++;
+                    } else {
+                        break;
+                    }
+                }
+                // Assign length to all mappings in this chain
+                readMappings[i].chain_length = chain_length;
+                chain_pos = 1;
+            } else {
+                readMappings[i].chain_length = chain_length;
+                chain_pos++;
+            }
+            readMappings[i].chain_pos = chain_pos;
+        }
+
         //Print the results
         for(auto &e : readMappings)
         {
@@ -2401,7 +2436,7 @@ namespace skch
             {
               outstrm << sep << "jc:f:" << float(e.conservedSketches) / e.sketchSize;
             } else {
-              outstrm << sep << "chain:i:" << e.splitMappingId;
+              outstrm << sep << "chain:i:" << e.splitMappingId << "." << e.chain_pos << "." << e.chain_length;
             }
           } else
           {
