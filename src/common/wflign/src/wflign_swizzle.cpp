@@ -40,12 +40,41 @@ static bool sequences_match(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start,
-    int N) {
-    if (query_start < 0 || target_start < 0) return false;
-    if (query_start + N > (int64_t)query_seq.size()) return false;
-    if (target_start + N > (int64_t)target_seq.size()) return false;
+    int N,
+    bool debug = false) {
+    if (query_start < 0 || target_start < 0) {
+        if (debug) {
+            std::cerr << "[swizzle-debug] sequences_match failed: negative start position"
+                      << " query_start=" << query_start 
+                      << " target_start=" << target_start << std::endl;
+        }
+        return false;
+    }
+    if (query_start + N > (int64_t)query_seq.size()) {
+        if (debug) {
+            std::cerr << "[swizzle-debug] sequences_match failed: query bounds"
+                      << " query_start=" << query_start
+                      << " N=" << N 
+                      << " query_size=" << query_seq.size() << std::endl;
+        }
+        return false;
+    }
+    if (target_start + N > (int64_t)target_seq.size()) {
+        if (debug) {
+            std::cerr << "[swizzle-debug] sequences_match failed: target bounds"
+                      << " target_start=" << target_start
+                      << " N=" << N
+                      << " target_size=" << target_seq.size() << std::endl;
+        }
+        return false;
+    }
     for (int i = 0; i < N; i++) {
         if (query_seq[query_start + i] != target_seq[target_start + i]) {
+            if (debug) {
+                std::cerr << "[swizzle-debug] sequences_match failed: mismatch at position " << i
+                          << " query=" << query_seq[query_start + i]
+                          << " target=" << target_seq[target_start + i] << std::endl;
+            }
             return false;
         }
     }
@@ -57,7 +86,17 @@ static bool verify_cigar_alignment(
     const std::string &query_seq,
     const std::string &target_seq,
     int64_t query_start,
-    int64_t target_start) {
+    int64_t target_start,
+    bool debug = false) {
+    if (debug) {
+        std::cerr << "[swizzle-debug] verify_cigar_alignment:"
+                  << " cigar=" << cigar
+                  << " query_start=" << query_start
+                  << " target_start=" << target_start
+                  << " query_size=" << query_seq.size()
+                  << " target_size=" << target_seq.size() << std::endl;
+    }
+
     int64_t qPos = query_start;
     int64_t tPos = target_start;
 
@@ -70,14 +109,28 @@ static bool verify_cigar_alignment(
         }
         if (i >= cigar.size()) break;
         char op = cigar[i++];
+        
         if (op == '=') {
             if (qPos < 0 || tPos < 0 ||
                 qPos + val > (int64_t)query_seq.size() ||
                 tPos + val > (int64_t)target_seq.size()) {
+                if (debug) {
+                    std::cerr << "[swizzle-debug] verify_cigar_alignment failed: bounds check"
+                              << " op=" << op
+                              << " val=" << val
+                              << " qPos=" << qPos
+                              << " tPos=" << tPos << std::endl;
+                }
                 return false;
             }
             for (int k = 0; k < val; k++) {
                 if (query_seq[qPos + k] != target_seq[tPos + k]) {
+                    if (debug) {
+                        std::cerr << "[swizzle-debug] verify_cigar_alignment failed: mismatch"
+                                  << " pos=" << k
+                                  << " query=" << query_seq[qPos + k]
+                                  << " target=" << target_seq[tPos + k] << std::endl;
+                    }
                     return false;
                 }
             }
@@ -85,10 +138,20 @@ static bool verify_cigar_alignment(
             tPos += val;
         } else if (op == 'D') {
             if (tPos + val > (int64_t)target_seq.size()) {
+                if (debug) {
+                    std::cerr << "[swizzle-debug] verify_cigar_alignment failed: deletion bounds"
+                              << " val=" << val
+                              << " tPos=" << tPos
+                              << " target_size=" << target_seq.size() << std::endl;
+                }
                 return false;
             }
             tPos += val;
         } else {
+            if (debug) {
+                std::cerr << "[swizzle-debug] verify_cigar_alignment failed: invalid op "
+                          << op << std::endl;
+            }
             return false;
         }
     }
@@ -223,13 +286,34 @@ std::string try_swap_start_pattern(
     }
 
     if (op1 == '=' && op2 == 'D') {
-        if (sequences_match(query_seq, target_seq, query_start, target_start + Dlen, N)) {
+        // Enable debug logging for troubleshooting
+        const bool debug = true;
+
+        if (debug) {
+            std::cerr << "[swizzle-debug] try_swap_start_pattern:"
+                      << " cigar=" << cigar
+                      << " N=" << N
+                      << " Dlen=" << Dlen
+                      << " query_start=" << query_start
+                      << " target_start=" << target_start
+                      << " query_size=" << query_seq.size()
+                      << " target_size=" << target_seq.size() << std::endl;
+        }
+
+        // Check if we can match the sequences after shifting by Dlen
+        if (sequences_match(query_seq, target_seq, query_start, target_start + Dlen, N, debug)) {
             std::string remainder = cigar.substr(second_op_end);
             std::string swapped = std::to_string(Dlen) + "D" +
                                 std::to_string(N) + "=" +
                                 remainder;
             swapped = merge_cigar_ops(swapped);
-            if (!verify_cigar_alignment(swapped, query_seq, target_seq, query_start, target_start)) {
+
+            // Verify the entire new alignment
+            if (!verify_cigar_alignment(swapped, query_seq, target_seq, query_start, target_start, debug)) {
+                if (debug) {
+                    std::cerr << "[swizzle-debug] try_swap_start_pattern: verification failed for swapped CIGAR"
+                              << " swapped=" << swapped << std::endl;
+                }
                 return cigar;
             }
             return swapped;
