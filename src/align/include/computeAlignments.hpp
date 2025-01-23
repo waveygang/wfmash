@@ -169,16 +169,20 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           // if the estimated identity is missing, avoid assuming too low values
           const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
-          // Parse chain info if present (expecting format "chain:id:len:pos" in tokens[13])
+          // Parse chain info if present (expecting format "chain:i:id.pos.len" in tokens[13])
           int32_t chain_id = -1;
           int32_t chain_length = 1;
           int32_t chain_pos = 1;
           if (tokens.size() > 13) {
               const vector<string> chain_vec = skch::CommonFunc::split(tokens[13], ':');
-              if (chain_vec.size() == 4 && chain_vec[0] == "chain") {
-                  chain_id = std::stoi(chain_vec[1]);
-                  chain_length = std::stoi(chain_vec[2]);
-                  chain_pos = std::stoi(chain_vec[3]);
+              if (chain_vec.size() == 3 && chain_vec[0] == "chain" && chain_vec[1] == "i") {
+                  // Split the id.pos.len format
+                  const vector<string> chain_parts = skch::CommonFunc::split(chain_vec[2], '.');
+                  if (chain_parts.size() == 3) {
+                      chain_id = std::stoi(chain_parts[0]);
+                      chain_pos = std::stoi(chain_parts[1]); 
+                      chain_length = std::stoi(chain_parts[2]);
+                  }
               }
           }
 
@@ -193,10 +197,13 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.chain_id = chain_id;
               currentRecord.chain_length = chain_length;
               currentRecord.chain_pos = chain_pos;
+              
               // Apply target padding while ensuring we don't go below 0 or above reference length
               uint64_t rStartPos = std::stoi(tokens[7]);
               uint64_t rEndPos = std::stoi(tokens[8]);
-              if (target_padding > 0) {
+              
+              // Only apply padding to internal chain segments
+              if (target_padding > 0 && chain_length > 1 && chain_pos > 1 && chain_pos < chain_length) {
                   if (rStartPos >= target_padding) {
                       rStartPos -= target_padding;
                   } else {
