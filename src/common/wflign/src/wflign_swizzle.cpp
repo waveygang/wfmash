@@ -180,7 +180,7 @@ static bool extract_last_two_ops(
     return true;
 }
 
-static std::pair<int64_t,int64_t> alignment_end_coords(
+std::pair<int64_t,int64_t> wflign::alignment_end_coords(
     const std::string &cigar,
     int64_t query_start,
     int64_t target_start) {
