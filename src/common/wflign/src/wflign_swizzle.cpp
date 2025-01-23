@@ -301,6 +301,20 @@ std::string try_swap_start_pattern(
                       << " target_start=" << target_start
                       << " query_size=" << query_seq.size()
                       << " target_size=" << target_seq.size() << std::endl;
+            
+            // Print first 200 chars of sequences
+            std::cerr << "[swizzle-debug] query seq (first 200): "
+                      << query_seq.substr(0, 200) << std::endl;
+            std::cerr << "[swizzle-debug] target seq (first 200): "
+                      << target_seq.substr(0, 200) << std::endl;
+            
+            // Print the specific regions we're trying to match
+            std::cerr << "[swizzle-debug] comparing query["
+                      << query_start << ".." << (query_start + N) << "]: "
+                      << query_seq.substr(query_start, N) << std::endl;
+            std::cerr << "[swizzle-debug] with target["
+                      << (target_start + Dlen) << ".." << (target_start + Dlen + N) << "]: "
+                      << target_seq.substr(target_start + Dlen, N) << std::endl;
         }
 
         // Check if we can match the sequences after shifting by Dlen
