@@ -13,6 +13,21 @@ namespace wflign {
 static std::string wfa_edit_cigar_to_string(const wflign_cigar_t& edit_cigar);
 static void wfa_string_to_edit_cigar(const std::string& cigar_str, wflign_cigar_t* edit_cigar);
 
+// Implementation of the functions declared above
+static std::string try_swap_start_pattern(
+    const std::string &cigar,
+    const std::string &query_seq,
+    const std::string &target_seq,
+    int64_t query_start,
+    int64_t target_start);
+
+static std::string try_swap_end_pattern(
+    const std::string &cigar,
+    const std::string &target_seq,
+    const std::string &query_seq,
+    int64_t query_start,
+    int64_t target_start);
+
 // Try to swap start pattern: "N= DlenD" => "DlenD N="
 static std::string try_swap_start_pattern(
     const std::string &cigar,
