@@ -23,6 +23,17 @@ namespace wflign {
         
         matches = mismatches = insertions = inserted_bp = deletions = deleted_bp = refAlignedLength = qAlignedLength = 0;
         
+        std::cerr << "[cigar-debug] Processing CIGAR string: " << cigar_str << std::endl;
+        
+        // For a compressed CIGAR string like "50000=", we should get perfect identity
+        if (cigar_str.find_first_not_of("0123456789") == cigar_str.length() - 1 && cigar_str.back() == '=') {
+            matches = std::stoi(cigar_str.substr(0, cigar_str.length() - 1));
+            refAlignedLength = matches;
+            qAlignedLength = matches;
+            std::cerr << "[cigar-debug] Perfect match CIGAR: matches=" << matches << std::endl;
+            return;
+        }
+
         size_t pos = 0;
         while (pos < cigar_str.length()) {
             // Parse the length
