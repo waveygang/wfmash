@@ -327,14 +327,23 @@ std::string try_swap_start_pattern(
 
         // Note: target_seq is already offset by the padding, so we use 0-based coords
         if (sequences_match(query_seq, target_seq, query_start, 0, N, debug)) {
+            // When we move a deletion from after the match to before it,
+            // we need to adjust target_start since the deletion now comes first
+            int64_t new_target_start = target_start - Dlen;
+            
+            if (debug) {
+                std::cerr << "[swizzle-debug] Adjusting target_start from " << target_start 
+                         << " to " << new_target_start << " (deletion length=" << Dlen << ")" << std::endl;
+            }
+
             std::string remainder = cigar.substr(second_op_end);
             std::string swapped = std::to_string(Dlen) + "D" +
                                 std::to_string(N) + "=" +
                                 remainder;
             swapped = merge_cigar_ops(swapped);
 
-            // Verify the entire new alignment
-            if (!verify_cigar_alignment(swapped, query_seq, target_seq, query_start, target_start, debug)) {
+            // Verify the entire new alignment with adjusted target_start
+            if (!verify_cigar_alignment(swapped, query_seq, target_seq, query_start, new_target_start, debug)) {
                 if (debug) {
                     std::cerr << "[swizzle-debug] try_swap_start_pattern: verification failed for swapped CIGAR"
                               << " swapped=" << swapped << std::endl;
