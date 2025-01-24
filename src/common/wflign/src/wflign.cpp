@@ -104,8 +104,8 @@ void do_biwfa_alignment(
         if (cigar_str != wfa_edit_cigar_to_string(aln.edit_cigar)) {
             // Update coordinates based on swizzled CIGAR
             auto new_coords = alignment_end_coords(cigar_str, query_offset, target_offset);
-            aln.j = new_coords.first;  // new query start
-            aln.i = new_coords.second; // new target start
+            //aln.j = new_coords.first;  // new query start
+            //aln.i = new_coords.second; // new target start
                 
             // Convert back to WFA format
             wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);

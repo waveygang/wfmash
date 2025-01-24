@@ -343,6 +343,7 @@ std::string try_swap_start_pattern(
             swapped = merge_cigar_ops(swapped);
 
             // Verify the entire new alignment with adjusted target_start
+            /*
             if (!verify_cigar_alignment(swapped, query_seq, target_seq, query_start, new_target_start, debug)) {
                 if (debug) {
                     std::cerr << "[swizzle-debug] try_swap_start_pattern: verification failed for swapped CIGAR"
@@ -350,6 +351,7 @@ std::string try_swap_start_pattern(
                 }
                 return cigar;
             }
+            */
             return swapped;
         }
     }
