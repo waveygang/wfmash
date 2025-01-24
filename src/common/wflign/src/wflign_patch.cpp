@@ -2222,7 +2222,28 @@ void write_alignment_sam(
         }
     }
 
-    char* patch_cigar = wfa_edit_cigar_to_string(&patch_aln.edit_cigar);
+    // Convert edit CIGAR to string representation
+    std::string cigar_str;
+    char last_op = '\0';
+    int run_length = 0;
+    
+    for (int i = patch_aln.edit_cigar.begin_offset; i < patch_aln.edit_cigar.end_offset; i++) {
+        char op = patch_aln.edit_cigar.cigar_ops[i];
+        if (op == last_op) {
+            run_length++;
+        } else {
+            if (run_length > 0) {
+                cigar_str += std::to_string(run_length) + last_op;
+            }
+            last_op = op;
+            run_length = 1;
+        }
+    }
+    if (run_length > 0) {
+        cigar_str += std::to_string(run_length) + last_op;
+    }
+    
+    char* patch_cigar = strdup(cigar_str.c_str());
 
     double patch_gap_compressed_identity = (double)patch_matches /
         (double)(patch_matches + patch_mismatches + patch_insertions + patch_deletions);
@@ -2352,7 +2373,28 @@ bool write_alignment_paf(
             }
         }
 
-        char* cigar = wfa_edit_cigar_to_string(&aln.edit_cigar);
+        // Convert edit CIGAR to string representation
+        std::string cigar_str;
+        char last_op = '\0';
+        int run_length = 0;
+        
+        for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; i++) {
+            char op = aln.edit_cigar.cigar_ops[i];
+            if (op == last_op) {
+                run_length++;
+            } else {
+                if (run_length > 0) {
+                    cigar_str += std::to_string(run_length) + last_op;
+                }
+                last_op = op;
+                run_length = 1;
+            }
+        }
+        if (run_length > 0) {
+            cigar_str += std::to_string(run_length) + last_op;
+        }
+        
+        char* cigar = strdup(cigar_str.c_str());
 
         size_t alignmentRefPos = aln.i;
         double gap_compressed_identity =
