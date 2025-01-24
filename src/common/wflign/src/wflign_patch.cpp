@@ -2179,10 +2179,50 @@ void write_alignment_sam(
     uint64_t patch_refAlignedLength = 0;
     uint64_t patch_qAlignedLength = 0;
 
-    char* patch_cigar = wfa_alignment_to_cigar(
-        &patch_aln.edit_cigar, patch_refAlignedLength, patch_qAlignedLength,
-        patch_matches, patch_mismatches, patch_insertions, patch_inserted_bp,
-        patch_deletions, patch_deleted_bp);
+    // Process CIGAR operations
+    bool in_insertion = false;
+    bool in_deletion = false;
+    
+    for (int i = patch_aln.edit_cigar.begin_offset; i < patch_aln.edit_cigar.end_offset; i++) {
+        char op = patch_aln.edit_cigar.cigar_ops[i];
+        switch (op) {
+            case 'M':
+            case '=':
+                patch_matches++;
+                patch_refAlignedLength++;
+                patch_qAlignedLength++;
+                in_insertion = false;
+                in_deletion = false;
+                break;
+            case 'X':
+                patch_mismatches++;
+                patch_refAlignedLength++;
+                patch_qAlignedLength++;
+                in_insertion = false;
+                in_deletion = false;
+                break;
+            case 'I':
+                if (!in_insertion) {
+                    patch_insertions++;  // Count runs for gap-compressed
+                    in_insertion = true;
+                }
+                patch_inserted_bp++;  // Count individual bases for block
+                patch_qAlignedLength++;
+                in_deletion = false;
+                break;
+            case 'D':
+                if (!in_deletion) {
+                    patch_deletions++;  // Count runs for gap-compressed
+                    in_deletion = true;
+                }
+                patch_deleted_bp++;  // Count individual bases for block
+                patch_refAlignedLength++;
+                in_insertion = false;
+                break;
+        }
+    }
+
+    char* patch_cigar = wfa_edit_cigar_to_string(&patch_aln.edit_cigar);
 
     double patch_gap_compressed_identity = (double)patch_matches /
         (double)(patch_matches + patch_mismatches + patch_insertions + patch_deletions);
@@ -2269,9 +2309,50 @@ bool write_alignment_paf(
         uint64_t refAlignedLength = 0;
         uint64_t qAlignedLength = 0;
 
-        char *cigar = wfa_alignment_to_cigar(
-                &aln.edit_cigar, refAlignedLength, qAlignedLength, matches,
-                mismatches, insertions, inserted_bp, deletions, deleted_bp);
+        // Process CIGAR operations
+        bool in_insertion = false;
+        bool in_deletion = false;
+    
+        for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; i++) {
+            char op = aln.edit_cigar.cigar_ops[i];
+            switch (op) {
+                case 'M':
+                case '=':
+                    matches++;
+                    refAlignedLength++;
+                    qAlignedLength++;
+                    in_insertion = false;
+                    in_deletion = false;
+                    break;
+                case 'X':
+                    mismatches++;
+                    refAlignedLength++;
+                    qAlignedLength++;
+                    in_insertion = false;
+                    in_deletion = false;
+                    break;
+                case 'I':
+                    if (!in_insertion) {
+                        insertions++;  // Count runs for gap-compressed
+                        in_insertion = true;
+                    }
+                    inserted_bp++;  // Count individual bases for block
+                    qAlignedLength++;
+                    in_deletion = false;
+                    break;
+                case 'D':
+                    if (!in_deletion) {
+                        deletions++;  // Count runs for gap-compressed
+                        in_deletion = true;
+                    }
+                    deleted_bp++;  // Count individual bases for block
+                    refAlignedLength++;
+                    in_insertion = false;
+                    break;
+            }
+        }
+
+        char* cigar = wfa_edit_cigar_to_string(&aln.edit_cigar);
 
         size_t alignmentRefPos = aln.i;
         double gap_compressed_identity =
