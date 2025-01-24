@@ -2047,7 +2047,7 @@ query_start : query_end)
         // Write the patch alignments
         for (auto& patch_aln : multi_patch_alns) {
             write_alignment_sam(
-                out, patch_aln, query_name, query_total_length,
+                out, patch_aln, "", query_name, query_total_length,
                 query_offset, query_length, query_is_rev,
                 target_name, target_total_length, target_offset, target_length,
                 min_identity, mashmap_estimated_identity,
@@ -2068,6 +2068,7 @@ query_start : query_end)
             bool wrote = write_alignment_paf(
                     out,
                     patch_aln,
+                    "",
                     query_name,
                     query_total_length,
                     query_offset,
@@ -2168,6 +2169,7 @@ void write_tag_and_md_string(
 void write_alignment_sam(
     std::ostream &out,
     const alignment_t& patch_aln,
+    const std::string& cigar_str,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
@@ -2184,6 +2186,8 @@ void write_alignment_sam(
     const char* query,
     const char* target,
     const int64_t& target_pointer_shift) {
+
+    if (cigar_str == "") { std::cerr << "[wflign_patch] unsupported codepath" << std::endl; exit(1); }
 
     uint64_t patch_matches = 0;
     uint64_t patch_mismatches = 0;
@@ -2237,27 +2241,6 @@ void write_alignment_sam(
         }
     }
 
-    // Convert edit CIGAR to string representation
-    std::string cigar_str;
-    char last_op = '\0';
-    int run_length = 0;
-    
-    for (int i = patch_aln.edit_cigar.begin_offset; i < patch_aln.edit_cigar.end_offset; i++) {
-        char op = patch_aln.edit_cigar.cigar_ops[i];
-        if (op == last_op) {
-            run_length++;
-        } else {
-            if (run_length > 0) {
-                cigar_str += std::to_string(run_length) + last_op;
-            }
-            last_op = op;
-            run_length = 1;
-        }
-    }
-    if (run_length > 0) {
-        cigar_str += std::to_string(run_length) + last_op;
-    }
-    
     char* patch_cigar = strdup(cigar_str.c_str());
 
     double patch_gap_compressed_identity = (double)patch_matches /
@@ -2320,6 +2303,7 @@ void write_alignment_sam(
 bool write_alignment_paf(
         std::ostream& out,
         const alignment_t& aln,
+        const std::string& cigar_str,
         const std::string& query_name,
         const uint64_t& query_total_length,
         const uint64_t& query_offset, // query offset on the forward strand
@@ -2334,6 +2318,7 @@ bool write_alignment_paf(
         const bool& with_endline,
         const bool& is_rev_patch) {
     bool ret = false;  // return true if we wrote the alignment
+    if (cigar_str == "") { std::cerr << "[wflign_patch] unsupported codepath" << std::endl; exit(1); }
 
     if (aln.ok) {
         uint64_t matches = 0;
@@ -2345,6 +2330,9 @@ bool write_alignment_paf(
         uint64_t refAlignedLength = 0;
         uint64_t qAlignedLength = 0;
 
+        /// XXXX TODO
+        /// Here we are going to work with a compressed representation of the cigar string that is already in the right format and we are going to recompute all aspects of the mapping output based on it. This will save us a lot of time for long alignments.
+        
         // Process CIGAR operations
         bool in_insertion = false;
         bool in_deletion = false;
