@@ -2333,9 +2333,10 @@ bool write_alignment_paf(
         // Process CIGAR operations
         bool in_insertion = false;
         bool in_deletion = false;
-    
+
         for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; i++) {
             char op = aln.edit_cigar.cigar_ops[i];
+            std::cerr << "op: " << op << std::endl;
             switch (op) {
                 case 'M':
                 case '=':
@@ -2372,6 +2373,8 @@ bool write_alignment_paf(
                     break;
             }
         }
+
+        std::cerr << "matches: " << matches << ", mismatches: " << mismatches << ", insertions: " << insertions << ", inserted_bp: " << inserted_bp << ", deletions: " << deletions << ", deleted_bp: " << deleted_bp << ", refAlignedLength: " << refAlignedLength << ", qAlignedLength: " << qAlignedLength << std::endl;
 
         // Convert edit CIGAR to string representation
         std::string cigar_str;
