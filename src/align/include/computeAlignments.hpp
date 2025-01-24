@@ -218,8 +218,6 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               throw std::runtime_error("[wfmash::align::parseMashmapRow] Error! Invalid mashmap mapping record: " + mappingRecordLine);
           }
 
-          std::cerr << "[parse-debug] Processing record: " << mappingRecordLine << std::endl;
-
           // Extract the mashmap identity from the string
           const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
           // if the estimated identity is missing, avoid assuming too low values
