@@ -513,6 +513,16 @@ char* wfa_alignment_to_cigar(
         uint64_t& inserted_bp,
         uint64_t& deletions,
         uint64_t& deleted_bp) {
+    // Initialize all counters to 0
+    target_aligned_length = 0;
+    query_aligned_length = 0;
+    matches = 0;
+    mismatches = 0;
+    insertions = 0;
+    inserted_bp = 0;
+    deletions = 0;
+    deleted_bp = 0;
+
     // the edit cigar contains a character string of ops
     // here we compress them into the standard cigar representation
 
