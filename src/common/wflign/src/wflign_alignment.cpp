@@ -529,6 +529,7 @@ char* wfa_alignment_to_cigar(
             (edit_cigar->cigar_ops[i] != lastMove && lastMove != 0)) {
             // calculate matches, mismatches, insertions, deletions
             switch (lastMove) {
+                case '=':
                 case 'M':
                     matches += numOfSameMoves;
                     query_aligned_length += numOfSameMoves;
