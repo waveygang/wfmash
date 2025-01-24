@@ -1868,16 +1868,37 @@ query_start : query_end)
             total_target_aligned_length, total_query_aligned_length, matches,
             mismatches, insertions, inserted_bp, deletions, deleted_bp);
 
+    // Calculate metrics from the compressed CIGAR string
+    uint64_t cigar_matches = 0;
+    uint64_t cigar_mismatches = 0;
+    uint64_t cigar_insertions = 0;
+    uint64_t cigar_inserted_bp = 0;
+    uint64_t cigar_deletions = 0;
+    uint64_t cigar_deleted_bp = 0;
+    uint64_t cigar_refAlignedLength = 0;
+    uint64_t cigar_qAlignedLength = 0;
+
+    process_compressed_cigar(
+        std::string(cigarv),
+        cigar_matches,
+        cigar_mismatches,
+        cigar_insertions,
+        cigar_inserted_bp,
+        cigar_deletions,
+        cigar_deleted_bp,
+        cigar_refAlignedLength,
+        cigar_qAlignedLength);
+
     const double gap_compressed_identity =
-            (double)matches /
-            (double)(matches + mismatches + insertions + deletions);
+            (double)cigar_matches /
+            (double)(cigar_matches + cigar_mismatches + cigar_insertions + cigar_deletions);
 
     if (gap_compressed_identity >= min_identity) {
-        const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
+        const uint64_t edit_distance = cigar_mismatches + cigar_inserted_bp + cigar_deleted_bp;
 
         // identity over the full block
         const double block_identity =
-                (double)matches / (double)(matches + edit_distance);
+                (double)cigar_matches / (double)(cigar_matches + edit_distance);
 
         auto write_tag_and_md_string = [&](std::ostream &out, const char *c,
                                            const int target_start) {
@@ -1974,8 +1995,8 @@ query_start : query_end)
                 << "\t" << (query_is_rev ? "-" : "+") << "\t" << target_name
                 << "\t" << target_total_length << "\t"
                 << target_offset - target_pointer_shift + target_start << "\t"
-                << target_offset + target_end << "\t" << matches << "\t"
-                << matches + mismatches + inserted_bp + deleted_bp
+                << target_offset + target_end << "\t" << cigar_matches << "\t"
+                << cigar_matches + cigar_mismatches + cigar_inserted_bp + cigar_deleted_bp
                 << "\t"
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
