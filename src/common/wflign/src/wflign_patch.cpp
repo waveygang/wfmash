@@ -2290,6 +2290,13 @@ bool write_alignment_paf(
                 q_start = query_offset + aln.j;
                 q_end = query_offset + aln.j + qAlignedLength;
             }
+            std::cerr << "[paf-debug] Writing alignment with:"
+                      << " matches=" << matches
+                      << " refAlignedLength=" << refAlignedLength
+                      << " qAlignedLength=" << qAlignedLength
+                      << " gap_compressed_identity=" << gap_compressed_identity
+                      << " block_identity=" << block_identity << std::endl;
+
             out << query_name << "\t" << query_total_length << "\t" << q_start
                 << "\t" << q_end << "\t"
                 << (aln.is_rev ^ query_is_rev ? "-" : "+") << "\t" << target_name << "\t"
