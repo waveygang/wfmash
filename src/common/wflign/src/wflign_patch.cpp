@@ -9,6 +9,57 @@
 
 namespace wflign {
 
+    // Process a compressed CIGAR string to get alignment metrics
+    void process_compressed_cigar(
+            const std::string& cigar_str,
+            uint64_t& matches,
+            uint64_t& mismatches, 
+            uint64_t& insertions,
+            uint64_t& inserted_bp,
+            uint64_t& deletions,
+            uint64_t& deleted_bp,
+            uint64_t& refAlignedLength,
+            uint64_t& qAlignedLength) {
+        
+        matches = mismatches = insertions = inserted_bp = deletions = deleted_bp = refAlignedLength = qAlignedLength = 0;
+        
+        size_t pos = 0;
+        while (pos < cigar_str.length()) {
+            // Parse the length
+            size_t next_pos = pos;
+            while (next_pos < cigar_str.length() && isdigit(cigar_str[next_pos])) {
+                next_pos++;
+            }
+            int length = std::stoi(cigar_str.substr(pos, next_pos - pos));
+            char op = cigar_str[next_pos];
+            
+            switch (op) {
+                case 'M':
+                case '=':
+                    matches += length;
+                    refAlignedLength += length;
+                    qAlignedLength += length;
+                    break;
+                case 'X':
+                    mismatches += length;
+                    refAlignedLength += length;
+                    qAlignedLength += length;
+                    break;
+                case 'I':
+                    insertions++;  // Count runs for gap-compressed
+                    inserted_bp += length;  // Count individual bases for block
+                    qAlignedLength += length;
+                    break;
+                case 'D':
+                    deletions++;  // Count runs for gap-compressed
+                    deleted_bp += length;  // Count individual bases for block
+                    refAlignedLength += length;
+                    break;
+            }
+            pos = next_pos + 1;
+        }
+    }
+
     void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
         //Encode the image
         unsigned error = lodepng::encode(filename, image, width, height);
@@ -2198,48 +2249,16 @@ void write_alignment_sam(
     uint64_t patch_refAlignedLength = 0;
     uint64_t patch_qAlignedLength = 0;
 
-    // Process CIGAR operations
-    bool in_insertion = false;
-    bool in_deletion = false;
-    
-    for (int i = patch_aln.edit_cigar.begin_offset; i < patch_aln.edit_cigar.end_offset; i++) {
-        char op = patch_aln.edit_cigar.cigar_ops[i];
-        switch (op) {
-            case 'M':
-            case '=':
-                patch_matches++;
-                patch_refAlignedLength++;
-                patch_qAlignedLength++;
-                in_insertion = false;
-                in_deletion = false;
-                break;
-            case 'X':
-                patch_mismatches++;
-                patch_refAlignedLength++;
-                patch_qAlignedLength++;
-                in_insertion = false;
-                in_deletion = false;
-                break;
-            case 'I':
-                if (!in_insertion) {
-                    patch_insertions++;  // Count runs for gap-compressed
-                    in_insertion = true;
-                }
-                patch_inserted_bp++;  // Count individual bases for block
-                patch_qAlignedLength++;
-                in_deletion = false;
-                break;
-            case 'D':
-                if (!in_deletion) {
-                    patch_deletions++;  // Count runs for gap-compressed
-                    in_deletion = true;
-                }
-                patch_deleted_bp++;  // Count individual bases for block
-                patch_refAlignedLength++;
-                in_insertion = false;
-                break;
-        }
-    }
+    process_compressed_cigar(
+        cigar_str,
+        patch_matches,
+        patch_mismatches,
+        patch_insertions,
+        patch_inserted_bp,
+        patch_deletions,
+        patch_deleted_bp,
+        patch_refAlignedLength,
+        patch_qAlignedLength);
 
     char* patch_cigar = strdup(cigar_str.c_str());
 
@@ -2330,75 +2349,17 @@ bool write_alignment_paf(
         uint64_t refAlignedLength = 0;
         uint64_t qAlignedLength = 0;
 
-        /// XXXX TODO
-        /// Here we are going to work with a compressed representation of the cigar string that is already in the right format and we are going to recompute all aspects of the mapping output based on it. This will save us a lot of time for long alignments.
-        
-        // Process CIGAR operations
-        bool in_insertion = false;
-        bool in_deletion = false;
+        process_compressed_cigar(
+            cigar_str,
+            matches,
+            mismatches,
+            insertions,
+            inserted_bp,
+            deletions,
+            deleted_bp,
+            refAlignedLength,
+            qAlignedLength);
 
-        for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; i++) {
-            char op = aln.edit_cigar.cigar_ops[i];
-            switch (op) {
-                case 'M':
-                case '=':
-                    matches++;
-                    refAlignedLength++;
-                    qAlignedLength++;
-                    in_insertion = false;
-                    in_deletion = false;
-                    break;
-                case 'X':
-                    mismatches++;
-                    refAlignedLength++;
-                    qAlignedLength++;
-                    in_insertion = false;
-                    in_deletion = false;
-                    break;
-                case 'I':
-                    if (!in_insertion) {
-                        insertions++;  // Count runs for gap-compressed
-                        in_insertion = true;
-                    }
-                    inserted_bp++;  // Count individual bases for block
-                    qAlignedLength++;
-                    in_deletion = false;
-                    break;
-                case 'D':
-                    if (!in_deletion) {
-                        deletions++;  // Count runs for gap-compressed
-                        in_deletion = true;
-                    }
-                    deleted_bp++;  // Count individual bases for block
-                    refAlignedLength++;
-                    in_insertion = false;
-                    break;
-            }
-        }
-
-        std::cerr << "matches: " << matches << ", mismatches: " << mismatches << ", insertions: " << insertions << ", inserted_bp: " << inserted_bp << ", deletions: " << deletions << ", deleted_bp: " << deleted_bp << ", refAlignedLength: " << refAlignedLength << ", qAlignedLength: " << qAlignedLength << std::endl;
-
-        // Convert edit CIGAR to string representation
-        std::string cigar_str;
-        char last_op = '\0';
-        int run_length = 0;
-        
-        for (int i = aln.edit_cigar.begin_offset; i < aln.edit_cigar.end_offset; i++) {
-            char op = aln.edit_cigar.cigar_ops[i];
-            if (op == last_op) {
-                run_length++;
-            } else {
-                if (run_length > 0) {
-                    cigar_str += std::to_string(run_length) + last_op;
-                }
-                last_op = op;
-                run_length = 1;
-            }
-        }
-        if (run_length > 0) {
-            cigar_str += std::to_string(run_length) + last_op;
-        }
-        
         char* cigar = strdup(cigar_str.c_str());
 
         size_t alignmentRefPos = aln.i;
