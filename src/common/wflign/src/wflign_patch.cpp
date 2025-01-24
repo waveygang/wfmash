@@ -535,24 +535,39 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
 }
 
 void trim_alignment(alignment_t& aln) {
-    // Trim head
+    // Count leading indels
     int head_trim_q = 0, head_trim_t = 0;
-    while (aln.edit_cigar.begin_offset < aln.edit_cigar.end_offset) {
-        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.begin_offset];
+    int head_trim_ops = 0;
+    while (aln.edit_cigar.begin_offset + head_trim_ops < aln.edit_cigar.end_offset) {
+        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.begin_offset + head_trim_ops];
         if (op != 'I' && op != 'D') break;
         if (op == 'I') head_trim_q++;
         if (op == 'D') head_trim_t++;
-        aln.edit_cigar.begin_offset++;
+        head_trim_ops++;
     }
 
-    // Trim tail
+    // Count trailing indels
     int tail_trim_q = 0, tail_trim_t = 0;
-    while (aln.edit_cigar.end_offset > aln.edit_cigar.begin_offset) {
-        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.end_offset - 1];
+    int tail_trim_ops = 0;
+    while (aln.edit_cigar.end_offset - tail_trim_ops > aln.edit_cigar.begin_offset + head_trim_ops) {
+        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.end_offset - 1 - tail_trim_ops];
         if (op != 'I' && op != 'D') break;
         if (op == 'I') tail_trim_q++;
         if (op == 'D') tail_trim_t++;
-        aln.edit_cigar.end_offset--;
+        tail_trim_ops++;
+    }
+
+    // If we found indels to trim, create new trimmed CIGAR
+    if (head_trim_ops > 0 || tail_trim_ops > 0) {
+        int new_len = aln.edit_cigar.end_offset - aln.edit_cigar.begin_offset - head_trim_ops - tail_trim_ops;
+        char* new_cigar = (char*)malloc(new_len * sizeof(char));
+        memcpy(new_cigar, 
+               aln.edit_cigar.cigar_ops + aln.edit_cigar.begin_offset + head_trim_ops,
+               new_len * sizeof(char));
+        free(aln.edit_cigar.cigar_ops);
+        aln.edit_cigar.cigar_ops = new_cigar;
+        aln.edit_cigar.begin_offset = 0;
+        aln.edit_cigar.end_offset = new_len;
     }
 
     // Adjust coordinates
