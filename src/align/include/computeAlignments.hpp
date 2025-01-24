@@ -185,10 +185,26 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               trailing_dels++;
           }
 
-          // Build new CIGAR string without leading/trailing deletions
+          // Build new CIGAR string and count consumed reference bases
+          uint64_t ref_consumed = 0;
           for (size_t j = leading_dels; j < cigar_ops.size() - trailing_dels; j++) {
               trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
+              
+              // Count reference bases consumed by this operation
+              switch(cigar_ops[j].second) {
+                  case 'M':
+                  case 'X':
+                  case '=':
+                  case 'D':
+                  case 'N':
+                      ref_consumed += cigar_ops[j].first;
+                      break;
+                  // I/S/H operations don't consume reference bases
+              }
           }
+
+          // Adjust ref_end based on consumed reference bases
+          new_ref_end = new_ref_start + ref_consumed;
 
           return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end);
       }
