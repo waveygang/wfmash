@@ -71,11 +71,6 @@ static bool sequences_match(
     }
     for (int i = 0; i < N; i++) {
         if (query_seq[query_start + i] != target_seq[target_start + i]) {
-            if (debug) {
-                std::cerr << "[swizzle-debug] sequences_match failed: mismatch at position " << i
-                          << " query=" << query_seq[query_start + i]
-                          << " target=" << target_seq[target_start + i] << std::endl;
-            }
             return false;
         }
     }
@@ -109,23 +104,10 @@ static bool verify_cigar_alignment(
             if (qPos < 0 || tPos < 0 ||
                 qPos + val > (int64_t)query_seq.size() ||
                 tPos + val > (int64_t)target_seq.size()) {
-                if (debug) {
-                    std::cerr << "[swizzle-debug] verify_cigar_alignment failed: bounds check"
-                              << " op=" << op
-                              << " val=" << val
-                              << " qPos=" << qPos
-                              << " tPos=" << tPos << std::endl;
-                }
                 return false;
             }
             for (int k = 0; k < val; k++) {
                 if (query_seq[qPos + k] != target_seq[tPos + k]) {
-                    if (debug) {
-                        std::cerr << "[swizzle-debug] verify_cigar_alignment failed: mismatch"
-                                  << " pos=" << k
-                                  << " query=" << query_seq[qPos + k]
-                                  << " target=" << target_seq[tPos + k] << std::endl;
-                    }
                     return false;
                 }
             }
@@ -133,20 +115,10 @@ static bool verify_cigar_alignment(
             tPos += val;
         } else if (op == 'D') {
             if (tPos + val > (int64_t)target_seq.size()) {
-                if (debug) {
-                    std::cerr << "[swizzle-debug] verify_cigar_alignment failed: deletion bounds"
-                              << " val=" << val
-                              << " tPos=" << tPos
-                              << " target_size=" << target_seq.size() << std::endl;
-                }
                 return false;
             }
             tPos += val;
         } else {
-            if (debug) {
-                std::cerr << "[swizzle-debug] verify_cigar_alignment failed: invalid op "
-                          << op << std::endl;
-            }
             return false;
         }
     }
@@ -272,7 +244,6 @@ std::string try_swap_start_pattern(
     
     /*
     if (!verify_cigar_alignment(cigar, query_seq, target_seq, query_start, target_start, true)) {
-        std::cerr << "[swizzle-debug] verification failed" << std::endl;
         return cigar;
     }
     */
@@ -281,11 +252,9 @@ std::string try_swap_start_pattern(
     char op1, op2;
     size_t second_op_start, second_op_end;
     if (!extract_first_two_ops(cigar, N, op1, Dlen, op2, second_op_start, second_op_end)) {
-        std::cerr << "[swizzle-debug] extraction failed" << std::endl;
         return cigar;
     }
 
-    std::cerr << "[swizzle-debug] op1:" << op1 << " and op2:" << op2 << std::endl;
 
     if (op1 == '=' && op2 == 'D') {
         // Always enable debug logging
@@ -308,8 +277,6 @@ std::string try_swap_start_pattern(
             /*
             if (!verify_cigar_alignment(swapped, query_seq, target_seq, query_start, new_target_start, debug)) {
                 if (debug) {
-                    std::cerr << "[swizzle-debug] try_swap_start_pattern: verification failed for swapped CIGAR"
-                              << " swapped=" << swapped << std::endl;
                 }
                 return cigar;
             }
