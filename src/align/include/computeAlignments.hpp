@@ -139,87 +139,6 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
       /**
        * @brief                 compute alignments
        */
-      /**
-       * @brief      Trim leading and trailing deletions from CIGAR string and adjust coordinates
-       * @param[in]  cigar       The CIGAR string to trim
-       * @param[in]  ref_start   Reference start position
-       * @param[in]  ref_end     Reference end position
-       * @return     Tuple of (trimmed_cigar, new_ref_start, new_ref_end)
-       */
-      static std::tuple<std::string, uint64_t, uint64_t, uint64_t, uint64_t> trim_deletions(
-              const std::string& cigar,
-              uint64_t ref_start,
-              uint64_t ref_end,
-              uint64_t query_start,
-              uint64_t query_end) {
-          
-          std::string trimmed_cigar;
-          uint64_t new_ref_start = ref_start;
-          uint64_t new_ref_end = ref_end;
-          uint64_t new_query_start = query_start;
-          uint64_t new_query_end = query_end;
-
-          // Parse CIGAR string
-          std::vector<std::pair<int, char>> cigar_ops;
-          size_t i = 0;
-          while (i < cigar.size()) {
-              int count = 0;
-              while (i < cigar.size() && std::isdigit(static_cast<unsigned char>(cigar[i]))) {
-                  count = count * 10 + (cigar[i] - '0');
-                  i++;
-              }
-              if (i < cigar.size()) {
-                  cigar_ops.push_back({count, cigar[i]});
-                  i++;
-              }
-          }
-
-          // Find leading deletions and matches
-          size_t leading_dels = 0;
-          while (leading_dels < cigar_ops.size() && cigar_ops[leading_dels].second == 'D') {
-              new_ref_start += cigar_ops[leading_dels].first;
-              leading_dels++;
-          }
-
-          // Find trailing deletions and matches
-          size_t trailing_dels = 0;
-          while (trailing_dels < cigar_ops.size() - leading_dels && 
-                 cigar_ops[cigar_ops.size() - 1 - trailing_dels].second == 'D') {
-              new_ref_end -= cigar_ops[cigar_ops.size() - 1 - trailing_dels].first;
-              trailing_dels++;
-          }
-
-          // Build new CIGAR string and count consumed bases
-          uint64_t ref_consumed = 0;
-          uint64_t query_consumed = 0;
-          for (size_t j = leading_dels; j < cigar_ops.size() - trailing_dels; j++) {
-              trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
-              
-              // Count bases consumed by this operation
-              switch(cigar_ops[j].second) {
-                  case 'M':
-                  case 'X':
-                  case '=':
-                      ref_consumed += cigar_ops[j].first;
-                      query_consumed += cigar_ops[j].first;
-                      break;
-                  case 'D':
-                  case 'N':
-                      ref_consumed += cigar_ops[j].first;
-                      break;
-                  case 'I':
-                      query_consumed += cigar_ops[j].first;
-                      break;
-                  // S/H operations don't affect coordinates
-              }
-          }
-
-          // Adjust coordinates based on consumed bases
-          new_ref_end = new_ref_start + ref_consumed;
-          new_query_end = new_query_start + query_consumed;
-
-          return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end);
-      }
 
       void compute()
       {
@@ -576,26 +495,8 @@ void worker_thread(uint64_t tid,
                              << " ref_end=" << ref_end 
                              << " cigar=" << cigar << std::endl;
 
-                    // Trim deletions and get new coordinates
-                    uint64_t query_start = std::stoull(fields[2]);
-                    uint64_t query_end = std::stoull(fields[3]);
-
-                    auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
-                        trim_deletions(cigar, ref_start, ref_end, query_start, query_end);
-
-                    std::cerr << "[trim-debug] After trimming:"
-                             << " ref_start=" << new_ref_start 
-                             << " ref_end=" << new_ref_end
-                             << " query_start=" << new_query_start
-                             << " query_end=" << new_query_end
-                             << " cigar=" << trimmed_cigar << std::endl;
-
-                    // Update all coordinate fields with new values
-                    fields[2] = std::to_string(new_query_start);
-                    fields[3] = std::to_string(new_query_end);
-                    fields[7] = std::to_string(new_ref_start);
-                    fields[8] = std::to_string(new_ref_end);
-                    *cigar_it = "cg:Z:" + trimmed_cigar;
+                    // Just pass through the CIGAR string and coordinates unchanged
+                    // The trimming is now handled in wflign namespace
 
                     // Reconstruct the line
                     std::string new_line;
