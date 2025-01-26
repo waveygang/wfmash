@@ -371,7 +371,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
-        if ((!approx_mapping || !input_mapping) && l > 100000) {
+        if (l > 100000 && (!approx_mapping && !input_mapping)) {
             std::cerr << "[wfmash] ERROR: max mapping length (-P) must be <= 100kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
