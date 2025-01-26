@@ -96,26 +96,23 @@ void do_biwfa_alignment(
         } else {
             std::cerr << "[wflign::debug] End pattern swizzle attempt failed" << std::endl;
         }
-        if (swizzled != cigar_str) {
-            cigar_str = swizzled;
-        }
 
         // If the CIGAR changed, update coordinates and alignment
-        if (cigar_str != wfa_edit_cigar_to_string(aln.edit_cigar)) {
+        //if (cigar_str != wfa_edit_cigar_to_string(aln.edit_cigar)) {
             // Update coordinates based on swizzled CIGAR
-            auto new_coords = alignment_end_coords(cigar_str, query_offset, target_offset);
-            //aln.j = new_coords.first;  // new query start
-            //aln.i = new_coords.second; // new target start
+            //auto new_coords = alignment_end_coords(cigar_str, query_offset, target_offset);
                 
             // Convert back to WFA format
-            wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
-        }
-    
+            //wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
+        //}
+
+        //wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
         // Write alignment
         if (paf_format_else_sam) {
             write_alignment_paf(
                 out,
                 aln,
+                cigar_str,
                 query_name,
                 query_total_length,
                 query_offset,
@@ -132,6 +129,7 @@ void do_biwfa_alignment(
             write_alignment_sam(
                 out,
                 aln,
+                cigar_str,
                 query_name,
                 query_total_length,
                 query_offset,
@@ -1181,6 +1179,7 @@ void WFlign::wflign_affine_wavefront(
                     write_alignment_paf(
                             *out,
                             **x,
+                            "",
                             query_name,
                             query_total_length,
                             query_offset,
