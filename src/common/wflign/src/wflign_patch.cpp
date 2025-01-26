@@ -2405,6 +2405,7 @@ bool write_alignment_paf(
             qAlignedLength);
 
         char* cigar = strdup(cigar_str.c_str());
+        std::cerr << "cigar vs cigar_str " << cigar << " " << cigar_str << std::endl;
 
         size_t alignmentRefPos = aln.i;
         double gap_compressed_identity =
