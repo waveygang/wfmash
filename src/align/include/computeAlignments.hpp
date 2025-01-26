@@ -483,9 +483,6 @@ void worker_thread(uint64_t tid,
                     uint64_t ref_start = std::stoull(fields[7]);
                     uint64_t ref_end = std::stoull(fields[8]);
 
-                    std::cerr << "[trim-debug] Before trimming: ref_start=" << ref_start 
-                             << " ref_end=" << ref_end 
-                             << " cigar=" << cigar << std::endl;
 
                     // Just pass through the CIGAR string and coordinates unchanged
                     // The trimming is now handled in wflign namespace
