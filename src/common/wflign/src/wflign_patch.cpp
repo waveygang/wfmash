@@ -123,33 +123,21 @@ namespace wflign {
                     matches += length;
                     refAlignedLength += length;
                     qAlignedLength += length;
-                    std::cerr << "[cigar-debug] Match: len=" << length 
-                              << " matches=" << matches 
-                              << " refLen=" << refAlignedLength 
-                              << " qLen=" << qAlignedLength << std::endl;
                     break;
                 case 'X':
                     mismatches += length;
                     refAlignedLength += length;
                     qAlignedLength += length;
-                    std::cerr << "[cigar-debug] Mismatch: len=" << length 
-                              << " mismatches=" << mismatches << std::endl;
                     break;
                 case 'I':
                     insertions++;  // Count runs for gap-compressed
                     inserted_bp += length;  // Count individual bases for block
                     qAlignedLength += length;
-                    std::cerr << "[cigar-debug] Insertion: len=" << length 
-                              << " insertions=" << insertions 
-                              << " inserted_bp=" << inserted_bp << std::endl;
                     break;
                 case 'D':
                     deletions++;  // Count runs for gap-compressed
                     deleted_bp += length;  // Count individual bases for block
                     refAlignedLength += length;
-                    std::cerr << "[cigar-debug] Deletion: len=" << length 
-                              << " deletions=" << deletions 
-                              << " deleted_bp=" << deleted_bp << std::endl;
                     break;
             }
             pos = next_pos + 1;
