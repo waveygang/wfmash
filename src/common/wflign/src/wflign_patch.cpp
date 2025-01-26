@@ -98,14 +98,12 @@ namespace wflign {
         
         matches = mismatches = insertions = inserted_bp = deletions = deleted_bp = refAlignedLength = qAlignedLength = 0;
         
-        std::cerr << "[cigar-debug] Processing CIGAR string: " << cigar_str << std::endl;
         
         // For a compressed CIGAR string like "50000=", we should get perfect identity
         if (cigar_str.find_first_not_of("0123456789") == cigar_str.length() - 1 && cigar_str.back() == '=') {
             matches = std::stoi(cigar_str.substr(0, cigar_str.length() - 1));
             refAlignedLength = matches;
             qAlignedLength = matches;
-            std::cerr << "[cigar-debug] Perfect match CIGAR: matches=" << matches << std::endl;
             return;
         }
 
@@ -2531,12 +2529,6 @@ bool write_alignment_paf(
                 q_start = query_offset + aln.j;
                 q_end = query_offset + aln.j + qAlignedLength;
             }
-            std::cerr << "[paf-debug] Writing alignment with:"
-                      << " matches=" << matches
-                      << " refAlignedLength=" << refAlignedLength
-                      << " qAlignedLength=" << qAlignedLength
-                      << " gap_compressed_identity=" << gap_compressed_identity
-                      << " block_identity=" << block_identity << std::endl;
 
             out << query_name << "\t" << query_total_length << "\t" << q_start
                 << "\t" << q_end << "\t"
