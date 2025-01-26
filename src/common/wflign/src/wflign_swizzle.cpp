@@ -90,12 +90,6 @@ static bool verify_cigar_alignment(
     int64_t target_start,
     bool debug) {
     if (true) {
-        std::cerr << "[swizzle-debug] verify_cigar_alignment:"
-                  << " cigar=" << cigar
-                  << " query_start=" << query_start
-                  << " target_start=" << target_start
-                  << " query_size=" << query_seq.size()
-                  << " target_size=" << target_seq.size() << std::endl;
     }
 
     int64_t qPos = query_start;
@@ -344,8 +338,6 @@ std::string try_swap_end_pattern(
     }
 
     if (op1 == 'D' && op2 == '=') {
-        std::cerr << "\n[swizzle-debug] Starting end pattern swizzle attempt..." << std::endl;
-        std::cerr << "[swizzle-debug] Found pattern: " << count1 << op1 << " followed by " << count2 << op2 << std::endl;
         int N = count2;
         int Dlen = count1;
         auto endCoords = alignment_end_coords(cigar, query_start, target_start);
