@@ -487,7 +487,7 @@ void parse_args(int argc,
         }
         align_parameters.target_padding = p;
     } else {
-        align_parameters.target_padding = 0;
+        align_parameters.target_padding = 100;
     }
 
     if (thread_count) {
