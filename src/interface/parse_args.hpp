@@ -113,7 +113,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k]", {'P', "max-length"});
+    args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
@@ -371,7 +371,7 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
         }
-        if (!approx_mapping && l > 100000) {
+        if ((!approx_mapping || !input_mapping) && l > 100000) {
             std::cerr << "[wfmash] ERROR: max mapping length (-P) must be <= 100kb when running alignment." << std::endl
                       << "[wfmash] For larger values, use -m/--approx-mapping to generate mappings," << std::endl
                       << "[wfmash] then align them with: wfmash ... -i mappings.paf" << std::endl;
