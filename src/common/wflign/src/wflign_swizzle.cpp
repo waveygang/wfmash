@@ -44,29 +44,12 @@ static bool sequences_match(
     int N,
     bool debug) {
     if (query_start < 0 || target_start < 0) {
-        if (debug) {
-            std::cerr << "[swizzle-debug] sequences_match failed: negative start position"
-                      << " query_start=" << query_start 
-                      << " target_start=" << target_start << std::endl;
-        }
         return false;
     }
     if (query_start + N > (int64_t)query_seq.size()) {
-        if (debug) {
-            std::cerr << "[swizzle-debug] sequences_match failed: query bounds"
-                      << " query_start=" << query_start
-                      << " N=" << N 
-                      << " query_size=" << query_seq.size() << std::endl;
-        }
         return false;
     }
     if (target_start + N > (int64_t)target_seq.size()) {
-        if (debug) {
-            std::cerr << "[swizzle-debug] sequences_match failed: target bounds"
-                      << " target_start=" << target_start
-                      << " N=" << N
-                      << " target_size=" << target_seq.size() << std::endl;
-        }
         return false;
     }
     for (int i = 0; i < N; i++) {
