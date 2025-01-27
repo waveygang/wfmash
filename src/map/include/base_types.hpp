@@ -177,6 +177,9 @@ namespace skch
     bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
     double chainPairScore;                              // best score for potential chain pair
     int64_t chainPairId;                                // best partner mapping for potential chain pair
+    int32_t chain_id{-1};                               //unique ID for this chain (-1 if not part of chain)
+    int32_t chain_length{1};                            //total segments in chain (1 if not part of chain)
+    int32_t chain_pos{1};                               //position in chain, 1-based (1 if not part of chain)
 
     offset_t qlen() {                                   //length of this mapping on query axis
       return queryEndPos - queryStartPos + 1;

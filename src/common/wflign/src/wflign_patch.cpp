@@ -9,6 +9,141 @@
 
 namespace wflign {
 
+    std::tuple<std::string, uint64_t, uint64_t, uint64_t, uint64_t> trim_deletions(
+            const std::string& cigar,
+            uint64_t ref_start,
+            uint64_t ref_end,
+            uint64_t query_start,
+            uint64_t query_end) {
+        
+        std::string trimmed_cigar;
+        uint64_t new_ref_start = ref_start;
+        uint64_t new_ref_end = ref_end;
+        uint64_t new_query_start = query_start;
+        uint64_t new_query_end = query_end;
+
+        // Parse CIGAR string
+        std::vector<std::pair<int, char>> cigar_ops;
+        size_t i = 0;
+        while (i < cigar.size()) {
+            int count = 0;
+            while (i < cigar.size() && std::isdigit(static_cast<unsigned char>(cigar[i]))) {
+                count = count * 10 + (cigar[i] - '0');
+                i++;
+            }
+            if (i < cigar.size()) {
+                cigar_ops.push_back({count, cigar[i]});
+                i++;
+            }
+        }
+
+        // Find leading deletions and matches
+        size_t leading_dels = 0;
+        while (leading_dels < cigar_ops.size() && cigar_ops[leading_dels].second == 'D') {
+            new_ref_start += cigar_ops[leading_dels].first;
+            leading_dels++;
+        }
+
+        // Find trailing deletions and matches
+        size_t trailing_dels = 0;
+        while (trailing_dels < cigar_ops.size() - leading_dels && 
+               cigar_ops[cigar_ops.size() - 1 - trailing_dels].second == 'D') {
+            new_ref_end -= cigar_ops[cigar_ops.size() - 1 - trailing_dels].first;
+            trailing_dels++;
+        }
+
+        // Build new CIGAR string and count consumed bases
+        uint64_t ref_consumed = 0;
+        uint64_t query_consumed = 0;
+        for (size_t j = leading_dels; j < cigar_ops.size() - trailing_dels; j++) {
+            trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
+            
+            // Count bases consumed by this operation
+            switch(cigar_ops[j].second) {
+                case 'M':
+                case 'X':
+                case '=':
+                    ref_consumed += cigar_ops[j].first;
+                    query_consumed += cigar_ops[j].first;
+                    break;
+                case 'D':
+                case 'N':
+                    ref_consumed += cigar_ops[j].first;
+                    break;
+                case 'I':
+                    query_consumed += cigar_ops[j].first;
+                    break;
+                // S/H operations don't affect coordinates
+            }
+        }
+
+        // Adjust coordinates based on consumed bases
+        new_ref_end = new_ref_start + ref_consumed;
+        new_query_end = new_query_start + query_consumed;
+
+        return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end);
+    }
+
+    // Process a compressed CIGAR string to get alignment metrics
+    void process_compressed_cigar(
+            const std::string& cigar_str,
+            uint64_t& matches,
+            uint64_t& mismatches, 
+            uint64_t& insertions,
+            uint64_t& inserted_bp,
+            uint64_t& deletions,
+            uint64_t& deleted_bp,
+            uint64_t& refAlignedLength,
+            uint64_t& qAlignedLength) {
+        
+        matches = mismatches = insertions = inserted_bp = deletions = deleted_bp = refAlignedLength = qAlignedLength = 0;
+        
+        
+        // For a compressed CIGAR string like "50000=", we should get perfect identity
+        if (cigar_str.find_first_not_of("0123456789") == cigar_str.length() - 1 && cigar_str.back() == '=') {
+            matches = std::stoi(cigar_str.substr(0, cigar_str.length() - 1));
+            refAlignedLength = matches;
+            qAlignedLength = matches;
+            return;
+        }
+
+        size_t pos = 0;
+        while (pos < cigar_str.length()) {
+            // Parse the length
+            size_t next_pos = pos;
+            while (next_pos < cigar_str.length() && isdigit(cigar_str[next_pos])) {
+                next_pos++;
+            }
+            int length = std::stoi(cigar_str.substr(pos, next_pos - pos));
+            char op = cigar_str[next_pos];
+            
+            switch (op) {
+                case 'M':
+                case '=':
+                    matches += length;
+                    refAlignedLength += length;
+                    qAlignedLength += length;
+                    break;
+                case 'X':
+                    mismatches += length;
+                    refAlignedLength += length;
+                    qAlignedLength += length;
+                    break;
+                case 'I':
+                    insertions++;  // Count runs for gap-compressed
+                    inserted_bp += length;  // Count individual bases for block
+                    qAlignedLength += length;
+                    break;
+                case 'D':
+                    deletions++;  // Count runs for gap-compressed
+                    deleted_bp += length;  // Count individual bases for block
+                    refAlignedLength += length;
+                    break;
+            }
+            pos = next_pos + 1;
+        }
+    }
+
     void encodeOneStep(const char *filename, std::vector<unsigned char> &image, unsigned width, unsigned height) {
         //Encode the image
         unsigned error = lodepng::encode(filename, image, width, height);
@@ -535,24 +670,39 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
 }
 
 void trim_alignment(alignment_t& aln) {
-    // Trim head
+    // Count leading indels
     int head_trim_q = 0, head_trim_t = 0;
-    while (aln.edit_cigar.begin_offset < aln.edit_cigar.end_offset) {
-        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.begin_offset];
+    int head_trim_ops = 0;
+    while (aln.edit_cigar.begin_offset + head_trim_ops < aln.edit_cigar.end_offset) {
+        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.begin_offset + head_trim_ops];
         if (op != 'I' && op != 'D') break;
         if (op == 'I') head_trim_q++;
         if (op == 'D') head_trim_t++;
-        aln.edit_cigar.begin_offset++;
+        head_trim_ops++;
     }
 
-    // Trim tail
+    // Count trailing indels
     int tail_trim_q = 0, tail_trim_t = 0;
-    while (aln.edit_cigar.end_offset > aln.edit_cigar.begin_offset) {
-        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.end_offset - 1];
+    int tail_trim_ops = 0;
+    while (aln.edit_cigar.end_offset - tail_trim_ops > aln.edit_cigar.begin_offset + head_trim_ops) {
+        char op = aln.edit_cigar.cigar_ops[aln.edit_cigar.end_offset - 1 - tail_trim_ops];
         if (op != 'I' && op != 'D') break;
         if (op == 'I') tail_trim_q++;
         if (op == 'D') tail_trim_t++;
-        aln.edit_cigar.end_offset--;
+        tail_trim_ops++;
+    }
+
+    // If we found indels to trim, create new trimmed CIGAR
+    if (head_trim_ops > 0 || tail_trim_ops > 0) {
+        int new_len = aln.edit_cigar.end_offset - aln.edit_cigar.begin_offset - head_trim_ops - tail_trim_ops;
+        char* new_cigar = (char*)malloc(new_len * sizeof(char));
+        memcpy(new_cigar, 
+               aln.edit_cigar.cigar_ops + aln.edit_cigar.begin_offset + head_trim_ops,
+               new_len * sizeof(char));
+        free(aln.edit_cigar.cigar_ops);
+        aln.edit_cigar.cigar_ops = new_cigar;
+        aln.edit_cigar.begin_offset = 0;
+        aln.edit_cigar.end_offset = new_len;
     }
 
     // Adjust coordinates
@@ -1802,16 +1952,37 @@ query_start : query_end)
             total_target_aligned_length, total_query_aligned_length, matches,
             mismatches, insertions, inserted_bp, deletions, deleted_bp);
 
+    // Calculate metrics from the compressed CIGAR string
+    uint64_t cigar_matches = 0;
+    uint64_t cigar_mismatches = 0;
+    uint64_t cigar_insertions = 0;
+    uint64_t cigar_inserted_bp = 0;
+    uint64_t cigar_deletions = 0;
+    uint64_t cigar_deleted_bp = 0;
+    uint64_t cigar_refAlignedLength = 0;
+    uint64_t cigar_qAlignedLength = 0;
+
+    process_compressed_cigar(
+        std::string(cigarv),
+        cigar_matches,
+        cigar_mismatches,
+        cigar_insertions,
+        cigar_inserted_bp,
+        cigar_deletions,
+        cigar_deleted_bp,
+        cigar_refAlignedLength,
+        cigar_qAlignedLength);
+
     const double gap_compressed_identity =
-            (double)matches /
-            (double)(matches + mismatches + insertions + deletions);
+            (double)cigar_matches /
+            (double)(cigar_matches + cigar_mismatches + cigar_insertions + cigar_deletions);
 
     if (gap_compressed_identity >= min_identity) {
-        const uint64_t edit_distance = mismatches + inserted_bp + deleted_bp;
+        const uint64_t edit_distance = cigar_mismatches + cigar_inserted_bp + cigar_deleted_bp;
 
         // identity over the full block
         const double block_identity =
-                (double)matches / (double)(matches + edit_distance);
+                (double)cigar_matches / (double)(cigar_matches + edit_distance);
 
         auto write_tag_and_md_string = [&](std::ostream &out, const char *c,
                                            const int target_start) {
@@ -1908,8 +2079,8 @@ query_start : query_end)
                 << "\t" << (query_is_rev ? "-" : "+") << "\t" << target_name
                 << "\t" << target_total_length << "\t"
                 << target_offset - target_pointer_shift + target_start << "\t"
-                << target_offset + target_end << "\t" << matches << "\t"
-                << matches + mismatches + inserted_bp + deleted_bp
+                << target_offset + target_end << "\t" << cigar_matches << "\t"
+                << cigar_matches + cigar_mismatches + cigar_inserted_bp + cigar_deleted_bp
                 << "\t"
                 << std::round(float2phred(1.0 - block_identity))
                 //<< "\t" << "as:i:" << total_score
@@ -2032,7 +2203,7 @@ query_start : query_end)
         // Write the patch alignments
         for (auto& patch_aln : multi_patch_alns) {
             write_alignment_sam(
-                out, patch_aln, query_name, query_total_length,
+                out, patch_aln, "", query_name, query_total_length,
                 query_offset, query_length, query_is_rev,
                 target_name, target_total_length, target_offset, target_length,
                 min_identity, mashmap_estimated_identity,
@@ -2053,6 +2224,7 @@ query_start : query_end)
             bool wrote = write_alignment_paf(
                     out,
                     patch_aln,
+                    "",
                     query_name,
                     query_total_length,
                     query_offset,
@@ -2163,6 +2335,7 @@ void write_tag_and_md_string(
 void write_alignment_sam(
     std::ostream &out,
     const alignment_t& patch_aln,
+    const std::string& cigar_str,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
@@ -2180,6 +2353,8 @@ void write_alignment_sam(
     const char* target,
     const int64_t& target_pointer_shift) {
 
+    if (cigar_str == "") { std::cerr << "[wflign_patch] unsupported codepath" << std::endl; exit(1); }
+
     uint64_t patch_matches = 0;
     uint64_t patch_mismatches = 0;
     uint64_t patch_insertions = 0;
@@ -2189,10 +2364,35 @@ void write_alignment_sam(
     uint64_t patch_refAlignedLength = 0;
     uint64_t patch_qAlignedLength = 0;
 
-    char* patch_cigar = wfa_alignment_to_cigar(
-        &patch_aln.edit_cigar, patch_refAlignedLength, patch_qAlignedLength,
-        patch_matches, patch_mismatches, patch_insertions, patch_inserted_bp,
-        patch_deletions, patch_deleted_bp);
+    process_compressed_cigar(
+        cigar_str,
+        patch_matches,
+        patch_mismatches,
+        patch_insertions,
+        patch_inserted_bp,
+        patch_deletions,
+        patch_deleted_bp,
+        patch_refAlignedLength,
+        patch_qAlignedLength);
+
+    // Trim deletions and get new coordinates
+    auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
+        trim_deletions(cigar_str, target_offset + patch_aln.i, target_offset + patch_aln.i + patch_refAlignedLength,
+                      query_offset + patch_aln.j, query_offset + patch_aln.j + patch_qAlignedLength);
+
+    // Recompute metrics with trimmed CIGAR
+    process_compressed_cigar(
+        trimmed_cigar,
+        patch_matches,
+        patch_mismatches,
+        patch_insertions,
+        patch_inserted_bp,
+        patch_deletions,
+        patch_deleted_bp,
+        patch_refAlignedLength,
+        patch_qAlignedLength);
+
+    char* patch_cigar = strdup(trimmed_cigar.c_str());
 
     double patch_gap_compressed_identity = (double)patch_matches /
         (double)(patch_matches + patch_mismatches + patch_insertions + patch_deletions);
@@ -2256,6 +2456,7 @@ void write_alignment_sam(
 bool write_alignment_paf(
         std::ostream& out,
         const alignment_t& aln,
+        const std::string& cigar_str,
         const std::string& query_name,
         const uint64_t& query_total_length,
         const uint64_t& query_offset, // query offset on the forward strand
@@ -2270,6 +2471,7 @@ bool write_alignment_paf(
         const bool& with_endline,
         const bool& is_rev_patch) {
     bool ret = false;  // return true if we wrote the alignment
+    if (cigar_str == "") { std::cerr << "[wflign_patch] unsupported codepath" << std::endl; exit(1); }
 
     if (aln.ok) {
         uint64_t matches = 0;
@@ -2281,11 +2483,36 @@ bool write_alignment_paf(
         uint64_t refAlignedLength = 0;
         uint64_t qAlignedLength = 0;
 
-        char *cigar = wfa_alignment_to_cigar(
-                &aln.edit_cigar, refAlignedLength, qAlignedLength, matches,
-                mismatches, insertions, inserted_bp, deletions, deleted_bp);
+        process_compressed_cigar(
+            cigar_str,
+            matches,
+            mismatches,
+            insertions,
+            inserted_bp,
+            deletions,
+            deleted_bp,
+            refAlignedLength,
+            qAlignedLength);
 
-        size_t alignmentRefPos = aln.i;
+        // Trim deletions and get new coordinates
+        auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
+            trim_deletions(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
+                         query_offset + aln.j, query_offset + aln.j + qAlignedLength);
+
+        // Recompute metrics with trimmed CIGAR
+        process_compressed_cigar(
+            trimmed_cigar,
+            matches,
+            mismatches,
+            insertions,
+            inserted_bp,
+            deletions,
+            deleted_bp,
+            refAlignedLength,
+            qAlignedLength);
+
+        char* cigar = strdup(trimmed_cigar.c_str());
+        size_t alignmentRefPos = new_ref_start - target_offset;
         double gap_compressed_identity =
                 (double)matches /
                 (double)(matches + mismatches + insertions + deletions);
@@ -2302,6 +2529,7 @@ bool write_alignment_paf(
                 q_start = query_offset + aln.j;
                 q_end = query_offset + aln.j + qAlignedLength;
             }
+
             out << query_name << "\t" << query_total_length << "\t" << q_start
                 << "\t" << q_end << "\t"
                 << (aln.is_rev ^ query_is_rev ? "-" : "+") << "\t" << target_name << "\t"

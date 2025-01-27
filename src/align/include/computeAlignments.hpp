@@ -139,6 +139,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
       /**
        * @brief                 compute alignments
        */
+
       void compute()
       {
         this->computeAlignments();
@@ -149,7 +150,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
        * @param[in]   mappingRecordLine
        * @param[out]  currentRecord
        */
-      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord) {
+      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding) {
           std::stringstream ss(mappingRecordLine); // Insert the string into a stream
           std::string word; // Have a buffer string
 
@@ -169,6 +170,23 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           // if the estimated identity is missing, avoid assuming too low values
           const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
 
+          // Parse chain info if present (expecting format "chain:i:id.pos.len" in tokens[14])
+          int32_t chain_id = -1;
+          int32_t chain_length = 1;
+          int32_t chain_pos = 1;
+          if (tokens.size() > 14) {
+              const vector<string> chain_vec = skch::CommonFunc::split(tokens[14], ':');
+              if (chain_vec.size() == 3 && chain_vec[0] == "chain" && chain_vec[1] == "i") {
+                  // Split the id.pos.len format
+                  const vector<string> chain_parts = skch::CommonFunc::split(chain_vec[2], '.');
+                  if (chain_parts.size() == 3) {
+                      chain_id = std::stoi(chain_parts[0]);
+                      chain_pos = std::stoi(chain_parts[1]); 
+                      chain_length = std::stoi(chain_parts[2]);
+                  }
+              }
+          }
+
           // Save words into currentRecord
           {
               currentRecord.qId = tokens[0];
@@ -176,8 +194,39 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.qEndPos = std::stoi(tokens[3]);
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = tokens[5];
-              currentRecord.rStartPos = std::stoi(tokens[7]);
-              currentRecord.rEndPos = std::stoi(tokens[8]);
+              const uint64_t ref_len = std::stoi(tokens[6]);
+              currentRecord.chain_id = chain_id;
+              currentRecord.chain_length = chain_length;
+              currentRecord.chain_pos = chain_pos;
+              
+              // Apply target padding while ensuring we don't go below 0 or above reference length
+              uint64_t rStartPos = std::stoi(tokens[7]);
+              uint64_t rEndPos = std::stoi(tokens[8]);
+              
+              // Always apply target padding
+              if (target_padding > 0) {
+                  if (rStartPos >= target_padding) {
+                      rStartPos -= target_padding;
+                  } else {
+                      rStartPos = 0;
+                  }
+                  if (rEndPos + target_padding <= ref_len) {
+                      rEndPos += target_padding;
+                  } else {
+                      rEndPos = ref_len;
+                  }
+              }
+
+              // Validate coordinates against reference length
+              if (rStartPos >= ref_len || rEndPos > ref_len) {
+                  std::cerr << "[parse-debug] ERROR: Coordinates exceed reference length!" << std::endl;
+                  throw std::runtime_error("[wfmash::align::parseMashmapRow] Error! Coordinates exceed reference length: " 
+                                         + std::to_string(rStartPos) + "-" + std::to_string(rEndPos) 
+                                         + " (ref_len=" + std::to_string(ref_len) + ")");
+              }
+              
+              currentRecord.rStartPos = rStartPos;
+              currentRecord.rEndPos = rEndPos;
               currentRecord.mashmap_estimated_identity = mm_id;
           }
       }
@@ -193,7 +242,7 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     // Get the query sequence length
     const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
 
-    // Compute padding
+    // Compute padding for sequence extraction
     const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
         ? param.wflign_max_len_minor : currentRecord.rStartPos;
     const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
@@ -273,7 +322,10 @@ std::string processAlignment(seq_record_t* rec) {
         param.no_seq_in_sam,
         param.min_identity,
         param.wflign_max_len_minor,
-        rec->currentRecord.mashmap_estimated_identity);
+        rec->currentRecord.mashmap_estimated_identity,
+        rec->currentRecord.chain_id,
+        rec->currentRecord.chain_length,
+        rec->currentRecord.chain_pos);
 
     return output.str();
 }
@@ -310,7 +362,7 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
         std::string* line_ptr = nullptr;
         if (line_queue.try_pop(line_ptr)) {
             MappingBoundaryRow currentRecord;
-            parseMashmapRow(*line_ptr, currentRecord);
+            parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
             
             // Process the record and create seq_record_t
             seq_record_t* rec = createSeqRecord(currentRecord, *line_ptr, local_ref_faidx, local_query_faidx);
@@ -408,9 +460,48 @@ void worker_thread(uint64_t tid,
         if (seq_queue.try_pop(rec)) {
             is_working.store(true);
             std::string alignment_output = processAlignment(rec);
-            
-            // Push the alignment output to the paf_queue
-            paf_queue.push(new std::string(std::move(alignment_output)));
+
+            // Parse the alignment output to find CIGAR string and coordinates
+            std::stringstream ss(alignment_output);
+            std::string line;
+            while (std::getline(ss, line)) {
+                if (line.empty()) continue;
+                
+                std::vector<std::string> fields;
+                std::stringstream field_ss(line);
+                std::string field;
+                while (field_ss >> field) {
+                    fields.push_back(field);
+                }
+
+                // Find the CIGAR string field (should be after cg:Z:)
+                auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                    [](const std::string& s) { return s.substr(0, 5) == "cg:Z:"; });
+                
+                if (cigar_it != fields.end()) {
+                    std::string cigar = cigar_it->substr(5); // Remove cg:Z: prefix
+                    uint64_t ref_start = std::stoull(fields[7]);
+                    uint64_t ref_end = std::stoull(fields[8]);
+
+
+                    // Just pass through the CIGAR string and coordinates unchanged
+                    // The trimming is now handled in wflign namespace
+
+                    // Reconstruct the line
+                    std::string new_line;
+                    for (const auto& f : fields) {
+                        if (!new_line.empty()) new_line += '\t';
+                        new_line += f;
+                    }
+                    new_line += '\n';
+                    
+                    // Push the modified alignment output to the paf_queue
+                    paf_queue.push(new std::string(std::move(new_line)));
+                } else {
+                    // If no CIGAR string found, output the line unchanged
+                    paf_queue.push(new std::string(line + '\n'));
+                }
+            }
             
             // Update progress meter and processed alignment length
             uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
@@ -514,7 +605,7 @@ void computeAlignments() {
 
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
-                parseMashmapRow(mappingRecordLine, currentRecord);
+                parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
             }
         }

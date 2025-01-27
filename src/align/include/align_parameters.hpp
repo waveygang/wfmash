@@ -62,6 +62,7 @@ struct Parameters {
     bool sam_format;                              //Emit the output in SAM format (PAF default)
     bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
     bool multithread_fasta_input;                 //Multithreaded fasta input
+    uint64_t target_padding;                      //Additional padding around target sequence
 
 #ifdef WFA_PNG_TSV_TIMING
     // plotting

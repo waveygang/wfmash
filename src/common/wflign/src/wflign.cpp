@@ -4,6 +4,7 @@
 
 #include "wflign.hpp"
 #include "wflign_patch.hpp"
+#include "wflign_swizzle.hpp"
 
 
 // Namespaces
@@ -34,7 +35,10 @@ void do_biwfa_alignment(
     const bool no_seq_in_sam,
     const float min_identity,
     const uint64_t wflign_max_len_minor,
-    const float mashmap_estimated_identity) {
+    const float mashmap_estimated_identity,
+    const int32_t chain_id,
+    const int32_t chain_length,
+    const int32_t chain_pos) {
     
     // Create WFA aligner with the provided penalties
     wfa::WFAlignerGapAffine2Pieces wf_aligner(
@@ -49,6 +53,7 @@ void do_biwfa_alignment(
     
     wf_aligner.setHeuristicNone();
     
+
     // Perform the alignment
     const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
     
@@ -64,12 +69,39 @@ void do_biwfa_alignment(
         
         // Copy alignment CIGAR
         wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
-        
+
+        // Convert WFA CIGAR to string format for potential swizzling
+        std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
+        // Try swizzling the CIGAR at both ends with debug enabled
+
+        std::string swizzled = try_swap_start_pattern(cigar_str, query, target, 0, 0);
+        if (swizzled != cigar_str) {
+            cigar_str = swizzled;
+        } else {
+        }
+
+        swizzled = try_swap_end_pattern(cigar_str, query, target, 0, 0);
+        if (swizzled != cigar_str) {
+            cigar_str = swizzled;
+        } else {
+        }
+
+        // If the CIGAR changed, update coordinates and alignment
+        //if (cigar_str != wfa_edit_cigar_to_string(aln.edit_cigar)) {
+            // Update coordinates based on swizzled CIGAR
+            //auto new_coords = alignment_end_coords(cigar_str, query_offset, target_offset);
+                
+            // Convert back to WFA format
+            //wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
+        //}
+
+        //wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
         // Write alignment
         if (paf_format_else_sam) {
             write_alignment_paf(
                 out,
                 aln,
+                cigar_str,
                 query_name,
                 query_total_length,
                 query_offset,
@@ -86,6 +118,7 @@ void do_biwfa_alignment(
             write_alignment_sam(
                 out,
                 aln,
+                cigar_str,
                 query_name,
                 query_total_length,
                 query_offset,
@@ -451,7 +484,8 @@ void WFlign::wflign_affine_wavefront(
             query_name, query, query_total_length, query_offset, query_length, query_is_rev,
             target_name, target, target_total_length, target_offset, target_length,
             *out, wfa_convex_penalties, emit_md_tag, paf_format_else_sam, no_seq_in_sam,
-            min_identity, wflign_max_len_minor, mashmap_estimated_identity);
+            min_identity, wflign_max_len_minor, mashmap_estimated_identity,
+            -1, 1, 1); // Not part of a chain when using direct biWFA
         return;
     }
 
@@ -1134,6 +1168,7 @@ void WFlign::wflign_affine_wavefront(
                     write_alignment_paf(
                             *out,
                             **x,
+                            "",
                             query_name,
                             query_total_length,
                             query_offset,
