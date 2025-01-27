@@ -243,13 +243,8 @@ std::string try_swap_start_pattern(
         // Always enable debug logging
         const bool debug = true;
 
-        // Note: target_seq is already offset by the padding, so we use 0-based coords
-        if (sequences_match(query_seq, target_seq, query_start, 0, N, debug)) {
-            // When we move a deletion from after the match to before it,
-            // we need to adjust target_start since the deletion now comes first
-            int64_t new_target_start = target_start - Dlen;
-            
-
+        if (sequences_match(query_seq, target_seq, query_start, target_start + Dlen, N, debug)) {
+            // Swap the first two operations
             std::string remainder = cigar.substr(second_op_end);
             std::string swapped = std::to_string(Dlen) + "D" +
                                 std::to_string(N) + "=" +
