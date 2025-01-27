@@ -266,6 +266,11 @@ add_test(
   COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -Q Y12 > x.paf && pafcheck --query-fasta data/scerevisiae8.fa.gz --target-fasta data/scerevisiae8.fa.gz --paf x.paf"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_test(
+  NAME wfmash-maf-validity
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -Q Y12 > x.paf && wgatools paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz x.paf > x.maf && wgatools maf-check x.maf"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 install(TARGETS wfmash DESTINATION bin)
 
 if (BUILD_STATIC)

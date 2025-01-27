@@ -32,6 +32,11 @@ jobs:
           samtools
           libjemalloc-dev
           bedtools
+          cargo
+      - name: Install wgatools
+        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+      - name: Install pafcheck  
+        run: cargo install --git https://github.com/ekg/pafcheck.git
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
