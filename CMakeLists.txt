@@ -262,13 +262,8 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
-  NAME wfmash-short-reads-500bps-to-SAM
-  COMMAND bash -c "${INVOKE} data/reference.fa.gz data/reads.500bps.fa.gz -s 0.5k -N -a > reads.500bps.sam && ./scripts/test.sh data/reference.fa.gz.fai reads.500bps.sam 0.75"
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_test(
-  NAME wfmash-short-reads-255bps-to-PAF
-  COMMAND bash -c "${INVOKE} data/reads.255bps.fa.gz -w 16 -s 100 -l 200 -L > reads.255bps.paf && ./scripts/test.sh data/reads.255bps.fa.gz.fai reads.255bps.paf 0.65"
+  NAME wfmash-pafcheck-yeast
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -Q Y12 > x.paf && pafcheck --query-fasta data/scerevisiae8.fa.gz --target-fasta data/scerevisiae8.fa.gz --paf x.paf"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
