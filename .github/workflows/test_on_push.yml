@@ -56,11 +56,12 @@ jobs:
         run: pafcheck --query-fasta data/scerevisiae8.fa.gz --paf test.paf
       - name: Convert PAF to MAF using wgatools
         run: wgatools paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz test.paf > test.maf
-      - name: Check if MAF file is not empty
+      - name: Check MAF file alignment length
         run: |
-          if [ -s test.maf ]; then
-            echo "MAF file is not empty. Test passed."
+          total_len=$(wgatools stat test.maf | cut -f 7 | awk '{ s+=$1 } END { print s }')
+          if [ "$total_len" -gt 11000000 ]; then
+            echo "MAF alignment length $total_len bp exceeds 11Mbp threshold. Test passed."
           else
-            echo "MAF file is empty. Test failed."
+            echo "MAF alignment length $total_len bp is below 11Mbp threshold. Test failed."
             exit 1
           fi
