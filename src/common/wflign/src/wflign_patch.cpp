@@ -2255,9 +2255,7 @@ void write_tag_and_md_string(
     const int cigar_start,
     const int cigar_end,
     const int target_start,
-    const char *target,
-    const int64_t target_offset,
-    const int64_t target_pointer_shift) {
+    const char *target) {
 
     out << "MD:Z:";
 
@@ -2268,29 +2266,38 @@ void write_tag_and_md_string(
     int x = cigar_start;
 
     while (x < cigar_end) {
+        // Parse the length digits
         while (x < cigar_end && isdigit(cigar_ops[x]))
             ++x;
+
         char op = cigar_ops[x];
         int len = 0;
-        std::from_chars(cigar_ops + l, cigar_ops + x, len);
+
+        // Convert the substring [l, x) to an integer
+        auto result = std::from_chars(cigar_ops + l, cigar_ops + x, len);
         l = ++x;
+
+        // Process the previous operation if there was one
         if (last_len) {
             if (last_op == op) {
                 len += last_len;
             } else {
+                // Handle the previous operation based on its type
                 if (last_op == '=' || last_op == 'M') {
                     l_MD += last_len;
                     t_off += last_len;
                 } else if (last_op == 'X') {
                     for (uint64_t ii = 0; ii < last_len; ++ii) {
-                        out << l_MD << target[t_off + ii - target_pointer_shift];
+                        int64_t idx = t_off + ii ;
+                        out << l_MD << target[idx];
                         l_MD = 0;
                     }
                     t_off += last_len;
                 } else if (last_op == 'D') {
                     out << l_MD << "^";
                     for (uint64_t ii = 0; ii < last_len; ++ii) {
-                        out << target[t_off + ii - target_pointer_shift];
+                        int64_t idx = t_off + ii;
+                        out << target[idx];
                     }
                     l_MD = 0;
                     t_off += last_len;
@@ -2301,12 +2308,14 @@ void write_tag_and_md_string(
         last_len = len;
     }
 
+    // Process the last operation
     if (last_len) {
         if (last_op == '=' || last_op == 'M') {
             out << last_len + l_MD;
         } else if (last_op == 'X') {
             for (uint64_t ii = 0; ii < last_len; ++ii) {
-                out << l_MD << target[t_off + ii - target_pointer_shift];
+                int64_t idx = t_off + ii;
+                out << l_MD << target[idx];
                 l_MD = 0;
             }
             out << "0";
@@ -2315,7 +2324,8 @@ void write_tag_and_md_string(
         } else if (last_op == 'D') {
             out << l_MD << "^";
             for (uint64_t ii = 0; ii < last_len; ++ii) {
-                out << target[t_off + ii - target_pointer_shift];
+                int64_t idx = t_off + ii;
+                out << target[idx];
             }
             out << "0";
         }
@@ -2424,15 +2434,17 @@ void write_alignment_sam(
             << "NM:i:" << (patch_mismatches + patch_inserted_bp + patch_deleted_bp) << "\t"
             << "gi:f:" << patch_gap_compressed_identity << "\t"
             << "bi:f:" << patch_block_identity << "\t"
-            << "md:f:" << mashmap_estimated_identity << "\t";
-            //<< "pt:Z:true" << "\t"
-            //<< "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
+            << "md:f:" << mashmap_estimated_identity;
+            //<< "\t" << "pt:Z:true" <<
+            //<< "\t" << "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
 
         if (emit_md_tag) {
             out << "\t";
+
+            // target_start is 0, as we are working on a subset of the target sequence
             write_tag_and_md_string(out, patch_cigar, 0, strlen(patch_cigar), 
-                                    target_offset + patch_aln.i,
-                                    target, target_offset, target_pointer_shift);
+                                    0 + patch_aln.i,
+                                    target);
         }
 
         out << "\n";
