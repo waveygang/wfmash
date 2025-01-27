@@ -50,10 +50,6 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - name: Install wgatools
-        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
-      - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
       - name: Run wfmash and generate PAF
         run: build/bin/wfmash -t 8 -T SGDref -Q S288C -Y '#' data/scerevisiae8.fa.gz > test.paf
       - name: check PAF coordinates and extended CIGAR validity
