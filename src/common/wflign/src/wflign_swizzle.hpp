@@ -40,8 +40,7 @@ static bool sequences_match(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start,
-    int N,
-    bool debug = false);
+    int N);
 static bool extract_first_two_ops(
     const std::string &cigar,
     int &count1, char &op1,

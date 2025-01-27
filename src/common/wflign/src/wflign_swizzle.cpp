@@ -41,8 +41,7 @@ static bool sequences_match(
     const std::string &target_seq,
     int64_t query_start,
     int64_t target_start,
-    int N,
-    bool debug) {
+    int N) {
     if (query_start < 0 || target_start < 0) {
         return false;
     }
@@ -55,8 +54,7 @@ static bool sequences_match(
     for (int i = 0; i < N; i++) {
         if (query_seq[query_start + i] != target_seq[target_start + i]) {
             return false;
-        }
-    }
+        }    }
     return true;
 }
 
@@ -67,8 +65,6 @@ static bool verify_cigar_alignment(
     int64_t query_start,
     int64_t target_start,
     bool debug) {
-    if (true) {
-    }
 
     int64_t qPos = query_start;
     int64_t tPos = target_start;
@@ -240,10 +236,8 @@ std::string try_swap_start_pattern(
 
 
     if (op1 == '=' && op2 == 'D') {
-        // Always enable debug logging
-        const bool debug = true;
 
-        if (sequences_match(query_seq, target_seq, query_start, target_start + Dlen, N, debug)) {
+        if (sequences_match(query_seq, target_seq, query_start, target_start + Dlen, N)) {
             // Swap the first two operations
             std::string remainder = cigar.substr(second_op_end);
             std::string swapped = std::to_string(Dlen) + "D" +
