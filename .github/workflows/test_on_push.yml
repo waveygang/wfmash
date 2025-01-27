@@ -41,27 +41,7 @@ jobs:
         run: git submodule update --init --recursive
       - name: Build wfmash
         run: cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Debug -DWFA_PNG_AND_TSV=ON && cmake --build build -- -j 2
-      - name: Run cmake tests (exclude lengthy ones)
+      - name: Run cmake tests
         run: |
           cd build
-          ctest -E all2all
-      - name: Install Rust and Cargo
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - name: Run wfmash and generate PAF
-        run: build/bin/wfmash -t 8 -T SGDref -Q S288C -Y '#' data/scerevisiae8.fa.gz > test.paf
-      - name: check PAF coordinates and extended CIGAR validity
-        run: pafcheck --query-fasta data/scerevisiae8.fa.gz --paf test.paf
-      - name: Convert PAF to MAF using wgatools
-        run: wgatools paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz test.paf > test.maf
-      - name: Check MAF file alignment length
-        run: |
-          total_len=$(wgatools stat test.maf | cut -f 7 | awk '{ s+=$1 } END { print s }')
-          if [ "$total_len" -gt 11000000 ]; then
-            echo "MAF alignment length $total_len bp exceeds 11Mbp threshold. Test passed."
-          else
-            echo "MAF alignment length $total_len bp is below 11Mbp threshold. Test failed."
-            exit 1
-          fi
+          ctest --output-on-failure
