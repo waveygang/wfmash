@@ -69,9 +69,11 @@ public:
         if (logger.joinable()) {
             logger.join();
         }
+        uint64_t final_completed = completed.load();
         completed.store(total);
         do_print();
         std::cerr << std::endl;
+        std::cerr << "[progress] completed " << final_completed << "/" << total << " operations" << std::endl;
     }
     std::string print_time(const double& _seconds) {
         int days = 0, hours = 0, minutes = 0, seconds = 0;
