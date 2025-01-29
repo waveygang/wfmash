@@ -542,7 +542,7 @@ namespace skch
             total_frag_length += len;
             // we also add a fragment at the end, unless the sequence is divisible by fragment size exactly
             if (len % param.segLength != 0) {
-                total_frag_length += param.segLength - (len % param.segLength);
+                total_frag_length += param.segLength - (param.segLength - (len % param.segLength));
             }
         }
 
