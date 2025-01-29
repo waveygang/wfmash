@@ -52,22 +52,7 @@ public:
         auto curr = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = curr-start_time;
         double rate = completed / elapsed_seconds.count();
-        double seconds_to_completion = 0;
-        if (completed > 0) {
-            if (completed >= total) {
-                seconds_to_completion = 0;
-            } else {
-                seconds_to_completion = (total - completed) / rate;
-                // Cap unreasonable estimates at 100 days
-                if (seconds_to_completion > 8640000) { // 100 days in seconds
-                    seconds_to_completion = 8640000;
-                }
-                // Prevent negative estimates
-                if (seconds_to_completion < 0) {
-                    seconds_to_completion = 0;
-                }
-            }
-        }
+        double seconds_to_completion = (completed > 0 ? (total - completed) / rate : 0);
         std::cerr << "\r" << banner << " "
                   << std::defaultfloat
                   << std::setfill(' ')
