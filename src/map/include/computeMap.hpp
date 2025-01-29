@@ -542,9 +542,9 @@ namespace skch
             // Count full fragments
             uint64_t full_fragments = len / param.segLength;
             total_frag_length += full_fragments * param.segLength;
-            // Add final fragment if there's a remainder
+            // Add final fragment if there's a remainder, but only count the actual remaining bases
             if (len % param.segLength != 0) {
-                total_frag_length += param.segLength;
+                total_frag_length += len % param.segLength;
             }
         }
 
