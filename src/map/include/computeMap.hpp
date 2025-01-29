@@ -427,7 +427,6 @@ namespace skch
               InputSeqProgContainer* input = nullptr;
               if (input_queue.try_pop(input)) {
                   auto output = mapModule(input, fragment_queue);
-                  //progress.increment(input->len / 4);
                   while (!merged_queue.try_push(output)) {
                       std::this_thread::sleep_for(std::chrono::milliseconds(10));
                   }
@@ -537,9 +536,14 @@ namespace skch
 
         // Count the total number of sequences and sequence length
         uint64_t total_seqs = querySequenceNames.size();
-        uint64_t total_seq_length = 0;
+        uint64_t total_frag_length = 0;
         for (const auto& seqName : querySequenceNames) {
-            total_seq_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
+            auto len = idManager->getSequenceLength(idManager->getSequenceId(seqName));
+            total_frag_length += len;
+            // we also add a fragment at the end, unless the sequence is divisible by fragment size exactly
+            if (len % param.segLength != 0) {
+                total_frag_length += param.segLength - (len % param.segLength);
+            }
         }
 
         std::vector<std::vector<std::string>> target_subsets = createTargetSubsets(targetSequenceNames);
@@ -609,7 +613,7 @@ namespace skch
                 std::atomic<bool> reader_done(false);
                 std::atomic<bool> workers_done(false);
                 std::atomic<bool> fragments_done(false);
-                processSubset(subset_count, target_subsets.size(), total_seq_length, input_queue, merged_queue, 
+                processSubset(subset_count, target_subsets.size(), total_frag_length, input_queue, merged_queue, 
                               fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
             }
 
@@ -682,14 +686,14 @@ namespace skch
 
       }
 
-      void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_seq_length,
+      void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_frag_length,
                          input_atomic_queue_t& input_queue, merged_mappings_queue_t& merged_queue,
                          fragment_atomic_queue_t& fragment_queue, std::atomic<bool>& reader_done,
                          std::atomic<bool>& workers_done, std::atomic<bool>& fragments_done,
                          std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings)
       {
           progress_meter::ProgressMeter progress(
-              total_seq_length,
+              total_frag_length,
               "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
@@ -2074,7 +2078,6 @@ namespace skch
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
               }
-              progress.increment(1);
           }
 
           // Assign the merged mapping ids
