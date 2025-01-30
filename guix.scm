@@ -53,8 +53,10 @@
 
 (define-module (guix)
   #:use-module ((guix licenses) #:prefix license:)
+  #:use-module (guix build-system cargo)
   #:use-module (guix build-system cmake)
   #:use-module (guix download)
+  #:use-module (guix git-download)
   #:use-module (guix gexp)
   #:use-module (guix git-download)
   #:use-module (guix packages)
@@ -64,20 +66,99 @@
   #:use-module (gnu packages bash)
   #:use-module (gnu packages bioinformatics)
   #:use-module (gnu packages build-tools)
+  #:use-module (gnu packages certs)
+  #:use-module (gnu packages cmake)
+  #:use-module (gnu packages commencement)
   #:use-module (gnu packages compression)
   #:use-module (gnu packages cpp)
+  #:use-module (gnu packages crates-io)
+  #:use-module (gnu packages curl)
   #:use-module (gnu packages gcc)
   #:use-module (gnu packages jemalloc)
   #:use-module (gnu packages linux) ; for util-linux column
   #:use-module (gnu packages llvm)
   #:use-module (gnu packages maths)
   #:use-module (gnu packages multiprecision)
+  #:use-module (gnu packages perl)
   #:use-module (gnu packages pkg-config)
   #:use-module (gnu packages python)
+  #:use-module (gnu packages rust)
+  #:use-module (gnu packages rust-apps) ; for cargo
+  #:use-module (gnu packages tls)
   #:use-module (gnu packages version-control)
   #:use-module (srfi srfi-1)
   #:use-module (ice-9 popen)
-  #:use-module (ice-9 rdelim))
+  #:use-module (ice-9 rdelim)
+  )
+
+(define-public pafcheck-github
+  (package
+    (name "pafcheck-github")
+    (version "0.1.0")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/ekg/pafcheck")
+             (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32
+         "0prlkq8am3sskg55x7b8vr4j54dmkjqldyl50isq5qyy9pff3xxs"))))
+    (build-system cargo-build-system)
+    (inputs (list curl gnutls lzip openssl pkg-config zlib xz)) ;; mostly for htslib
+    (arguments
+     `(#:cargo-inputs (("rust-addr" ,rust-addr-0.14)
+                       ("rust-anyhow" ,rust-anyhow-1)
+                       ("rust-cssparser" ,rust-cssparser-0.28)
+                       ("rust-clap" ,rust-clap-4)
+                       ("rust-lifeguard" ,rust-lifeguard-0.6)
+                       ("rust-rmp-serde" ,rust-rmp-serde-1)
+                       ("rust-rust-htslib" ,rust-rust-htslib-0.38)
+                       ("rust-tempfile" ,rust-tempfile-3)
+                       ("rust-thiserror" ,rust-thiserror-1))
+       ;; #:cargo-development-inputs ()))
+       #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
+     ))
+    (synopsis "pafcheck")
+    (description
+     "Tool for validating PAF (Pairwise Alignment Format) files against their corresponding FASTA sequences. It ensures that the alignments described in the PAF file match the actual sequences in the FASTA files.")
+    (home-page "https://github.com/ekg/pafcheck")
+    (license license:expat)))
+
+(define-public pafcheck-shell-git
+  "Shell version to use 'cargo build'"
+  (package
+    (inherit pafcheck-github)
+    (name "pafcheck-shell-git")
+    ;; (version (git-version "0.21" "HEAD" %git-commit))
+    (inputs
+     (modify-inputs (package-inputs pafcheck-github)
+         (append binutils coreutils-minimal ;; for the shell
+                 )))
+    (propagated-inputs (list cmake rust rust-cargo nss-certs openssl perl gnu-make-4.2
+                             coreutils-minimal which perl binutils gcc-toolchain pkg-config zlib
+                             )) ;; to run cargo build in the shell
+    (arguments
+     `(
+       #:cargo-inputs (("rust-anyhow" ,rust-anyhow-1)
+                       ("rust-clap" ,rust-clap-4)
+                       ("rust-rust-htslib" ,rust-rust-htslib-0.38)
+                       ("rust-tempfile" ,rust-tempfile-3)
+                       ("rust-thiserror" ,rust-thiserror-1)
+                       )
+       ;; #:cargo-development-inputs ()))
+       #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
+       #:phases (modify-phases %standard-phases
+                               (delete 'configure)
+                               (delete 'build)
+                               (delete 'package)
+                               (delete 'check)
+                               (delete 'install)
+                               )
+     ))
+    ))
+
 
 (define %source-dir (dirname (current-filename)))
 
@@ -104,6 +185,7 @@
        ("htslib" ,htslib)
        ("jemalloc" ,jemalloc)
        ("libdeflate" ,libdeflate)
+       ("pafcheck" ,pafcheck-shell-git)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
        ("xz" ,xz)
@@ -146,6 +228,15 @@ obtain base-level alignments.")
      (modify-inputs (package-inputs wfmash-gcc-git)
          (append gperftools
                  )))
+    (arguments
+     `(#:phases (modify-phases %standard-phases
+                               (delete 'configure)
+                               (delete 'build)
+                               (delete 'package)
+                               (delete 'check)
+                               (delete 'install)
+                               )
+     ))
     ))
 
 (define-public wfmash-clang-git
