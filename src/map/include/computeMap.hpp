@@ -534,18 +534,17 @@ namespace skch
         this->querySequenceNames = idManager->getQuerySequenceNames();
         this->targetSequenceNames = idManager->getTargetSequenceNames();
 
-        // Count the total number of sequences and sequence length
-        uint64_t total_seqs = querySequenceNames.size();
-        uint64_t total_frag_length = 0;
+        // Count total fragments across all queries
+        uint64_t total_fragments = 0;
         for (const auto& seqName : querySequenceNames) {
             auto len = idManager->getSequenceLength(idManager->getSequenceId(seqName));
             // Count full fragments
-            uint64_t full_fragments = len / param.segLength;
-            total_frag_length += full_fragments * param.segLength;
-            // Add final fragment if there's a remainder, but only count the actual remaining bases
-            if (len % param.segLength != 0) {
-                total_frag_length += len % param.segLength;
+            int noOverlapFragmentCount = len / param.segLength;
+            // Add final fragment if needed
+            if (noOverlapFragmentCount >= 1 && len % param.segLength != 0) {
+                ++noOverlapFragmentCount;
             }
+            total_fragments += noOverlapFragmentCount;
         }
 
         std::vector<std::vector<std::string>> target_subsets = createTargetSubsets(targetSequenceNames);
