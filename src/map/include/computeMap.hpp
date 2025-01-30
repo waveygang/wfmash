@@ -614,7 +614,7 @@ namespace skch
                 std::atomic<bool> reader_done(false);
                 std::atomic<bool> workers_done(false);
                 std::atomic<bool> fragments_done(false);
-                processSubset(subset_count, target_subsets.size(), total_frag_length, input_queue, merged_queue, 
+                processSubset(subset_count, target_subsets.size(), total_fragments, input_queue, merged_queue, 
                               fragment_queue, reader_done, workers_done, fragments_done, combinedMappings);
             }
 
