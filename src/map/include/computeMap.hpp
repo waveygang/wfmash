@@ -687,7 +687,7 @@ namespace skch
 
       }
 
-      void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_frag_length,
+      void processSubset(uint64_t subset_count, size_t total_subsets, uint64_t total_fragments,
                          input_atomic_queue_t& input_queue, merged_mappings_queue_t& merged_queue,
                          fragment_atomic_queue_t& fragment_queue, std::atomic<bool>& reader_done,
                          std::atomic<bool>& workers_done, std::atomic<bool>& fragments_done,
