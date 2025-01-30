@@ -192,7 +192,7 @@ namespace skch
         }
 
         // Update progress after processing the fragment
-        fragment->output->progress.increment(fragment->len);
+        fragment->output->progress.increment(1);
 
         fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
         delete fragment;
@@ -695,7 +695,7 @@ namespace skch
                          std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings)
       {
           progress_meter::ProgressMeter progress(
-              total_frag_length,
+              total_fragments,
               "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
