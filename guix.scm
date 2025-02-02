@@ -92,24 +92,6 @@
   #:use-module (ice-9 rdelim)
   )
 
-(define-public rust-adblock-override
-  (package
-    (inherit rust-adblock-0.5)
-    (name "rust-adblock-override")
-    (version "0.5.8")
-    (source (origin
-              (method url-fetch)
-              (uri (crate-uri "adblock" version))
-              (file-name (string-append name "-" version ".tar.gz"))
-              (sha256
-               (base32
-                "1qgjcrm7vqxq5ispdj95ql7payy5d5rj0zfwba4b076xxvw1q4yq"))
-              (modules '((guix build utils)))
-              (snippet
-               '(begin (substitute* "Cargo.toml"
-                                    (("^0\\.4") "^0.5.1"))))))))
-
-
 (define-public pafcheck-github
   (package
     (name "pafcheck-github")
@@ -128,7 +110,7 @@
     (inputs (list curl gnutls lzip openssl pkg-config zlib xz)) ;; mostly for htslib
     (arguments
      `(#:cargo-inputs (("rust-addr" ,rust-addr-0.14)
-                       ("rust-adblock" ,rust-adblock-override)
+                       ("rust-adblock" ,rust-adblock-0.7)
                        ("rust-anyhow" ,rust-anyhow-1)
                        ("rust-cssparser" ,rust-cssparser-0.28)
                        ("rust-clap" ,rust-clap-4)
