@@ -72,6 +72,7 @@
   #:use-module (gnu packages compression)
   #:use-module (gnu packages cpp)
   #:use-module (gnu packages crates-io)
+  #:use-module (gnu packages crates-web)
   #:use-module (gnu packages curl)
   #:use-module (gnu packages gcc)
   #:use-module (gnu packages jemalloc)
@@ -91,6 +92,24 @@
   #:use-module (ice-9 rdelim)
   )
 
+(define-public rust-adblock-override
+  (package
+    (inherit rust-adblock-0.5)
+    (name "rust-adblock-override")
+    (version "0.5.8")
+    (source (origin
+              (method url-fetch)
+              (uri (crate-uri "adblock" version))
+              (file-name (string-append name "-" version ".tar.gz"))
+              (sha256
+               (base32
+                "1qgjcrm7vqxq5ispdj95ql7payy5d5rj0zfwba4b076xxvw1q4yq"))
+              (modules '((guix build utils)))
+              (snippet
+               '(begin (substitute* "Cargo.toml"
+                                    (("^0\\.4") "^0.5.1"))))))))
+
+
 (define-public pafcheck-github
   (package
     (name "pafcheck-github")
@@ -109,9 +128,14 @@
     (inputs (list curl gnutls lzip openssl pkg-config zlib xz)) ;; mostly for htslib
     (arguments
      `(#:cargo-inputs (("rust-addr" ,rust-addr-0.14)
+                       ("rust-adblock" ,rust-adblock-override)
                        ("rust-anyhow" ,rust-anyhow-1)
                        ("rust-cssparser" ,rust-cssparser-0.28)
                        ("rust-clap" ,rust-clap-4)
+                       ("rust-criterion" ,rust-criterion-0.4)
+                       ("rust-criterion" ,rust-criterion-0.5)
+                       ("rust-reqwest" ,rust-reqwest-0.11)
+                       ("rust-mock-instant" ,rust-mock-instant-0.2)
                        ("rust-lifeguard" ,rust-lifeguard-0.6)
                        ("rust-rmp-serde" ,rust-rmp-serde-1)
                        ("rust-rust-htslib" ,rust-rust-htslib-0.38)
@@ -119,6 +143,7 @@
                        ("rust-thiserror" ,rust-thiserror-1))
        ;; #:cargo-development-inputs ()))
        #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
+       #:tests? #f
      ))
     (synopsis "pafcheck")
     (description
@@ -139,24 +164,6 @@
     (propagated-inputs (list cmake rust rust-cargo nss-certs openssl perl gnu-make-4.2
                              coreutils-minimal which perl binutils gcc-toolchain pkg-config zlib
                              )) ;; to run cargo build in the shell
-    (arguments
-     `(
-       #:cargo-inputs (("rust-anyhow" ,rust-anyhow-1)
-                       ("rust-clap" ,rust-clap-4)
-                       ("rust-rust-htslib" ,rust-rust-htslib-0.38)
-                       ("rust-tempfile" ,rust-tempfile-3)
-                       ("rust-thiserror" ,rust-thiserror-1)
-                       )
-       ;; #:cargo-development-inputs ()))
-       #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
-       #:phases (modify-phases %standard-phases
-                               (delete 'configure)
-                               (delete 'build)
-                               (delete 'package)
-                               (delete 'check)
-                               (delete 'install)
-                               )
-     ))
     ))
 
 
