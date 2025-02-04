@@ -9,7 +9,7 @@
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
-;;   guix shell -C -D -F -f guix.scm         # default build
+;;   guix shell --share=$HOME/.cargo -C -D -F -f guix.scm         # default build
 ;;   guix shell -L . -C -D -F wfmash-gcc-git # preferred development container
 ;;   guix shell -L . -C -D -F wfmash-gcc-static-git
 ;;   guix shell -L . -C -D -F wfmash-clang-git
@@ -93,52 +93,53 @@
   )
 
 (define-public pafcheck-github
-  (package
-    (name "pafcheck-github")
-    (version "0.1.0")
-    (source
-     (origin
+  (let ((commit "6aad6af378d91c9ee1ecb7865cf2f8ecbe67cb90"))
+    (package
+     (name "pafcheck-github")
+     (version (string-append "0.1.0-" (string-take commit 7)))
+     (source
+      (origin
        (method git-fetch)
        (uri (git-reference
-             (url "https://github.com/ekg/pafcheck")
-             (commit (string-append "v" version))))
-       (file-name (git-file-name name version))
+             (url "https://github.com/pjotrp/pafcheck")
+             (commit commit)))
+       (file-name (string-append name "-" version "-checkout"))
        (sha256
         (base32
-         "0prlkq8am3sskg55x7b8vr4j54dmkjqldyl50isq5qyy9pff3xxs"))))
-    (build-system cargo-build-system)
-    (inputs (list curl gnutls lzip openssl pkg-config zlib xz)) ;; mostly for htslib
-    (arguments
-     `(#:cargo-inputs (("rust-addr" ,rust-addr-0.14)
-                       ("rust-adblock" ,rust-adblock-0.7)
-                       ("rust-anyhow" ,rust-anyhow-1)
-                       ("rust-cssparser" ,rust-cssparser-0.28)
-                       ("rust-clap" ,rust-clap-4)
-                       ("rust-criterion" ,rust-criterion-0.4)
-                       ("rust-criterion" ,rust-criterion-0.5)
-                       ("rust-reqwest" ,rust-reqwest-0.11)
-                       ("rust-mock-instant" ,rust-mock-instant-0.2)
-                       ("rust-lifeguard" ,rust-lifeguard-0.6)
-                       ("rust-rmp-serde" ,rust-rmp-serde-1)
-                       ("rust-rust-htslib" ,rust-rust-htslib-0.38)
-                       ("rust-tempfile" ,rust-tempfile-3)
-                       ("rust-thiserror" ,rust-thiserror-1))
-       ;; #:cargo-development-inputs ()))
-       #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
-       #:tests? #f
-     ))
-    (synopsis "pafcheck")
-    (description
-     "Tool for validating PAF (Pairwise Alignment Format) files against their corresponding FASTA sequences. It ensures that the alignments described in the PAF file match the actual sequences in the FASTA files.")
-    (home-page "https://github.com/ekg/pafcheck")
-    (license license:expat)))
+         "1dndbym1a0pz5asa7xs6369dszmxpyxanb0naknlx6b62f6r8j1c"
+        ))))
+     (build-system cargo-build-system)
+     (inputs (list curl gnutls lzip openssl pkg-config zlib xz)) ;; mostly for htslib
+     (arguments
+      `(#:cargo-inputs (("rust-addr" ,rust-addr-0.14)
+                        ("rust-adblock" ,rust-adblock-0.7)
+                        ("rust-anyhow" ,rust-anyhow-1)
+                        ("rust-cssparser" ,rust-cssparser-0.28)
+                        ("rust-clap" ,rust-clap-4)
+                        ("rust-criterion" ,rust-criterion-0.4)
+                        ("rust-criterion" ,rust-criterion-0.5)
+                        ("rust-reqwest" ,rust-reqwest-0.11)
+                        ("rust-mock-instant" ,rust-mock-instant-0.2)
+                        ("rust-lifeguard" ,rust-lifeguard-0.6)
+                        ("rust-rmp-serde" ,rust-rmp-serde-1)
+                        ("rust-rust-htslib" ,rust-rust-htslib-0.38)
+                        ("rust-tempfile" ,rust-tempfile-3)
+                        ("rust-thiserror" ,rust-thiserror-1))
+        ;; #:cargo-development-inputs ()))
+        #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
+        #:tests? #f
+        ))
+     (synopsis "pafcheck")
+     (description
+      "Tool for validating PAF (Pairwise Alignment Format) files against their corresponding FASTA sequences. It ensures that the alignments described in the PAF file match the actual sequences in the FASTA files.")
+     (home-page "https://github.com/ekg/pafcheck")
+     (license license:expat))))
 
 (define-public pafcheck-shell-git
   "Shell version to use 'cargo build'"
   (package
     (inherit pafcheck-github)
     (name "pafcheck-shell-git")
-    ;; (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs pafcheck-github)
          (append binutils coreutils-minimal ;; for the shell
@@ -174,11 +175,13 @@
        ("htslib" ,htslib)
        ("jemalloc" ,jemalloc)
        ("libdeflate" ,libdeflate)
-       ("pafcheck" ,pafcheck-shell-git)
        ("make" ,gnu-make)
        ("pkg-config" ,pkg-config)
        ("xz" ,xz)
        ("zlib" ,zlib)))
+    (propagated-inputs
+       `(("pafcheck" ,pafcheck-shell-git)
+       ))
      (synopsis "wfmash")
      (description
       "wfmash is an aligner for pangenomes that combines efficient homology
@@ -196,7 +199,7 @@ obtain base-level alignments.")
     (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
-         (append gcc-14
+         (append gcc
                  )))
     ))
 
