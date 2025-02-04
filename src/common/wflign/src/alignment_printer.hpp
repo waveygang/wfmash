@@ -21,6 +21,7 @@ void write_tag_and_md_string(
 void write_alignment_sam(
     std::ostream &out,
     const alignment_t& patch_aln,
+    const std::string& cigar_str,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
@@ -41,6 +42,7 @@ void write_alignment_sam(
 bool write_alignment_paf(
     std::ostream& out,
     const alignment_t& aln,
+    const std::string& cigar_str,
     const std::string& query_name,
     const uint64_t& query_total_length,
     const uint64_t& query_offset,
