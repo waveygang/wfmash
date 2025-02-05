@@ -694,7 +694,7 @@ namespace skch
                          std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings)
       {
           progress_meter::ProgressMeter progress(
-              total_fragments,
+              total_fragments * 2,
               "[wfmash::mashmap] mapping ("
               + std::to_string(subset_count + 1) + "/" + std::to_string(total_subsets) + ")");
 
@@ -945,6 +945,7 @@ namespace skch
             fragments.push_back(fragment);
         }
 
+
         if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
             auto fragment = new FragmentData{
                 &(input->seq)[0u] + input->len - param.segLength,
@@ -969,7 +970,7 @@ namespace skch
         }
 
         // Wait for all fragments to be processed
-        while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
+        while (fragments_processed.load(std::memory_order_seq_cst) < noOverlapFragmentCount) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
@@ -1909,7 +1910,6 @@ namespace skch
           }
 
           fragment.blockLength = std::max(fragment.refEndPos - fragment.refStartPos, fragment.queryEndPos - fragment.queryStartPos);
-          //fragment.blockLength = fragment.queryEndPos - fragment.queryStartPos;
                                           
           fragment.approxMatches = std::round(fragment.nucIdentity * fragment.blockLength / 100.0);
 
