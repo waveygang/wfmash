@@ -111,8 +111,8 @@ private:
             }
 
             if (groupKey.empty() && !prefixDelim.empty()) {
-                // Use prefix before delimiter as group key
-                size_t pos = seqName.find(prefixDelim);
+                // Use prefix before last delimiter as group key
+                size_t pos = seqName.rfind(prefixDelim);
                 if (pos != std::string::npos) {
                     groupKey = seqName.substr(0, pos);
                 }
@@ -127,6 +127,12 @@ private:
                 groupMap[groupKey] = ++currentGroup;
             }
             metadata[originalIndex].groupId = groupMap[groupKey];
+        }
+
+        // Debug output to verify grouping
+        for (size_t i = 0; i < metadata.size(); ++i) {
+            std::cerr << "[DEBUG group assignment] seq " << metadata[i].name 
+                      << " → group " << metadata[i].groupId << std::endl;
         }
 
         if (totalSeqs == 0) {
