@@ -1980,10 +1980,57 @@ namespace skch
        * @param[in]   param           Algorithm parameters
        * @return                      Filtered mappings
        */
+      struct SuperChainEnvelope {
+          seqno_t refSeqId;
+          offset_t q_start, q_end;
+          offset_t r_start, r_end;
+          strand_t strand;
+          
+          bool contains(const MappingResult& m, int64_t max_gap) const {
+              if (m.refSeqId != refSeqId || m.strand != strand) return false;
+              
+              // Check if mapping endpoints are within diagonal band
+              int64_t q_dist_start = std::abs((int64_t)m.queryStartPos - (int64_t)q_start);
+              int64_t r_dist_start = std::abs((int64_t)m.refStartPos - (int64_t)r_start);
+              int64_t q_dist_end = std::abs((int64_t)m.queryEndPos - (int64_t)q_end);
+              int64_t r_dist_end = std::abs((int64_t)m.refEndPos - (int64_t)r_end);
+              
+              return std::abs(q_dist_start - r_dist_start) <= max_gap &&
+                     std::abs(q_dist_end - r_dist_end) <= max_gap;
+          }
+      };
+
       void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
       {
           // Filter weak mappings
           filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
+
+          // Generate super-chains with relaxed gap constraints
+          auto superChains = mergeMappingsInRange(readMappings, param.super_chain_gap, progress);
+
+          // Create envelopes around super-chains
+          std::vector<SuperChainEnvelope> envelopes;
+          for (const auto& chain : superChains) {
+              SuperChainEnvelope env;
+              env.refSeqId = chain.refSeqId;
+              env.q_start = chain.queryStartPos;
+              env.q_end = chain.queryEndPos;
+              env.r_start = chain.refStartPos;
+              env.r_end = chain.refEndPos;
+              env.strand = chain.strand;
+              envelopes.push_back(env);
+          }
+
+          // Filter mappings not near any super-chain
+          readMappings.erase(
+              std::remove_if(readMappings.begin(), readMappings.end(),
+                  [&](const MappingResult& m) {
+                      return !std::any_of(envelopes.begin(), envelopes.end(),
+                          [&](const SuperChainEnvelope& env) {
+                              return env.contains(m, param.scaffold_gap);
+                          });
+                  }),
+              readMappings.end());
 
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {

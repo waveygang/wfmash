@@ -113,6 +113,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> scaffold_gap(mapping_opts, "INT", "max diagonal deviation from super-chains [50k]", {"scaffold-gap"});
+    args::ValueFlag<std::string> super_chain_gap(mapping_opts, "INT", "gap threshold for super-chains [20k]", {"super-chain-gap"}); 
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -363,6 +365,28 @@ void parse_args(int argc,
     } else {
         map_parameters.chain_gap = 2000;
         align_parameters.chain_gap = 2000;
+    }
+
+    if (scaffold_gap) {
+        const int64_t l = wfmash::handy_parameter(args::get(scaffold_gap));
+        if (l < 0) {
+            std::cerr << "[wfmash] ERROR: scaffold gap must be >= 0" << std::endl;
+            exit(1);
+        }
+        map_parameters.scaffold_gap = l;
+    } else {
+        map_parameters.scaffold_gap = 50000;
+    }
+
+    if (super_chain_gap) {
+        const int64_t l = wfmash::handy_parameter(args::get(super_chain_gap));
+        if (l < 0) {
+            std::cerr << "[wfmash] ERROR: super chain gap must be >= 0" << std::endl;
+            exit(1);
+        }
+        map_parameters.super_chain_gap = l;
+    } else {
+        map_parameters.super_chain_gap = 20000;
     }
 
     if (max_mapping_length) {
