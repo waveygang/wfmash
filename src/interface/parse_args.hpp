@@ -114,7 +114,7 @@ void parse_args(int argc,
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> scaffolding(mapping_opts, "G,L,D", 
-        "mapping scaffolding parameters (G,L,D) [20k,50k,50k]", {'S', "scaffolding"});
+        "mapping scaffolding parameters (chain-Gap,min-Len,max-Dev) [20k,50k,50k]", {'S', "scaffolding"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
