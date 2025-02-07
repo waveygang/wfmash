@@ -113,9 +113,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> scaffold_gap(mapping_opts, "INT", "max diagonal deviation from super-chains [50k]", {"scaffold-gap"});
-    args::ValueFlag<std::string> super_chain_gap(mapping_opts, "INT", "gap threshold for super-chains [20k]", {"super-chain-gap"}); 
-    args::ValueFlag<std::string> super_block(mapping_opts, "INT", "minimum super block length [50k]", {"super-block"});
+    args::ValueFlag<std::string> scaffolding(mapping_opts, "gap,len,dev", 
+        "mapping scaffolding parameters (gap,len,dev) [20k,50k,50k]", {'S', "scaffolding"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -368,37 +367,31 @@ void parse_args(int argc,
         align_parameters.chain_gap = 2000;
     }
 
-    if (scaffold_gap) {
-        const int64_t l = wfmash::handy_parameter(args::get(scaffold_gap));
-        if (l < 0) {
-            std::cerr << "[wfmash] ERROR: scaffold gap must be >= 0" << std::endl;
+    if (scaffolding) {
+        std::string params = args::get(scaffolding);
+        std::vector<std::string> values = skch::CommonFunc::split(params, ',');
+        if (values.size() != 3) {
+            std::cerr << "[wfmash] ERROR: scaffolding requires 3 comma-separated values: gap,len,dev" << std::endl;
             exit(1);
         }
-        map_parameters.scaffold_gap = l;
-    } else {
-        map_parameters.scaffold_gap = 50000;
-    }
-
-    if (super_chain_gap) {
-        const int64_t l = wfmash::handy_parameter(args::get(super_chain_gap));
-        if (l < 0) {
-            std::cerr << "[wfmash] ERROR: super chain gap must be >= 0" << std::endl;
+        
+        // Parse in order: gap, length, deviation
+        map_parameters.scaffold_gap = handy_parameter(values[0]);         // gap
+        map_parameters.scaffold_min_length = handy_parameter(values[1]);  // len  
+        map_parameters.scaffold_max_deviation = handy_parameter(values[2]);// dev
+        
+        // Validate the values
+        if (map_parameters.scaffold_gap < 0 || 
+            map_parameters.scaffold_min_length <= 0 || 
+            map_parameters.scaffold_max_deviation < 0) {
+            std::cerr << "[wfmash] ERROR: Invalid scaffolding parameters" << std::endl;
             exit(1);
         }
-        map_parameters.super_chain_gap = l;
     } else {
-        map_parameters.super_chain_gap = 20000;
-    }
-
-    if (super_block) {
-        const int64_t s = handy_parameter(args::get(super_block));
-        if (s <= 0) {
-            std::cerr << "[wfmash] ERROR: super-block must be >0" << std::endl;
-            exit(1);
-        }
-        map_parameters.super_block_length = s;
-    } else {
-        map_parameters.super_block_length = 50000; // Default 50k
+        // Default values
+        map_parameters.scaffold_gap = 20000;          // 20k
+        map_parameters.scaffold_min_length = 50000;   // 50k  
+        map_parameters.scaffold_max_deviation = 50000; // 50k
     }
 
     if (max_mapping_length) {
@@ -747,7 +740,9 @@ void parse_args(int argc,
               << ", l=" << map_parameters.block_length
               << ", c=" << map_parameters.chain_gap
               << ", P=" << map_parameters.max_mapping_length
-              << ", S=" << map_parameters.super_block_length
+              << ", S=" << map_parameters.scaffold_gap << "," 
+              << map_parameters.scaffold_min_length << "," 
+              << map_parameters.scaffold_max_deviation
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
               << ", t=" << map_parameters.threads
