@@ -2008,7 +2008,7 @@ namespace skch
           // Generate super-chains with relaxed gap constraints
           // copy the read mappings
           auto readMappings2 = readMappings;
-          auto superChains = mergeMappingsInRange(readMappings2, param.super_chain_gap, progress);
+          auto superChains = mergeMappingsInRange(readMappings2, param.scaffold_gap, progress);
 
           // Filter superchains by length
           superChains.erase(
@@ -2016,7 +2016,7 @@ namespace skch
                   [&](const auto& chain) {
                       int64_t query_span = chain.queryEndPos - chain.queryStartPos;
                       int64_t ref_span = chain.refEndPos - chain.refStartPos;
-                      return std::max(query_span, ref_span) < param.super_block_length;
+                      return std::max(query_span, ref_span) < param.scaffold_min_length;
                   }),
               superChains.end());
 
