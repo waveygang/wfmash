@@ -84,7 +84,8 @@ struct Parameters
     double overlap_threshold;                         // minimum overlap for a mapping to be considered
     int64_t scaffold_gap;                            // max diagonal deviation from super-chains
     int64_t super_chain_gap;                         // gap threshold for merging super-chains
-
+    int64_t super_block_length = 50000;              // minimum super block length
+    
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //
     int64_t index_by_size = std::numeric_limits<int64_t>::max();  // Target total size of sequences for each index subset
