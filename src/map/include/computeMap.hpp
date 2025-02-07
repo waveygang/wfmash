@@ -2006,7 +2006,9 @@ namespace skch
           filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
 
           // Generate super-chains with relaxed gap constraints
-          auto superChains = mergeMappingsInRange(readMappings, param.super_chain_gap, progress);
+          // copy the read mappings
+          auto readMappings2 = readMappings;
+          auto superChains = mergeMappingsInRange(readMappings2, param.super_chain_gap, progress);
 
           // Create envelopes around super-chains
           std::vector<SuperChainEnvelope> envelopes;
