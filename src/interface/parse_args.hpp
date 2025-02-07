@@ -113,8 +113,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
-    args::ValueFlag<std::string> scaffolding(mapping_opts, "Gap,Len,Dev", 
-        "mapping scaffolding parameters (Gap,Len,Dev) [20k,50k,50k]", {'G', "scaffolding"});
+    args::ValueFlag<std::string> scaffolding(mapping_opts, "G,L,D", 
+        "mapping scaffolding parameters (G,L,D) [20k,50k,50k]", {'S', "scaffolding"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -740,7 +740,7 @@ void parse_args(int argc,
               << ", l=" << map_parameters.block_length
               << ", c=" << map_parameters.chain_gap
               << ", P=" << map_parameters.max_mapping_length
-              << ", G=" << map_parameters.scaffold_gap << "," 
+              << ", S=" << map_parameters.scaffold_gap << "," 
               << map_parameters.scaffold_min_length << "," 
               << map_parameters.scaffold_max_deviation
               << ", n=" << map_parameters.numMappingsForSegment
