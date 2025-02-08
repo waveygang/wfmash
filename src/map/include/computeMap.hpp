@@ -2002,6 +2002,12 @@ namespace skch
 
       void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
       {
+          // Skip scaffolding if parameters are 0
+          if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
+              filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
+              return;
+          }
+
           // Filter weak mappings
           filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
 

@@ -371,8 +371,11 @@ void parse_args(int argc,
         std::string params = args::get(scaffolding);
         std::vector<std::string> values = skch::CommonFunc::split(params, ',');
         if (values.size() != 3) {
-            std::cerr << "[wfmash] ERROR: scaffolding requires 3 comma-separated values: gap,len,dev" << std::endl;
-            exit(1);
+            // Disable scaffolding if pattern doesn't match
+            map_parameters.scaffold_gap = 0;
+            map_parameters.scaffold_min_length = 0;
+            map_parameters.scaffold_max_deviation = 0;
+            return;
         }
         
         // Parse in order: gap, length, deviation
