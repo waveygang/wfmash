@@ -375,20 +375,19 @@ void parse_args(int argc,
             map_parameters.scaffold_gap = 0;
             map_parameters.scaffold_min_length = 0;
             map_parameters.scaffold_max_deviation = 0;
-            return;
-        }
-        
-        // Parse in order: gap, length, deviation
-        map_parameters.scaffold_gap = handy_parameter(values[0]);         // gap
-        map_parameters.scaffold_min_length = handy_parameter(values[1]);  // len  
-        map_parameters.scaffold_max_deviation = handy_parameter(values[2]);// dev
-        
-        // Validate the values
-        if (map_parameters.scaffold_gap < 0 || 
-            map_parameters.scaffold_min_length <= 0 || 
-            map_parameters.scaffold_max_deviation < 0) {
-            std::cerr << "[wfmash] ERROR: Invalid scaffolding parameters" << std::endl;
-            exit(1);
+        } else {
+            // Parse in order: gap, length, deviation
+            map_parameters.scaffold_gap = handy_parameter(values[0]);         // gap
+            map_parameters.scaffold_min_length = handy_parameter(values[1]);  // len  
+            map_parameters.scaffold_max_deviation = handy_parameter(values[2]);// dev
+            
+            // Validate the values
+            if (map_parameters.scaffold_gap < 0 || 
+                map_parameters.scaffold_min_length <= 0 || 
+                map_parameters.scaffold_max_deviation < 0) {
+                std::cerr << "[wfmash] ERROR: Invalid scaffolding parameters" << std::endl;
+                exit(1);
+            }
         }
     } else {
         // Default values
