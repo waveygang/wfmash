@@ -2016,6 +2016,10 @@ namespace skch
           auto readMappings2 = readMappings;
           auto superChains = mergeMappingsInRange(readMappings2, param.scaffold_gap, progress);
 
+          // Open scaffold PAF file
+          static std::ofstream scafStrm("scaf.paf");
+          static std::mutex scafMutex;
+
           // Filter superchains by length
           superChains.erase(
               std::remove_if(superChains.begin(), superChains.end(),
@@ -2025,6 +2029,30 @@ namespace skch
                       return std::max(query_span, ref_span) < param.scaffold_min_length;
                   }),
               superChains.end());
+
+          // Write scaffold chains to file
+          {
+              std::lock_guard<std::mutex> lock(scafMutex);
+              for (const auto& chain : superChains) {
+                  float fakeMapQ = chain.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(chain.nucIdentity)));
+                  scafStrm << idManager->getSequenceName(chain.querySeqId)
+                          << "\t" << chain.queryLen
+                          << "\t" << chain.queryStartPos
+                          << "\t" << chain.queryEndPos
+                          << "\t" << (chain.strand == strnd::FWD ? "+" : "-")
+                          << "\t" << idManager->getSequenceName(chain.refSeqId)
+                          << "\t" << idManager->getSequenceLength(chain.refSeqId)
+                          << "\t" << chain.refStartPos
+                          << "\t" << chain.refEndPos
+                          << "\t" << chain.conservedSketches
+                          << "\t" << chain.blockLength
+                          << "\t" << fakeMapQ
+                          << "\t" << "id:f:" << chain.nucIdentity
+                          << "\t" << "kc:f:" << chain.kmerComplexity
+                          << "\t" << "chain:i:" << chain.splitMappingId << "." << chain.chain_pos << "." << chain.chain_length
+                          << "\n";
+              }
+          }
 
           // Create envelopes around super-chains
           std::vector<SuperChainEnvelope> envelopes;
