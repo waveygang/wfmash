@@ -2008,17 +2008,13 @@ namespace skch
               return;
           }
 
-          // Filter weak mappings
-          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
-
           // Generate super-chains with relaxed gap constraints
           // copy the read mappings
           auto readMappings2 = readMappings;
           auto superChains = mergeMappingsInRange(readMappings2, param.scaffold_gap, progress);
 
-          // Open scaffold PAF file
-          static std::ofstream scafStrm("scaf.paf");
-          static std::mutex scafMutex;
+          // Filter weak mappings
+          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
 
           // Filter superchains by length
           superChains.erase(
@@ -2029,6 +2025,10 @@ namespace skch
                       return std::max(query_span, ref_span) < param.scaffold_min_length;
                   }),
               superChains.end());
+
+          // Open scaffold PAF file
+          static std::ofstream scafStrm("scaf.paf");
+          static std::mutex scafMutex;
 
           // Write scaffold chains to file
           {
