@@ -141,6 +141,25 @@ namespace skch
       //used only if one-to-one filtering is ON
       std::vector<ContigInfo> qmetadata;
 
+      struct SuperChainEnvelope {
+          seqno_t refSeqId;
+          offset_t q_start, q_end;
+          offset_t r_start, r_end;
+          strand_t strand;
+          
+          bool contains(const MappingResult& m, int64_t max_gap) const {
+              if (m.refSeqId != refSeqId || m.strand != strand) return false;
+              
+              int64_t q_dist_start = std::abs((int64_t)m.queryStartPos - (int64_t)q_start);
+              int64_t r_dist_start = std::abs((int64_t)m.refStartPos - (int64_t)r_start);
+              int64_t q_dist_end = std::abs((int64_t)m.queryEndPos - (int64_t)q_end);
+              int64_t r_dist_end = std::abs((int64_t)m.refEndPos - (int64_t)r_end);
+              
+              return std::abs(q_dist_start - r_dist_start) <= max_gap &&
+                     std::abs(q_dist_end - r_dist_end) <= max_gap;
+          }
+      };
+
       //Vector for sketch cutoffs. Position [i] indicates the minimum intersection size required
       //for an L1 candidate if the best intersection size is i;
       std::vector<int> sketchCutoffs; 
@@ -998,11 +1017,16 @@ namespace skch
       }
 
       void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
+          // Keep a copy of raw mappings for scaffold analysis
+          MappingResultsVector_t rawMappings = mappings;
 
-          // XXX we should fix this combined condition
           if (param.mergeMappings && param.split) {
               auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
               filterMaximallyMerged(maximallyMergedMappings, param, progress);
+              
+              // Apply scaffold filtering using raw mappings
+              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
+              
               robin_hood::unordered_set<offset_t> kept_chains;
               for (auto &mapping : maximallyMergedMappings) {
                   kept_chains.insert(mapping.splitMappingId);
@@ -2000,21 +2024,20 @@ namespace skch
           }
       };
 
-      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
+      void filterByScaffolds(MappingResultsVector_t& readMappings,
+                            const MappingResultsVector_t& rawMappings,
+                            const Parameters& param,
+                            progress_meter::ProgressMeter& progress) 
       {
-          // Skip scaffolding if parameters are 0
           if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
-              filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
               return;
           }
 
-          // Generate super-chains with relaxed gap constraints
-          // copy the read mappings
-          auto readMappings2 = readMappings;
-          auto superChains = mergeMappingsInRange(readMappings2, param.scaffold_gap, progress);
-
-          // Filter weak mappings
-          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
+          // Make a copy of the raw mappings for scaffolding
+          MappingResultsVector_t scaffoldMappings = rawMappings;
+          
+          // Generate super-chains with relaxed parameters
+          auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
 
           // Filter superchains by length
           superChains.erase(
@@ -2025,34 +2048,6 @@ namespace skch
                       return std::max(query_span, ref_span) < param.scaffold_min_length;
                   }),
               superChains.end());
-
-          // Open scaffold PAF file
-          static std::ofstream scafStrm("scaf.paf");
-          static std::mutex scafMutex;
-
-          // Write scaffold chains to file
-          {
-              std::lock_guard<std::mutex> lock(scafMutex);
-              for (const auto& chain : superChains) {
-                  float fakeMapQ = chain.nucIdentity == 1 ? 255 : std::round(-10.0 * std::log10(1-(chain.nucIdentity)));
-                  scafStrm << idManager->getSequenceName(chain.querySeqId)
-                          << "\t" << chain.queryLen
-                          << "\t" << chain.queryStartPos
-                          << "\t" << chain.queryEndPos
-                          << "\t" << (chain.strand == strnd::FWD ? "+" : "-")
-                          << "\t" << idManager->getSequenceName(chain.refSeqId)
-                          << "\t" << idManager->getSequenceLength(chain.refSeqId)
-                          << "\t" << chain.refStartPos
-                          << "\t" << chain.refEndPos
-                          << "\t" << chain.conservedSketches
-                          << "\t" << chain.blockLength
-                          << "\t" << fakeMapQ
-                          << "\t" << "id:f:" << chain.nucIdentity
-                          << "\t" << "kc:f:" << chain.kmerComplexity
-                          << "\t" << "chain:i:" << chain.splitMappingId << "." << chain.chain_pos << "." << chain.chain_length
-                          << "\n";
-              }
-          }
 
           // Create envelopes around super-chains
           std::vector<SuperChainEnvelope> envelopes;
@@ -2077,13 +2072,18 @@ namespace skch
                           });
                   }),
               readMappings.end());
+      }
 
-          // Apply group filtering if necessary
-          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-              MappingResultsVector_t groupFilteredMappings;
-              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
-              readMappings = std::move(groupFilteredMappings);
+      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
+      {
+          // Just keep basic filtering
+          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
+          
+          if (param.filterLengthMismatches) {
+              filterFalseHighIdentity(readMappings);
           }
+          
+          sparsifyMappings(readMappings);
       }
 
       /**
