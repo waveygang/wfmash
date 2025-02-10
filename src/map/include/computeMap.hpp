@@ -229,6 +229,7 @@ namespace skch
           PostProcessResultsFn_t f = nullptr) :
         param(p),
         processMappingResults(f),
+        scafOutstrm(p.outFileName + ".scaf.paf"),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
         idManager(std::make_unique<SequenceIdManager>(
             p.querySequences,
@@ -525,6 +526,7 @@ namespace skch
         seqno_t totalReadsMapped = 0;
 
         std::ofstream outstrm(param.outFileName);
+        std::ofstream scafOutstrm;
 
         // Get sequence names from ID manager
 
@@ -2029,6 +2031,13 @@ namespace skch
                       return std::max(query_span, ref_span) < param.scaffold_min_length;
                   }),
               superChains.end());
+
+          // Write scaffold mappings to separate file
+          if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
+              for (const auto& chain : superChains) {
+                  reportReadMappings(MappingResultsVector_t{chain}, idManager->getSequenceName(chain.querySeqId), scafOutstrm);
+              }
+          }
 
           // Create envelopes around super-chains
           std::vector<SuperChainEnvelope> envelopes;
