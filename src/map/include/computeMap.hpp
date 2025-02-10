@@ -2032,7 +2032,7 @@ namespace skch
 
           // Write scaffold mappings to separate file
           if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-              std::ofstream scafOutstrm(".scaf.paf");
+              std::ofstream scafOutstrm("scaf.paf");
               reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
 
