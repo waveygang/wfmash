@@ -69,6 +69,7 @@ public:
         if (logger.joinable()) {
             logger.join();
         }
+        uint64_t final_completed = completed.load();
         completed.store(total);
         do_print();
         std::cerr << std::endl;
