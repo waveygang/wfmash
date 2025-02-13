@@ -12,7 +12,7 @@ name: build and test
 
 jobs:
   build_and_test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Install required packages
@@ -22,6 +22,7 @@ jobs:
           cmake
           make
           g++
+          libbz2-dev
           python3-dev
           libatomic-ops-dev
           autoconf
