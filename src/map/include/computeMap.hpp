@@ -147,16 +147,54 @@ namespace skch
           offset_t r_start, r_end;
           strand_t strand;
           
+          // Calculate the diagonal position for a query-reference coordinate pair
+          int64_t get_diagonal(int64_t q_pos, int64_t r_pos) const {
+              if (strand == strnd::FWD) {
+                  return r_pos - q_pos;
+              } else {
+                  return r_pos + q_pos;
+              }
+          }
+          
+          // Calculate the perpendicular distance from a point to the chain's diagonal
+          int64_t perpendicular_distance(int64_t q_pos, int64_t r_pos) const {
+              // Get the diagonals for the point and the chain endpoints
+              int64_t point_diag = get_diagonal(q_pos, r_pos);
+              int64_t chain_diag = get_diagonal((q_start + q_end)/2, (r_start + r_end)/2);
+              
+              // The perpendicular distance is proportional to the difference in diagonals
+              // We divide by sqrt(2) because we're measuring perpendicular to the diagonal
+              return std::abs(point_diag - chain_diag) / std::sqrt(2);
+          }
+          
+          // Check if a mapping falls within this chain's envelope
           bool contains(const MappingResult& m, int64_t max_gap) const {
-              if (m.refSeqId != refSeqId || m.strand != strand) return false;
+              // First check basic compatibility
+              if (m.refSeqId != refSeqId || m.strand != strand) {
+                  return false;
+              }
               
-              int64_t q_dist_start = std::abs((int64_t)m.queryStartPos - (int64_t)q_start);
-              int64_t r_dist_start = std::abs((int64_t)m.refStartPos - (int64_t)r_start);
-              int64_t q_dist_end = std::abs((int64_t)m.queryEndPos - (int64_t)q_end);
-              int64_t r_dist_end = std::abs((int64_t)m.refEndPos - (int64_t)r_end);
+              // Get the mapping's midpoint
+              int64_t m_q_mid = (m.queryStartPos + m.queryEndPos) / 2;
+              int64_t m_r_mid = (m.refStartPos + m.refEndPos) / 2;
               
-              return std::abs(q_dist_start - r_dist_start) <= max_gap &&
-                     std::abs(q_dist_end - r_dist_end) <= max_gap;
+              // Get chain's midpoint
+              int64_t chain_q_mid = (q_start + q_end) / 2;
+              int64_t chain_r_mid = (r_start + r_end) / 2;
+              
+              // Calculate parallel and perpendicular distances
+              int64_t parallel_dist;
+              if (strand == strnd::FWD) {
+                  parallel_dist = std::abs((m_r_mid - m_q_mid) - (chain_r_mid - chain_q_mid));
+              } else {
+                  parallel_dist = std::abs((m_r_mid + m_q_mid) - (chain_r_mid + chain_q_mid));
+              }
+              
+              int64_t perp_dist = perpendicular_distance(m_q_mid, m_r_mid);
+              
+              // A mapping is within the envelope if it's within max_gap distance
+              // in both the parallel and perpendicular directions
+              return parallel_dist <= max_gap && perp_dist <= max_gap;
           }
       };
 
