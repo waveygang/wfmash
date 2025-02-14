@@ -1016,47 +1016,6 @@ namespace skch
           }
       }
 
-      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
-          // Keep a copy of raw mappings for scaffold analysis
-          MappingResultsVector_t rawMappings = mappings;
-
-          if (param.mergeMappings && param.split) {
-              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-              filterMaximallyMerged(maximallyMergedMappings, param, progress);
-              
-              // Apply scaffold filtering using raw mappings
-              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
-              
-              robin_hood::unordered_set<offset_t> kept_chains;
-              for (auto &mapping : maximallyMergedMappings) {
-                  kept_chains.insert(mapping.splitMappingId);
-              }
-              mappings.erase(
-                  std::remove_if(mappings.begin(), mappings.end(),
-                                 [&kept_chains](const MappingResult &mapping) {
-                                     return !kept_chains.count(mapping.splitMappingId);
-                                 }),
-                  mappings.end());
-          } else {
-              filterNonMergedMappings(mappings, param, progress);
-          }
-
-          if (param.filterLengthMismatches) {
-              filterFalseHighIdentity(mappings);
-          }
-
-          sparsifyMappings(mappings);
-
-          // Apply group filtering aggregated across all targets
-          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-              MappingResultsVector_t filteredMappings;
-              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager, progress);
-              mappings = std::move(filteredMappings);
-          }
-
-          // Removed reportReadMappings call
-      }
-
       void aggregator_thread(merged_mappings_queue_t& merged_queue,
                              std::atomic<bool>& workers_done,
                              std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings) {
@@ -2021,20 +1980,15 @@ namespace skch
           auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
 
           // Filter superchains by length
-          superChains.erase(
-              std::remove_if(superChains.begin(), superChains.end(),
-                  [&](const auto& chain) {
-                      int64_t query_span = chain.queryEndPos - chain.queryStartPos;
-                      int64_t ref_span = chain.refEndPos - chain.refStartPos;
-                      return std::max(query_span, ref_span) < param.scaffold_min_length;
-                  }),
-              superChains.end());
+          filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
           // Write scaffold mappings to separate file
+          /*
           if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
               std::ofstream scafOutstrm("scaf.paf");
               reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
+          */
 
           // Create envelopes around super-chains
           std::vector<SuperChainEnvelope> envelopes;
@@ -2061,11 +2015,20 @@ namespace skch
               readMappings.end());
       }
 
-      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
+      void filterMaximallyMerged(MappingResultsVector_t& readMappings,
+                                 const int64_t min_mapping_count,
+                                 progress_meter::ProgressMeter& progress)
       {
           // Just keep basic filtering
-          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
-          
+          filterWeakMappings(readMappings, min_mapping_count);
+
+          // Apply group filtering if necessary
+          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              MappingResultsVector_t groupFilteredMappings;
+              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
+              readMappings = std::move(groupFilteredMappings);
+          }
+
           if (param.filterLengthMismatches) {
               filterFalseHighIdentity(readMappings);
           }
@@ -2141,7 +2104,9 @@ namespace skch
                       }
 
                       // Check if the distance is within acceptable range
-                      if (query_dist >= 0 && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                      if (query_dist <= max_dist
+                          && ref_dist >= -param.segLength/5
+                          && ref_dist <= max_dist) {
                           double dist = std::sqrt(std::pow(query_dist, 2) + std::pow(ref_dist, 2));
                           if (dist < max_dist && best_score > dist && it2->chainPairScore > dist) {
                               best_it2 = it2;
@@ -2326,16 +2291,22 @@ namespace skch
        */
       std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+
+          // Make a copy of the raw mappings for scaffolding
+          MappingResultsVector_t rawMappings = mappings;
           
           // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-          
+
           // Process both merged and non-merged mappings
           if (param.mergeMappings && param.split) {
-              filterMaximallyMerged(maximallyMergedMappings, param, progress);
+              filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
           } else {
               filterNonMergedMappings(mappings, param, progress);
           }
+
+          // Apply scaffold filtering using raw mappings
+          filterByScaffolds(mappings, rawMappings, param, progress);
 
           // Build dense chain ID mapping
           std::unordered_map<offset_t, offset_t> id_map;
