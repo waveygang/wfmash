@@ -1983,12 +1983,10 @@ namespace skch
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
           // Write scaffold mappings to separate file
-          /*
           if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
               std::ofstream scafOutstrm("scaf.paf");
               reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
-          */
 
           // Create envelopes around super-chains
           std::vector<SuperChainEnvelope> envelopes;
