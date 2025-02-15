@@ -141,66 +141,6 @@ namespace skch
       //used only if one-to-one filtering is ON
       std::vector<ContigInfo> qmetadata;
 
-      struct SuperChainEnvelope {
-          seqno_t refSeqId;
-          offset_t q_start, q_end;
-          offset_t r_start, r_end;
-          strand_t strand;
-          
-          // Calculate the diagonal position for a query-reference coordinate pair
-          int64_t get_diagonal(int64_t q_pos, int64_t r_pos) const {
-              if (strand == strnd::FWD) {
-                  return r_pos - q_pos;
-              } else {
-                  return r_pos + q_pos;
-              }
-          }
-          
-          // Calculate the perpendicular distance from a point to the chain's diagonal
-          int64_t perpendicular_distance(int64_t q_pos, int64_t r_pos) const {
-              // Get the diagonals for the point and the chain endpoints
-              int64_t point_diag = get_diagonal(q_pos, r_pos);
-              int64_t chain_diag = get_diagonal((q_start + q_end)/2, (r_start + r_end)/2);
-              
-              // The perpendicular distance is proportional to the difference in diagonals
-              // We divide by sqrt(2) because we're measuring perpendicular to the diagonal
-              return std::abs(point_diag - chain_diag) / std::sqrt(2);
-          }
-          
-          // Check if a mapping falls within this chain's envelope
-          bool contains(const MappingResult& m, int64_t max_gap) const {
-              // First check basic compatibility
-              if (m.refSeqId != refSeqId || m.strand != strand) {
-                  return false;
-              }
-              
-              // Get the mapping's midpoint
-              int64_t m_q_mid = (m.queryStartPos + m.queryEndPos) / 2;
-              int64_t m_r_mid = (m.refStartPos + m.refEndPos) / 2;
-              
-              // Get chain's midpoint
-              int64_t chain_q_mid = (q_start + q_end) / 2;
-              int64_t chain_r_mid = (r_start + r_end) / 2;
-              
-              // Calculate parallel and perpendicular distances
-              int64_t parallel_dist;
-              if (strand == strnd::FWD) {
-                  parallel_dist = std::abs((m_r_mid - m_q_mid) - (chain_r_mid - chain_q_mid));
-              } else {
-                  parallel_dist = std::abs((m_r_mid + m_q_mid) - (chain_r_mid + chain_q_mid));
-              }
-              
-              int64_t perp_dist = perpendicular_distance(m_q_mid, m_r_mid);
-              
-              // A mapping is within the envelope if it's within max_gap distance
-              // in both the parallel and perpendicular directions
-              if (parallel_dist <= max_gap && perp_dist <= max_gap) {
-                  std::cerr << "wow! it's within bounds" << std::endl;
-                  std::cerr << "parallel_dist " << parallel_dist << " vs " << max_gap << " and perp_dist " << perp_dist << std::endl;
-              }
-              return parallel_dist <= max_gap && perp_dist <= max_gap;
-          }
-      };
 
       //Vector for sketch cutoffs. Position [i] indicates the minimum intersection size required
       //for an L1 candidate if the best intersection size is i;
@@ -2011,53 +1951,99 @@ namespace skch
                             const Parameters& param,
                             progress_meter::ProgressMeter& progress) 
       {
+          // If no scaffold filtering is enabled, just return.
           if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
-              return;
+               return;
           }
 
-          // Make a copy of the raw mappings for scaffolding
+          // Generate scaffold mappings ("super-chains") as before.
           MappingResultsVector_t scaffoldMappings = rawMappings;
-          
-          // Generate super-chains with relaxed parameters
           auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
-
-          // Filter superchains by length
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
-          // Write scaffold mappings to separate file
+          // Optionally, write scaffold mappings to file.
           if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-              std::ofstream scafOutstrm("scaf.paf");
-              reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
+               std::ofstream scafOutstrm("scaf.paf");
+               reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
 
-          // Create envelopes around super-chains
-          std::vector<SuperChainEnvelope> envelopes;
+          // Define a helper struct for a rotated envelope.
+          struct RotatedEnvelope {
+             double u_start; // = (q_start + r_start)/sqrt(2)
+             double u_end;   // = (q_end   + r_end)/sqrt(2)
+             double v_min;   // = min((r_start - q_start), (r_end - q_end))/sqrt(2) minus deviation
+             double v_max;   // = max((r_start - q_start), (r_end - q_end))/sqrt(2) plus deviation
+          };
+
+          // Lambda to compute the rotated envelope for a given mapping.
+          auto computeRotatedEnvelope = [&](const MappingResult& m) -> RotatedEnvelope {
+               const double invSqrt2 = 1.0 / std::sqrt(2.0);
+               double u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
+               double u_end   = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+               double v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
+               double v2 = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+               double v_min = std::min(v1, v2) - param.scaffold_max_deviation;
+               double v_max = std::max(v1, v2) + param.scaffold_max_deviation;
+               if (u_start > u_end) std::swap(u_start, u_end);
+               return {u_start, u_end, v_min, v_max};
+          };
+
+          // Build rotated envelopes for the scaffold mappings.
+          std::vector<RotatedEnvelope> scaffoldEnvelopes;
           for (const auto& chain : superChains) {
-              SuperChainEnvelope env;
-              env.refSeqId = chain.refSeqId;
-              env.q_start = chain.queryStartPos;
-              env.q_end = chain.queryEndPos;
-              env.r_start = chain.refStartPos;
-              env.r_end = chain.refEndPos;
-              env.strand = chain.strand;
-              envelopes.push_back(env);
+               scaffoldEnvelopes.push_back(computeRotatedEnvelope(chain));
+          }
+          // Sort scaffold envelopes by u_start.
+          std::sort(scaffoldEnvelopes.begin(), scaffoldEnvelopes.end(), [](const RotatedEnvelope& a, const RotatedEnvelope& b) {
+               return a.u_start < b.u_start;
+          });
+
+          // Build rotated envelopes for the raw mappings, remembering their original indices.
+          struct RawEnv {
+               RotatedEnvelope env;
+               size_t index;
+          };
+          std::vector<RawEnv> rawEnvs;
+          rawEnvs.reserve(readMappings.size());
+          for (size_t i = 0; i < readMappings.size(); i++) {
+               rawEnvs.push_back({computeRotatedEnvelope(readMappings[i]), i});
+          }
+          // Sort raw envelopes by u_start.
+          std::sort(rawEnvs.begin(), rawEnvs.end(), [](const RawEnv& a, const RawEnv& b) {
+               return a.env.u_start < b.env.u_start;
+          });
+
+          // Use a sweep-line algorithm to determine which raw mappings fall within a scaffold envelope.
+          std::vector<bool> keep(rawEnvs.size(), false);
+          size_t s_idx = 0;
+          for (size_t r = 0; r < rawEnvs.size(); r++) {
+               const auto& rawEnv = rawEnvs[r].env;
+               // Advance the scaffold pointer past envelopes that have already ended.
+               while (s_idx < scaffoldEnvelopes.size() && scaffoldEnvelopes[s_idx].u_end < rawEnv.u_start) {
+                    s_idx++;
+               }
+               bool found = false;
+               // For all scaffold envelopes that might overlap in u...
+               for (size_t s = s_idx; s < scaffoldEnvelopes.size(); s++) {
+                    const auto& scaf = scaffoldEnvelopes[s];
+                    if (scaf.u_start > rawEnv.u_end) break; // no u-overlap possible
+                    // Check if the raw mapping's vertical range is entirely within the scaffold's envelope.
+                    if (rawEnv.v_min >= scaf.v_min && rawEnv.v_max <= scaf.v_max) {
+                         found = true;
+                         break;
+                    }
+               }
+               keep[r] = found;
           }
 
-          // Filter mappings not near any super-chain
-          readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(),
-                  [&](const MappingResult& m) {
-                      return !std::any_of(envelopes.begin(), envelopes.end(),
-                          [&](const SuperChainEnvelope& env) {
-                              auto b = env.contains(m, param.scaffold_max_deviation);
-                              if (b) {
-                                  std::cerr << "mapping " << m.queryStartPos << "," << m.queryEndPos << " " << m.refStartPos << "," << m.refEndPos << std::endl;
-                                  std::cerr << "within " << env.q_start << "," << env.q_end << " " << env.r_start << "," << env.r_end << std::endl;
-                              }
-                              return b;
-                          });
-                  }),
-              readMappings.end());
+          // Build a new vector of mappings that pass the scaffold filter.
+          MappingResultsVector_t filtered;
+          for (size_t i = 0; i < rawEnvs.size(); i++) {
+               if (keep[i]) {
+                    filtered.push_back(readMappings[rawEnvs[i].index]);
+               }
+          }
+          readMappings = std::move(filtered);
       }
 
       void filterMaximallyMerged(MappingResultsVector_t& readMappings,
