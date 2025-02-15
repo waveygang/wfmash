@@ -194,6 +194,10 @@ namespace skch
               
               // A mapping is within the envelope if it's within max_gap distance
               // in both the parallel and perpendicular directions
+              if (parallel_dist <= max_gap && perp_dist <= max_gap) {
+                  std::cerr << "wow! it's within bounds" << std::endl;
+                  std::cerr << "parallel_dist " << parallel_dist << " vs " << max_gap << " and perp_dist " << perp_dist << std::endl;
+              }
               return parallel_dist <= max_gap && perp_dist <= max_gap;
           }
       };
@@ -2045,7 +2049,12 @@ namespace skch
                   [&](const MappingResult& m) {
                       return !std::any_of(envelopes.begin(), envelopes.end(),
                           [&](const SuperChainEnvelope& env) {
-                              return env.contains(m, param.scaffold_gap);
+                              auto b = env.contains(m, param.scaffold_max_deviation);
+                              if (b) {
+                                  std::cerr << "mapping " << m.queryStartPos << "," << m.queryEndPos << " " << m.refStartPos << "," << m.refEndPos << std::endl;
+                                  std::cerr << "within " << env.q_start << "," << env.q_end << " " << env.r_start << "," << env.r_end << std::endl;
+                              }
+                              return b;
                           });
                   }),
               readMappings.end());
