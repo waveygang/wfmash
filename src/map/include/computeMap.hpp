@@ -2056,11 +2056,22 @@ namespace skch
 
           // Build a new vector of mappings that pass the scaffold filter.
           MappingResultsVector_t filtered;
+          filtered.reserve(rawEnvs.size());
           for (size_t i = 0; i < rawEnvs.size(); i++) {
                if (keep[i]) {
                     filtered.push_back(readMappings[rawEnvs[i].index]);
+               } else {
+                    std::cerr << "\nDiscarding mapping outside scaffold envelope:"
+                             << "\n  Query: [" << readMappings[rawEnvs[i].index].queryStartPos 
+                             << ", " << readMappings[rawEnvs[i].index].queryEndPos << "]"
+                             << "\n  Target: [" << readMappings[rawEnvs[i].index].refStartPos 
+                             << ", " << readMappings[rawEnvs[i].index].refEndPos << "]"
+                             << "\n  Rotated coords:"
+                             << "\n    u: [" << rawEnvs[i].env.u_start << ", " << rawEnvs[i].env.u_end << "]"
+                             << "\n    v: [" << rawEnvs[i].env.v_min << ", " << rawEnvs[i].env.v_max << "]\n";
                }
           }
+          // Actually replace the input mappings with just the filtered ones
           readMappings = std::move(filtered);
       }
 
