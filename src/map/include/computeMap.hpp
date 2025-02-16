@@ -2005,21 +2005,53 @@ namespace skch
                double u_end;   // computed from query and reference end
                double v_min;   // lower bound of v, expanded by deviation
                double v_max;   // upper bound of v, expanded by deviation
+               bool antidiagonal; // whether this uses antidiagonal projection
           };
-          auto computeRotatedEnvelope = [&](const MappingResult& m) -> RotatedEnvelope {
+
+          // Helper to compute weighted orientation score for a mapping
+          auto computeOrientationScore = [](const MappingResult& m) -> double {
+              int64_t q_span = m.queryEndPos - m.queryStartPos;
+              int64_t r_span = m.refEndPos - m.refStartPos;
+              double diag_proj = (r_span + q_span) / std::sqrt(2.0);
+              double anti_proj = (r_span - q_span) / std::sqrt(2.0);
+              // Return ratio of antidiagonal to diagonal projection
+              return std::abs(anti_proj / diag_proj);
+          };
+
+          // Helper to determine if a group should use antidiagonal projection
+          auto shouldUseAntidiagonal = [&computeOrientationScore](const std::vector<MappingResult>& mappings) -> bool {
+              double total_weight = 0.0;
+              double weighted_score = 0.0;
+              for (const auto& m : mappings) {
+                  double weight = m.queryEndPos - m.queryStartPos;
+                  total_weight += weight;
+                  weighted_score += weight * computeOrientationScore(m);
+              }
+              return (weighted_score / total_weight) > 1.0; // Use antidiagonal if more "inverted" than "direct"
+          };
+          auto computeRotatedEnvelope = [&](const MappingResult& m, bool use_antidiagonal) -> RotatedEnvelope {
                const double invSqrt2 = 1.0 / std::sqrt(2.0);
-               // Use the same transformation for both orientations.
-               double u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
-               double u_end   = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
-               double v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
-               double v2 = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
-               // For forward mappings, typically u_start <= u_end.
-               // For reverse mappings, they might be nearly equal.
+               double u_start, u_end, v1, v2;
+               
+               if (!use_antidiagonal) {
+                   // Standard diagonal projection
+                   u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
+                   u_end   = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+                   v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
+                   v2 = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+               } else {
+                   // Antidiagonal projection
+                   u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
+                   u_end   = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+                   v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
+                   v2 = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+               }
+               
                double u_min = std::min(u_start, u_end);
                double u_max = std::max(u_start, u_end);
                double v_min = std::min(v1, v2) - param.scaffold_max_deviation;
                double v_max = std::max(v1, v2) + param.scaffold_max_deviation;
-               return { u_min, u_max, v_min, v_max };
+               return { u_min, u_max, v_min, v_max, use_antidiagonal };
           };
 
           // For raw mappings within a group we keep track of their envelope plus index.
@@ -2040,10 +2072,13 @@ namespace skch
                }
                const auto& groupScaf = scafGroups[key];
 
+               // Determine projection type for this group
+               bool use_antidiagonal = shouldUseAntidiagonal(groupScaf);
+               
                // Compute rotated envelopes for scaffold mappings in this group.
                std::vector<RotatedEnvelope> scaffoldEnvelopes;
                for (const auto& m : groupScaf) {
-                    scaffoldEnvelopes.push_back(computeRotatedEnvelope(m));
+                    scaffoldEnvelopes.push_back(computeRotatedEnvelope(m, use_antidiagonal));
                }
                std::sort(scaffoldEnvelopes.begin(), scaffoldEnvelopes.end(),
                          [](const RotatedEnvelope& a, const RotatedEnvelope& b) {
@@ -2053,7 +2088,7 @@ namespace skch
                // Compute envelopes for raw mappings in this group.
                std::vector<RawEnv> rawEnvs;
                for (size_t i = 0; i < groupRaw.size(); i++) {
-                    rawEnvs.push_back({ computeRotatedEnvelope(groupRaw[i]), i });
+                    rawEnvs.push_back({ computeRotatedEnvelope(groupRaw[i], use_antidiagonal), i });
                }
                std::sort(rawEnvs.begin(), rawEnvs.end(),
                          [](const RawEnv& a, const RawEnv& b) {
