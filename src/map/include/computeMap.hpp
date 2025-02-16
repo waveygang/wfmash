@@ -2111,7 +2111,7 @@ namespace skch
                          // Check if the two rectangles intersect
                          if (!(rawEnv.u_end < scafEnv.u_start || rawEnv.u_start > scafEnv.u_end ||
                                rawEnv.v_max < scafEnv.v_min || rawEnv.v_min > scafEnv.v_max)) {
-                             // Print debug info about the match
+                             /* Debug output for envelope matches
                              std::cerr << "\nFound mapping within scaffold envelope:"
                                       << "\nRaw mapping:"
                                       << "\n  Query: [" << groupRaw[rawEnvs[r].index].queryStartPos 
@@ -2129,12 +2129,14 @@ namespace skch
                                       << "\n  Rotated coords:"
                                       << "\n    u: [" << scafEnv.u_start << ", " << scafEnv.u_end << "]"
                                       << "\n    v: [" << scafEnv.v_min << ", " << scafEnv.v_max << "]\n";
+                             */
                              found = true;
                              break;
                          }
                     }
                     keep[r] = found;
                     if (!found) {
+                         /* Debug output for discarded mappings
                          std::cerr << "\nDiscarding mapping outside scaffold envelope:"
                                   << "\n  Query: [" << groupRaw[rawEnvs[r].index].queryStartPos 
                                   << ", " << groupRaw[rawEnvs[r].index].queryEndPos << "]"
@@ -2143,6 +2145,7 @@ namespace skch
                                   << "\n  Rotated coords:"
                                   << "\n    u: [" << rawEnv.u_start << ", " << rawEnv.u_end << "]"
                                   << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]\n";
+                         */
                     }
                }
                // Collect raw mappings that passed for this group.
