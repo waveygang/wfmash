@@ -2029,6 +2029,24 @@ namespace skch
                     if (scaf.u_start > rawEnv.u_end) break; // no u-overlap possible
                     // Check if the raw mapping's vertical range is entirely within the scaffold's envelope.
                     if (rawEnv.v_min >= scaf.v_min && rawEnv.v_max <= scaf.v_max) {
+                         // Print debug info about the match
+                         std::cerr << "\nFound mapping within scaffold envelope:"
+                                  << "\nRaw mapping:"
+                                  << "\n  Query: [" << readMappings[rawEnvs[r].index].queryStartPos 
+                                  << ", " << readMappings[rawEnvs[r].index].queryEndPos << "]"
+                                  << "\n  Target: [" << readMappings[rawEnvs[r].index].refStartPos 
+                                  << ", " << readMappings[rawEnvs[r].index].refEndPos << "]"
+                                  << "\n  Rotated coords:"
+                                  << "\n    u: [" << rawEnv.u_start << ", " << rawEnv.u_end << "]"
+                                  << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]"
+                                  << "\nMatching scaffold:"
+                                  << "\n  Query: [" << superChains[s].queryStartPos 
+                                  << ", " << superChains[s].queryEndPos << "]"
+                                  << "\n  Target: [" << superChains[s].refStartPos 
+                                  << ", " << superChains[s].refEndPos << "]"
+                                  << "\n  Rotated coords:"
+                                  << "\n    u: [" << scaf.u_start << ", " << scaf.u_end << "]"
+                                  << "\n    v: [" << scaf.v_min << ", " << scaf.v_max << "]\n";
                          found = true;
                          break;
                     }
