@@ -1951,12 +1951,12 @@ namespace skch
                             const Parameters& param,
                             progress_meter::ProgressMeter& progress) 
       {
-          // If no scaffold filtering is enabled, just return.
+          // If scaffold filtering is disabled, do nothing.
           if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
                return;
           }
 
-          // Generate scaffold mappings ("super-chains") as before.
+          // First, generate scaffold mappings ("super-chains") as before.
           MappingResultsVector_t scaffoldMappings = rawMappings;
           auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
@@ -1967,112 +1967,156 @@ namespace skch
                reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
 
-          // Define a helper struct for a rotated envelope.
-          struct RotatedEnvelope {
-             double u_start; // = (q_start + r_start)/sqrt(2)
-             double u_end;   // = (q_end   + r_end)/sqrt(2)
-             double v_min;   // = min((r_start - q_start), (r_end - q_end))/sqrt(2) minus deviation
-             double v_max;   // = max((r_start - q_start), (r_end - q_end))/sqrt(2) plus deviation
+          // --- Grouping by coordinate system (query, reference, strand) ---
+          struct GroupKey {
+               seqno_t querySeqId;
+               seqno_t refSeqId;
+               int strand; // 1 for forward, -1 for reverse
+               bool operator==(const GroupKey &other) const {
+                   return querySeqId == other.querySeqId &&
+                          refSeqId   == other.refSeqId &&
+                          strand     == other.strand;
+               }
+          };
+          struct GroupKeyHash {
+               std::size_t operator()(const GroupKey &k) const {
+                   size_t h1 = std::hash<seqno_t>()(k.querySeqId);
+                   size_t h2 = std::hash<seqno_t>()(k.refSeqId);
+                   size_t h3 = std::hash<int>()(k.strand);
+                   return h1 ^ (h2 << 1) ^ (h3 << 2);
+               }
           };
 
-          // Lambda to compute the rotated envelope for a given mapping.
+          // Partition raw mappings and scaffold mappings into groups.
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> rawGroups;
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> scafGroups;
+          for (const auto& m : readMappings) {
+               GroupKey key { m.querySeqId, m.refSeqId, (m.strand == strnd::FWD ? 1 : -1) };
+               rawGroups[key].push_back(m);
+          }
+          for (const auto& m : superChains) {
+               GroupKey key { m.querySeqId, m.refSeqId, (m.strand == strnd::FWD ? 1 : -1) };
+               scafGroups[key].push_back(m);
+          }
+
+          // --- Rotated Envelope Calculation ---
+          struct RotatedEnvelope {
+               double u_start; // computed from query and reference start
+               double u_end;   // computed from query and reference end
+               double v_min;   // lower bound of v, expanded by deviation
+               double v_max;   // upper bound of v, expanded by deviation
+          };
           auto computeRotatedEnvelope = [&](const MappingResult& m) -> RotatedEnvelope {
                const double invSqrt2 = 1.0 / std::sqrt(2.0);
+               // Use the same transformation for both orientations.
                double u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
                double u_end   = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
                double v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
                double v2 = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+               // For forward mappings, typically u_start <= u_end.
+               // For reverse mappings, they might be nearly equal.
+               double u_min = std::min(u_start, u_end);
+               double u_max = std::max(u_start, u_end);
                double v_min = std::min(v1, v2) - param.scaffold_max_deviation;
                double v_max = std::max(v1, v2) + param.scaffold_max_deviation;
-               if (u_start > u_end) std::swap(u_start, u_end);
-               return {u_start, u_end, v_min, v_max};
+               return { u_min, u_max, v_min, v_max };
           };
 
-          // Build rotated envelopes for the scaffold mappings.
-          std::vector<RotatedEnvelope> scaffoldEnvelopes;
-          for (const auto& chain : superChains) {
-               scaffoldEnvelopes.push_back(computeRotatedEnvelope(chain));
-          }
-          // Sort scaffold envelopes by u_start.
-          std::sort(scaffoldEnvelopes.begin(), scaffoldEnvelopes.end(), [](const RotatedEnvelope& a, const RotatedEnvelope& b) {
-               return a.u_start < b.u_start;
-          });
-
-          // Build rotated envelopes for the raw mappings, remembering their original indices.
+          // For raw mappings within a group we keep track of their envelope plus index.
           struct RawEnv {
                RotatedEnvelope env;
-               size_t index;
+               size_t index; // index within the group vector
           };
-          std::vector<RawEnv> rawEnvs;
-          rawEnvs.reserve(readMappings.size());
-          for (size_t i = 0; i < readMappings.size(); i++) {
-               rawEnvs.push_back({computeRotatedEnvelope(readMappings[i]), i});
-          }
-          // Sort raw envelopes by u_start.
-          std::sort(rawEnvs.begin(), rawEnvs.end(), [](const RawEnv& a, const RawEnv& b) {
-               return a.env.u_start < b.env.u_start;
-          });
 
-          // Use a sweep-line algorithm to determine which raw mappings fall within a scaffold envelope.
-          std::vector<bool> keep(rawEnvs.size(), false);
-          size_t s_idx = 0;
-          for (size_t r = 0; r < rawEnvs.size(); r++) {
-               const auto& rawEnv = rawEnvs[r].env;
-               // Advance the scaffold pointer past envelopes that have already ended.
-               while (s_idx < scaffoldEnvelopes.size() && scaffoldEnvelopes[s_idx].u_end < rawEnv.u_start) {
-                    s_idx++;
+          MappingResultsVector_t filteredMappings;
+
+          // --- Process Each Group Separately ---
+          for (auto& kv : rawGroups) {
+               const GroupKey &key = kv.first;
+               auto& groupRaw = kv.second;
+               if (scafGroups.find(key) == scafGroups.end()) {
+                   // No scaffold mappings available for this (query, ref, strand) group.
+                   continue;
                }
-               bool found = false;
-               // For all scaffold envelopes that might overlap in u...
-               for (size_t s = s_idx; s < scaffoldEnvelopes.size(); s++) {
-                    const auto& scaf = scaffoldEnvelopes[s];
-                    if (scaf.u_start > rawEnv.u_end) break; // no u-overlap possible
-                    // Check if the raw mapping's vertical range is entirely within the scaffold's envelope.
-                    if (rawEnv.v_min >= scaf.v_min && rawEnv.v_max <= scaf.v_max) {
-                         // Print debug info about the match
-                         std::cerr << "\nFound mapping within scaffold envelope:"
-                                  << "\nRaw mapping:"
-                                  << "\n  Query: [" << readMappings[rawEnvs[r].index].queryStartPos 
-                                  << ", " << readMappings[rawEnvs[r].index].queryEndPos << "]"
-                                  << "\n  Target: [" << readMappings[rawEnvs[r].index].refStartPos 
-                                  << ", " << readMappings[rawEnvs[r].index].refEndPos << "]"
+               const auto& groupScaf = scafGroups[key];
+
+               // Compute rotated envelopes for scaffold mappings in this group.
+               std::vector<RotatedEnvelope> scaffoldEnvelopes;
+               for (const auto& m : groupScaf) {
+                    scaffoldEnvelopes.push_back(computeRotatedEnvelope(m));
+               }
+               std::sort(scaffoldEnvelopes.begin(), scaffoldEnvelopes.end(),
+                         [](const RotatedEnvelope& a, const RotatedEnvelope& b) {
+                               return a.u_start < b.u_start;
+                         });
+
+               // Compute envelopes for raw mappings in this group.
+               std::vector<RawEnv> rawEnvs;
+               for (size_t i = 0; i < groupRaw.size(); i++) {
+                    rawEnvs.push_back({ computeRotatedEnvelope(groupRaw[i]), i });
+               }
+               std::sort(rawEnvs.begin(), rawEnvs.end(),
+                         [](const RawEnv& a, const RawEnv& b) {
+                               return a.env.u_start < b.env.u_start;
+                         });
+
+               // --- Sweep-Line: Check for Overlap ---
+               std::vector<bool> keep(rawEnvs.size(), false);
+               size_t s_idx = 0;
+               for (size_t r = 0; r < rawEnvs.size(); r++) {
+                    const auto& rawEnv = rawEnvs[r].env;
+                    while (s_idx < scaffoldEnvelopes.size() && scaffoldEnvelopes[s_idx].u_end < rawEnv.u_start) {
+                         s_idx++;
+                    }
+                    bool found = false;
+                    for (size_t s = s_idx; s < scaffoldEnvelopes.size(); s++) {
+                         const auto& scafEnv = scaffoldEnvelopes[s];
+                         if (scafEnv.u_start > rawEnv.u_end)
+                             break; // no u-overlap possible further on
+                         // Check if the two rectangles intersect
+                         if (!(rawEnv.u_end < scafEnv.u_start || rawEnv.u_start > scafEnv.u_end ||
+                               rawEnv.v_max < scafEnv.v_min || rawEnv.v_min > scafEnv.v_max)) {
+                             // Print debug info about the match
+                             std::cerr << "\nFound mapping within scaffold envelope:"
+                                      << "\nRaw mapping:"
+                                      << "\n  Query: [" << groupRaw[rawEnvs[r].index].queryStartPos 
+                                      << ", " << groupRaw[rawEnvs[r].index].queryEndPos << "]"
+                                      << "\n  Target: [" << groupRaw[rawEnvs[r].index].refStartPos 
+                                      << ", " << groupRaw[rawEnvs[r].index].refEndPos << "]"
+                                      << "\n  Rotated coords:"
+                                      << "\n    u: [" << rawEnv.u_start << ", " << rawEnv.u_end << "]"
+                                      << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]"
+                                      << "\nMatching scaffold:"
+                                      << "\n  Query: [" << groupScaf[s].queryStartPos 
+                                      << ", " << groupScaf[s].queryEndPos << "]"
+                                      << "\n  Target: [" << groupScaf[s].refStartPos 
+                                      << ", " << groupScaf[s].refEndPos << "]"
+                                      << "\n  Rotated coords:"
+                                      << "\n    u: [" << scafEnv.u_start << ", " << scafEnv.u_end << "]"
+                                      << "\n    v: [" << scafEnv.v_min << ", " << scafEnv.v_max << "]\n";
+                             found = true;
+                             break;
+                         }
+                    }
+                    keep[r] = found;
+                    if (!found) {
+                         std::cerr << "\nDiscarding mapping outside scaffold envelope:"
+                                  << "\n  Query: [" << groupRaw[rawEnvs[r].index].queryStartPos 
+                                  << ", " << groupRaw[rawEnvs[r].index].queryEndPos << "]"
+                                  << "\n  Target: [" << groupRaw[rawEnvs[r].index].refStartPos 
+                                  << ", " << groupRaw[rawEnvs[r].index].refEndPos << "]"
                                   << "\n  Rotated coords:"
                                   << "\n    u: [" << rawEnv.u_start << ", " << rawEnv.u_end << "]"
-                                  << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]"
-                                  << "\nMatching scaffold:"
-                                  << "\n  Query: [" << superChains[s].queryStartPos 
-                                  << ", " << superChains[s].queryEndPos << "]"
-                                  << "\n  Target: [" << superChains[s].refStartPos 
-                                  << ", " << superChains[s].refEndPos << "]"
-                                  << "\n  Rotated coords:"
-                                  << "\n    u: [" << scaf.u_start << ", " << scaf.u_end << "]"
-                                  << "\n    v: [" << scaf.v_min << ", " << scaf.v_max << "]\n";
-                         found = true;
-                         break;
+                                  << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]\n";
                     }
                }
-               keep[r] = found;
-          }
-
-          // Build a new vector of mappings that pass the scaffold filter.
-          MappingResultsVector_t filtered;
-          filtered.reserve(rawEnvs.size());
-          for (size_t i = 0; i < rawEnvs.size(); i++) {
-               if (keep[i]) {
-                    filtered.push_back(readMappings[rawEnvs[i].index]);
-               } else {
-                    std::cerr << "\nDiscarding mapping outside scaffold envelope:"
-                             << "\n  Query: [" << readMappings[rawEnvs[i].index].queryStartPos 
-                             << ", " << readMappings[rawEnvs[i].index].queryEndPos << "]"
-                             << "\n  Target: [" << readMappings[rawEnvs[i].index].refStartPos 
-                             << ", " << readMappings[rawEnvs[i].index].refEndPos << "]"
-                             << "\n  Rotated coords:"
-                             << "\n    u: [" << rawEnvs[i].env.u_start << ", " << rawEnvs[i].env.u_end << "]"
-                             << "\n    v: [" << rawEnvs[i].env.v_min << ", " << rawEnvs[i].env.v_max << "]\n";
+               // Collect raw mappings that passed for this group.
+               for (size_t i = 0; i < rawEnvs.size(); i++) {
+                    if (keep[i])
+                         filteredMappings.push_back(groupRaw[rawEnvs[i].index]);
                }
           }
-          // Actually replace the input mappings with just the filtered ones
-          readMappings = std::move(filtered);
+          readMappings = std::move(filteredMappings);
       }
 
       void filterMaximallyMerged(MappingResultsVector_t& readMappings,
