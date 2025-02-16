@@ -2440,12 +2440,12 @@ namespace skch
           // Process both merged and non-merged mappings
           if (param.mergeMappings && param.split) {
               filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
+              // Also apply scaffold filtering to merged mappings
+              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
           } else {
               filterNonMergedMappings(mappings, param, progress);
+              filterByScaffolds(mappings, rawMappings, param, progress);
           }
-
-          // Apply scaffold filtering using raw mappings
-          filterByScaffolds(mappings, rawMappings, param, progress);
 
           // Build dense chain ID mapping
           std::unordered_map<offset_t, offset_t> id_map;
