@@ -301,7 +301,7 @@ namespace skch
        *                                 until we only have secondaryToKeep secondary mappings
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
+      void filterMappings(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
       {
           //Apply the main filtering algorithm to ensure the best mappings across complete axis
           liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold, progress);
