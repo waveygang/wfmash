@@ -1956,18 +1956,22 @@ namespace skch
       }
 
       // Event types for sweep line algorithm
-      enum EventType { START_SCAF, END_SCAF, START_RAW, END_RAW };
+      enum EventType { START, END };
+      enum MappingType { SCAFFOLD, RAW };
 
       struct Event {
           double u;  // u-coordinate
           EventType type;
+          MappingType mappingType;
           double v_min, v_max;
           size_t id;
           
           bool operator<(const Event& other) const {
               if (u != other.u) return u < other.u;
               // If u-coords are equal, process START before END
-              return type < other.type;
+              if (type != other.type) return type < other.type;
+              // If both are START or both are END, process scaffolds first
+              return mappingType < other.mappingType;
           }
       };
 
@@ -2137,15 +2141,15 @@ namespace skch
                   auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(groupScaf[i]);
                   v_min -= param.scaffold_max_deviation;
                   v_max += param.scaffold_max_deviation;
-                  events.push_back({u_min, START_SCAF, v_min, v_max, i});
-                  events.push_back({u_max, END_SCAF, v_min, v_max, i});
+                  events.push_back(Event{u_min, START, SCAFFOLD, v_min, v_max, i});
+                  events.push_back(Event{u_max, END, SCAFFOLD, v_min, v_max, i});
               }
 
               // Generate events for raw mappings
               for (size_t i = 0; i < groupRaw.size(); i++) {
                   auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(groupRaw[i]);
-                  events.push_back({u_min, START_RAW, v_min, v_max, i});
-                  events.push_back({u_max, END_RAW, v_min, v_max, i});
+                  events.push_back(Event{u_min, START, RAW, v_min, v_max, i});
+                  events.push_back(Event{u_max, END, RAW, v_min, v_max, i});
               }
 
               // Sort events
