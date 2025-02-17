@@ -2064,6 +2064,8 @@ namespace skch
           MappingResultsVector_t scaffoldMappings = mergedMappings;
           auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
+          auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
+          filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
           // Optionally, write scaffold mappings to file.
           if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
@@ -2071,21 +2073,20 @@ namespace skch
                reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
 
-          // --- Grouping by coordinate system (query, reference) ---
+          // Group mappings by query and reference sequence
           struct GroupKey {
-               seqno_t querySeqId;
-               seqno_t refSeqId;
-               bool operator==(const GroupKey &other) const {
-                   return querySeqId == other.querySeqId &&
-                          refSeqId   == other.refSeqId;
-               }
+              seqno_t querySeqId;
+              seqno_t refSeqId;
+              bool operator==(const GroupKey &other) const {
+                  return querySeqId == other.querySeqId && refSeqId == other.refSeqId;
+              }
           };
           struct GroupKeyHash {
-               std::size_t operator()(const GroupKey &k) const {
-                   size_t h1 = std::hash<seqno_t>()(k.querySeqId);
-                   size_t h2 = std::hash<seqno_t>()(k.refSeqId);
-                   return h1 ^ (h2 << 1);
-               }
+              std::size_t operator()(const GroupKey &k) const {
+                  auto h1 = std::hash<seqno_t>()(k.querySeqId);
+                  auto h2 = std::hash<seqno_t>()(k.refSeqId);
+                  return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
+              }
           };
 
           // Partition raw mappings and scaffold mappings into groups
