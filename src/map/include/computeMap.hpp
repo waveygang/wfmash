@@ -2064,8 +2064,6 @@ namespace skch
           MappingResultsVector_t scaffoldMappings = mergedMappings;
           auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
-          auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
-          filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
           // Optionally, write scaffold mappings to file.
           if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
