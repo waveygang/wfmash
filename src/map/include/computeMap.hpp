@@ -2055,6 +2055,64 @@ namespace skch
           };
 
           // For raw mappings within a group we keep track of their envelope plus index.
+          // Event types for sweep line algorithm
+          enum EventType { START, END };
+          enum MappingType { SCAFFOLD, RAW };
+
+          struct Event {
+              double u;  // u-coordinate
+              EventType type;
+              MappingType mappingType;
+              double v_min, v_max;
+              size_t id;
+              
+              bool operator<(const Event& other) const {
+                  if (u != other.u) return u < other.u;
+                  // If u-coords are equal, process START before END
+                  if (type != other.type) return type < other.type;
+                  // If both are START or both are END, process scaffolds first
+                  return mappingType < other.mappingType;
+              }
+          };
+
+          // Interval tree node for v-coordinate ranges
+          struct Interval {
+              double low, high;
+              size_t id;
+              
+              bool operator<(const Interval& other) const {
+                  return low < other.low;
+              }
+          };
+
+          class IntervalTree {
+              std::set<Interval> intervals;
+
+          public:
+              void insert(double low, double high, size_t id) {
+                  intervals.insert({low, high, id});
+              }
+
+              void remove(double low, double high, size_t id) {
+                  intervals.erase({low, high, id});
+              }
+
+              bool hasOverlap(double low, double high) const {
+                  // Find first interval that could overlap
+                  auto it = intervals.upper_bound({low, 0, 0});
+                  if (it != intervals.begin()) --it;
+                  
+                  // Check all potentially overlapping intervals
+                  while (it != intervals.end() && it->low <= high) {
+                      if (!(it->high < low || it->low > high)) {
+                          return true;
+                      }
+                      ++it;
+                  }
+                  return false;
+              }
+          };
+
           struct RawEnv {
                RotatedEnvelope env;
                size_t index; // index within the group vector
@@ -2095,57 +2153,65 @@ namespace skch
                                return a.env.u_start < b.env.u_start;
                          });
 
-               // --- Sweep-Line: Check for Overlap ---
+               // --- 2D Sweep-Line with Interval Tree ---
+               std::vector<Event> events;
+               IntervalTree activeScaffolds;
                std::vector<bool> keep(rawEnvs.size(), false);
-               size_t s_idx = 0;
-               for (size_t r = 0; r < rawEnvs.size(); r++) {
-                    const auto& rawEnv = rawEnvs[r].env;
-                    while (s_idx < scaffoldEnvelopes.size() && scaffoldEnvelopes[s_idx].u_end < rawEnv.u_start) {
-                         s_idx++;
-                    }
-                    bool found = false;
-                    for (size_t s = s_idx; s < scaffoldEnvelopes.size(); s++) {
-                         const auto& scafEnv = scaffoldEnvelopes[s];
-                         if (scafEnv.u_start > rawEnv.u_end)
-                             break; // no u-overlap possible further on
-                         // Check if the two rectangles intersect
-                         if (!(rawEnv.u_end < scafEnv.u_start || rawEnv.u_start > scafEnv.u_end ||
-                               rawEnv.v_max < scafEnv.v_min || rawEnv.v_min > scafEnv.v_max)) {
-                             /* Debug output for envelope matches
-                             std::cerr << "\nFound mapping within scaffold envelope:"
-                                      << "\nRaw mapping:"
-                                      << "\n  Query: [" << groupRaw[rawEnvs[r].index].queryStartPos 
-                                      << ", " << groupRaw[rawEnvs[r].index].queryEndPos << "]"
-                                      << "\n  Target: [" << groupRaw[rawEnvs[r].index].refStartPos 
-                                      << ", " << groupRaw[rawEnvs[r].index].refEndPos << "]"
-                                      << "\n  Rotated coords:"
-                                      << "\n    u: [" << rawEnv.u_start << ", " << rawEnv.u_end << "]"
-                                      << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]"
-                                      << "\nMatching scaffold:"
-                                      << "\n  Query: [" << groupScaf[s].queryStartPos 
-                                      << ", " << groupScaf[s].queryEndPos << "]"
-                                      << "\n  Target: [" << groupScaf[s].refStartPos 
-                                      << ", " << groupScaf[s].refEndPos << "]"
-                                      << "\n  Rotated coords:"
-                                      << "\n    u: [" << scafEnv.u_start << ", " << scafEnv.u_end << "]"
-                                      << "\n    v: [" << scafEnv.v_min << ", " << scafEnv.v_max << "]\n";
-                             */
-                             found = true;
-                             break;
+
+               // Generate events for both scaffold and raw envelopes
+               for (size_t i = 0; i < scaffoldEnvelopes.size(); i++) {
+                    const auto& scaf = scaffoldEnvelopes[i];
+                    events.push_back({scaf.u_start, START, SCAFFOLD, scaf.v_min, scaf.v_max, i});
+                    events.push_back({scaf.u_end, END, SCAFFOLD, scaf.v_min, scaf.v_max, i});
+               }
+               for (size_t i = 0; i < rawEnvs.size(); i++) {
+                    const auto& raw = rawEnvs[i].env;
+                    events.push_back({raw.u_start, START, RAW, raw.v_min, raw.v_max, i});
+                    events.push_back({raw.u_end, END, RAW, raw.v_min, raw.v_max, i});
+               }
+
+               // Sort events by u-coordinate (and type/mapping type for ties)
+               std::sort(events.begin(), events.end());
+
+               // Process events in order
+               for (const auto& event : events) {
+                    if (event.mappingType == SCAFFOLD) {
+                         if (event.type == START) {
+                              activeScaffolds.insert(event.v_min, event.v_max, event.id);
+                         } else {
+                              activeScaffolds.remove(event.v_min, event.v_max, event.id);
                          }
-                    }
-                    keep[r] = found;
-                    if (!found) {
-                         /* Debug output for discarded mappings
-                         std::cerr << "\nDiscarding mapping outside scaffold envelope:"
-                                  << "\n  Query: [" << groupRaw[rawEnvs[r].index].queryStartPos 
-                                  << ", " << groupRaw[rawEnvs[r].index].queryEndPos << "]"
-                                  << "\n  Target: [" << groupRaw[rawEnvs[r].index].refStartPos 
-                                  << ", " << groupRaw[rawEnvs[r].index].refEndPos << "]"
-                                  << "\n  Rotated coords:"
-                                  << "\n    u: [" << rawEnv.u_start << ", " << rawEnv.u_end << "]"
-                                  << "\n    v: [" << rawEnv.v_min << ", " << rawEnv.v_max << "]\n";
-                         */
+                    } else { // RAW mapping
+                         if (event.type == START) {
+                              // Check if this raw mapping overlaps any active scaffold
+                              if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
+                                   /* Debug output for envelope matches
+                                   std::cerr << "\nFound mapping within scaffold envelope:"
+                                            << "\nRaw mapping:"
+                                            << "\n  Query: [" << groupRaw[event.id].queryStartPos 
+                                            << ", " << groupRaw[event.id].queryEndPos << "]"
+                                            << "\n  Target: [" << groupRaw[event.id].refStartPos 
+                                            << ", " << groupRaw[event.id].refEndPos << "]"
+                                            << "\n  Rotated coords:"
+                                            << "\n    u: [" << rawEnvs[event.id].env.u_start 
+                                            << ", " << rawEnvs[event.id].env.u_end << "]"
+                                            << "\n    v: [" << event.v_min << ", " << event.v_max << "]\n";
+                                   */
+                                   keep[event.id] = true;
+                              } else {
+                                   /* Debug output for discarded mappings
+                                   std::cerr << "\nDiscarding mapping outside scaffold envelope:"
+                                            << "\n  Query: [" << groupRaw[event.id].queryStartPos 
+                                            << ", " << groupRaw[event.id].queryEndPos << "]"
+                                            << "\n  Target: [" << groupRaw[event.id].refStartPos 
+                                            << ", " << groupRaw[event.id].refEndPos << "]"
+                                            << "\n  Rotated coords:"
+                                            << "\n    u: [" << rawEnvs[event.id].env.u_start 
+                                            << ", " << rawEnvs[event.id].env.u_end << "]"
+                                            << "\n    v: [" << event.v_min << ", " << event.v_max << "]\n";
+                                   */
+                              }
+                         }
                     }
                }
                // Collect raw mappings that passed for this group.
