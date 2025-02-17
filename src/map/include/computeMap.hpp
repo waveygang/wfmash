@@ -2313,13 +2313,13 @@ namespace skch
                // Generate events for both scaffold and raw envelopes
                for (size_t i = 0; i < scaffoldEnvelopes.size(); i++) {
                     const auto& scaf = scaffoldEnvelopes[i];
-                    events.push_back({scaf.u_start, START, SCAFFOLD, scaf.v_min, scaf.v_max, i});
-                    events.push_back({scaf.u_end, END, SCAFFOLD, scaf.v_min, scaf.v_max, i});
+                    events.push_back(Event{scaf.u_start, START_SCAF, scaf.v_min, scaf.v_max, i});
+                    events.push_back(Event{scaf.u_end, END_SCAF, scaf.v_min, scaf.v_max, i});
                }
                for (size_t i = 0; i < rawEnvs.size(); i++) {
                     const auto& raw = rawEnvs[i].env;
-                    events.push_back({raw.u_start, START, RAW, raw.v_min, raw.v_max, i});
-                    events.push_back({raw.u_end, END, RAW, raw.v_min, raw.v_max, i});
+                    events.push_back(Event{raw.u_start, START_RAW, raw.v_min, raw.v_max, i});
+                    events.push_back(Event{raw.u_end, END_RAW, raw.v_min, raw.v_max, i});
                }
 
                // Sort events by u-coordinate (and type/mapping type for ties)
