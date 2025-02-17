@@ -2051,7 +2051,7 @@ namespace skch
       };
 
       void filterByScaffolds(MappingResultsVector_t& readMappings,
-                            const MappingResultsVector_t& rawMappings,
+                            const MappingResultsVector_t& mergedMappings,
                             const Parameters& param,
                             progress_meter::ProgressMeter& progress) 
       {
@@ -2060,8 +2060,8 @@ namespace skch
                return;
           }
 
-          // First, generate scaffold mappings ("super-chains") as before.
-          MappingResultsVector_t scaffoldMappings = rawMappings;
+          // Build scaffold mappings from the maximally merged mappings
+          MappingResultsVector_t scaffoldMappings = mergedMappings;
           auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
