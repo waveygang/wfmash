@@ -1955,6 +1955,26 @@ namespace skch
           return std::abs(anti_proj / diag_proj);
       }
 
+      // Event types for sweep line algorithm
+      enum EventType { START, END };
+      enum MappingType { SCAFFOLD, RAW };
+
+      struct Event {
+          double u;  // u-coordinate
+          EventType type;
+          MappingType mappingType;
+          double v_min, v_max;
+          size_t id;
+          
+          bool operator<(const Event& other) const {
+              if (u != other.u) return u < other.u;
+              // If u-coords are equal, process START before END
+              if (type != other.type) return type < other.type;
+              // If both are START or both are END, process scaffolds first
+              return mappingType < other.mappingType;
+          }
+      };
+
       // Helper to determine if a group should use antidiagonal projection
       bool shouldUseAntidiagonal(const std::vector<MappingResult>& mappings) {
           double total_weight = 0.0;
@@ -1964,7 +1984,7 @@ namespace skch
               total_weight += weight;
               weighted_score += weight * computeOrientationScore(m);
           }
-          return (weighted_weight / total_weight) > 1.0;
+          return (weighted_score / total_weight) > 1.0;
       }
 
       struct RotatedEnvelope {
