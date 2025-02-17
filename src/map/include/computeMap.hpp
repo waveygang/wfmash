@@ -1946,23 +1946,26 @@ namespace skch
        * @return                      Filtered mappings
        */
 
-      // Event types for sweep line algorithm
-      enum EventType { START_SCAF, END_SCAF, START_RAW, END_RAW };
-
-      struct Event {
-          double u;  // u-coordinate
-          EventType type;
-          double v_min, v_max;
-          size_t id;
-          
-          bool operator<(const Event& other) const {
-              if (u != other.u) return u < other.u;
-              // If u-coords are equal, process START before END
-              if (type != other.type) return type < other.type;
-              // If both are START or both are END, process scaffolds first
-              return type < other.type;
+      // Helper to determine if a group should use antidiagonal projection
+      bool shouldUseAntidiagonal(const std::vector<MappingResult>& mappings) {
+          double total_weight = 0.0;
+          double weighted_score = 0.0;
+          for (const auto& m : mappings) {
+              double weight = m.queryEndPos - m.queryStartPos;
+              total_weight += weight;
+              weighted_score += weight * computeOrientationScore(m);
           }
+          return (weighted_score / total_weight) > 1.0;
+      }
+
+      struct RotatedEnvelope {
+          double u_start;
+          double u_end;
+          double v_min;
+          double v_max;
+          bool antidiagonal;
       };
+
 
       // Interval tree node for v-coordinate ranges
       struct Interval {
