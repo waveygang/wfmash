@@ -2018,12 +2018,28 @@ namespace skch
               intervals.erase({low, high, id});
           }
 
-          bool hasOverlap(double low, double high) const {
+          // Returns vector of IDs of all intervals that overlap [low, high]
+          std::vector<size_t> findOverlapping(double low, double high) const {
+              std::vector<size_t> result;
+              
               // Find first interval that could overlap
               auto it = intervals.upper_bound({low, 0, 0});
               if (it != intervals.begin()) --it;
               
-              // Check all potentially overlapping intervals
+              // Collect all overlapping intervals
+              while (it != intervals.end() && it->low <= high) {
+                  if (!(it->high < low || it->low > high)) {
+                      result.push_back(it->id);
+                  }
+                  ++it;
+              }
+              return result;
+          }
+
+          bool hasOverlap(double low, double high) const {
+              auto it = intervals.upper_bound({low, 0, 0});
+              if (it != intervals.begin()) --it;
+              
               while (it != intervals.end() && it->low <= high) {
                   if (!(it->high < low || it->low > high)) {
                       return true;
@@ -2162,14 +2178,10 @@ namespace skch
               for (const auto& event : events) {
                   if (event.type == START && event.mappingType == SCAFFOLD) {
                       activeScaffolds.insert(event.v_min, event.v_max, event.id);
-                      if (activeRaws.hasOverlap(event.v_min, event.v_max)) {
-                          // Mark all overlapping raw mappings as kept
-                          for (size_t i = 0; i < groupRaw.size(); i++) {
-                              auto [_, __, v_min, v_max] = computeRotatedCoords(groupRaw[i]);
-                              if (!(v_max < event.v_min || v_min > event.v_max)) {
-                                  keep[i] = true;
-                              }
-                          }
+                      // Get all overlapping raw mappings efficiently
+                      auto overlapping = activeRaws.findOverlapping(event.v_min, event.v_max);
+                      for (auto raw_id : overlapping) {
+                          keep[raw_id] = true;
                       }
                   } else if (event.type == END && event.mappingType == SCAFFOLD) {
                       activeScaffolds.remove(event.v_min, event.v_max, event.id);
