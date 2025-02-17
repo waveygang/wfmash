@@ -889,7 +889,7 @@ namespace skch
             }
             else
             {
-                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold, progress);
+                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold);
             }
             filteredMappings.insert(
                 filteredMappings.end(), 
@@ -2487,7 +2487,7 @@ namespace skch
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
               }
-              progress.increment(1);
+              // Remove progress increment from post-processing
           }
 
           // Assign the merged mapping ids
