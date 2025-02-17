@@ -223,7 +223,6 @@ namespace skch
             //mark mappings as good
             obj.markGood(bst, secondaryToKeep, dropRand, overlapThreshold);
 
-            progress.increment(std::distance(it, it2));
             it = it2;
           }
 
@@ -301,7 +300,7 @@ namespace skch
        *                                 until we only have secondaryToKeep secondary mappings
        */
       template <typename VecIn>
-      void filterMappings(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
+      void filterMappings(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold)
       {
           //Apply the main filtering algorithm to ensure the best mappings across complete axis
           liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold, progress);

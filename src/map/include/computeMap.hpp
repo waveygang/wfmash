@@ -889,7 +889,7 @@ namespace skch
             }
             else
             {
-                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold, progress);
+                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold);
             }
             filteredMappings.insert(
                 filteredMappings.end(), 
