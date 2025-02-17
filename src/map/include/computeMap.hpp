@@ -2160,7 +2160,7 @@ namespace skch
               IntervalTree activeRaws;
 
               for (const auto& event : events) {
-                  if (event.type == START_SCAF) {
+                  if (event.type == START && event.mappingType == SCAFFOLD) {
                       activeScaffolds.insert(event.v_min, event.v_max, event.id);
                       if (activeRaws.hasOverlap(event.v_min, event.v_max)) {
                           // Mark all overlapping raw mappings as kept
@@ -2171,9 +2171,9 @@ namespace skch
                               }
                           }
                       }
-                  } else if (event.type == END_SCAF) {
+                  } else if (event.type == END && event.mappingType == SCAFFOLD) {
                       activeScaffolds.remove(event.v_min, event.v_max, event.id);
-                  } else if (event.type == START_RAW) {
+                  } else if (event.type == START && event.mappingType == RAW) {
                       if (!keep[event.id]) {  // Only process if not already kept
                           if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
                               keep[event.id] = true;
@@ -2181,7 +2181,7 @@ namespace skch
                               activeRaws.insert(event.v_min, event.v_max, event.id);
                           }
                       }
-                  } else if (event.type == END_RAW) {
+                  } else if (event.type == END && event.mappingType == RAW) {
                       if (!keep[event.id]) {  // Only remove if we actually inserted it
                           activeRaws.remove(event.v_min, event.v_max, event.id);
                       }
