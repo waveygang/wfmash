@@ -2100,6 +2100,18 @@ namespace skch
                scafGroups[key].push_back(m);
           }
 
+          // Partition raw mappings and scaffold mappings into groups
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> rawGroups;
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> scafGroups;
+          for (const auto& m : readMappings) {
+               GroupKey key { m.querySeqId, m.refSeqId };
+               rawGroups[key].push_back(m);
+          }
+          for (const auto& m : superChains) {
+               GroupKey key { m.querySeqId, m.refSeqId };
+               scafGroups[key].push_back(m);
+          }
+
           // Helper to compute weighted orientation score for a mapping
           auto computeOrientationScore = [](const MappingResult& m) -> double {
               int64_t q_span = m.queryEndPos - m.queryStartPos;
