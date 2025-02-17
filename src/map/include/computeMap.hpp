@@ -1946,6 +1946,15 @@ namespace skch
        * @return                      Filtered mappings
        */
 
+      // Helper to compute orientation score for a mapping
+      double computeOrientationScore(const MappingResult& m) {
+          int64_t q_span = m.queryEndPos - m.queryStartPos;
+          int64_t r_span = m.refEndPos - m.refStartPos;
+          double diag_proj = (r_span + q_span) / std::sqrt(2.0);
+          double anti_proj = (r_span - q_span) / std::sqrt(2.0);
+          return std::abs(anti_proj / diag_proj);
+      }
+
       // Helper to determine if a group should use antidiagonal projection
       bool shouldUseAntidiagonal(const std::vector<MappingResult>& mappings) {
           double total_weight = 0.0;
@@ -1955,7 +1964,7 @@ namespace skch
               total_weight += weight;
               weighted_score += weight * computeOrientationScore(m);
           }
-          return (weighted_score / total_weight) > 1.0;
+          return (weighted_weight / total_weight) > 1.0;
       }
 
       struct RotatedEnvelope {
@@ -2203,25 +2212,6 @@ namespace skch
           };
 
           // For raw mappings within a group we keep track of their envelope plus index.
-          // Event types for sweep line algorithm
-          enum EventType { START, END };
-          enum MappingType { SCAFFOLD, RAW };
-
-          struct Event {
-              double u;  // u-coordinate
-              EventType type;
-              MappingType mappingType;
-              double v_min, v_max;
-              size_t id;
-              
-              bool operator<(const Event& other) const {
-                  if (u != other.u) return u < other.u;
-                  // If u-coords are equal, process START before END
-                  if (type != other.type) return type < other.type;
-                  // If both are START or both are END, process scaffolds first
-                  return mappingType < other.mappingType;
-              }
-          };
 
           // Interval tree node for v-coordinate ranges
           struct Interval {
@@ -2265,8 +2255,6 @@ namespace skch
                RotatedEnvelope env;
                size_t index; // index within the group vector
           };
-
-          MappingResultsVector_t filteredMappings;
 
           // --- Process Each Group Separately ---
           for (auto& kv : rawGroups) {
