@@ -1956,22 +1956,18 @@ namespace skch
       }
 
       // Event types for sweep line algorithm
-      enum EventType { START, END };
-      enum MappingType { SCAFFOLD, RAW };
+      enum EventType { START_SCAF, END_SCAF, START_RAW, END_RAW };
 
       struct Event {
           double u;  // u-coordinate
           EventType type;
-          MappingType mappingType;
           double v_min, v_max;
           size_t id;
           
           bool operator<(const Event& other) const {
               if (u != other.u) return u < other.u;
               // If u-coords are equal, process START before END
-              if (type != other.type) return type < other.type;
-              // If both are START or both are END, process scaffolds first
-              return mappingType < other.mappingType;
+              return type < other.type;
           }
       };
 
