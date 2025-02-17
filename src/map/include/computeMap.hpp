@@ -2156,39 +2156,31 @@ namespace skch
               IntervalTree activeRaws;
 
               for (const auto& event : events) {
-                  switch (event.type) {
-                      case START_SCAF:
-                          activeScaffolds.insert(event.v_min, event.v_max, event.id);
-                          if (activeRaws.hasOverlap(event.v_min, event.v_max)) {
-                              // Mark all overlapping raw mappings as kept
-                              for (size_t i = 0; i < groupRaw.size(); i++) {
-                                  auto [_, __, v_min, v_max] = computeRotatedCoords(groupRaw[i]);
-                                  if (!(v_max < event.v_min || v_min > event.v_max)) {
-                                      keep[i] = true;
-                                  }
+                  if (event.type == START_SCAF) {
+                      activeScaffolds.insert(event.v_min, event.v_max, event.id);
+                      if (activeRaws.hasOverlap(event.v_min, event.v_max)) {
+                          // Mark all overlapping raw mappings as kept
+                          for (size_t i = 0; i < groupRaw.size(); i++) {
+                              auto [_, __, v_min, v_max] = computeRotatedCoords(groupRaw[i]);
+                              if (!(v_max < event.v_min || v_min > event.v_max)) {
+                                  keep[i] = true;
                               }
                           }
-                          break;
-
-                      case END_SCAF:
-                          activeScaffolds.remove(event.v_min, event.v_max, event.id);
-                          break;
-
-                      case START_RAW:
-                          if (!keep[event.id]) {  // Only process if not already kept
-                              if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
-                                  keep[event.id] = true;
-                              } else {
-                                  activeRaws.insert(event.v_min, event.v_max, event.id);
-                              }
+                      }
+                  } else if (event.type == END_SCAF) {
+                      activeScaffolds.remove(event.v_min, event.v_max, event.id);
+                  } else if (event.type == START_RAW) {
+                      if (!keep[event.id]) {  // Only process if not already kept
+                          if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
+                              keep[event.id] = true;
+                          } else {
+                              activeRaws.insert(event.v_min, event.v_max, event.id);
                           }
-                          break;
-
-                      case END_RAW:
-                          if (!keep[event.id]) {  // Only remove if we actually inserted it
-                              activeRaws.remove(event.v_min, event.v_max, event.id);
-                          }
-                          break;
+                      }
+                  } else if (event.type == END_RAW) {
+                      if (!keep[event.id]) {  // Only remove if we actually inserted it
+                          activeRaws.remove(event.v_min, event.v_max, event.id);
+                      }
                   }
               }
 
