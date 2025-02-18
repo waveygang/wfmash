@@ -273,11 +273,30 @@ void parse_args(int argc,
         align_parameters.wfa_gap_extension_score = 1;
     }
 
-    align_parameters.wfa_patching_mismatch_score = 3;
-    align_parameters.wfa_patching_gap_opening_score1 = 4;
-    align_parameters.wfa_patching_gap_extension_score1 = 2;
-    align_parameters.wfa_patching_gap_opening_score2 = 24;
-    align_parameters.wfa_patching_gap_extension_score2 = 1;
+    if (!args::get(wfa_params).empty()) {
+        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_params), ',');
+        if (params_str.size() != 5) {
+            std::cerr << "[wfmash] ERROR error: 5 scoring parameters must be given to --wfa-params"
+                      << std::endl;
+            exit(1);
+        }
+
+        std::vector<int> params(params_str.size());
+        std::transform(params_str.begin(), params_str.end(), params.begin(),
+                       [](const std::string &s) { return std::stoi(s); });
+
+        align_parameters.wfa_patching_mismatch_score = params[0];
+        align_parameters.wfa_patching_gap_opening_score1 = params[1];
+        align_parameters.wfa_patching_gap_extension_score1 = params[2];
+        align_parameters.wfa_patching_gap_opening_score2 = params[3];
+        align_parameters.wfa_patching_gap_extension_score2 = params[4];
+    } else {
+        align_parameters.wfa_patching_mismatch_score = 3;
+        align_parameters.wfa_patching_gap_opening_score1 = 4;
+        align_parameters.wfa_patching_gap_extension_score1 = 2;
+        align_parameters.wfa_patching_gap_opening_score2 = 24;
+        align_parameters.wfa_patching_gap_extension_score2 = 1;
+    }
 
     align_parameters.wflign_mismatch_score = 2;
     align_parameters.wflign_gap_opening_score = 3;
