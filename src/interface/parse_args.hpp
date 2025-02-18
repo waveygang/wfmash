@@ -126,7 +126,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [0]", {'E', "target-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
-        "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
+        "scoring: mismatch, gap1(o,e), gap2(o,e) [3,4,2,24,1]", {'g', "wfa-params"});
 
     args::Group output_opts(options_group, "Output Format:");
     args::Flag sam_format(output_opts, "", "output in SAM format (PAF by default)", {'a', "sam"});
