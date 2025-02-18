@@ -2050,6 +2050,56 @@ namespace skch
           }
       };
 
+      void filterScaffoldCandidates(MappingResultsVector_t& scaffoldCandidates,
+                                    const MappingResultsVector_t& mergedMappings,
+                                    const Parameters& param,
+                                    progress_meter::ProgressMeter& progress) 
+      {
+          // Group mappings by query and reference sequence
+          struct GroupKey {
+              seqno_t querySeqId;
+              seqno_t refSeqId;
+              bool operator==(const GroupKey &other) const {
+                  return querySeqId == other.querySeqId && refSeqId == other.refSeqId;
+              }
+          };
+          struct GroupKeyHash {
+              std::size_t operator()(const GroupKey &k) const {
+                  auto h1 = std::hash<seqno_t>()(k.querySeqId);
+                  auto h2 = std::hash<seqno_t>()(k.refSeqId);
+                  return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
+              }
+          };
+
+          // Partition mappings into groups
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> groups;
+          for (const auto& m : scaffoldCandidates) {
+              GroupKey key { m.querySeqId, m.refSeqId };
+              groups[key].push_back(m);
+          }
+
+          // Process each group with plane sweep
+          MappingResultsVector_t filteredCandidates;
+          for (const auto& kv : groups) {
+              const auto& group = kv.second;
+              bool use_antidiagonal = shouldUseAntidiagonal(group);
+
+              // Apply plane sweep filtering to this group
+              std::vector<bool> keep(group.size(), false);
+              // ... (rest of your existing plane sweep logic) ...
+
+              // Collect mappings that passed filtering
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (keep[i]) {
+                      filteredCandidates.push_back(group[i]);
+                  }
+              }
+          }
+
+          // Replace input with filtered results
+          scaffoldCandidates = std::move(filteredCandidates);
+      }
+
       void filterByScaffolds(MappingResultsVector_t& readMappings,
                             const MappingResultsVector_t& mergedMappings,
                             const Parameters& param,
@@ -2061,9 +2111,8 @@ namespace skch
           }
 
           // Build scaffold mappings from the maximally merged mappings
-          // First filter the merged mappings to get high-confidence scaffold candidates
           MappingResultsVector_t scaffoldCandidates = mergedMappings;
-          filterByScaffolds(scaffoldCandidates, mergedMappings, param, progress);
+          filterScaffoldCandidates(scaffoldCandidates, mergedMappings, param, progress);
 
           // Then merge these candidates with an aggressive gap to create final scaffolds
           Parameters scaffoldParam = param;
