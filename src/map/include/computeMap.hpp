@@ -2075,11 +2075,44 @@ namespace skch
           return { u_min, u_max, v_min, v_max, use_antidiagonal };
       }
 
+      // Helper to check if an envelope fits within scaffold bounds
+      bool envelopeFits(const RotatedEnvelope& env, const RotatedEnvelope& scaffold) {
+          return env.u_start >= scaffold.u_start && env.u_end <= scaffold.u_end &&
+                 env.v_min >= scaffold.v_min && env.v_max <= scaffold.v_max;
+      }
+
+      // Helper to compute rotated coordinates for a mapping
+      std::tuple<double, double, double, double> computeRotatedCoords(const MappingResult& m, bool use_antidiagonal) {
+          const double invSqrt2 = 1.0 / std::sqrt(2.0);
+          double u_start, u_end, v1, v2;
+          
+          if (!use_antidiagonal) {
+              u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
+              u_end = (m.queryEndPos + m.refEndPos) * invSqrt2;
+              v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
+              v2 = (m.refEndPos - m.queryEndPos) * invSqrt2;
+          } else {
+              u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
+              u_end = (m.refEndPos - m.queryEndPos) * invSqrt2;
+              v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
+              v2 = (m.queryEndPos + m.refEndPos) * invSqrt2;
+          }
+          
+          return std::make_tuple(
+              std::min(u_start, u_end),
+              std::max(u_start, u_end),
+              std::min(v1, v2),
+              std::max(v1, v2)
+          );
+      }
+
       void filterScaffoldCandidates(MappingResultsVector_t& scaffoldCandidates,
                                     const MappingResultsVector_t& mergedMappings,
                                     const Parameters& param,
                                     progress_meter::ProgressMeter& progress) 
       {
+          robin_hood::unordered_set<offset_t> acceptedChains;
+          RotatedEnvelope scaffoldEnvelope;
           // Group mappings by query and reference sequence
           struct GroupKey {
               seqno_t querySeqId;
@@ -2181,7 +2214,7 @@ namespace skch
           }
 
           // Replace input with filtered results
-          readMappings = std::move(filteredMappings);
+          scaffoldCandidates = std::move(filteredMappings);
       }
 
       void filterByScaffolds(MappingResultsVector_t& readMappings,
