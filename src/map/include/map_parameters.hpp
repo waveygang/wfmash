@@ -82,7 +82,10 @@ struct Parameters
     bool world_minimizers;
     uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
     double overlap_threshold;                         // minimum overlap for a mapping to be considered
-
+    int64_t scaffold_max_deviation;                  // max diagonal deviation from scaffold chains
+    int64_t scaffold_gap;                           // gap threshold for scaffold chaining
+    int64_t scaffold_min_length = 50000;            // minimum scaffold block length
+    
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //
     int64_t index_by_size = std::numeric_limits<int64_t>::max();  // Target total size of sequences for each index subset

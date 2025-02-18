@@ -141,6 +141,7 @@ namespace skch
       //used only if one-to-one filtering is ON
       std::vector<ContigInfo> qmetadata;
 
+
       //Vector for sketch cutoffs. Position [i] indicates the minimum intersection size required
       //for an L1 candidate if the best intersection size is i;
       std::vector<int> sketchCutoffs; 
@@ -995,42 +996,6 @@ namespace skch
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
           }
-      }
-
-      void processAggregatedMappings(const std::string& queryName, MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
-
-          // XXX we should fix this combined condition
-          if (param.mergeMappings && param.split) {
-              auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-              filterMaximallyMerged(maximallyMergedMappings, param, progress);
-              robin_hood::unordered_set<offset_t> kept_chains;
-              for (auto &mapping : maximallyMergedMappings) {
-                  kept_chains.insert(mapping.splitMappingId);
-              }
-              mappings.erase(
-                  std::remove_if(mappings.begin(), mappings.end(),
-                                 [&kept_chains](const MappingResult &mapping) {
-                                     return !kept_chains.count(mapping.splitMappingId);
-                                 }),
-                  mappings.end());
-          } else {
-              filterNonMergedMappings(mappings, param, progress);
-          }
-
-          if (param.filterLengthMismatches) {
-              filterFalseHighIdentity(mappings);
-          }
-
-          sparsifyMappings(mappings);
-
-          // Apply group filtering aggregated across all targets
-          if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
-              MappingResultsVector_t filteredMappings;
-              filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, param.filterMode == filter::ONETOONE, *idManager, progress);
-              mappings = std::move(filteredMappings);
-          }
-
-          // Removed reportReadMappings call
       }
 
       void aggregator_thread(merged_mappings_queue_t& merged_queue,
@@ -1980,10 +1945,521 @@ namespace skch
        * @param[in]   param           Algorithm parameters
        * @return                      Filtered mappings
        */
-      void filterMaximallyMerged(MappingResultsVector_t& readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
+
+      // Helper to compute orientation score for a mapping
+      double computeOrientationScore(const MappingResult& m) {
+          int64_t q_span = m.queryEndPos - m.queryStartPos;
+          int64_t r_span = m.refEndPos - m.refStartPos;
+          double diag_proj = (r_span + q_span) / std::sqrt(2.0);
+          double anti_proj = (r_span - q_span) / std::sqrt(2.0);
+          return std::abs(anti_proj / diag_proj);
+      }
+
+      // Event types for sweep line algorithm
+      enum EventType { START, END };
+      enum MappingType { SCAFFOLD, RAW };
+
+      struct Event {
+          double u;  // u-coordinate
+          EventType type;
+          MappingType mappingType;
+          double v_min, v_max;
+          size_t id;
+          
+          bool operator<(const Event& other) const {
+              if (u != other.u) return u < other.u;
+              // If u-coords are equal, process START before END
+              if (type != other.type) return type < other.type;
+              // If both are START or both are END, process scaffolds first
+              return mappingType < other.mappingType;
+          }
+      };
+
+      // Helper to determine if a group should use antidiagonal projection
+      bool shouldUseAntidiagonal(const std::vector<MappingResult>& mappings) {
+          double total_weight = 0.0;
+          double weighted_score = 0.0;
+          for (const auto& m : mappings) {
+              double weight = m.queryEndPos - m.queryStartPos;
+              total_weight += weight;
+              weighted_score += weight * computeOrientationScore(m);
+          }
+          return (weighted_score / total_weight) > 1.0;
+      }
+
+      struct RotatedEnvelope {
+          double u_start;
+          double u_end;
+          double v_min;
+          double v_max;
+          bool antidiagonal;
+      };
+
+
+      // Interval tree node for v-coordinate ranges
+      struct Interval {
+          double low, high;
+          size_t id;
+          
+          bool operator<(const Interval& other) const {
+              return low < other.low;
+          }
+      };
+
+      class IntervalTree {
+          std::set<Interval> intervals;
+
+      public:
+          void insert(double low, double high, size_t id) {
+              intervals.insert({low, high, id});
+          }
+
+          void remove(double low, double high, size_t id) {
+              intervals.erase({low, high, id});
+          }
+
+          // Returns vector of IDs of all intervals that overlap [low, high]
+          std::vector<size_t> findOverlapping(double low, double high) const {
+              std::vector<size_t> result;
+              
+              // Find first interval that could overlap
+              auto it = intervals.upper_bound({low, 0, 0});
+              if (it != intervals.begin()) --it;
+              
+              // Collect all overlapping intervals
+              while (it != intervals.end() && it->low <= high) {
+                  if (!(it->high < low || it->low > high)) {
+                      result.push_back(it->id);
+                  }
+                  ++it;
+              }
+              return result;
+          }
+
+          bool hasOverlap(double low, double high) const {
+              auto it = intervals.upper_bound({low, 0, 0});
+              if (it != intervals.begin()) --it;
+              
+              while (it != intervals.end() && it->low <= high) {
+                  if (!(it->high < low || it->low > high)) {
+                      return true;
+                  }
+                  ++it;
+              }
+              return false;
+          }
+      };
+
+      RotatedEnvelope computeRotatedEnvelope(const MappingResult& m, bool use_antidiagonal) {
+          const double invSqrt2 = 1.0 / std::sqrt(2.0);
+          double u_start, u_end, v1, v2;
+               
+          if (!use_antidiagonal) {
+              // Standard diagonal projection
+              u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
+              u_end   = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+              v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
+              v2 = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+          } else {
+              // Antidiagonal projection
+              u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
+              u_end   = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+              v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
+              v2 = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+          }
+               
+          double u_min = std::min(u_start, u_end);
+          double u_max = std::max(u_start, u_end);
+          double v_min = std::min(v1, v2) - param.scaffold_max_deviation;
+          double v_max = std::max(v1, v2) + param.scaffold_max_deviation;
+          return { u_min, u_max, v_min, v_max, use_antidiagonal };
+      }
+
+      void filterScaffoldCandidates(MappingResultsVector_t& scaffoldCandidates,
+                                    const MappingResultsVector_t& mergedMappings,
+                                    const Parameters& param,
+                                    progress_meter::ProgressMeter& progress) 
       {
-          // Filter weak mappings
-          filterWeakMappings(readMappings, std::floor(param.block_length / param.segLength));
+          // Group mappings by query and reference sequence
+          struct GroupKey {
+              seqno_t querySeqId;
+              seqno_t refSeqId;
+              bool operator==(const GroupKey &other) const {
+                  return querySeqId == other.querySeqId && refSeqId == other.refSeqId;
+              }
+          };
+          struct GroupKeyHash {
+              std::size_t operator()(const GroupKey &k) const {
+                  auto h1 = std::hash<seqno_t>()(k.querySeqId);
+                  auto h2 = std::hash<seqno_t>()(k.refSeqId);
+                  return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
+              }
+          };
+
+          // Partition mappings into groups
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> groups;
+          for (const auto& m : scaffoldCandidates) {
+              GroupKey key { m.querySeqId, m.refSeqId };
+              groups[key].push_back(m);
+          }
+
+          // Process each group with plane sweep
+          MappingResultsVector_t filteredCandidates;
+          for (const auto& kv : groups) {
+              const auto& group = kv.second;
+              bool use_antidiagonal = shouldUseAntidiagonal(group);
+
+              // Apply plane sweep filtering to this group
+              std::vector<bool> keep(group.size(), false);
+              // ... (rest of your existing plane sweep logic) ...
+
+              // Collect mappings that passed filtering
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (keep[i]) {
+                      filteredCandidates.push_back(group[i]);
+                  }
+              }
+          }
+
+          // Replace input with filtered results
+          scaffoldCandidates = std::move(filteredCandidates);
+      }
+
+      void filterByScaffolds(MappingResultsVector_t& readMappings,
+                            const MappingResultsVector_t& mergedMappings,
+                            const Parameters& param,
+                            progress_meter::ProgressMeter& progress) 
+      {
+          // If scaffold filtering is disabled, do nothing.
+          if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
+               return;
+          }
+
+          // Build scaffold mappings from the maximally merged mappings
+          MappingResultsVector_t scaffoldMappings = mergedMappings;
+
+          // Merge with aggressive gap to create scaffolds
+          Parameters scaffoldParam = param;
+          scaffoldParam.chain_gap *= 2;  // More aggressive merging for scaffolds
+          auto superChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, progress);
+          filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
+
+          // Expand scaffold mappings by half the max deviation on each end
+          for (auto& mapping : superChains) {
+              int64_t expansion = param.scaffold_max_deviation / 2;
+              mapping.refStartPos = std::max<int64_t>(0, mapping.refStartPos - expansion);
+              mapping.refEndPos = std::min<int64_t>(idManager->getSequenceLength(mapping.refSeqId), 
+                                                   mapping.refEndPos + expansion);
+              mapping.queryStartPos = std::max<int64_t>(0, mapping.queryStartPos - expansion);
+              mapping.queryEndPos = std::min<int64_t>(mapping.queryLen, mapping.queryEndPos + expansion);
+              mapping.blockLength = std::max(mapping.refEndPos - mapping.refStartPos,
+                                           mapping.queryEndPos - mapping.queryStartPos);
+          }
+
+          /* Optionally, write scaffold mappings to file for debugging
+          if (!superChains.empty() && 
+              (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0)) {
+              std::ofstream scafOutstrm("scaf.paf", std::ios::app);
+              reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
+          }
+          */
+
+          // Group mappings by query and reference sequence
+          struct GroupKey {
+              seqno_t querySeqId;
+              seqno_t refSeqId;
+              bool operator==(const GroupKey &other) const {
+                  return querySeqId == other.querySeqId && refSeqId == other.refSeqId;
+              }
+          };
+          struct GroupKeyHash {
+              std::size_t operator()(const GroupKey &k) const {
+                  auto h1 = std::hash<seqno_t>()(k.querySeqId);
+                  auto h2 = std::hash<seqno_t>()(k.refSeqId);
+                  return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
+              }
+          };
+
+          // Partition raw mappings and scaffold mappings into groups
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> rawGroups;
+          std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> scafGroups;
+          for (const auto& m : readMappings) {
+               GroupKey key { m.querySeqId, m.refSeqId };
+               rawGroups[key].push_back(m);
+          }
+          for (const auto& m : superChains) {
+               GroupKey key { m.querySeqId, m.refSeqId };
+               scafGroups[key].push_back(m);
+          }
+
+          // Helper to compute weighted orientation score for a mapping
+          auto computeOrientationScore = [](const MappingResult& m) -> double {
+              int64_t q_span = m.queryEndPos - m.queryStartPos;
+              int64_t r_span = m.refEndPos - m.refStartPos;
+              double diag_proj = (r_span + q_span) / std::sqrt(2.0);
+              double anti_proj = (r_span - q_span) / std::sqrt(2.0);
+              return std::abs(anti_proj / diag_proj);
+          };
+
+          // Process each group with 2D sweep
+          MappingResultsVector_t filteredMappings;
+          for (const auto& kv : rawGroups) {
+              const GroupKey& key = kv.first;
+              const auto& groupRaw = kv.second;
+              
+              if (scafGroups.find(key) == scafGroups.end()) {
+                  continue;  // No scaffold mappings for this group
+              }
+              const auto& groupScaf = scafGroups[key];
+
+              // Determine projection type for this group
+              bool use_antidiagonal = shouldUseAntidiagonal(groupScaf);
+
+              // Generate events for both scaffold and raw mappings
+              std::vector<Event> events;
+              std::vector<bool> keep(groupRaw.size(), false);
+
+              // Helper to compute rotated coordinates
+              auto computeRotatedCoords = [use_antidiagonal](const MappingResult& m) {
+                  const double invSqrt2 = 1.0 / std::sqrt(2.0);
+                  double u_start, u_end, v1, v2;
+                  
+                  if (!use_antidiagonal) {
+                      u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
+                      u_end = (m.queryEndPos + m.refEndPos) * invSqrt2;
+                      v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
+                      v2 = (m.refEndPos - m.queryEndPos) * invSqrt2;
+                  } else {
+                      u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
+                      u_end = (m.refEndPos - m.queryEndPos) * invSqrt2;
+                      v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
+                      v2 = (m.queryEndPos + m.refEndPos) * invSqrt2;
+                  }
+                  
+                  return std::make_tuple(
+                      std::min(u_start, u_end),
+                      std::max(u_start, u_end),
+                      std::min(v1, v2),
+                      std::max(v1, v2)
+                  );
+              };
+
+              // Generate events for scaffolds
+              for (size_t i = 0; i < groupScaf.size(); i++) {
+                  auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(groupScaf[i]);
+                  v_min -= param.scaffold_max_deviation;
+                  v_max += param.scaffold_max_deviation;
+                  events.push_back(Event{u_min, START, SCAFFOLD, v_min, v_max, i});
+                  events.push_back(Event{u_max, END, SCAFFOLD, v_min, v_max, i});
+              }
+
+              // Generate events for raw mappings
+              for (size_t i = 0; i < groupRaw.size(); i++) {
+                  auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(groupRaw[i]);
+                  events.push_back(Event{u_min, START, RAW, v_min, v_max, i});
+                  events.push_back(Event{u_max, END, RAW, v_min, v_max, i});
+              }
+
+              // Sort events
+              std::sort(events.begin(), events.end());
+
+              // Process events with two active sets
+              IntervalTree activeScaffolds;
+              IntervalTree activeRaws;
+
+              for (const auto& event : events) {
+                  if (event.type == START && event.mappingType == SCAFFOLD) {
+                      activeScaffolds.insert(event.v_min, event.v_max, event.id);
+                      // Get all overlapping raw mappings efficiently
+                      auto overlapping = activeRaws.findOverlapping(event.v_min, event.v_max);
+                      for (auto raw_id : overlapping) {
+                          keep[raw_id] = true;
+                      }
+                  } else if (event.type == END && event.mappingType == SCAFFOLD) {
+                      activeScaffolds.remove(event.v_min, event.v_max, event.id);
+                  } else if (event.type == START && event.mappingType == RAW) {
+                      if (!keep[event.id]) {  // Only process if not already kept
+                          if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
+                              keep[event.id] = true;
+                          } else {
+                              activeRaws.insert(event.v_min, event.v_max, event.id);
+                          }
+                      }
+                  } else if (event.type == END && event.mappingType == RAW) {
+                      if (!keep[event.id]) {  // Only remove if we actually inserted it
+                          activeRaws.remove(event.v_min, event.v_max, event.id);
+                      }
+                  }
+              }
+
+              // Collect mappings that passed filtering
+              for (size_t i = 0; i < groupRaw.size(); i++) {
+                  if (keep[i]) {
+                      filteredMappings.push_back(groupRaw[i]);
+                  }
+              }
+          }
+
+          // Replace original mappings with filtered ones
+          readMappings = std::move(filteredMappings);
+
+          // For raw mappings within a group we keep track of their envelope plus index.
+
+          // Interval tree node for v-coordinate ranges
+          struct Interval {
+              double low, high;
+              size_t id;
+              
+              bool operator<(const Interval& other) const {
+                  return low < other.low;
+              }
+          };
+
+          class IntervalTree {
+              std::set<Interval> intervals;
+
+          public:
+              void insert(double low, double high, size_t id) {
+                  intervals.insert({low, high, id});
+              }
+
+              void remove(double low, double high, size_t id) {
+                  intervals.erase({low, high, id});
+              }
+
+              bool hasOverlap(double low, double high) const {
+                  // Find first interval that could overlap
+                  auto it = intervals.upper_bound({low, 0, 0});
+                  if (it != intervals.begin()) --it;
+                  
+                  // Check all potentially overlapping intervals
+                  while (it != intervals.end() && it->low <= high) {
+                      if (!(it->high < low || it->low > high)) {
+                          return true;
+                      }
+                      ++it;
+                  }
+                  return false;
+              }
+          };
+
+          struct RawEnv {
+               RotatedEnvelope env;
+               size_t index; // index within the group vector
+          };
+
+          // --- Process Each Group Separately ---
+          for (auto& kv : rawGroups) {
+               const GroupKey &key = kv.first;
+               auto& groupRaw = kv.second;
+               if (scafGroups.find(key) == scafGroups.end()) {
+                   // No scaffold mappings available for this (query, ref, strand) group.
+                   continue;
+               }
+               const auto& groupScaf = scafGroups[key];
+
+               // Determine projection type for this group
+               bool use_antidiagonal = shouldUseAntidiagonal(groupScaf);
+               
+               // Compute rotated envelopes for scaffold mappings in this group.
+               std::vector<RotatedEnvelope> scaffoldEnvelopes;
+               for (const auto& m : groupScaf) {
+                    scaffoldEnvelopes.push_back(computeRotatedEnvelope(m, use_antidiagonal));
+               }
+               std::sort(scaffoldEnvelopes.begin(), scaffoldEnvelopes.end(),
+                         [](const RotatedEnvelope& a, const RotatedEnvelope& b) {
+                               return a.u_start < b.u_start;
+                         });
+
+               // Compute envelopes for raw mappings in this group.
+               std::vector<RawEnv> rawEnvs;
+               for (size_t i = 0; i < groupRaw.size(); i++) {
+                    RawEnv env;
+                    env.env = computeRotatedEnvelope(groupRaw[i], use_antidiagonal);
+                    env.index = i;
+                    rawEnvs.push_back(env);
+               }
+               std::sort(rawEnvs.begin(), rawEnvs.end(),
+                         [](const RawEnv& a, const RawEnv& b) {
+                               return a.env.u_start < b.env.u_start;
+                         });
+
+               // --- 2D Sweep-Line with Interval Tree ---
+               std::vector<Event> events;
+               IntervalTree activeScaffolds;
+               std::vector<bool> keep(rawEnvs.size(), false);
+
+               // Generate events for both scaffold and raw envelopes
+               for (size_t i = 0; i < scaffoldEnvelopes.size(); i++) {
+                    const auto& scaf = scaffoldEnvelopes[i];
+                    events.push_back(Event{scaf.u_start, START, SCAFFOLD, scaf.v_min, scaf.v_max, i});
+                    events.push_back(Event{scaf.u_end, END, SCAFFOLD, scaf.v_min, scaf.v_max, i});
+               }
+               for (size_t i = 0; i < rawEnvs.size(); i++) {
+                    const auto& raw = rawEnvs[i].env;
+                    events.push_back(Event{raw.u_start, START, RAW, raw.v_min, raw.v_max, i});
+                    events.push_back(Event{raw.u_end, END, RAW, raw.v_min, raw.v_max, i});
+               }
+
+               // Sort events by u-coordinate (and type/mapping type for ties)
+               std::sort(events.begin(), events.end());
+
+               // Process events in order
+               for (const auto& event : events) {
+                    if (event.mappingType == SCAFFOLD) {
+                         if (event.type == START) {
+                              activeScaffolds.insert(event.v_min, event.v_max, event.id);
+                         } else {
+                              activeScaffolds.remove(event.v_min, event.v_max, event.id);
+                         }
+                    } else { // RAW mapping
+                         if (event.type == START) {
+                              // Check if this raw mapping overlaps any active scaffold
+                              if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
+                                   /* Debug output for envelope matches
+                                   std::cerr << "\nFound mapping within scaffold envelope:"
+                                            << "\nRaw mapping:"
+                                            << "\n  Query: [" << groupRaw[event.id].queryStartPos 
+                                            << ", " << groupRaw[event.id].queryEndPos << "]"
+                                            << "\n  Target: [" << groupRaw[event.id].refStartPos 
+                                            << ", " << groupRaw[event.id].refEndPos << "]"
+                                            << "\n  Rotated coords:"
+                                            << "\n    u: [" << rawEnvs[event.id].env.u_start 
+                                            << ", " << rawEnvs[event.id].env.u_end << "]"
+                                            << "\n    v: [" << event.v_min << ", " << event.v_max << "]\n";
+                                   */
+                                   keep[event.id] = true;
+                              } else {
+                                   /* Debug output for discarded mappings
+                                   std::cerr << "\nDiscarding mapping outside scaffold envelope:"
+                                            << "\n  Query: [" << groupRaw[event.id].queryStartPos 
+                                            << ", " << groupRaw[event.id].queryEndPos << "]"
+                                            << "\n  Target: [" << groupRaw[event.id].refStartPos 
+                                            << ", " << groupRaw[event.id].refEndPos << "]"
+                                            << "\n  Rotated coords:"
+                                            << "\n    u: [" << rawEnvs[event.id].env.u_start 
+                                            << ", " << rawEnvs[event.id].env.u_end << "]"
+                                            << "\n    v: [" << event.v_min << ", " << event.v_max << "]\n";
+                                   */
+                              }
+                         }
+                    }
+               }
+               // Collect raw mappings that passed for this group.
+               for (size_t i = 0; i < rawEnvs.size(); i++) {
+                    if (keep[i])
+                         filteredMappings.push_back(groupRaw[rawEnvs[i].index]);
+               }
+          }
+          readMappings = std::move(filteredMappings);
+      }
+
+      void filterMaximallyMerged(MappingResultsVector_t& readMappings,
+                                 const int64_t min_mapping_count,
+                                 progress_meter::ProgressMeter& progress)
+      {
+          // Just keep basic filtering
+          filterWeakMappings(readMappings, min_mapping_count);
 
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
@@ -1991,6 +2467,12 @@ namespace skch
               filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
               readMappings = std::move(groupFilteredMappings);
           }
+
+          if (param.filterLengthMismatches) {
+              filterFalseHighIdentity(readMappings);
+          }
+          
+          sparsifyMappings(readMappings);
       }
 
       /**
@@ -2061,7 +2543,9 @@ namespace skch
                       }
 
                       // Check if the distance is within acceptable range
-                      if (query_dist >= 0 && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                      if (query_dist <= max_dist
+                          && ref_dist >= -param.segLength/5
+                          && ref_dist <= max_dist) {
                           double dist = std::sqrt(std::pow(query_dist, 2) + std::pow(ref_dist, 2));
                           if (dist < max_dist && best_score > dist && it2->chainPairScore > dist) {
                               best_it2 = it2;
@@ -2074,7 +2558,7 @@ namespace skch
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
               }
-              progress.increment(1);
+              // Remove progress increment from post-processing
           }
 
           // Assign the merged mapping ids
@@ -2246,15 +2730,21 @@ namespace skch
        */
       std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+
+          // Make a copy of the raw mappings for scaffolding
+          MappingResultsVector_t rawMappings = mappings;
           
           // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-          
+
           // Process both merged and non-merged mappings
           if (param.mergeMappings && param.split) {
-              filterMaximallyMerged(maximallyMergedMappings, param, progress);
+              filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
+              // Also apply scaffold filtering to merged mappings
+              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
           } else {
               filterNonMergedMappings(mappings, param, progress);
+              filterByScaffolds(mappings, rawMappings, param, progress);
           }
 
           // Build dense chain ID mapping
@@ -2294,11 +2784,16 @@ namespace skch
        */
 
       void computeChainStatistics(std::vector<MappingResult>::iterator begin, std::vector<MappingResult>::iterator end) {
+          if (begin == end) return;
+
           offset_t chain_start_query = std::numeric_limits<offset_t>::max();
           offset_t chain_end_query = std::numeric_limits<offset_t>::min();
           offset_t chain_start_ref = std::numeric_limits<offset_t>::max();
           offset_t chain_end_ref = std::numeric_limits<offset_t>::min();
           double accumulate_nuc_identity = 0.0;
+          double accumulate_kmer_complexity = 0.0;
+          int total_conserved_sketches = 0;
+          int total_sketch_size = 0;
           int n_in_full_chain = std::distance(begin, end);
 
           for (auto it = begin; it != end; ++it) {
@@ -2307,15 +2802,23 @@ namespace skch
               chain_start_ref = std::min(chain_start_ref, it->refStartPos);
               chain_end_ref = std::max(chain_end_ref, it->refEndPos);
               accumulate_nuc_identity += it->nucIdentity;
+              accumulate_kmer_complexity += it->kmerComplexity;
+              total_conserved_sketches += it->conservedSketches;
+              total_sketch_size += it->sketchSize;
           }
 
           auto chain_nuc_identity = accumulate_nuc_identity / n_in_full_chain;
+          auto chain_kmer_complexity = accumulate_kmer_complexity / n_in_full_chain;
           auto block_length = std::max(chain_end_query - chain_start_query, chain_end_ref - chain_start_ref);
 
           for (auto it = begin; it != end; ++it) {
               it->n_merged = n_in_full_chain;
               it->blockLength = block_length;
               it->blockNucIdentity = chain_nuc_identity;
+              it->kmerComplexity = chain_kmer_complexity;
+              it->conservedSketches = total_conserved_sketches;
+              it->sketchSize = total_sketch_size;
+              it->approxMatches = std::round(chain_nuc_identity * block_length / 100.0);
           }
       }
 

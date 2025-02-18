@@ -113,6 +113,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> scaffolding(mapping_opts, "G,L,D", 
+        "homology scaffolding [20k,50k,50k]", {'S', "scaffolding"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -384,9 +386,38 @@ void parse_args(int argc,
         align_parameters.chain_gap = 2000;
     }
 
+    if (scaffolding) {
+        std::string params = args::get(scaffolding);
+        std::vector<std::string> values = skch::CommonFunc::split(params, ',');
+        if (values.size() != 3) {
+            // Disable scaffolding if pattern doesn't match
+            map_parameters.scaffold_gap = 0;
+            map_parameters.scaffold_min_length = 0;
+            map_parameters.scaffold_max_deviation = 0;
+        } else {
+            // Parse in order: gap, length, deviation
+            map_parameters.scaffold_gap = handy_parameter(values[0]);         // gap
+            map_parameters.scaffold_min_length = handy_parameter(values[1]);  // len  
+            map_parameters.scaffold_max_deviation = handy_parameter(values[2]);// dev
+            
+            // Validate the values
+            if (map_parameters.scaffold_gap < 0 || 
+                map_parameters.scaffold_min_length <= 0 || 
+                map_parameters.scaffold_max_deviation < 0) {
+                std::cerr << "[wfmash] ERROR: Invalid scaffolding parameters" << std::endl;
+                exit(1);
+            }
+        }
+    } else {
+        // Default values
+        map_parameters.scaffold_gap = 50000;          // 50k
+        map_parameters.scaffold_min_length = 20000;   // 20k  
+        map_parameters.scaffold_max_deviation = 100000; // 100k
+    }
+
     if (max_mapping_length) {
         const int64_t l = args::get(max_mapping_length) == "inf" ? std::numeric_limits<int64_t>::max()
-            : wfmash::handy_parameter(args::get(max_mapping_length));
+            : handy_parameter(args::get(max_mapping_length));
         if (l <= 0) {
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
@@ -730,6 +761,9 @@ void parse_args(int argc,
               << ", l=" << map_parameters.block_length
               << ", c=" << map_parameters.chain_gap
               << ", P=" << map_parameters.max_mapping_length
+              << ", S=" << map_parameters.scaffold_gap << "," 
+              << map_parameters.scaffold_min_length << "," 
+              << map_parameters.scaffold_max_deviation
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
               << ", t=" << map_parameters.threads
