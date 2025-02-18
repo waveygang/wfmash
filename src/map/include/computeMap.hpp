@@ -2719,11 +2719,16 @@ namespace skch
        */
 
       void computeChainStatistics(std::vector<MappingResult>::iterator begin, std::vector<MappingResult>::iterator end) {
+          if (begin == end) return;
+
           offset_t chain_start_query = std::numeric_limits<offset_t>::max();
           offset_t chain_end_query = std::numeric_limits<offset_t>::min();
           offset_t chain_start_ref = std::numeric_limits<offset_t>::max();
           offset_t chain_end_ref = std::numeric_limits<offset_t>::min();
           double accumulate_nuc_identity = 0.0;
+          double accumulate_kmer_complexity = 0.0;
+          int total_conserved_sketches = 0;
+          int total_sketch_size = 0;
           int n_in_full_chain = std::distance(begin, end);
 
           for (auto it = begin; it != end; ++it) {
@@ -2732,15 +2737,23 @@ namespace skch
               chain_start_ref = std::min(chain_start_ref, it->refStartPos);
               chain_end_ref = std::max(chain_end_ref, it->refEndPos);
               accumulate_nuc_identity += it->nucIdentity;
+              accumulate_kmer_complexity += it->kmerComplexity;
+              total_conserved_sketches += it->conservedSketches;
+              total_sketch_size += it->sketchSize;
           }
 
           auto chain_nuc_identity = accumulate_nuc_identity / n_in_full_chain;
+          auto chain_kmer_complexity = accumulate_kmer_complexity / n_in_full_chain;
           auto block_length = std::max(chain_end_query - chain_start_query, chain_end_ref - chain_start_ref);
 
           for (auto it = begin; it != end; ++it) {
               it->n_merged = n_in_full_chain;
               it->blockLength = block_length;
               it->blockNucIdentity = chain_nuc_identity;
+              it->kmerComplexity = chain_kmer_complexity;
+              it->conservedSketches = total_conserved_sketches;
+              it->sketchSize = total_sketch_size;
+              it->approxMatches = std::round(chain_nuc_identity * block_length / 100.0);
           }
       }
 
