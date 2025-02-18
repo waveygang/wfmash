@@ -2351,7 +2351,7 @@ namespace skch
                // Compute rotated envelopes for scaffold mappings in this group.
                std::vector<RotatedEnvelope> scaffoldEnvelopes;
                for (const auto& m : groupScaf) {
-                    scaffoldEnvelopes.push_back(computeRotatedEnvelope(m, use_antidiagonal, param));
+                    scaffoldEnvelopes.push_back(computeRotatedEnvelope(m, use_antidiagonal));
                }
                std::sort(scaffoldEnvelopes.begin(), scaffoldEnvelopes.end(),
                          [](const RotatedEnvelope& a, const RotatedEnvelope& b) {
@@ -2362,7 +2362,7 @@ namespace skch
                std::vector<RawEnv> rawEnvs;
                for (size_t i = 0; i < groupRaw.size(); i++) {
                     RawEnv env;
-                    env.env = computeRotatedEnvelope(groupRaw[i], use_antidiagonal, param);
+                    env.env = computeRotatedEnvelope(groupRaw[i], use_antidiagonal);
                     env.index = i;
                     rawEnvs.push_back(env);
                }
