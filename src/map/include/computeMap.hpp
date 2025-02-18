@@ -2139,7 +2139,38 @@ namespace skch
               }
 
               // Process remaining mappings with plane sweep
-              // ... (existing plane sweep logic) ...
+              IntervalTree activeRaws;
+              
+              // First pass - collect all raw mappings that don't overlap with scaffolds
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (!keep[i]) {  // Skip already kept mappings
+                      auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(group[i], use_antidiagonal);
+                      activeRaws.insert(v_min, v_max, i);
+                  }
+              }
+
+              // Second pass - find overlaps between raw mappings
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (!keep[i]) {  // Skip already kept mappings
+                      auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(group[i], use_antidiagonal);
+                      
+                      // Find all raw mappings that overlap with this one
+                      auto overlapping = activeRaws.findOverlapping(v_min, v_max);
+                      
+                      // Keep the mapping with the highest nucleotide identity
+                      bool is_best = true;
+                      for (auto other_id : overlapping) {
+                          if (other_id != i && group[other_id].nucIdentity > group[i].nucIdentity) {
+                              is_best = false;
+                              break;
+                          }
+                      }
+                      
+                      if (is_best) {
+                          keep[i] = true;
+                      }
+                  }
+              }
 
               // Collect mappings that passed filtering
               for (size_t i = 0; i < group.size(); i++) {
