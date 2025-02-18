@@ -2103,26 +2103,54 @@ namespace skch
               groups[key].push_back(m);
           }
 
-          // Process each group with plane sweep
-          MappingResultsVector_t filteredCandidates;
+          // First process maximal merged mappings to identify accepted chains
+          for (const auto& mergedMapping : mergedMappings) {
+              RotatedEnvelope env = computeRotatedEnvelope(mergedMapping, shouldUseAntidiagonal({mergedMapping}));
+              if (envelopeFits(env, scaffoldEnvelope)) {
+                  acceptedChains.insert(mergedMapping.splitMappingId);
+              }
+          }
+
+          // Process each group with plane sweep, skipping accepted chains
+          MappingResultsVector_t filteredMappings;
           for (const auto& kv : groups) {
               const auto& group = kv.second;
-              bool use_antidiagonal = shouldUseAntidiagonal(group);
+              
+              // Skip processing if all mappings in this group belong to accepted chains
+              bool all_accepted = std::all_of(group.begin(), group.end(),
+                  [&acceptedChains](const MappingResult& m) {
+                      return acceptedChains.count(m.splitMappingId) > 0;
+                  });
+              
+              if (all_accepted) {
+                  // Add all mappings from accepted chains to filtered results
+                  filteredMappings.insert(filteredMappings.end(), group.begin(), group.end());
+                  continue;
+              }
 
-              // Apply plane sweep filtering to this group
+              bool use_antidiagonal = shouldUseAntidiagonal(group);
               std::vector<bool> keep(group.size(), false);
-              // ... (rest of your existing plane sweep logic) ...
+
+              // Mark mappings from accepted chains as kept
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (acceptedChains.count(group[i].splitMappingId) > 0) {
+                      keep[i] = true;
+                  }
+              }
+
+              // Process remaining mappings with plane sweep
+              // ... (existing plane sweep logic) ...
 
               // Collect mappings that passed filtering
               for (size_t i = 0; i < group.size(); i++) {
                   if (keep[i]) {
-                      filteredCandidates.push_back(group[i]);
+                      filteredMappings.push_back(group[i]);
                   }
               }
           }
 
           // Replace input with filtered results
-          scaffoldCandidates = std::move(filteredCandidates);
+          readMappings = std::move(filteredMappings);
       }
 
       void filterByScaffolds(MappingResultsVector_t& readMappings,
