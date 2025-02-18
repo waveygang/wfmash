@@ -2061,8 +2061,14 @@ namespace skch
           }
 
           // Build scaffold mappings from the maximally merged mappings
-          MappingResultsVector_t scaffoldMappings = mergedMappings;
-          auto superChains = mergeMappingsInRange(scaffoldMappings, param.scaffold_gap, progress);
+          // First filter the merged mappings to get high-confidence scaffold candidates
+          MappingResultsVector_t scaffoldCandidates = mergedMappings;
+          filterByScaffolds(scaffoldCandidates, mergedMappings, param, progress);
+
+          // Then merge these candidates with an aggressive gap to create final scaffolds
+          Parameters scaffoldParam = param;
+          scaffoldParam.chain_gap *= 2;  // More aggressive merging for scaffolds
+          auto superChains = mergeMappingsInRange(scaffoldCandidates, scaffoldParam.chain_gap, progress);
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
           // Optionally, write scaffold mappings to file for debugging
