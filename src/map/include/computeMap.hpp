@@ -2156,12 +2156,13 @@ namespace skch
                                            mapping.queryEndPos - mapping.queryStartPos);
           }
 
-          // Optionally, write scaffold mappings to file for debugging
+          /* Optionally, write scaffold mappings to file for debugging
           if (!superChains.empty() && 
               (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0)) {
               std::ofstream scafOutstrm("scaf.paf", std::ios::app);
               reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
           }
+          */
 
           // Group mappings by query and reference sequence
           struct GroupKey {
