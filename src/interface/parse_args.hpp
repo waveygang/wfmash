@@ -391,9 +391,9 @@ void parse_args(int argc,
         }
     } else {
         // Default values
-        map_parameters.scaffold_gap = 20000;          // 20k
-        map_parameters.scaffold_min_length = 50000;   // 50k  
-        map_parameters.scaffold_max_deviation = 50000; // 50k
+        map_parameters.scaffold_gap = 50000;          // 50k
+        map_parameters.scaffold_min_length = 20000;   // 20k  
+        map_parameters.scaffold_max_deviation = 100000; // 100k
     }
 
     if (max_mapping_length) {
