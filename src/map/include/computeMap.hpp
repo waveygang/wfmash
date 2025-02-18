@@ -2135,6 +2135,9 @@ namespace skch
                return;
           }
 
+          // Track which chains are accepted by the scaffold filter
+          robin_hood::unordered_set<offset_t> acceptedChains;
+
           // Build scaffold mappings from the maximally merged mappings
           MappingResultsVector_t scaffoldMappings = mergedMappings;
 
