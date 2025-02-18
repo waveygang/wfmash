@@ -70,6 +70,12 @@ $ mashmap-align -s ref.fa -q seq.fq --mappingFile mashmap.out --pi 80 [OPTIONS]"
     std::cerr << "[wfmash::align] Mapping file = " << parameters.mashmapPafFile << std::endl;
     std::cerr << "[wfmash::align] Alignment identity cutoff = " << std::fixed << std::setprecision(2) << parameters.min_identity * 100.0 << "\%" << std::endl;
     std::cerr << "[wfmash::align] Alignment output file = " << parameters.pafOutputFile << std::endl;
+    std::cerr << "[wfmash::align] Alignment scoring: [mismatch, gap1(o,e), gap2(o,e)[] = [" 
+              << parameters.wfa_patching_mismatch_score << ", "
+              << parameters.wfa_patching_gap_opening_score1 << ", "
+              << parameters.wfa_patching_gap_extension_score1 << ", "
+              << parameters.wfa_patching_gap_opening_score2 << ", "
+              << parameters.wfa_patching_gap_extension_score2 << "]" << std::endl;
   }
 
   /**

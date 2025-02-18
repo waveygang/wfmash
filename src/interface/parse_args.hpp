@@ -126,7 +126,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [0]", {'E', "target-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
-        "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,2,26,1]", {'g', "wfa-params"});
+        "scoring: mismatch, gap1(o,e), gap2(o,e) [3,4,2,24,1]", {'g', "wfa-params"});
 
     args::Group output_opts(options_group, "Output Format:");
     args::Flag sam_format(output_opts, "", "output in SAM format (PAF by default)", {'a', "sam"});
@@ -273,11 +273,30 @@ void parse_args(int argc,
         align_parameters.wfa_gap_extension_score = 1;
     }
 
-    align_parameters.wfa_patching_mismatch_score = 3;
-    align_parameters.wfa_patching_gap_opening_score1 = 4;
-    align_parameters.wfa_patching_gap_extension_score1 = 2;
-    align_parameters.wfa_patching_gap_opening_score2 = 24;
-    align_parameters.wfa_patching_gap_extension_score2 = 1;
+    if (!args::get(wfa_params).empty()) {
+        const std::vector<std::string> params_str = skch::CommonFunc::split(args::get(wfa_params), ',');
+        if (params_str.size() != 5) {
+            std::cerr << "[wfmash] ERROR error: 5 scoring parameters must be given to --wfa-params"
+                      << std::endl;
+            exit(1);
+        }
+
+        std::vector<int> params(params_str.size());
+        std::transform(params_str.begin(), params_str.end(), params.begin(),
+                       [](const std::string &s) { return std::stoi(s); });
+
+        align_parameters.wfa_patching_mismatch_score = params[0];
+        align_parameters.wfa_patching_gap_opening_score1 = params[1];
+        align_parameters.wfa_patching_gap_extension_score1 = params[2];
+        align_parameters.wfa_patching_gap_opening_score2 = params[3];
+        align_parameters.wfa_patching_gap_extension_score2 = params[4];
+    } else {
+        align_parameters.wfa_patching_mismatch_score = 3;
+        align_parameters.wfa_patching_gap_opening_score1 = 4;
+        align_parameters.wfa_patching_gap_extension_score1 = 2;
+        align_parameters.wfa_patching_gap_opening_score2 = 24;
+        align_parameters.wfa_patching_gap_extension_score2 = 1;
+    }
 
     align_parameters.wflign_mismatch_score = 2;
     align_parameters.wflign_gap_opening_score = 3;
