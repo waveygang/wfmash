@@ -2075,11 +2075,44 @@ namespace skch
           return { u_min, u_max, v_min, v_max, use_antidiagonal };
       }
 
+      // Helper to check if an envelope fits within scaffold bounds
+      bool envelopeFits(const RotatedEnvelope& env, const RotatedEnvelope& scaffold) {
+          return env.u_start >= scaffold.u_start && env.u_end <= scaffold.u_end &&
+                 env.v_min >= scaffold.v_min && env.v_max <= scaffold.v_max;
+      }
+
+      // Helper to compute rotated coordinates for a mapping
+      std::tuple<double, double, double, double> computeRotatedCoords(const MappingResult& m, bool use_antidiagonal) {
+          const double invSqrt2 = 1.0 / std::sqrt(2.0);
+          double u_start, u_end, v1, v2;
+          
+          if (!use_antidiagonal) {
+              u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
+              u_end = (m.queryEndPos + m.refEndPos) * invSqrt2;
+              v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
+              v2 = (m.refEndPos - m.queryEndPos) * invSqrt2;
+          } else {
+              u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
+              u_end = (m.refEndPos - m.queryEndPos) * invSqrt2;
+              v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
+              v2 = (m.queryEndPos + m.refEndPos) * invSqrt2;
+          }
+          
+          return std::make_tuple(
+              std::min(u_start, u_end),
+              std::max(u_start, u_end),
+              std::min(v1, v2),
+              std::max(v1, v2)
+          );
+      }
+
       void filterScaffoldCandidates(MappingResultsVector_t& scaffoldCandidates,
                                     const MappingResultsVector_t& mergedMappings,
                                     const Parameters& param,
                                     progress_meter::ProgressMeter& progress) 
       {
+          robin_hood::unordered_set<offset_t> acceptedChains;
+          RotatedEnvelope scaffoldEnvelope;
           // Group mappings by query and reference sequence
           struct GroupKey {
               seqno_t querySeqId;
@@ -2103,26 +2136,85 @@ namespace skch
               groups[key].push_back(m);
           }
 
-          // Process each group with plane sweep
-          MappingResultsVector_t filteredCandidates;
+          // First process maximal merged mappings to identify accepted chains
+          for (const auto& mergedMapping : mergedMappings) {
+              RotatedEnvelope env = computeRotatedEnvelope(mergedMapping, shouldUseAntidiagonal({mergedMapping}));
+              if (envelopeFits(env, scaffoldEnvelope)) {
+                  acceptedChains.insert(mergedMapping.splitMappingId);
+              }
+          }
+
+          // Process each group with plane sweep, skipping accepted chains
+          MappingResultsVector_t filteredMappings;
           for (const auto& kv : groups) {
               const auto& group = kv.second;
-              bool use_antidiagonal = shouldUseAntidiagonal(group);
+              
+              // Skip processing if all mappings in this group belong to accepted chains
+              bool all_accepted = std::all_of(group.begin(), group.end(),
+                  [&acceptedChains](const MappingResult& m) {
+                      return acceptedChains.count(m.splitMappingId) > 0;
+                  });
+              
+              if (all_accepted) {
+                  // Add all mappings from accepted chains to filtered results
+                  filteredMappings.insert(filteredMappings.end(), group.begin(), group.end());
+                  continue;
+              }
 
-              // Apply plane sweep filtering to this group
+              bool use_antidiagonal = shouldUseAntidiagonal(group);
               std::vector<bool> keep(group.size(), false);
-              // ... (rest of your existing plane sweep logic) ...
+
+              // Mark mappings from accepted chains as kept
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (acceptedChains.count(group[i].splitMappingId) > 0) {
+                      keep[i] = true;
+                  }
+              }
+
+              // Process remaining mappings with plane sweep
+              IntervalTree activeRaws;
+              
+              // First pass - collect all raw mappings that don't overlap with scaffolds
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (!keep[i]) {  // Skip already kept mappings
+                      auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(group[i], use_antidiagonal);
+                      activeRaws.insert(v_min, v_max, i);
+                  }
+              }
+
+              // Second pass - find overlaps between raw mappings
+              for (size_t i = 0; i < group.size(); i++) {
+                  if (!keep[i]) {  // Skip already kept mappings
+                      auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(group[i], use_antidiagonal);
+                      
+                      // Find all raw mappings that overlap with this one
+                      auto overlapping = activeRaws.findOverlapping(v_min, v_max);
+                      
+                      // Keep the mapping with the highest nucleotide identity
+                      bool is_best = true;
+                      for (auto other_id : overlapping) {
+                          if (other_id != i && group[other_id].nucIdentity > group[i].nucIdentity) {
+                              is_best = false;
+                              break;
+                          }
+                      }
+                      
+                      if (is_best) {
+                          keep[i] = true;
+                      }
+                  }
+              }
 
               // Collect mappings that passed filtering
               for (size_t i = 0; i < group.size(); i++) {
                   if (keep[i]) {
-                      filteredCandidates.push_back(group[i]);
+                      filteredMappings.push_back(group[i]);
                   }
               }
           }
 
           // Replace input with filtered results
-          scaffoldCandidates = std::move(filteredCandidates);
+          scaffoldCandidates = std::move(filteredMappings);
       }
 
       void filterByScaffolds(MappingResultsVector_t& readMappings,
@@ -2134,6 +2226,9 @@ namespace skch
           if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
                return;
           }
+
+          // Track which chains are accepted by the scaffold filter
+          robin_hood::unordered_set<offset_t> acceptedChains;
 
           // Build scaffold mappings from the maximally merged mappings
           MappingResultsVector_t scaffoldMappings = mergedMappings;
