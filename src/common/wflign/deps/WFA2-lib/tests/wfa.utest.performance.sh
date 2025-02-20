@@ -2,7 +2,7 @@
 # PROJECT: Wavefront Alignments Algorithms (Unitary Tests)
 # LICENCE: MIT License 
 # AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
-# DESCRIPTION: WFA unitary tests (performance & correcness)
+# DESCRIPTION: WFA unitary tests (performance & correctness)
 # USAGE: ./wfa.utest.performance.sh
 
 # Config
@@ -14,7 +14,7 @@ LOWMEMORY="--wfa-memory-mode=med"
 BIWFA="--wfa-memory-mode=ultralow"
 
 # Clear
-rm $OUTPUT/*.log $OUTPUT/*.alg
+rm -f $OUTPUT/*.log $OUTPUT/*.alg
 
 # Utest for length=100
 \time -v ./bin/align_benchmark -a $ALGORITHM -i ../data/sim.l100.n100K.e2.seq -o $OUTPUT/sim.l100.e2.W.alg               &> $OUTPUT/sim.l100.e2.W.log
@@ -38,4 +38,7 @@ rm $OUTPUT/*.log $OUTPUT/*.alg
 \time -v ./bin/align_benchmark -a $ALGORITHM -i ../data/sim.l100K.n1.e10.seq -o $OUTPUT/sim.l100K.e10.Wb.alg $BIWFA      &> $OUTPUT/sim.l100K.e10.Wb.log
 
 # Run the check
-./tests/wfa.utest.cmp.sh tests/ tests/wfa.utest.performance.check/ --cmp-performance
+echo ">>> "
+echo ">>> Performance [base vs new]: "
+echo ">>> "
+./tests/wfa.utest.cmp.sh tests/wfa.utest.performance.check/ tests/ --cmp-performance

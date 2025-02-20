@@ -32,6 +32,7 @@
 #ifndef CIGAR_H_
 #define CIGAR_H_
 
+#include <stdbool.h>
 #include "system/mm_allocator.h"
 #include "alignment/linear_penalties.h"
 #include "alignment/affine_penalties.h"
@@ -73,17 +74,17 @@ void cigar_free(
  * Accessors
  */
 bool cigar_is_null(
-    cigar_t* const cigar);
+    const cigar_t* const cigar);
 
 int cigar_count_matches(
-    cigar_t* const cigar);
+    const cigar_t* const cigar);
 
 void cigar_append_forward(
     cigar_t* const cigar_dst,
-    cigar_t* const cigar_src);
+    const cigar_t* const cigar_src);
 void cigar_append_reverse(
     cigar_t* const cigar_dst,
-    cigar_t* const cigar_src);
+    const cigar_t* const cigar_src);
 
 void cigar_append_deletion(
     cigar_t* const cigar,
@@ -105,43 +106,43 @@ void cigar_get_CIGAR(
  * Score
  */
 int cigar_score_edit(
-    cigar_t* const cigar);
+    const cigar_t* const cigar);
 int cigar_score_gap_linear(
-    cigar_t* const cigar,
-    linear_penalties_t* const penalties);
+    const cigar_t* const cigar,
+    const linear_penalties_t* const penalties);
 int cigar_score_gap_affine(
-    cigar_t* const cigar,
-    affine_penalties_t* const penalties);
+    const cigar_t* const cigar,
+    const affine_penalties_t* const penalties);
 int cigar_score_gap_affine2p(
-    cigar_t* const cigar,
-    affine2p_penalties_t* const penalties);
+    const cigar_t* const cigar,
+    const affine2p_penalties_t* const penalties);
 
 /*
  * Utils
  */
 int cigar_cmp(
-    cigar_t* const cigar_a,
-    cigar_t* const cigar_b);
+    const cigar_t* const cigar_a,
+    const cigar_t* const cigar_b);
 void cigar_copy(
     cigar_t* const cigar_dst,
-    cigar_t* const cigar_src);
+    const cigar_t* const cigar_src);
 
 void cigar_discover_mismatches(
-    char* const pattern,
+    const char* const pattern,
     const int pattern_length,
-    char* const text,
+    const char* const text,
     const int text_length,
     cigar_t* const cigar);
 
 bool cigar_maxtrim_gap_linear(
     cigar_t* const cigar,
-    linear_penalties_t* const penalties);
+    const linear_penalties_t* const penalties);
 bool cigar_maxtrim_gap_affine(
     cigar_t* const cigar,
-    affine_penalties_t* const penalties);
+    const affine_penalties_t* const penalties);
 bool cigar_maxtrim_gap_affine2p(
     cigar_t* const cigar,
-    affine2p_penalties_t* const penalties);
+    const affine2p_penalties_t* const penalties);
 
 /*
  * Check
@@ -152,7 +153,7 @@ bool cigar_check_alignment(
     const int pattern_length,
     const char* const text,
     const int text_length,
-    cigar_t* const cigar,
+    const cigar_t* const cigar,
     const bool verbose);
 
 /*
@@ -160,11 +161,11 @@ bool cigar_check_alignment(
  */
 void cigar_print(
     FILE* const stream,
-    cigar_t* const cigar,
+    const cigar_t* const cigar,
     const bool print_matches);
 int cigar_sprint(
     char* const buffer,
-    cigar_t* const cigar,
+    const cigar_t* const cigar,
     const bool print_matches);
 
 void cigar_print_SAM_CIGAR(

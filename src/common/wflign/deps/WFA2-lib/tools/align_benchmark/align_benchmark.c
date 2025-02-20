@@ -29,7 +29,10 @@
  * DESCRIPTION: Wavefront Alignment Algorithms benchmarking tool
  */
 
+
+#ifdef WFA_PARALLEL
 #include <omp.h>
+#endif
 
 #include "align_benchmark_params.h"
 
@@ -217,7 +220,16 @@ wavefront_aligner_t* align_input_configure_wavefront(
       break;
   }
   // Select alignment form
-  attributes.alignment_form.span = (parameters.endsfree) ? alignment_endsfree : alignment_end2end;
+  if (parameters.align_span_extension) {
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.extension = true;
+  } else if (parameters.align_span_endsfree) {
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.extension = false;
+  } else { // Global
+    attributes.alignment_form.span = alignment_end2end;
+    attributes.alignment_form.extension = false;
+  }
   // Misc
   attributes.plot.enabled = (parameters.plot != 0);
   attributes.plot.align_level = (parameters.plot < 0) ? -1 : parameters.plot - 1;
@@ -236,8 +248,6 @@ void align_input_configure_global(
   align_input->linear_penalties = parameters.linear_penalties;
   align_input->affine_penalties = parameters.affine_penalties;
   align_input->affine2p_penalties = parameters.affine2p_penalties;
-  // Alignment form
-  align_input->ends_free = parameters.endsfree;
   // Output
   align_input->output_file = parameters.output_file;
   align_input->output_full = parameters.output_full;
@@ -271,7 +281,7 @@ void align_input_configure_global(
 void align_input_configure_local(
     align_input_t* const align_input) {
   // Ends-free configuration
-  if (parameters.endsfree) {
+  if (parameters.align_span_endsfree) {
     const int plen = align_input->pattern_length;
     const int tlen = align_input->text_length;
     align_input->pattern_begin_free = nominal_prop_u32(plen,parameters.pattern_begin_free);
@@ -442,7 +452,6 @@ void align_benchmark_run_algorithm(
 void align_benchmark_sequential() {
   // PROFILE
   timer_reset(&parameters.timer_global);
-  timer_start(&parameters.timer_global);
   // I/O files
   parameters.input_file = fopen(parameters.input_filename, "r");
   if (parameters.input_file == NULL) {
@@ -465,7 +474,9 @@ void align_benchmark_sequential() {
         seqs_processed,&align_input);
     if (!input_read) break;
     // Execute the selected algorithm
+    timer_start(&parameters.timer_global); // PROFILE
     align_benchmark_run_algorithm(&align_input);
+    timer_stop(&parameters.timer_global); // PROFILE
     // Update progress
     ++seqs_processed;
     if (++progress == parameters.progress) {
@@ -482,7 +493,6 @@ void align_benchmark_sequential() {
     if (parameters.plot != 0) align_benchmark_plot_wf(&align_input,seqs_processed);
   }
   // Print benchmark results
-  timer_stop(&parameters.timer_global);
   if (parameters.verbose >= 0) align_benchmark_print_results(&align_input,seqs_processed,true);
   // Free
   align_benchmark_free(&align_input);
@@ -494,7 +504,6 @@ void align_benchmark_sequential() {
 void align_benchmark_parallel() {
   // PROFILE
   timer_reset(&parameters.timer_global);
-  timer_start(&parameters.timer_global);
   // Open input file
   parameters.input_file = fopen(parameters.input_filename, "r");
   if (parameters.input_file == NULL) {
@@ -528,9 +537,12 @@ void align_benchmark_parallel() {
     }
     if (seqs_batch == 0) break;
     // Parallel processing of the sequences batch
+    timer_start(&parameters.timer_global); // PROFILE
+#ifdef WFA_PARALLEL
     #pragma omp parallel num_threads(parameters.num_threads)
     {
       int tid = omp_get_thread_num();
+
       #pragma omp for
       for (int seq_idx=0;seq_idx<seqs_batch;++seq_idx) {
         // Configure sequence
@@ -544,6 +556,8 @@ void align_benchmark_parallel() {
         align_benchmark_run_algorithm(align_input+tid);
       }
     }
+#endif
+    timer_stop(&parameters.timer_global); // PROFILE
     // Update progress
     seqs_processed += seqs_batch;
     progress += seqs_batch;
@@ -555,7 +569,6 @@ void align_benchmark_parallel() {
     //mm_allocator_print(stderr,align_input->wf_aligner->mm_allocator,false);
   }
   // Print benchmark results
-  timer_stop(&parameters.timer_global);
   if (parameters.verbose >= 0) align_benchmark_print_results(align_input,seqs_processed,true);
   // Free
   for (int tid=0;tid<parameters.num_threads;++tid) {
