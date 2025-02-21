@@ -632,8 +632,73 @@ namespace skch
                                   seqno_t seqId = idManager->getSequenceId(queryName);
                                   auto input = new InputSeqProgContainer(queryName, seqId, progress);
 
-                                  // Process the query and its fragments directly
-                                  auto output = mapModule(input, nullptr);
+                                  // Process the query and its fragments using a subflow
+                                  auto output = new QueryMappingOutput(queryName, {}, {}, progress);
+                                  std::atomic<int> fragments_processed{0};
+                                  bool split_mapping = true;
+                                  int refGroup = idManager->getRefGroup(seqId);
+
+                                  // Create fragment tasks
+                                  std::vector<FragmentData> fragments;
+                                  int noOverlapFragmentCount = input->len / param.segLength;
+
+                                  // Create a subflow for fragment processing
+                                  qsf.emplace([this, input, output, &fragments_processed, noOverlapFragmentCount](tf::Subflow& fsf) {
+                                      // Process fragments in parallel
+                                      fsf.for_each_index(0, noOverlapFragmentCount, 1, [&](int i) {
+                                          std::vector<IntervalPoint> intervalPoints;
+                                          std::vector<L1_candidateLocus_t> l1Mappings;
+                                          MappingResultsVector_t l2Mappings;
+                                          QueryMetaData<MinVec_Type> Q;
+
+                                          auto fragment = FragmentData{
+                                              &(input->seq)[0u] + i * param.segLength,
+                                              static_cast<int>(param.segLength),
+                                              static_cast<int>(input->len),
+                                              input->seqId,
+                                              input->name,
+                                              refGroup,
+                                              i,
+                                              output,
+                                              &fragments_processed
+                                          };
+
+                                          processFragment(&fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                      });
+
+                                      // Handle final fragment if needed
+                                      if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+                                          auto fragment = FragmentData{
+                                              &(input->seq)[0u] + input->len - param.segLength,
+                                              static_cast<int>(param.segLength),
+                                              static_cast<int>(input->len),
+                                              input->seqId,
+                                              input->name,
+                                              refGroup,
+                                              noOverlapFragmentCount,
+                                              output,
+                                              &fragments_processed
+                                          };
+
+                                          std::vector<IntervalPoint> intervalPoints;
+                                          std::vector<L1_candidateLocus_t> l1Mappings;
+                                          MappingResultsVector_t l2Mappings;
+                                          QueryMetaData<MinVec_Type> Q;
+                                          processFragment(&fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                      }
+                                  }).name("fragments");
+
+                                  // Wait for all fragments to complete
+                                  while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
+                                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                                  }
+
+                                  mappingBoundarySanityCheck(input, output->results);
+                              
+                                  // Filter and get both merged and non-merged mappings
+                                  auto [nonMergedMappings, mergedMappings] = filterSubsetMappings(output->results, progress);
+                                  output->results = std::move(nonMergedMappings);
+                                  output->mergedResults = std::move(mergedMappings);
 
                                   // Store results in batch mappings
                                   if (!output->results.empty()) {
