@@ -208,10 +208,12 @@ namespace skch
        * @param[in] refSketch   reference sketch
        * @param[in] f           optional user defined custom function to post process the reported mapping results
        */
-      Map(skch::Parameters p,
-          PostProcessResultsFn_t f = nullptr) :
+      Map(skch::Parameters p, 
+          PostProcessResultsFn_t f = nullptr,
+          size_t batch_size = DEFAULT_BATCH_SIZE) :
         param(p),
         processMappingResults(f),
+        query_batch_size(batch_size),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
         idManager(std::make_unique<SequenceIdManager>(
             p.querySequences,
@@ -603,35 +605,64 @@ namespace skch
                   std::unordered_map<seqno_t, MappingResultsVector_t> subsetMappings;
                   std::mutex subsetMappingsMutex;
 
-                  // Process queries in parallel
-                  auto processQueriesTask = sf.emplace([this, &progress, &subsetMappings, 
+                  // Process queries in batches
+                  auto processQueriesTask = sf.emplace([this, &progress, &subsetMappings,
                                                       &subsetMappingsMutex](tf::Subflow& qsf) {
-                      // Process each query sequence
-                      qsf.for_each(querySequenceNames.begin(), querySequenceNames.end(),
-                          [this, &progress, &subsetMappings, &subsetMappingsMutex]
-                          (const std::string& queryName) {
-                              seqno_t seqId = idManager->getSequenceId(queryName);
-                              auto input = new InputSeqProgContainer(queryName, seqId, progress);
+                      const size_t total_queries = querySequenceNames.size();
+                      const size_t num_batches = (total_queries + query_batch_size - 1) / query_batch_size;
 
-                              // Process the query
-                              auto output = mapModule(input, nullptr);
+                      // Create tasks for each batch
+                      std::vector<tf::Task> batch_tasks;
+                      batch_tasks.reserve(num_batches);
 
-                              // Store results in subset mappings
-                              if (!output->results.empty()) {
-                                  std::lock_guard<std::mutex> lock(subsetMappingsMutex);
-                                  auto& mappings = param.mergeMappings && param.split ? 
-                                                 output->mergedResults : output->results;
-                                  subsetMappings[seqId].insert(
-                                      subsetMappings[seqId].end(),
-                                      mappings.begin(),
-                                      mappings.end()
-                                  );
+                      for (size_t batch = 0; batch < num_batches; ++batch) {
+                          const size_t start_idx = batch * query_batch_size;
+                          const size_t end_idx = std::min(start_idx + query_batch_size, total_queries);
+
+                          auto batch_task = qsf.emplace([this, start_idx, end_idx, &progress,
+                                                       &subsetMappings, &subsetMappingsMutex]() {
+                              // Local storage for this batch's results
+                              std::unordered_map<seqno_t, MappingResultsVector_t> batchMappings;
+
+                              // Process each query in the batch
+                              for (size_t i = start_idx; i < end_idx; ++i) {
+                                  const auto& queryName = querySequenceNames[i];
+                                  seqno_t seqId = idManager->getSequenceId(queryName);
+                                  auto input = new InputSeqProgContainer(queryName, seqId, progress);
+
+                                  // Process the query and its fragments directly
+                                  auto output = mapModule(input, nullptr);
+
+                                  // Store results in batch mappings
+                                  if (!output->results.empty()) {
+                                      auto& mappings = param.mergeMappings && param.split ?
+                                                     output->mergedResults : output->results;
+                                      batchMappings[seqId].insert(
+                                          batchMappings[seqId].end(),
+                                          mappings.begin(),
+                                          mappings.end()
+                                      );
+                                  }
+
+                                  delete output;
+                                  delete input;
                               }
 
-                              delete output;
-                              delete input;
-                          }
-                      );
+                              // Merge batch results into subset mappings
+                              if (!batchMappings.empty()) {
+                                  std::lock_guard<std::mutex> lock(subsetMappingsMutex);
+                                  for (auto& [seqId, mappings] : batchMappings) {
+                                      subsetMappings[seqId].insert(
+                                          subsetMappings[seqId].end(),
+                                          std::make_move_iterator(mappings.begin()),
+                                          std::make_move_iterator(mappings.end())
+                                      );
+                                  }
+                              }
+                          }).name("batch_" + std::to_string(batch));
+
+                          batch_tasks.push_back(batch_task);
+                      }
                   }).name("processQueries_" + std::to_string(subset_idx));
 
                   // Merge subset results into combined mappings
