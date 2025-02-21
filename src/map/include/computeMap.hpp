@@ -275,6 +275,8 @@ namespace skch
 
       ~Map() = default;
 
+      void mapQueryTaskflow();
+
       private:
       void buildMetadataFromIndex() {
           for (const auto& fileName : param.refSequences) {
