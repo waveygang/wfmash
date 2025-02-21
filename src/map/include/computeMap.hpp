@@ -642,10 +642,13 @@ namespace skch
                                   std::vector<FragmentData> fragments;
                                   int noOverlapFragmentCount = input->len / param.segLength;
 
-                                  // Create a subflow for fragment processing
-                                  qsf.emplace([this, input, output, &fragments_processed, noOverlapFragmentCount](tf::Subflow& fsf) {
-                                      // Process fragments in parallel
-                                      fsf.for_each_index(0, noOverlapFragmentCount, 1, [&](int i) {
+                                  // Create tasks for fragment processing
+                                  std::vector<tf::Task> fragment_tasks;
+                                  fragment_tasks.reserve(noOverlapFragmentCount + 1);
+
+                                  // Process fragments in parallel
+                                  for (int i = 0; i < noOverlapFragmentCount; ++i) {
+                                      auto task = qsf.emplace([this, input, output, i]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -660,14 +663,23 @@ namespace skch
                                               refGroup,
                                               i,
                                               output,
-                                              &fragments_processed
+                                              nullptr  // No longer need atomic counter
                                           };
 
                                           processFragment(&fragment, intervalPoints, l1Mappings, l2Mappings, Q);
-                                      });
+                                      }).name("fragment_" + std::to_string(i));
+                                      
+                                      fragment_tasks.push_back(task);
+                                  }
 
-                                      // Handle final fragment if needed
-                                      if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+                                  // Handle final fragment if needed
+                                  if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+                                      auto task = qsf.emplace([this, input, output, noOverlapFragmentCount]() {
+                                          std::vector<IntervalPoint> intervalPoints;
+                                          std::vector<L1_candidateLocus_t> l1Mappings;
+                                          MappingResultsVector_t l2Mappings;
+                                          QueryMetaData<MinVec_Type> Q;
+
                                           auto fragment = FragmentData{
                                               &(input->seq)[0u] + input->len - param.segLength,
                                               static_cast<int>(param.segLength),
@@ -677,20 +689,19 @@ namespace skch
                                               refGroup,
                                               noOverlapFragmentCount,
                                               output,
-                                              &fragments_processed
+                                              nullptr  // No longer need atomic counter
                                           };
 
-                                          std::vector<IntervalPoint> intervalPoints;
-                                          std::vector<L1_candidateLocus_t> l1Mappings;
-                                          MappingResultsVector_t l2Mappings;
-                                          QueryMetaData<MinVec_Type> Q;
                                           processFragment(&fragment, intervalPoints, l1Mappings, l2Mappings, Q);
-                                      }
-                                  }).name("fragments");
+                                      }).name("fragment_final");
+                                      
+                                      fragment_tasks.push_back(task);
+                                  }
 
-                                  // Wait for all fragments to complete
-                                  while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
-                                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                                  // Create a join task that will run after all fragments complete
+                                  auto join_task = qsf.emplace([](){}).name("fragment_join");
+                                  for (auto& task : fragment_tasks) {
+                                      task.precede(join_task);
                                   }
 
                                   mappingBoundarySanityCheck(input, output->results);
