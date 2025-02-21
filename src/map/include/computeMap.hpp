@@ -119,8 +119,10 @@ namespace skch
 
     private:
 
-      //algorithm parameters
+      //algorithm parameters  
       skch::Parameters param;
+      static constexpr size_t DEFAULT_BATCH_SIZE = 100;
+      size_t query_batch_size;
 
       //reference sketch
       skch::Sketch* refSketch;
