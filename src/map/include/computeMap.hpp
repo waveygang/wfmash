@@ -607,16 +607,14 @@ namespace skch
                   std::unordered_map<seqno_t, MappingResultsVector_t> subsetMappings;
                   std::mutex subsetMappingsMutex;
 
-                  // Process queries in batches
+                  // Process queries in batches serially to control memory usage
                   auto processQueriesTask = sf.emplace([this, &progress, &subsetMappings,
                                                       &subsetMappingsMutex](tf::Subflow& qsf) {
                       const size_t total_queries = querySequenceNames.size();
                       const size_t num_batches = (total_queries + query_batch_size - 1) / query_batch_size;
 
-                      // Create tasks for each batch
-                      std::vector<tf::Task> batch_tasks;
-                      batch_tasks.reserve(num_batches);
-
+                      // Create a linear chain of batch tasks
+                      tf::Task previous_batch;
                       for (size_t batch = 0; batch < num_batches; ++batch) {
                           const size_t start_idx = batch * query_batch_size;
                           const size_t end_idx = std::min(start_idx + query_batch_size, total_queries);
@@ -739,7 +737,11 @@ namespace skch
                               }
                           }).name("batch_" + std::to_string(batch));
 
-                          batch_tasks.push_back(batch_task);
+                          // Make each batch wait for the previous one
+                          if (batch > 0) {
+                              previous_batch.precede(batch_task);
+                          }
+                          previous_batch = batch_task;
                       }
                   }).name("processQueries_" + std::to_string(subset_idx));
 
