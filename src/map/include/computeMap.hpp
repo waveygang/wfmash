@@ -28,6 +28,7 @@ namespace fs = std::filesystem;
 #include <mutex>
 #include <sstream>
 #include "common/atomic_queue/atomic_queue.h"
+#include "taskflow/taskflow.hpp"
 
 //Own includes
 #include "map/include/base_types.hpp"
@@ -497,7 +498,237 @@ namespace skch
         return target_subsets;
       }
 
-      void mapQuery()
+      void mapQuery() {
+          mapQueryTaskflow();
+      }
+
+      void mapQueryTaskflow() {
+          std::cerr << "[wfmash::mashmap] Using Taskflow-based parallel execution" << std::endl;
+
+          // Create taskflow and executor
+          tf::Taskflow taskflow("Map::mapQueryTaskflow");
+          tf::Executor executor(param.threads);
+
+          // Count of reads mapped by us
+          seqno_t totalReadsPickedForMapping = 0;
+          seqno_t totalReadsMapped = 0;
+
+          std::ofstream outstrm(param.outFileName);
+
+          // Get sequence names from ID manager
+          this->querySequenceNames = idManager->getQuerySequenceNames();
+          this->targetSequenceNames = idManager->getTargetSequenceNames();
+
+          // Calculate total target length
+          uint64_t total_target_length = 0;
+          size_t target_seq_count = targetSequenceNames.size();
+          std::string target_prefix = param.target_prefix.empty() ? "none" : param.target_prefix;
+
+          for (const auto& seqName : targetSequenceNames) {
+              seqno_t seqId = idManager->getSequenceId(seqName);
+              total_target_length += idManager->getSequenceLength(seqId);
+          }
+
+          // Calculate total query length
+          uint64_t total_query_length = 0;
+          for (const auto& seqName : querySequenceNames) {
+              total_query_length += idManager->getSequenceLength(idManager->getSequenceId(seqName));
+          }
+
+          // Create target subsets
+          std::vector<std::vector<std::string>> target_subsets = createTargetSubsets(targetSequenceNames);
+
+          // Calculate and log subset statistics
+          uint64_t total_subset_size = 0;
+          for (const auto& subset : target_subsets) {
+              for (const auto& seqName : subset) {
+                  seqno_t seqId = idManager->getSequenceId(seqName);
+                  total_subset_size += idManager->getSequenceLength(seqId);
+              }
+          }
+          double avg_subset_size = target_subsets.size() ? (double)total_subset_size / target_subsets.size() : 0;
+
+          std::cerr << "[wfmash::mashmap] Target subsets: " << target_subsets.size();
+          if (param.index_by_size > 0) {
+              std::cerr << ", target size: " << param.index_by_size << "bp";
+          }
+          std::cerr << ", average size: " << std::fixed << std::setprecision(0) << avg_subset_size << "bp" << std::endl;
+
+          // Storage for combined mappings across all subsets
+          std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
+
+          // Create tasks for each subset
+          std::vector<tf::Task> subsetTasks;
+          subsetTasks.reserve(target_subsets.size());
+
+          // Process each subset
+          for (size_t subset_idx = 0; subset_idx < target_subsets.size(); ++subset_idx) {
+              const auto& target_subset = target_subsets[subset_idx];
+              if (target_subset.empty()) continue;
+
+              auto subsetTask = taskflow.emplace([this, &executor, &combinedMappings, 
+                                                subset_idx, &target_subset, &target_subsets,
+                                                &total_seq_length](tf::Subflow& sf) {
+                  // Calculate subset length
+                  uint64_t subset_length = 0;
+                  for (const auto& seqName : target_subset) {
+                      seqno_t seqId = idManager->getSequenceId(seqName);
+                      subset_length += idManager->getSequenceLength(seqId);
+                  }
+
+                  // Initialize progress meter for this subset
+                  progress_meter::ProgressMeter progress(
+                      total_seq_length,
+                      "[wfmash::mashmap] mapping (" + 
+                      std::to_string(subset_idx + 1) + "/" + 
+                      std::to_string(target_subsets.size()) + ")");
+
+                  // Build or load index
+                  auto buildIndexTask = sf.emplace([this, &target_subset]() {
+                      if (param.create_index_only) {
+                          refSketch = new skch::Sketch(param, *idManager, target_subset);
+                          refSketch->writeIndex(target_subset, param.indexFilename.string(), subset_idx != 0);
+                      } else {
+                          if (!param.indexFilename.empty()) {
+                              refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr);
+                          } else {
+                              refSketch = new skch::Sketch(param, *idManager, target_subset);
+                          }
+                      }
+                  }).name("buildIndex_" + std::to_string(subset_idx));
+
+                  // Storage for this subset's mappings
+                  std::unordered_map<seqno_t, MappingResultsVector_t> subsetMappings;
+                  std::mutex subsetMappingsMutex;
+
+                  // Process queries in parallel
+                  auto processQueriesTask = sf.emplace([this, &progress, &subsetMappings, 
+                                                      &subsetMappingsMutex](tf::Subflow& qsf) {
+                      // Process each query sequence
+                      qsf.for_each(querySequenceNames.begin(), querySequenceNames.end(),
+                          [this, &progress, &subsetMappings, &subsetMappingsMutex]
+                          (const std::string& queryName) {
+                              seqno_t seqId = idManager->getSequenceId(queryName);
+                              auto input = new InputSeqProgContainer(queryName, seqId, progress);
+
+                              // Process the query
+                              auto output = mapModule(input, nullptr);
+
+                              // Store results in subset mappings
+                              if (!output->results.empty()) {
+                                  std::lock_guard<std::mutex> lock(subsetMappingsMutex);
+                                  auto& mappings = param.mergeMappings && param.split ? 
+                                                 output->mergedResults : output->results;
+                                  subsetMappings[seqId].insert(
+                                      subsetMappings[seqId].end(),
+                                      mappings.begin(),
+                                      mappings.end()
+                                  );
+                              }
+
+                              delete output;
+                              delete input;
+                          }
+                      );
+                  }).name("processQueries_" + std::to_string(subset_idx));
+
+                  // Merge subset results into combined mappings
+                  auto mergeResultsTask = sf.emplace([this, &combinedMappings, &subsetMappings]() {
+                      for (auto& [querySeqId, mappings] : subsetMappings) {
+                          combinedMappings[querySeqId].insert(
+                              combinedMappings[querySeqId].end(),
+                              std::make_move_iterator(mappings.begin()),
+                              std::make_move_iterator(mappings.end())
+                          );
+                      }
+                  }).name("mergeResults_" + std::to_string(subset_idx));
+
+                  // Set up dependencies
+                  buildIndexTask.precede(processQueriesTask);
+                  processQueriesTask.precede(mergeResultsTask);
+
+                  // Clean up
+                  auto cleanupTask = sf.emplace([this]() {
+                      delete refSketch;
+                      refSketch = nullptr;
+                  }).name("cleanup_" + std::to_string(subset_idx));
+
+                  mergeResultsTask.precede(cleanupTask);
+
+                  progress.finish();
+              }).name("subset_" + std::to_string(subset_idx));
+
+              subsetTasks.push_back(subsetTask);
+          }
+
+          // Final processing task
+          auto finalProcessingTask = taskflow.emplace([this, &combinedMappings, &outstrm]() {
+              progress_meter::ProgressMeter progress(
+                  combinedMappings.size() * 2,
+                  "[wfmash::mashmap] merging and filtering");
+
+              // Process combined mappings
+              aggregate_atomic_queue_t aggregate_queue;
+              writer_atomic_queue_t writer_queue;
+              std::atomic<bool> processing_done(false);
+              std::atomic<bool> workers_done(false);
+              std::atomic<bool> output_done(false);
+
+              // Start worker threads
+              std::vector<std::thread> workers;
+              for (int i = 0; i < param.threads; ++i) {
+                  workers.emplace_back(&Map::processCombinedMappingsThread, this,
+                      std::ref(aggregate_queue), std::ref(writer_queue),
+                      std::ref(processing_done), std::ref(progress));
+              }
+
+              // Start output thread
+              std::thread output_thread(&Map::outputThread, this,
+                  std::ref(outstrm), std::ref(writer_queue),
+                  std::ref(processing_done), std::ref(workers_done),
+                  std::ref(output_done));
+
+              // Enqueue tasks
+              for (auto& [querySeqId, mappings] : combinedMappings) {
+                  auto* task = new std::pair<seqno_t, MappingResultsVector_t*>(querySeqId, &mappings);
+                  while (!aggregate_queue.try_push(task)) {
+                      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  }
+              }
+
+              // Signal completion
+              processing_done.store(true);
+
+              // Wait for worker threads
+              for (auto& worker : workers) {
+                  worker.join();
+              }
+              workers_done.store(true);
+
+              // Wait for output thread
+              while (!output_done.load()) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+              }
+              output_thread.join();
+
+              progress.finish();
+          }).name("finalProcessing");
+
+          // Make all subset tasks precede final processing
+          for (auto& task : subsetTasks) {
+              task.precede(finalProcessingTask);
+          }
+
+          // Execute taskflow
+          executor.run(taskflow).wait();
+
+          if (param.create_index_only) {
+              std::cerr << "[wfmash::mashmap] All indices created successfully. Exiting." << std::endl;
+              exit(0);
+          }
+      }
+
+      void mapQueryOld() 
       {
         std::cerr << "[wfmash::mashmap] L1 filtering parameters: cached_minimum_hits=" << cached_minimum_hits << std::endl;
 
