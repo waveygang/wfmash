@@ -279,8 +279,6 @@ namespace skch
 
       ~Map() = default;
 
-      void mapQueryTaskflow();
-
       private:
       void buildMetadataFromIndex() {
           for (const auto& fileName : param.refSequences) {
@@ -574,7 +572,7 @@ namespace skch
 
               auto subsetTask = taskflow.emplace([this, &executor, &combinedMappings, 
                                                 subset_idx, &target_subset, &target_subsets,
-                                                &total_seq_length](tf::Subflow& sf) {
+                                                &total_query_length](tf::Subflow& sf) {
                   // Calculate subset length
                   uint64_t subset_length = 0;
                   for (const auto& seqName : target_subset) {
@@ -590,7 +588,7 @@ namespace skch
                       std::to_string(target_subsets.size()) + ")");
 
                   // Build or load index
-                  auto buildIndexTask = sf.emplace([this, &target_subset]() {
+                  auto buildIndexTask = sf.emplace([this, &target_subset, subset_idx]() {
                       if (param.create_index_only) {
                           refSketch = new skch::Sketch(param, *idManager, target_subset);
                           refSketch->writeIndex(target_subset, param.indexFilename.string(), subset_idx != 0);
@@ -628,7 +626,9 @@ namespace skch
                               for (size_t i = start_idx; i < end_idx; ++i) {
                                   const auto& queryName = querySequenceNames[i];
                                   seqno_t seqId = idManager->getSequenceId(queryName);
-                                  auto input = new InputSeqProgContainer(queryName, seqId, progress);
+                                  std::string seq;
+                                  seqiter::get_sequence(param.querySequences[0], queryName, seq);
+                                  auto input = new InputSeqProgContainer(seq, queryName, seqId, progress);
 
                                   // Process the query and its fragments using a subflow
                                   auto output = new QueryMappingOutput(queryName, {}, {}, progress);
@@ -646,7 +646,7 @@ namespace skch
 
                                   // Process fragments in parallel
                                   for (int i = 0; i < noOverlapFragmentCount; ++i) {
-                                      auto task = qsf.emplace([this, input, output, i]() {
+                                      auto task = qsf.emplace([this, input, output, i, &qsf, refGroup]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -672,7 +672,7 @@ namespace skch
 
                                   // Handle final fragment if needed
                                   if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                      auto task = qsf.emplace([this, input, output, noOverlapFragmentCount]() {
+                                      auto task = qsf.emplace([this, input, output, noOverlapFragmentCount, &qsf, refGroup]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -697,7 +697,7 @@ namespace skch
                                   }
 
                                   // Create a join task that will run after all fragments complete
-                                  auto join_task = qsf.emplace([](){}).name("fragment_join");
+                                  auto join_task = qsf.emplace([&qsf](){}).name("fragment_join");
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
