@@ -1310,18 +1310,7 @@ namespace skch
             }
         }
 
-        // Wait for all fragments to be processed
-        while (fragments_processed.load(std::memory_order_relaxed) < noOverlapFragmentCount) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        mappingBoundarySanityCheck(input, output->results);
-          
-        // Filter and get both merged and non-merged mappings
-        auto [nonMergedMappings, mergedMappings] = filterSubsetMappings(output->results, input->progress);
-        output->results = std::move(nonMergedMappings);
-        output->mergedResults = std::move(mergedMappings);
-
+        // No need to wait - taskflow handles dependencies
         return output;
       }
 
