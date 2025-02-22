@@ -627,7 +627,10 @@ namespace skch
                                   const auto& queryName = querySequenceNames[i];
                                   seqno_t seqId = idManager->getSequenceId(queryName);
                                   std::string seq;
-                                  seqiter::get_sequence(param.querySequences[0], queryName, seq);
+                                  seqiter::for_each_seq_in_file(param.querySequences[0], {queryName}, 
+                                      [&seq](const std::string& name, const std::string& sequence) {
+                                          seq = sequence;
+                                      });
                                   auto input = new InputSeqProgContainer(seq, queryName, seqId, progress);
 
                                   // Process the query and its fragments using a subflow
@@ -646,7 +649,7 @@ namespace skch
 
                                   // Process fragments in parallel
                                   for (int i = 0; i < noOverlapFragmentCount; ++i) {
-                                      auto task = qsf.emplace([this, input, output, i, &qsf, refGroup]() {
+                                      auto task = qsf.emplace([this, input, output, i, refGroup]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -672,7 +675,7 @@ namespace skch
 
                                   // Handle final fragment if needed
                                   if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                      auto task = qsf.emplace([this, input, output, noOverlapFragmentCount, &qsf, refGroup]() {
+                                      auto task = qsf.emplace([this, input, output, noOverlapFragmentCount, refGroup]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -697,7 +700,7 @@ namespace skch
                                   }
 
                                   // Create a join task that will run after all fragments complete
-                                  auto join_task = qsf.emplace([&qsf](){}).name("fragment_join");
+                                  auto join_task = qsf.emplace([](){}).name("fragment_join");
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
