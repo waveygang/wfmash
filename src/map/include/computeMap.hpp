@@ -1259,7 +1259,17 @@ namespace skch
             }
         }
 
-        // No need to wait - taskflow handles dependencies
+        // Wait for all fragments to be processed
+        while (fragments_processed.load() < fragments.size()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        // Cleanup fragments
+        for (auto* fragment : fragments) {
+            delete fragment;
+        }
+        fragments.clear();
+
         return output;
       }
 
