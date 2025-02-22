@@ -617,8 +617,8 @@ namespace skch
                           const size_t start_idx = batch * query_batch_size;
                           const size_t end_idx = std::min(start_idx + query_batch_size, total_queries);
 
-                          auto batch_task = qsf.emplace([this, start_idx, end_idx, &progress,
-                                                       &subsetMappings, &subsetMappingsMutex]() {
+                          auto batch_task = sf.emplace([this, start_idx, end_idx, &progress,
+                                                      &subsetMappings, &subsetMappingsMutex, &sf]() {
                               // Local storage for this batch's results
                               std::unordered_map<seqno_t, MappingResultsVector_t> batchMappings;
 
@@ -649,7 +649,7 @@ namespace skch
 
                                   // Process fragments in parallel
                                   for (int i = 0; i < noOverlapFragmentCount; ++i) {
-                                      auto task = sf.emplace([this, input, output, i, refGroup]() {
+                                      auto task = sf.emplace([this, input, output, i, refGroup, &sf]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -675,7 +675,7 @@ namespace skch
 
                                   // Handle final fragment if needed
                                   if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                      auto task = sf.emplace([this, input, output, noOverlapFragmentCount, refGroup]() {
+                                      auto task = sf.emplace([this, input, output, noOverlapFragmentCount, refGroup, &sf]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -700,7 +700,7 @@ namespace skch
                                   }
 
                                   // Create a join task that will run after all fragments complete
-                                  auto join_task = sf.emplace([](){}).name("fragment_join");
+                                  auto join_task = sf.emplace([&sf](){}).name("fragment_join");
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
