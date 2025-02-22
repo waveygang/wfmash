@@ -864,6 +864,12 @@ namespace skch
               task.precede(finalProcessingTask);
           }
 
+          // Dump taskflow graph to DOT file
+          taskflow.dump(std::cout);
+          std::ofstream dot_file("task.dot");
+          taskflow.dump(dot_file);
+          dot_file.close();
+
           // Execute taskflow
           executor.run(taskflow).wait();
 
