@@ -727,13 +727,13 @@ namespace skch
                                       delete input;
                                   }).name("finalize_query");
 
-                                  // Set up task dependencies
+                                  // Set up task dependencies to ensure fragments complete before cleanup
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
                                   join_task.precede(finalize_task);
 
-                                  // Join all tasks in this query's subflow
+                                  // Wait for all fragment tasks to complete before returning
                                   sf.join();
                               }
 
@@ -769,19 +769,22 @@ namespace skch
                       }
                   }).name("mergeResults_" + std::to_string(subset_idx));
 
-                  // Set up dependencies
+                  // Set up dependencies to ensure index exists for all queries
                   buildIndexTask.precede(processQueriesTask);
+                  
+                  // Ensure all queries are processed before merging
                   processQueriesTask.precede(mergeResultsTask);
 
-                  // Clean up
+                  // Only clean up after all results are merged
                   auto cleanupTask = sf.emplace([this]() {
                       delete refSketch;
                       refSketch = nullptr;
                   }).name("cleanup_" + std::to_string(subset_idx));
 
+                  // Ensure cleanup happens after all tasks that use refSketch
                   mergeResultsTask.precede(cleanupTask);
 
-                  // Join all subflow tasks before returning
+                  // Wait for ALL tasks including cleanup before returning
                   sf.join();
 
                   progress.finish();
