@@ -622,7 +622,7 @@ namespace skch
                       }).name("setup_" + queryName);
 
                       // Create task for fragment generation
-                      auto fragment_gen_task = sf.emplace([this](InputSeqProgContainer* input, QueryMappingOutput* output) {
+                      auto fragment_gen_task = sf.emplace([this, &input, &output]() {
                           std::vector<std::shared_ptr<FragmentData>> fragments;
                           int refGroup = idManager->getRefGroup(input->seqId);
                           int noOverlapFragmentCount = input->len / param.segLength;
@@ -663,10 +663,7 @@ namespace skch
                       }).name("fragment_gen_" + queryName);
 
                       // Create task for processing fragments
-                      auto process_fragments_task = sf.emplace([this](
-                          std::vector<std::shared_ptr<FragmentData>>& fragments,
-                          InputSeqProgContainer* input,
-                          QueryMappingOutput* output) {
+                      auto process_fragments_task = sf.emplace([this, &fragments, &input, &output]() {
                           
                           tf::Taskflow taskflow;
                           std::vector<tf::Task> fragment_tasks;
@@ -691,9 +688,7 @@ namespace skch
                       }).name("process_fragments_" + queryName);
 
                       // Create finalization task
-                      auto finalize_task = sf.emplace([this, subsetMappings, subsetMappings_mutex](
-                          InputSeqProgContainer* input,
-                          QueryMappingOutput* output) {
+                      auto finalize_task = sf.emplace([this, &input, &output, subsetMappings, subsetMappings_mutex]() {
                           
                           // Apply filtering and store results
                           mappingBoundarySanityCheck(input, output->results);
