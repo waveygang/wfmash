@@ -162,7 +162,7 @@ namespace skch
       std::atomic<offset_t> maxChainIdSeen{0};
 
 
-    void processFragment(FragmentData* fragment, 
+    void processFragment(const FragmentData& fragment, 
                          std::vector<IntervalPoint>& intervalPoints,
                          std::vector<L1_candidateLocus_t>& l1Mappings,
                          MappingResultsVector_t& l2Mappings,
@@ -171,35 +171,34 @@ namespace skch
         l1Mappings.clear();
         l2Mappings.clear();
 
-        Q.seq = const_cast<char*>(fragment->seq);
-        Q.len = fragment->len;
-        Q.fullLen = fragment->fullLen;
-        Q.seqId = fragment->seqId;
-        Q.seqName = fragment->seqName;
-        Q.refGroup = fragment->refGroup;
+        Q.seq = const_cast<char*>(fragment.seq);
+        Q.len = fragment.len;
+        Q.fullLen = fragment.fullLen;
+        Q.seqId = fragment.seqId;
+        Q.seqName = fragment.seqName;
+        Q.refGroup = fragment.refGroup;
 
         mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
         std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-            e.queryLen = fragment->fullLen;
-            e.queryStartPos = fragment->fragmentIndex * param.segLength;
-            e.queryEndPos = e.queryStartPos + fragment->len;
+            e.queryLen = fragment.fullLen;
+            e.queryStartPos = fragment.fragmentIndex * param.segLength;
+            e.queryEndPos = e.queryStartPos + fragment.len;
         });
 
         {
-            std::lock_guard<std::mutex> lock(fragment->output->mutex);
-            fragment->output->results.insert(fragment->output->results.end(), l2Mappings.begin(), l2Mappings.end());
+            std::lock_guard<std::mutex> lock(fragment.output->mutex);
+            fragment.output->results.insert(fragment.output->results.end(), l2Mappings.begin(), l2Mappings.end());
             // Initialize mergedResults with same mappings
             if (param.mergeMappings && param.split) {
-                fragment->output->mergedResults.insert(fragment->output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
+                fragment.output->mergedResults.insert(fragment.output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
             }
         }
 
         // Update progress after processing the fragment
-        fragment->output->progress.increment(fragment->len);
+        fragment.output->progress.increment(fragment.len);
 
-        fragment->fragments_processed->fetch_add(1, std::memory_order_relaxed);
-        delete fragment;
+        fragment.fragments_processed->fetch_add(1, std::memory_order_relaxed);
     }
       
     public:
@@ -655,7 +654,7 @@ namespace skch
                                           MappingResultsVector_t l2Mappings;
                                           QueryMetaData<MinVec_Type> Q;
 
-                                          auto fragment = FragmentData{
+                                          FragmentData fragment{
                                               &(input->seq)[0u] + i * param.segLength,
                                               static_cast<int>(param.segLength),
                                               static_cast<int>(input->len),
@@ -667,7 +666,7 @@ namespace skch
                                               nullptr  // No longer need atomic counter
                                           };
 
-                                          processFragment(&fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                          processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                                       }).name("fragment_" + std::to_string(i));
                                       
                                       fragment_tasks.push_back(task);
@@ -681,7 +680,7 @@ namespace skch
                                           MappingResultsVector_t l2Mappings;
                                           QueryMetaData<MinVec_Type> Q;
 
-                                          auto fragment = FragmentData{
+                                          FragmentData fragment{
                                               &(input->seq)[0u] + input->len - param.segLength,
                                               static_cast<int>(param.segLength),
                                               static_cast<int>(input->len),
@@ -693,7 +692,7 @@ namespace skch
                                               nullptr  // No longer need atomic counter
                                           };
 
-                                          processFragment(&fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                          processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                                       }).name("fragment_final");
                                       
                                       fragment_tasks.push_back(task);
