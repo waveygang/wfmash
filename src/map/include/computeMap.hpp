@@ -562,16 +562,20 @@ namespace skch
 
               // Process queries in parallel using dynamic taskflow
               auto processQueries_task = subset_flow.emplace([&](tf::Subflow& sf) {
+                  std::cerr << "[DEBUG] Starting processQueries_task" << std::endl;
                   const auto& fileName = param.querySequences[0];
             
+                  std::cerr << "[DEBUG] Processing " << querySequenceNames.size() << " queries" << std::endl;
                   // Create shared state for all query tasks
                   std::atomic<int> fragments_processed{0};
 
                   // Process each query
                   for (const auto& queryName : querySequenceNames) {
+                      std::cerr << "[DEBUG] Creating task for query " << queryName << std::endl;
                       sf.emplace([this, &fileName, &queryName, &progress, 
                                   subsetMappings, subsetMappings_mutex,
                                   &fragments_processed, &sf]() {
+                          std::cerr << "[DEBUG] Starting processing for query " << queryName << std::endl;
                           // Read query sequence
                           std::string seq;
                           seqiter::for_each_seq_in_file(fileName, {queryName}, 
@@ -697,8 +701,10 @@ namespace skch
               processQueries_task.precede(merge_task);
               merge_task.precede(cleanup_task);
 
+              std::cerr << "[DEBUG] Running subset taskflow" << std::endl;
               // Run this subset's taskflow
               executor.run(subset_flow).wait();
+              std::cerr << "[DEBUG] Subset taskflow completed" << std::endl;
         
               progress.finish();
           }
@@ -710,7 +716,9 @@ namespace skch
 
           // Final results processing
           tf::Taskflow final_flow;
+          std::cerr << "[DEBUG] Creating final processing task" << std::endl;
           auto final_task = final_flow.emplace([&]() {
+              std::cerr << "[DEBUG] Starting final result processing" << std::endl;
               std::ofstream outstrm(param.outFileName);
               // Process final results
               for (auto& [querySeqId, mappings] : combinedMappings) {
@@ -718,7 +726,9 @@ namespace skch
                   reportReadMappings(mappings, queryName, outstrm);
               }
           });
+          std::cerr << "[DEBUG] Running final taskflow" << std::endl;
           executor.run(final_flow).wait();
+          std::cerr << "[DEBUG] Final taskflow completed" << std::endl;
       }
 
       void mapQueryOld()
