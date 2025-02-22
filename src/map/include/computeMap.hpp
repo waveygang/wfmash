@@ -64,16 +64,46 @@ namespace skch
           : queryName(name), results(r), mergedResults(mr), progress(p) {}
   };
 
+  // Manages fragment lifetime and processing
+  class FragmentManager {
+  private:
+      std::vector<std::shared_ptr<FragmentData>> fragments;
+      std::mutex fragments_mutex;
+
+  public:
+      void add_fragment(std::shared_ptr<FragmentData> fragment) {
+          std::lock_guard<std::mutex> lock(fragments_mutex);
+          fragments.push_back(fragment);
+      }
+
+      void clear() {
+          std::lock_guard<std::mutex> lock(fragments_mutex);
+          fragments.clear();
+      }
+
+      const std::vector<std::shared_ptr<FragmentData>>& get_fragments() const {
+          return fragments;
+      }
+  };
+
   struct FragmentData {
       const char* seq;
       int len;
-      int fullLen;
+      int fullLen; 
       seqno_t seqId;
       std::string seqName;
       int refGroup;
       int fragmentIndex;
       QueryMappingOutput* output;
       std::atomic<int>* fragments_processed;
+
+      // Add constructor for convenience
+      FragmentData(const char* s, int l, int fl, seqno_t sid, 
+                   const std::string& sn, int rg, int idx,
+                   QueryMappingOutput* out, std::atomic<int>* fp)
+          : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
+            refGroup(rg), fragmentIndex(idx), output(out), 
+            fragments_processed(fp) {}
   };
 
   /**
@@ -570,12 +600,14 @@ namespace skch
                   // Create shared state for all query tasks
                   std::atomic<int> fragments_processed{0};
 
-                  // Process each query
+                  // Process each query with proper task dependencies
                   for (const auto& queryName : querySequenceNames) {
                       std::cerr << "[DEBUG] Creating task for query " << queryName << std::endl;
-                      sf.emplace([this, &fileName, &queryName, &progress, 
-                                  subsetMappings, subsetMappings_mutex,
-                                  &fragments_processed, &sf]() {
+                  
+                      // Create fragment processing task group
+                      auto process_query = sf.emplace([this, &fileName, &queryName, &progress,
+                                                      subsetMappings, subsetMappings_mutex,
+                                                      &fragments_processed, &sf]() {
                           std::cerr << "[DEBUG] Starting processing for query " << queryName << std::endl;
                           // Read query sequence
                           std::string seq;
@@ -589,15 +621,21 @@ namespace skch
                           auto input = new InputSeqProgContainer(seq, queryName, seqId, progress);
                           auto output = new QueryMappingOutput(queryName, {}, {}, progress);
 
-                          // Process fragments using subflow
-                          std::vector<FragmentData*> fragments;
+                          // Create fragment manager for this query
+                          FragmentManager fragment_manager;
+                          
+                          // Process fragments using subflow with explicit dependencies
                           auto process_fragments = [&](tf::Subflow& sf) {
                               int noOverlapFragmentCount = input->len / param.segLength;
                               int refGroup = idManager->getRefGroup(seqId);
 
+                              // Create fragment processing tasks with dependencies
+                              std::vector<tf::Task> fragment_tasks;
+                              fragment_tasks.reserve(noOverlapFragmentCount);
+
                               // Process regular fragments in parallel
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  auto fragment = new FragmentData{
+                                  auto fragment = std::make_shared<FragmentData>(
                                       &(input->seq)[0u] + i * param.segLength,
                                       static_cast<int>(param.segLength),
                                       static_cast<int>(input->len),
@@ -607,17 +645,19 @@ namespace skch
                                       i,
                                       output,
                                       &fragments_processed
-                                  };
-                                  fragments.push_back(fragment);
+                                  );
+                                  fragment_manager.add_fragment(fragment);
                             
                                   // Create task for this fragment
-                                  sf.emplace([this, fragment]() {
+                                  auto task = sf.emplace([this, fragment]() {
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
                                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                                   }).name("fragment_" + std::to_string(i));
+                                  
+                                  fragment_tasks.push_back(task);
                               }
 
                               // Handle final fragment if needed 
@@ -1166,7 +1206,7 @@ namespace skch
         bool split_mapping = true;
         int refGroup = this->idManager->getRefGroup(input->seqId);
 
-        std::vector<FragmentData*> fragments;
+        FragmentManager fragment_manager;
         int noOverlapFragmentCount = input->len / param.segLength;
         std::cerr << "[DEBUG] Creating fragments for " << input->name 
                   << " len=" << input->len
@@ -1174,11 +1214,13 @@ namespace skch
                   << " fragmentCount=" << noOverlapFragmentCount 
                   << " refGroup=" << refGroup << "\n";
 
+        // Create processing tasks for regular fragments
         for (int i = 0; i < noOverlapFragmentCount; i++) {
             offset_t start_pos = i * param.segLength;
             std::cerr << "[DEBUG] Creating regular fragment " << i 
                       << " at pos " << start_pos << "\n";
-            auto fragment = new FragmentData{
+              
+            auto fragment = std::make_shared<FragmentData>(
                 &(input->seq)[0u] + i * param.segLength,
                 static_cast<int>(param.segLength),
                 static_cast<int>(input->len),
@@ -1188,8 +1230,8 @@ namespace skch
                 i,
                 output,
                 &fragments_processed
-            };
-            fragments.push_back(fragment);
+            );
+            fragment_manager.add_fragment(fragment);
         }
 
         if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
