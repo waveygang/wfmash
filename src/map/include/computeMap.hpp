@@ -571,7 +571,7 @@ namespace skch
                   for (const auto& queryName : querySequenceNames) {
                       sf.emplace([this, &fileName, &queryName, &progress, 
                                   subsetMappings, subsetMappings_mutex,
-                                  &fragments_processed]() {
+                                  &fragments_processed, &sf]() {
                           // Read query sequence
                           std::string seq;
                           seqiter::for_each_seq_in_file(fileName, {queryName}, 
