@@ -1336,7 +1336,7 @@ namespace skch
               FragmentData* fragment = nullptr;
               if (fragment_queue.try_pop(fragment)) {
                   if (fragment) {
-                      processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                   }
               } else {
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
