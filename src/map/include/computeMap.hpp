@@ -166,6 +166,10 @@ namespace skch
                          std::vector<L1_candidateLocus_t>& l1Mappings,
                          MappingResultsVector_t& l2Mappings,
                          QueryMetaData<MinVec_Type>& Q) {
+        std::cerr << "[DEBUG] processFragment(" << fragment.seqName
+                  << ") len=" << fragment.len 
+                  << " fragmentIndex=" << fragment.fragmentIndex 
+                  << " fullLen=" << fragment.fullLen << "\n";
         intervalPoints.clear();
         l1Mappings.clear();
         l2Mappings.clear();
