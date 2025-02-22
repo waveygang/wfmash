@@ -585,12 +585,12 @@ namespace skch
                           auto output = new QueryMappingOutput(queryName, {}, {}, progress);
 
                           // Process fragments using subflow
+                          std::vector<FragmentData*> fragments;
                           auto process_fragments = [&](tf::Subflow& sf) {
                               int noOverlapFragmentCount = input->len / param.segLength;
                               int refGroup = idManager->getRefGroup(seqId);
 
                               // Process regular fragments in parallel
-                              std::vector<FragmentData*> fragments;
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
                                   auto fragment = new FragmentData{
                                       &(input->seq)[0u] + i * param.segLength,
