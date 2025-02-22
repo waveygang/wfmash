@@ -2459,11 +2459,8 @@ namespace skch
       {
           // If scaffold filtering is disabled, do nothing.
           if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
-               return;
+              return;
           }
-
-          // Track which chains are accepted by the scaffold filter
-          robin_hood::unordered_set<offset_t> acceptedChains;
 
           // Build scaffold mappings from the maximally merged mappings
           MappingResultsVector_t scaffoldMappings = mergedMappings;
@@ -2473,26 +2470,6 @@ namespace skch
           scaffoldParam.chain_gap *= 2;  // More aggressive merging for scaffolds
           auto superChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, progress);
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
-
-          // Expand scaffold mappings by half the max deviation on each end
-          for (auto& mapping : superChains) {
-              int64_t expansion = param.scaffold_max_deviation / 2;
-              mapping.refStartPos = std::max<int64_t>(0, mapping.refStartPos - expansion);
-              mapping.refEndPos = std::min<int64_t>(idManager->getSequenceLength(mapping.refSeqId), 
-                                                   mapping.refEndPos + expansion);
-              mapping.queryStartPos = std::max<int64_t>(0, mapping.queryStartPos - expansion);
-              mapping.queryEndPos = std::min<int64_t>(mapping.queryLen, mapping.queryEndPos + expansion);
-              mapping.blockLength = std::max(mapping.refEndPos - mapping.refStartPos,
-                                           mapping.queryEndPos - mapping.queryStartPos);
-          }
-
-          /* Optionally, write scaffold mappings to file for debugging
-          if (!superChains.empty() && 
-              (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0)) {
-              std::ofstream scafOutstrm("scaf.paf", std::ios::app);
-              reportReadMappings(superChains, idManager->getSequenceName(superChains.front().querySeqId), scafOutstrm);
-          }
-          */
 
           // Group mappings by query and reference sequence
           struct GroupKey {
