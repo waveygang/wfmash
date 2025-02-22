@@ -156,6 +156,9 @@ namespace skch
       //reference sketch
       skch::Sketch* refSketch;
 
+      // Vector to store fragments
+      std::vector<FragmentData*> fragments;
+
       // Sequence ID manager
       std::unique_ptr<SequenceIdManager> idManager;
 
