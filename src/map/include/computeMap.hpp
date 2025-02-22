@@ -985,6 +985,12 @@ namespace skch
         std::atomic<bool> output_done(false);
         aggregate_atomic_queue_t aggregate_queue;
 
+        std::cerr << "[DEBUG] combinedMappings size: " << combinedMappings.size() << "\n";
+        for (auto& [qId, vec] : combinedMappings) {
+            std::cerr << "  queryId=" << qId 
+                      << " #mappings=" << vec.size() << "\n";
+        }
+
         // Get total count of mappings
         uint64_t totalMappings = 0;
         for (const auto& [querySeqId, mappings] : combinedMappings) {
@@ -1812,11 +1818,18 @@ namespace skch
 
           //Catch all NNNNNN case
           if (Q.sketchSize == 0 || Q.kmerComplexity < param.kmerComplexityThreshold) {
+            std::cerr << "[DEBUG] Skipping " << Q.seqName 
+                      << " (sketchSize=" << Q.sketchSize
+                      << " kmerComplexity=" << Q.kmerComplexity 
+                      << " threshold=" << param.kmerComplexityThreshold << ")\n";
             return;
           }
 
           //2. Compute windows and sort
           getSeedIntervalPoints(Q, intervalPoints);
+
+          std::cerr << "[DEBUG] L1 found " << intervalPoints.size() 
+                    << " interval points for " << Q.seqName << "\n";
 
           //3. Compute L1 windows
           // Always respect the minimum hits parameter if set
