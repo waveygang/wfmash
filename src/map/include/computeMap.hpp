@@ -1322,8 +1322,8 @@ namespace skch
         }
 
         for (auto& fragment : fragments) {
-            std::cerr << "[DEBUG] Queueing fragment " << i << " for " << fragment->seqName 
-                      << " start=" << (i * param.segLength) << "\n";
+            std::cerr << "[DEBUG] Queueing fragment " << fragment->fragmentIndex << " for " << fragment->seqName 
+                      << " start=" << (fragment->fragmentIndex * param.segLength) << "\n";
             while (!fragment_queue.try_push(fragment)) {
                 //std::this_thread::yield(); // too fast
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
