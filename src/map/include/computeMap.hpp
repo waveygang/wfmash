@@ -528,8 +528,14 @@ namespace skch
               tf::Taskflow subset_flow;
 
               // Initialize progress meter
+              // Calculate total query length for progress meter
+              uint64_t subset_query_length = 0;
+              for (const auto& queryName : querySequenceNames) {
+                  subset_query_length += idManager->getSequenceLength(idManager->getSequenceId(queryName));
+              }
+
               progress_meter::ProgressMeter progress(
-                  total_query_length,
+                  subset_query_length,
                   "[wfmash::mashmap] mapping (" + 
                   std::to_string(subset_idx + 1) + "/" + 
                   std::to_string(target_subsets.size()) + ")"
@@ -605,7 +611,7 @@ namespace skch
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q); 
+                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                                   }).name("fragment_" + std::to_string(i));
                               }
 
@@ -629,13 +635,13 @@ namespace skch
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                                   }).name("fragment_final");
                               }
                           };
 
                           // Wait for all fragments to complete
-                          auto finalize_task = sf.emplace([this, input, output, seqId,
+                          auto finalize_task = sf.emplace([this, input, output, seqId, &sf,
                                                            subsetMappings, subsetMappings_mutex]() {
                               // Apply sanity checks and filtering
                               mappingBoundarySanityCheck(input, output->results);
@@ -702,7 +708,11 @@ namespace skch
           tf::Taskflow final_flow;
           auto final_task = final_flow.emplace([&]() {
               std::ofstream outstrm(param.outFileName);
-              process_final_results(combinedMappings, outstrm);
+              // Process final results
+              for (auto& [querySeqId, mappings] : combinedMappings) {
+                  std::string queryName = idManager->getSequenceName(querySeqId);
+                  reportReadMappings(mappings, queryName, outstrm);
+              }
           });
           executor.run(final_flow).wait();
       }
