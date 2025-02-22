@@ -641,7 +641,7 @@ namespace skch
                           };
 
                           // Wait for all fragments to complete
-                          auto finalize_task = sf.emplace([this, input, output, seqId, &sf,
+                          auto finalize_task = sf.emplace([this, input, output, seqId,
                                                            subsetMappings, subsetMappings_mutex]() {
                               // Apply sanity checks and filtering
                               mappingBoundarySanityCheck(input, output->results);
@@ -660,11 +660,15 @@ namespace skch
                                       );
                               }
 
+                              // Output will be deleted by the aggregator thread
                               delete input;
-                              delete output;
                           }).name("finalize_query");
 
-                          process_fragments(sf);
+                          process_fragments(sf); // Process remaining fragments
+                          for (auto* fragment : fragments) {
+                              delete fragment;
+                          }
+                          fragments.clear();
                       }).name("process_query_" + queryName);
                   }
               }).name("process_queries");
