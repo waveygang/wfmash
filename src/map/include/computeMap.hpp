@@ -732,6 +732,9 @@ namespace skch
                                       task.precede(join_task);
                                   }
                                   join_task.precede(finalize_task);
+
+                                  // Join all tasks in this query's subflow
+                                  sf.join();
                               }
 
                               // Merge batch results into subset mappings
@@ -777,6 +780,9 @@ namespace skch
                   }).name("cleanup_" + std::to_string(subset_idx));
 
                   mergeResultsTask.precede(cleanupTask);
+
+                  // Join all subflow tasks before returning
+                  sf.join();
 
                   progress.finish();
               }).name("subset_" + std::to_string(subset_idx));
