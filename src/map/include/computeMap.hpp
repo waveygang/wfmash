@@ -645,18 +645,28 @@ namespace skch
                                   std::vector<FragmentData> fragments;
                                   int noOverlapFragmentCount = input->len / param.segLength;
 
+                                  // Create a data structure to hold fragment results
+                                  struct FragmentResult {
+                                      std::vector<IntervalPoint> intervalPoints;
+                                      std::vector<L1_candidateLocus_t> l1Mappings;
+                                      MappingResultsVector_t l2Mappings;
+                                      QueryMetaData<MinVec_Type> Q;
+                                  };
+                                  
+                                  // Allocate results vector that will live until all tasks complete
+                                  auto fragmentResults = std::make_shared<std::vector<FragmentResult>>(
+                                      noOverlapFragmentCount + (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0 ? 1 : 0)
+                                  );
+
                                   // Create tasks for fragment processing
                                   std::vector<tf::Task> fragment_tasks;
-                                  fragment_tasks.reserve(noOverlapFragmentCount + 1);
+                                  fragment_tasks.reserve(fragmentResults->size());
 
                                   // Process fragments in parallel
                                   for (int i = 0; i < noOverlapFragmentCount; ++i) {
-                                      auto task = sf.emplace([this, input, output, i, refGroup, &sf]() {
-                                          std::vector<IntervalPoint> intervalPoints;
-                                          std::vector<L1_candidateLocus_t> l1Mappings;
-                                          MappingResultsVector_t l2Mappings;
-                                          QueryMetaData<MinVec_Type> Q;
-
+                                      auto task = sf.emplace([this, input, output, i, refGroup, fragmentResults]() {
+                                          auto& result = (*fragmentResults)[i];
+                                          
                                           FragmentData fragment{
                                               &(input->seq)[0u] + i * param.segLength,
                                               static_cast<int>(param.segLength),
@@ -666,10 +676,11 @@ namespace skch
                                               refGroup,
                                               i,
                                               output,
-                                              nullptr  // No longer need atomic counter
+                                              nullptr
                                           };
 
-                                          processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                          processFragment(fragment, result.intervalPoints, 
+                                                        result.l1Mappings, result.l2Mappings, result.Q);
                                       }).name("fragment_" + std::to_string(i));
                                       
                                       fragment_tasks.push_back(task);
@@ -677,12 +688,10 @@ namespace skch
 
                                   // Handle final fragment if needed
                                   if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                      auto task = sf.emplace([this, input, output, noOverlapFragmentCount, refGroup, &sf]() {
-                                          std::vector<IntervalPoint> intervalPoints;
-                                          std::vector<L1_candidateLocus_t> l1Mappings;
-                                          MappingResultsVector_t l2Mappings;
-                                          QueryMetaData<MinVec_Type> Q;
-
+                                      auto task = sf.emplace([this, input, output, noOverlapFragmentCount, 
+                                                            refGroup, fragmentResults]() {
+                                          auto& result = (*fragmentResults)[noOverlapFragmentCount];
+                                          
                                           FragmentData fragment{
                                               &(input->seq)[0u] + input->len - param.segLength,
                                               static_cast<int>(param.segLength),
@@ -692,17 +701,18 @@ namespace skch
                                               refGroup,
                                               noOverlapFragmentCount,
                                               output,
-                                              nullptr  // No longer need atomic counter
+                                              nullptr
                                           };
 
-                                          processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                          processFragment(fragment, result.intervalPoints,
+                                                        result.l1Mappings, result.l2Mappings, result.Q);
                                       }).name("fragment_final");
                                       
                                       fragment_tasks.push_back(task);
                                   }
 
                                   // Create a join task that will run after all fragments complete
-                                  auto join_task = sf.emplace([this, input, output, &progress]() {
+                                  auto join_task = sf.emplace([this, input, output, fragmentResults, &progress]() {
                                       mappingBoundarySanityCheck(input, output->results);
                                       
                                       // Filter and get both merged and non-merged mappings
@@ -712,7 +722,8 @@ namespace skch
                                   }).name("fragment_join");
 
                                   // Create finalize task that will store results and clean up
-                                  auto finalize_task = sf.emplace([this, input, output, seqId, &batchMappings]() {
+                                  auto finalize_task = sf.emplace([this, input, output, seqId, 
+                                                                 fragmentResults, &batchMappings]() {
                                       // Store results in batch mappings
                                       if (!output->results.empty()) {
                                           auto& mappings = param.mergeMappings && param.split ?
@@ -725,16 +736,14 @@ namespace skch
                                       }
                                       delete output;
                                       delete input;
+                                      // fragmentResults will be freed when shared_ptr goes out of scope
                                   }).name("finalize_query");
 
-                                  // Set up task dependencies to ensure fragments complete before cleanup
+                                  // Set up task dependencies
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
                                   join_task.precede(finalize_task);
-
-                                  // Wait for all fragment tasks to complete before returning
-                                  sf.join();
                               }
 
                               // Merge batch results into subset mappings
