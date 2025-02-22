@@ -699,31 +699,36 @@ namespace skch
                                   }
 
                                   // Create a join task that will run after all fragments complete
-                                  auto join_task = sf.emplace([&sf](){}).name("fragment_join");
+                                  auto join_task = sf.emplace([this, input, output, &progress]() {
+                                      mappingBoundarySanityCheck(input, output->results);
+                                      
+                                      // Filter and get both merged and non-merged mappings
+                                      auto [nonMergedMappings, mergedMappings] = filterSubsetMappings(output->results, progress);
+                                      output->results = std::move(nonMergedMappings);
+                                      output->mergedResults = std::move(mergedMappings);
+                                  }).name("fragment_join");
+
+                                  // Create finalize task that will store results and clean up
+                                  auto finalize_task = sf.emplace([this, input, output, seqId, &batchMappings]() {
+                                      // Store results in batch mappings
+                                      if (!output->results.empty()) {
+                                          auto& mappings = param.mergeMappings && param.split ?
+                                                         output->mergedResults : output->results;
+                                          batchMappings[seqId].insert(
+                                              batchMappings[seqId].end(),
+                                              mappings.begin(),
+                                              mappings.end()
+                                          );
+                                      }
+                                      delete output;
+                                      delete input;
+                                  }).name("finalize_query");
+
+                                  // Set up task dependencies
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
-
-                                  mappingBoundarySanityCheck(input, output->results);
-                              
-                                  // Filter and get both merged and non-merged mappings
-                                  auto [nonMergedMappings, mergedMappings] = filterSubsetMappings(output->results, progress);
-                                  output->results = std::move(nonMergedMappings);
-                                  output->mergedResults = std::move(mergedMappings);
-
-                                  // Store results in batch mappings
-                                  if (!output->results.empty()) {
-                                      auto& mappings = param.mergeMappings && param.split ?
-                                                     output->mergedResults : output->results;
-                                      batchMappings[seqId].insert(
-                                          batchMappings[seqId].end(),
-                                          mappings.begin(),
-                                          mappings.end()
-                                      );
-                                  }
-
-                                  delete output;
-                                  delete input;
+                                  join_task.precede(finalize_task);
                               }
 
                               // Merge batch results into subset mappings
