@@ -64,6 +64,26 @@ namespace skch
           : queryName(name), results(r), mergedResults(mr), progress(p) {}
   };
 
+  struct FragmentData {
+      const char* seq;
+      int len;
+      int fullLen; 
+      seqno_t seqId;
+      std::string seqName;
+      int refGroup;
+      int fragmentIndex;
+      QueryMappingOutput* output;
+      std::atomic<int>* fragments_processed;
+
+      // Add constructor for convenience
+      FragmentData(const char* s, int l, int fl, seqno_t sid, 
+                   const std::string& sn, int rg, int idx,
+                   QueryMappingOutput* out, std::atomic<int>* fp)
+          : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
+            refGroup(rg), fragmentIndex(idx), output(out), 
+            fragments_processed(fp) {}
+  };
+
   // Manages fragment lifetime and processing
   class FragmentManager {
   private:
@@ -84,26 +104,6 @@ namespace skch
       const std::vector<std::shared_ptr<FragmentData>>& get_fragments() const {
           return fragments;
       }
-  };
-
-  struct FragmentData {
-      const char* seq;
-      int len;
-      int fullLen; 
-      seqno_t seqId;
-      std::string seqName;
-      int refGroup;
-      int fragmentIndex;
-      QueryMappingOutput* output;
-      std::atomic<int>* fragments_processed;
-
-      // Add constructor for convenience
-      FragmentData(const char* s, int l, int fl, seqno_t sid, 
-                   const std::string& sn, int rg, int idx,
-                   QueryMappingOutput* out, std::atomic<int>* fp)
-          : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
-            refGroup(rg), fragmentIndex(idx), output(out), 
-            fragments_processed(fp) {}
   };
 
   /**
