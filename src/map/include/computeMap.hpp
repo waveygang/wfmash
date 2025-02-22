@@ -1285,6 +1285,10 @@ namespace skch
 
         std::vector<FragmentData*> fragments;
         int noOverlapFragmentCount = input->len / param.segLength;
+        std::cerr << "[DEBUG] Creating fragments for " << input->name 
+                  << " len=" << input->len
+                  << " segLength=" << param.segLength 
+                  << " fragmentCount=" << noOverlapFragmentCount << "\n";
 
         for (int i = 0; i < noOverlapFragmentCount; i++) {
             auto fragment = new FragmentData{
@@ -1318,6 +1322,8 @@ namespace skch
         }
 
         for (auto& fragment : fragments) {
+            std::cerr << "[DEBUG] Queueing fragment " << i << " for " << fragment->seqName 
+                      << " start=" << (i * param.segLength) << "\n";
             while (!fragment_queue.try_push(fragment)) {
                 //std::this_thread::yield(); // too fast
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -1339,6 +1345,9 @@ namespace skch
               FragmentData* fragment = nullptr;
               if (fragment_queue.try_pop(fragment)) {
                   if (fragment) {
+                      std::cerr << "[DEBUG] Fragment thread processing fragment for " 
+                                << fragment->seqName << " index=" << fragment->fragmentIndex 
+                                << " len=" << fragment->len << "\n";
                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                   }
               } else {
