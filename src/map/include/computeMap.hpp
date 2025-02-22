@@ -169,7 +169,8 @@ namespace skch
         std::cerr << "[DEBUG] processFragment(" << fragment.seqName
                   << ") len=" << fragment.len 
                   << " fragmentIndex=" << fragment.fragmentIndex 
-                  << " fullLen=" << fragment.fullLen << "\n";
+                  << " fullLen=" << fragment.fullLen
+                  << " refGroup=" << fragment.refGroup << "\n";
         intervalPoints.clear();
         l1Mappings.clear();
         l2Mappings.clear();
@@ -621,6 +622,8 @@ namespace skch
 
                               // Handle final fragment if needed 
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+                                  offset_t start_pos = input->len - param.segLength;
+                                  std::cerr << "[DEBUG] Creating final fragment at pos " << start_pos << "\n";
                                   auto fragment = new FragmentData{
                                       &(input->seq)[0u] + input->len - param.segLength,
                                       static_cast<int>(param.segLength),
@@ -1168,9 +1171,13 @@ namespace skch
         std::cerr << "[DEBUG] Creating fragments for " << input->name 
                   << " len=" << input->len
                   << " segLength=" << param.segLength 
-                  << " fragmentCount=" << noOverlapFragmentCount << "\n";
+                  << " fragmentCount=" << noOverlapFragmentCount 
+                  << " refGroup=" << refGroup << "\n";
 
         for (int i = 0; i < noOverlapFragmentCount; i++) {
+            offset_t start_pos = i * param.segLength;
+            std::cerr << "[DEBUG] Creating regular fragment " << i 
+                      << " at pos " << start_pos << "\n";
             auto fragment = new FragmentData{
                 &(input->seq)[0u] + i * param.segLength,
                 static_cast<int>(param.segLength),
@@ -1722,7 +1729,9 @@ namespace skch
           getSeedIntervalPoints(Q, intervalPoints);
 
           std::cerr << "[DEBUG] L1 found " << intervalPoints.size() 
-                    << " interval points for " << Q.seqName << "\n";
+                    << " interval points for " << Q.seqName 
+                    << " (sketchSize=" << Q.sketchSize
+                    << " kmerComplexity=" << Q.kmerComplexity << ")\n";
 
           //3. Compute L1 windows
           // Always respect the minimum hits parameter if set
@@ -1844,6 +1853,10 @@ namespace skch
             }
 
             l2_vec.clear();
+            std::cerr << "[DEBUG] L2 mapping for " << Q.seqName 
+                      << " candidateLocus=[" << candidateLocus.rangeStartPos 
+                      << "," << candidateLocus.rangeEndPos 
+                      << "] intersectionSize=" << candidateLocus.intersectionSize << "\n";
             computeL2MappedRegions(Q, candidateLocus, l2_vec);
 
             for (auto& l2 : l2_vec) 
