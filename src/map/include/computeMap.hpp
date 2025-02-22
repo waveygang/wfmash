@@ -739,11 +739,14 @@ namespace skch
                                       // fragmentResults will be freed when shared_ptr goes out of scope
                                   }).name("finalize_query");
 
-                                  // Set up task dependencies
+                                  // Set up task dependencies to ensure fragments complete
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
                                   join_task.precede(finalize_task);
+
+                                  // Wait for all tasks in this query's subflow to complete
+                                  sf.join();
                               }
 
                               // Merge batch results into subset mappings
@@ -793,7 +796,8 @@ namespace skch
                   // Ensure cleanup happens after all tasks that use refSketch
                   mergeResultsTask.precede(cleanupTask);
 
-                  // Wait for ALL tasks including cleanup before returning
+                  // Wait for ALL tasks in this subset to complete before returning
+                  // This ensures fragment tasks run and refSketch remains valid
                   sf.join();
 
                   progress.finish();
