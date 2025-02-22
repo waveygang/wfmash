@@ -607,7 +607,7 @@ namespace skch
 
                   // Process queries in batches serially to control memory usage
                   auto processQueriesTask = sf.emplace([this, &progress, &subsetMappings,
-                                                      &subsetMappingsMutex](tf::Subflow& qsf) {
+                                                      &subsetMappingsMutex, &qsf](tf::Subflow& qsf) {
                       const size_t total_queries = querySequenceNames.size();
                       const size_t num_batches = (total_queries + query_batch_size - 1) / query_batch_size;
 
