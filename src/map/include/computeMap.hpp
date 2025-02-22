@@ -582,7 +582,7 @@ namespace skch
 
                   // Initialize progress meter for this subset
                   progress_meter::ProgressMeter progress(
-                      total_seq_length,
+                      total_query_length,
                       "[wfmash::mashmap] mapping (" + 
                       std::to_string(subset_idx + 1) + "/" + 
                       std::to_string(target_subsets.size()) + ")");
@@ -607,7 +607,7 @@ namespace skch
 
                   // Process queries in batches serially to control memory usage
                   auto processQueriesTask = sf.emplace([this, &progress, &subsetMappings,
-                                                      &subsetMappingsMutex, &qsf](tf::Subflow& qsf) {
+                                                      &subsetMappingsMutex](tf::Subflow& sf) {
                       const size_t total_queries = querySequenceNames.size();
                       const size_t num_batches = (total_queries + query_batch_size - 1) / query_batch_size;
 
@@ -649,7 +649,7 @@ namespace skch
 
                                   // Process fragments in parallel
                                   for (int i = 0; i < noOverlapFragmentCount; ++i) {
-                                      auto task = qsf.emplace([this, input, output, i, refGroup]() {
+                                      auto task = sf.emplace([this, input, output, i, refGroup]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -675,7 +675,7 @@ namespace skch
 
                                   // Handle final fragment if needed
                                   if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                      auto task = qsf.emplace([this, input, output, noOverlapFragmentCount, refGroup]() {
+                                      auto task = sf.emplace([this, input, output, noOverlapFragmentCount, refGroup]() {
                                           std::vector<IntervalPoint> intervalPoints;
                                           std::vector<L1_candidateLocus_t> l1Mappings;
                                           MappingResultsVector_t l2Mappings;
@@ -700,7 +700,7 @@ namespace skch
                                   }
 
                                   // Create a join task that will run after all fragments complete
-                                  auto join_task = qsf.emplace([](){}).name("fragment_join");
+                                  auto join_task = sf.emplace([](){}).name("fragment_join");
                                   for (auto& task : fragment_tasks) {
                                       task.precede(join_task);
                                   }
