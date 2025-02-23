@@ -666,12 +666,12 @@ namespace skch
                                   &(state->input->seq)[0u] + state->input->len - param.segLength,
                                   static_cast<int>(param.segLength),
                                   static_cast<int>(state->input->len),
-                                  state->input->seqId,
-                                  state->input->name,
-                                  refGroup,
-                                  noOverlapFragmentCount,
-                                  state->output.get(),
-                                  nullptr  // fragments_processed not needed anymore
+                                  state->input->seqId,                                    // Pass seqno_t directly
+                                  state->input->name,                                     // Pass string directly
+                                  refGroup,                                               // Pass int directly
+                                  noOverlapFragmentCount,                                // Pass int directly
+                                  std::shared_ptr<QueryMappingOutput>(state->output),    // Wrap in shared_ptr
+                                  std::make_shared<std::atomic<int>>(0)                  // Create atomic shared_ptr
                               );
                               state->fragments.push_back(fragment);
                           }
