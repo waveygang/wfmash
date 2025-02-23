@@ -650,12 +650,12 @@ namespace skch
                                   &(state->input->seq)[0u] + i * param.segLength,
                                   static_cast<int>(param.segLength),
                                   static_cast<int>(state->input->len),
-                                  state->input->seqId,
-                                  state->input->name,
-                                  refGroup,
-                                  i,
-                                  state->output,
-                                  fragments_processed
+                                  state->input->seqId,                                    // Pass seqno_t directly
+                                  state->input->name,                                     // Pass string directly
+                                  refGroup,                                               // Pass int directly
+                                  i,                                                      // Pass int directly
+                                  std::shared_ptr<QueryMappingOutput>(state->output),    // Wrap in shared_ptr
+                                  std::make_shared<std::atomic<int>>(0)                  // Create atomic shared_ptr
                               );
                               state->fragments.push_back(fragment);
                           }
