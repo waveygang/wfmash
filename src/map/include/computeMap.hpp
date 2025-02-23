@@ -558,8 +558,8 @@ namespace skch
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
 
-              // Create taskflow for this subset's processing 
-              tf::Taskflow subset_flow;
+              // Create taskflow for this subset's processing
+              auto subset_flow = std::make_shared<tf::Taskflow>();
 
               // Initialize progress meter
               // Calculate total query length for progress meter
@@ -568,7 +568,7 @@ namespace skch
                   subset_query_length += idManager->getSequenceLength(idManager->getSequenceId(queryName));
               }
 
-              progress_meter::ProgressMeter progress(
+              auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
                   "[wfmash::mashmap] mapping (" + 
                   std::to_string(subset_idx + 1) + "/" + 
@@ -576,7 +576,7 @@ namespace skch
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow.emplace([this, &target_subset]() {
+              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset]() {
                   if (param.create_index_only) {
                       refSketch = new skch::Sketch(param, *idManager, target_subset);
                       refSketch->writeIndex(target_subset, param.indexFilename.string(), false);
@@ -590,12 +590,14 @@ namespace skch
               }).name("build_index_" + std::to_string(subset_idx));
 
               // Storage for this subset's mappings
-              std::shared_ptr<std::unordered_map<seqno_t, MappingResultsVector_t>> subsetMappings = 
-                  std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
-              std::shared_ptr<std::mutex> subsetMappings_mutex = std::make_shared<std::mutex>();
+              auto subsetMappings = std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
+              auto subsetMappings_mutex = std::make_shared<std::mutex>();
 
               // Process queries in parallel using dynamic taskflow
-              auto processQueries_task = subset_flow.emplace([&](tf::Subflow& sf) {
+              auto processQueries_task = subset_flow->emplace([this, 
+                                                             progress,
+                                                             subsetMappings,
+                                                             subsetMappings_mutex](tf::Subflow& sf) {
                   std::cerr << "[DEBUG] Starting processQueries_task" << std::endl;
                   const auto& fileName = param.querySequences[0];
 
@@ -719,8 +721,10 @@ namespace skch
               }).name("process_queries");
 
               // Merge subset results into combined mappings
-              auto merge_task = subset_flow.emplace([this, subsetMappings, &combinedMappings,
-                                                     &combinedMappings_mutex]() {
+              auto merge_task = subset_flow->emplace([this,
+                                                    subsetMappings,
+                                                    &combinedMappings,
+                                                    &combinedMappings_mutex]() {
                   std::lock_guard<std::mutex> lock(combinedMappings_mutex);
                   for (auto& [querySeqId, mappings] : *subsetMappings) {
                       combinedMappings[querySeqId].insert(
@@ -744,10 +748,10 @@ namespace skch
 
               std::cerr << "[DEBUG] Running subset taskflow" << std::endl;
               // Run this subset's taskflow
-              executor.run(subset_flow).wait();
+              executor.run(*subset_flow).wait();
               std::cerr << "[DEBUG] Subset taskflow completed" << std::endl;
         
-              progress.finish();
+              progress->finish();
           }
 
           if (param.create_index_only) {
