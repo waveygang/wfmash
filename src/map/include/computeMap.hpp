@@ -72,13 +72,14 @@ namespace skch
       std::string seqName;
       int refGroup;
       int fragmentIndex;
-      QueryMappingOutput* output;
-      std::atomic<int>* fragments_processed;
+      std::shared_ptr<QueryMappingOutput> output;
+      std::shared_ptr<std::atomic<int>> fragments_processed;
 
       // Add constructor for convenience
       FragmentData(const char* s, int l, int fl, seqno_t sid, 
                    const std::string& sn, int rg, int idx,
-                   QueryMappingOutput* out, std::atomic<int>* fp)
+                   std::shared_ptr<QueryMappingOutput> out, 
+                   std::shared_ptr<std::atomic<int>> fp)
           : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
             refGroup(rg), fragmentIndex(idx), output(out), 
             fragments_processed(fp) {}
@@ -199,6 +200,9 @@ namespace skch
                          std::vector<L1_candidateLocus_t>& l1Mappings,
                          MappingResultsVector_t& l2Mappings,
                          QueryMetaData<MinVec_Type>& Q) {
+        auto output = fragment.output; // Keep shared_ptr alive
+        auto fragments_processed = fragment.fragments_processed; // Keep shared_ptr alive
+        
         std::cerr << "[DEBUG] processFragment(" << fragment.seqName
                   << ") len=" << fragment.len 
                   << " fragmentIndex=" << fragment.fragmentIndex 
@@ -223,19 +227,21 @@ namespace skch
             e.queryEndPos = e.queryStartPos + fragment.len;
         });
 
-        {
-            std::lock_guard<std::mutex> lock(fragment.output->mutex);
-            fragment.output->results.insert(fragment.output->results.end(), l2Mappings.begin(), l2Mappings.end());
+        if (output) { // Check if output is still valid
+            std::lock_guard<std::mutex> lock(output->mutex);
+            output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
             // Initialize mergedResults with same mappings
             if (param.mergeMappings && param.split) {
-                fragment.output->mergedResults.insert(fragment.output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
+                output->mergedResults.insert(output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
             }
+            
+            // Update progress after processing the fragment
+            output->progress.increment(fragment.len);
         }
 
-        // Update progress after processing the fragment
-        fragment.output->progress.increment(fragment.len);
-
-        fragment.fragments_processed->fetch_add(1, std::memory_order_relaxed);
+        if (fragments_processed) { // Check if counter is still valid
+            fragments_processed->fetch_add(1, std::memory_order_relaxed);
+        }
     }
       
     public:
@@ -639,6 +645,7 @@ namespace skch
 
                           // Create regular fragments
                           for(int i = 0; i < noOverlapFragmentCount; i++) {
+                              auto fragments_processed = std::make_shared<std::atomic<int>>(0);
                               auto fragment = std::make_shared<FragmentData>(
                                   &(state->input->seq)[0u] + i * param.segLength,
                                   static_cast<int>(param.segLength),
@@ -647,8 +654,8 @@ namespace skch
                                   state->input->name,
                                   refGroup,
                                   i,
-                                  state->output.get(),
-                                  nullptr  // fragments_processed not needed anymore
+                                  state->output,
+                                  fragments_processed
                               );
                               state->fragments.push_back(fragment);
                           }
