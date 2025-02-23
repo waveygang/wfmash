@@ -1788,10 +1788,10 @@ namespace skch
           //2. Compute windows and sort
           getSeedIntervalPoints(Q, intervalPoints);
 
-          std::cerr << "[DEBUG] L1 found " << intervalPoints.size() 
+          /*std::cerr << "[DEBUG] L1 found " << intervalPoints.size() 
                     << " interval points for " << Q.seqName 
                     << " (sketchSize=" << Q.sketchSize
-                    << " kmerComplexity=" << Q.kmerComplexity << ")\n";
+                    << " kmerComplexity=" << Q.kmerComplexity << ")\n";*/
 
           //3. Compute L1 windows
           // Always respect the minimum hits parameter if set
@@ -1913,10 +1913,10 @@ namespace skch
             }
 
             l2_vec.clear();
-            std::cerr << "[DEBUG] L2 mapping for " << Q.seqName 
+            /*std::cerr << "[DEBUG] L2 mapping for " << Q.seqName 
                       << " candidateLocus=[" << candidateLocus.rangeStartPos 
                       << "," << candidateLocus.rangeEndPos 
-                      << "] intersectionSize=" << candidateLocus.intersectionSize << "\n";
+                      << "] intersectionSize=" << candidateLocus.intersectionSize << "\n";*/
             computeL2MappedRegions(Q, candidateLocus, l2_vec);
 
             for (auto& l2 : l2_vec) 
