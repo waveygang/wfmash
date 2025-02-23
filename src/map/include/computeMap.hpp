@@ -625,9 +625,9 @@ namespace skch
                           // Create input and output containers
                           seqno_t seqId = idManager->getSequenceId(queryName);
                           state->input = std::make_shared<InputSeqProgContainer>(
-                              state->seq, queryName, seqId, progress);
+                              state->seq, queryName, seqId, *progress);
                           state->output = std::make_shared<QueryMappingOutput>(
-                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, progress);
+                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
 
                           return state;
                       }).name("setup_" + queryName);
@@ -690,8 +690,8 @@ namespace skch
                           }
 
                           // Run fragment tasks in parallel
-                          tf::Taskflow taskflow_executor(param.threads);
-                          taskflow_executor.run(taskflow).wait();
+                          tf::Executor executor(param.threads);
+                          executor.run(taskflow).wait();
 
                           return state;
                       }).name("process_fragments_" + queryName);
@@ -739,7 +739,7 @@ namespace skch
               }).name("merge_results");
 
               // Cleanup task
-              auto cleanup_task = subset_flow.emplace([this]() {
+              auto cleanup_task = subset_flow->emplace([this]() {
                   delete refSketch;
                   refSketch = nullptr;
               }).name("cleanup");
