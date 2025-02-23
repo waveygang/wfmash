@@ -203,11 +203,6 @@ namespace skch
         auto output = fragment.output; // Keep shared_ptr alive
         auto fragments_processed = fragment.fragments_processed; // Keep shared_ptr alive
         
-        std::cerr << "[DEBUG] processFragment(" << fragment.seqName
-                  << ") len=" << fragment.len 
-                  << " fragmentIndex=" << fragment.fragmentIndex 
-                  << " fullLen=" << fragment.fullLen
-                  << " refGroup=" << fragment.refGroup << "\n";
         intervalPoints.clear();
         l1Mappings.clear();
         l2Mappings.clear();
@@ -1220,17 +1215,10 @@ namespace skch
 
         FragmentManager fragment_manager;
         int noOverlapFragmentCount = input->len / param.segLength;
-        std::cerr << "[DEBUG] Creating fragments for " << input->name 
-                  << " len=" << input->len
-                  << " segLength=" << param.segLength 
-                  << " fragmentCount=" << noOverlapFragmentCount 
-                  << " refGroup=" << refGroup << "\n";
 
         // Create processing tasks for regular fragments
         for (int i = 0; i < noOverlapFragmentCount; i++) {
             offset_t start_pos = i * param.segLength;
-            std::cerr << "[DEBUG] Creating regular fragment " << i 
-                      << " at pos " << start_pos << "\n";
               
             auto fragment = std::make_shared<FragmentData>(
                 &(input->seq)[0u] + i * param.segLength,
@@ -1264,8 +1252,6 @@ namespace skch
 
         const auto& fragments = fragment_manager.get_fragments();
         for (const auto& fragment : fragments) {
-            std::cerr << "[DEBUG] Queueing fragment " << fragment->fragmentIndex << " for " << fragment->seqName 
-                      << " start=" << (fragment->fragmentIndex * param.segLength) << "\n";
             while (!fragment_queue.try_push(fragment.get())) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
@@ -1292,9 +1278,6 @@ namespace skch
               FragmentData* fragment = nullptr;
               if (fragment_queue.try_pop(fragment)) {
                   if (fragment) {
-                      std::cerr << "[DEBUG] Fragment thread processing fragment for " 
-                                << fragment->seqName << " index=" << fragment->fragmentIndex 
-                                << " len=" << fragment->len << "\n";
                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
                   }
               } else {
