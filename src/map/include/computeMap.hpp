@@ -615,113 +615,95 @@ namespace skch
                       };
                       auto state = std::make_shared<QueryState>();
                       
-                      // Create task for reading query sequence and setting up fragments
-                      auto setup_task = sf.emplace([this, fileName, queryName, progress, state]() {
-                          // Read query sequence
-                          seqiter::for_each_seq_in_file(fileName, {queryName}, 
-                              [&](const std::string& name, const std::string& sequence) {
-                                  state->seq = sequence;
+                      // Process queries using subflows for parallelism
+                      auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex](tf::Subflow& sf) {
+                          const auto& fileName = param.querySequences[0];
+                  
+                          // Directly iterate over sequences using seqiter's random access
+                          seqiter::for_each_seq_in_file(fileName, querySequenceNames, 
+                              [&](const std::string& queryName, const std::string& sequence) {
+                          
+                                  // Create a subflow for each query that processes its fragments in parallel
+                                  auto query_task = sf.emplace([&, queryName, sequence](tf::Subflow& query_sf) {
+                                      // Set up input/output containers
+                                      seqno_t seqId = idManager->getSequenceId(queryName);
+                                      auto input = std::make_shared<InputSeqProgContainer>(
+                                          sequence, queryName, seqId, *progress);
+                                      auto output = std::make_shared<QueryMappingOutput>(
+                                          queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
+                              
+                                      // Process fragments in parallel using subflows
+                                      int refGroup = idManager->getRefGroup(seqId);
+                                      int noOverlapFragmentCount = input->len / param.segLength;
+
+                                      // Regular fragments
+                                      for(int i = 0; i < noOverlapFragmentCount; i++) {
+                                          query_sf.emplace([&, i]() {
+                                              auto fragment = std::make_shared<FragmentData>(
+                                                  &(sequence)[0u] + i * param.segLength,
+                                                  static_cast<int>(param.segLength),
+                                                  static_cast<int>(input->len),
+                                                  seqId,
+                                                  queryName,
+                                                  refGroup,
+                                                  i,
+                                                  output,
+                                                  std::make_shared<std::atomic<int>>(0)
+                                              );
+                                      
+                                              std::vector<IntervalPoint> intervalPoints;
+                                              std::vector<L1_candidateLocus_t> l1Mappings;
+                                              MappingResultsVector_t l2Mappings;
+                                              QueryMetaData<MinVec_Type> Q;
+                                              processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                          });
+                                      }
+
+                                      // Handle final fragment if needed
+                                      if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+                                          query_sf.emplace([&]() {
+                                              auto fragment = std::make_shared<FragmentData>(
+                                                  &(sequence)[0u] + input->len - param.segLength,
+                                                  static_cast<int>(param.segLength),
+                                                  static_cast<int>(input->len),
+                                                  seqId,
+                                                  queryName,
+                                                  refGroup,
+                                                  noOverlapFragmentCount,
+                                                  output,
+                                                  std::make_shared<std::atomic<int>>(0)
+                                              );
+                                      
+                                              std::vector<IntervalPoint> intervalPoints;
+                                              std::vector<L1_candidateLocus_t> l1Mappings;
+                                              MappingResultsVector_t l2Mappings;
+                                              QueryMetaData<MinVec_Type> Q;
+                                              processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                          });
+                                      }
+
+                                      // Join ensures all fragments complete before finalization
+                                      query_sf.join();
+
+                                      // Finalize this query's results
+                                      mappingBoundarySanityCheck(input.get(), output->results);
+                                      auto [nonMergedMappings, mergedMappings] = 
+                                          filterSubsetMappings(output->results, output->progress);
+
+                                      // Store results
+                                      {
+                                          std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
+                                          auto& mappings = param.mergeMappings && param.split ?
+                                              mergedMappings : nonMergedMappings;
+                                          (*subsetMappings)[seqId].insert(
+                                              (*subsetMappings)[seqId].end(),
+                                              std::make_move_iterator(mappings.begin()),
+                                              std::make_move_iterator(mappings.end())
+                                          );
+                                      }
+                                  }).name("query_" + queryName);
                               });
-
-                          // Create input and output containers
-                          seqno_t seqId = idManager->getSequenceId(queryName);
-                          state->input = std::make_shared<InputSeqProgContainer>(
-                              state->seq, queryName, seqId, *progress);
-                          state->output = std::make_shared<QueryMappingOutput>(
-                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
-
-                          return state;
-                      }).name("setup_" + queryName);
-
-                      // Create task for fragment generation
-                      auto fragment_gen_task = sf.emplace([this, state]() {
-                          int refGroup = idManager->getRefGroup(state->input->seqId);
-                          int noOverlapFragmentCount = state->input->len / param.segLength;
-
-                          // Create regular fragments
-                          for(int i = 0; i < noOverlapFragmentCount; i++) {
-                              auto fragments_processed = std::make_shared<std::atomic<int>>(0);
-                              auto fragment = std::make_shared<FragmentData>(
-                                  &(state->input->seq)[0u] + i * param.segLength,
-                                  static_cast<int>(param.segLength),
-                                  static_cast<int>(state->input->len),
-                                  state->input->seqId,                                    // Pass seqno_t directly
-                                  state->input->name,                                     // Pass string directly
-                                  refGroup,                                               // Pass int directly
-                                  i,                                                      // Pass int directly
-                                  std::shared_ptr<QueryMappingOutput>(state->output),    // Wrap in shared_ptr
-                                  std::make_shared<std::atomic<int>>(0)                  // Create atomic shared_ptr
-                              );
-                              state->fragments.push_back(fragment);
-                          }
-
-                          // Handle final fragment if needed
-                          if (noOverlapFragmentCount >= 1 && state->input->len % param.segLength != 0) {
-                              auto fragment = std::make_shared<FragmentData>(
-                                  &(state->input->seq)[0u] + state->input->len - param.segLength,
-                                  static_cast<int>(param.segLength),
-                                  static_cast<int>(state->input->len),
-                                  state->input->seqId,                                    // Pass seqno_t directly
-                                  state->input->name,                                     // Pass string directly
-                                  refGroup,                                               // Pass int directly
-                                  noOverlapFragmentCount,                                // Pass int directly
-                                  std::shared_ptr<QueryMappingOutput>(state->output),    // Wrap in shared_ptr
-                                  std::make_shared<std::atomic<int>>(0)                  // Create atomic shared_ptr
-                              );
-                              state->fragments.push_back(fragment);
-                          }
-
-                          return state;
-                      }).name("fragment_gen_" + queryName);
-
-                      // Create task for processing fragments
-                      auto process_fragments_task = sf.emplace([this, state]() {
-                          tf::Taskflow taskflow;
-                          std::vector<tf::Task> fragment_tasks;
-
-                          // Create a task for each fragment
-                          for(auto& fragment : state->fragments) {
-                              auto task = taskflow.emplace([this, fragment]() {
-                                  std::vector<IntervalPoint> intervalPoints;
-                                  std::vector<L1_candidateLocus_t> l1Mappings;
-                                  MappingResultsVector_t l2Mappings;
-                                  QueryMetaData<MinVec_Type> Q;
-                                  processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
-                              }).name("process_fragment_" + std::to_string(fragment->fragmentIndex));
-                              fragment_tasks.push_back(task);
-                          }
-
-                          // Run fragment tasks in parallel
-                          tf::Executor executor(param.threads);
-                          executor.run(taskflow).wait();
-
-                          return state;
-                      }).name("process_fragments_" + queryName);
-
-                      // Create finalization task
-                      auto finalize_task = sf.emplace([this, state, subsetMappings, subsetMappings_mutex]() {
-                          // Apply filtering and store results
-                          mappingBoundarySanityCheck(state->input.get(), state->output->results);
-                          auto [nonMergedMappings, mergedMappings] = 
-                              filterSubsetMappings(state->output->results, state->output->progress);
-
-                          // Store results
-                          {
-                              std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
-                              auto& mappings = param.mergeMappings && param.split ?
-                                  mergedMappings : nonMergedMappings;
-                              (*subsetMappings)[state->input->seqId].insert(
-                                  (*subsetMappings)[state->input->seqId].end(),
-                                  std::make_move_iterator(mappings.begin()),
-                                  std::make_move_iterator(mappings.end())
-                              );
-                          }
-                      }).name("finalize_" + queryName);
-
-                      // Set up dependencies
-                      setup_task.precede(fragment_gen_task);
-                      fragment_gen_task.precede(process_fragments_task);
-                      process_fragments_task.precede(finalize_task);
+                      }).name("process_queries");
                   }
               }).name("process_queries");
 
