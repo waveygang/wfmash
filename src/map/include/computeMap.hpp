@@ -1761,10 +1761,10 @@ namespace skch
 
           //Catch all NNNNNN case
           if (Q.sketchSize == 0 || Q.kmerComplexity < param.kmerComplexityThreshold) {
-            std::cerr << "[DEBUG] Skipping " << Q.seqName 
+            /*std::cerr << "[DEBUG] Skipping " << Q.seqName 
                       << " (sketchSize=" << Q.sketchSize
                       << " kmerComplexity=" << Q.kmerComplexity 
-                      << " threshold=" << param.kmerComplexityThreshold << ")\n";
+                      << " threshold=" << param.kmerComplexityThreshold << ")\n";*/
             return;
           }
 
