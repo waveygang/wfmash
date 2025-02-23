@@ -1256,7 +1256,7 @@ namespace skch
                 refGroup,
                 noOverlapFragmentCount,
                 std::shared_ptr<QueryMappingOutput>(output),
-                std::make_shared<std::atomic<int>>(fragments_processed)
+                std::make_shared<std::atomic<int>>(0)
             );
             fragment_manager.add_fragment(fragment);
             noOverlapFragmentCount++;
