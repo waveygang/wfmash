@@ -616,7 +616,7 @@ namespace skch
                       auto state = std::make_shared<QueryState>();
                       
                       // Process queries using subflows for parallelism
-                      auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, subset_flow](tf::Subflow& sf) {
+                      auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex](tf::Subflow& sf) {
                           const auto& fileName = param.querySequences[0];
                   
                           // Directly iterate over sequences using seqiter's random access
