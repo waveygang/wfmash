@@ -1247,7 +1247,7 @@ namespace skch
         }
 
         if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-            auto fragment = new FragmentData{
+            auto fragment = std::make_shared<FragmentData>(
                 &(input->seq)[0u] + input->len - param.segLength,
                 static_cast<int>(param.segLength),
                 static_cast<int>(input->len),
@@ -1255,18 +1255,18 @@ namespace skch
                 input->name,
                 refGroup,
                 noOverlapFragmentCount,
-                output,
-                &fragments_processed
-            };
-            fragments.push_back(fragment);
+                std::shared_ptr<QueryMappingOutput>(output),
+                std::make_shared<std::atomic<int>>(fragments_processed)
+            );
+            fragment_manager.add_fragment(fragment);
             noOverlapFragmentCount++;
         }
 
-        for (auto& fragment : fragments) {
+        const auto& fragments = fragment_manager.get_fragments();
+        for (const auto& fragment : fragments) {
             std::cerr << "[DEBUG] Queueing fragment " << fragment->fragmentIndex << " for " << fragment->seqName 
                       << " start=" << (fragment->fragmentIndex * param.segLength) << "\n";
-            while (!fragment_queue.try_push(fragment)) {
-                //std::this_thread::yield(); // too fast
+            while (!fragment_queue.try_push(fragment.get())) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
@@ -1276,11 +1276,7 @@ namespace skch
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        // Cleanup fragments
-        for (auto* fragment : fragments) {
-            delete fragment;
-        }
-        fragments.clear();
+        fragment_manager.clear();
 
         return output;
       }
