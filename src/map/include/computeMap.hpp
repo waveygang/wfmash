@@ -1240,8 +1240,8 @@ namespace skch
                 input->name,
                 refGroup,
                 i,
-                output,
-                &fragments_processed
+                std::shared_ptr<QueryMappingOutput>(output),
+                std::make_shared<std::atomic<int>>(0)
             );
             fragment_manager.add_fragment(fragment);
         }
