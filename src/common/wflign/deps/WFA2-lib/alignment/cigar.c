@@ -68,7 +68,10 @@ cigar_t* cigar_new(
   cigar->begin_offset = 0;
   cigar->end_offset = 0;
   cigar->score = INT32_MIN;
+  cigar->end_v = -1;
+  cigar->end_h = -1;
   // CIGAR
+  cigar->cigar_length = 0;
   cigar->cigar_buffer = calloc(max_operations,sizeof(uint32_t));
   // Return
   return cigar;
@@ -108,11 +111,11 @@ void cigar_free(
  * Accessors
  */
 bool cigar_is_null(
-    cigar_t* const cigar) {
+    const cigar_t* const cigar) {
   return (cigar->begin_offset >= cigar->end_offset);
 }
 int cigar_count_matches(
-    cigar_t* const cigar) {
+    const cigar_t* const cigar) {
   int i, num_matches=0;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
     num_matches += (cigar->operations[i]=='M');
@@ -121,7 +124,7 @@ int cigar_count_matches(
 }
 void cigar_append_forward(
     cigar_t* const cigar_dst,
-    cigar_t* const cigar_src) {
+    const cigar_t* const cigar_src) {
   // Parameters
   const int cigar_length = cigar_src->end_offset - cigar_src->begin_offset;
   char* const operations_src = cigar_src->operations + cigar_src->begin_offset;
@@ -133,7 +136,7 @@ void cigar_append_forward(
 }
 void cigar_append_reverse(
     cigar_t* const cigar_dst,
-    cigar_t* const cigar_src) {
+    const cigar_t* const cigar_src) {
   // Parameters
   const int begin_offset = cigar_src->begin_offset;
   const int end_offset = cigar_src->end_offset;
@@ -239,7 +242,7 @@ void cigar_get_CIGAR(
  * Score
  */
 int cigar_score_edit(
-    cigar_t* const cigar) {
+    const cigar_t* const cigar) {
   int score = 0, i;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
     switch (cigar->operations[i]) {
@@ -255,8 +258,8 @@ int cigar_score_edit(
   return score;
 }
 int cigar_score_gap_linear(
-    cigar_t* const cigar,
-    linear_penalties_t* const penalties) {
+    const cigar_t* const cigar,
+    const linear_penalties_t* const penalties) {
   int score = 0, i;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
     switch (cigar->operations[i]) {
@@ -272,8 +275,8 @@ int cigar_score_gap_linear(
   return score;
 }
 int cigar_score_gap_affine(
-    cigar_t* const cigar,
-    affine_penalties_t* const penalties) {
+    const cigar_t* const cigar,
+    const affine_penalties_t* const penalties) {
   char last_op = '\0';
   int score = 0, i;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
@@ -301,7 +304,7 @@ int cigar_score_gap_affine(
 int cigar_score_gap_affine2p_score_op(
     const char operation,
     const int length,
-    affine2p_penalties_t* const penalties) {
+    const affine2p_penalties_t* const penalties) {
   switch (operation) {
     case 'M':
       return penalties->match*length;
@@ -319,8 +322,8 @@ int cigar_score_gap_affine2p_score_op(
   }
 }
 int cigar_score_gap_affine2p(
-    cigar_t* const cigar,
-    affine2p_penalties_t* const penalties) {
+    const cigar_t* const cigar,
+    const affine2p_penalties_t* const penalties) {
   char last_op = '\0';
   int score = 0, op_length = 0;
   int i;
@@ -341,8 +344,8 @@ int cigar_score_gap_affine2p(
  * Utils
  */
 int cigar_cmp(
-    cigar_t* const cigar_a,
-    cigar_t* const cigar_b) {
+    const cigar_t* const cigar_a,
+    const cigar_t* const cigar_b) {
   // Compare lengths
   const int length_cigar_a = cigar_a->end_offset - cigar_a->begin_offset;
   const int length_cigar_b = cigar_b->end_offset - cigar_b->begin_offset;
@@ -361,7 +364,7 @@ int cigar_cmp(
 }
 void cigar_copy(
     cigar_t* const cigar_dst,
-    cigar_t* const cigar_src) {
+    const cigar_t* const cigar_src) {
   cigar_dst->max_operations = cigar_src->max_operations;
   cigar_dst->begin_offset = cigar_src->begin_offset;
   cigar_dst->end_offset = cigar_src->end_offset;
@@ -371,9 +374,9 @@ void cigar_copy(
          cigar_src->end_offset-cigar_src->begin_offset);
 }
 void cigar_discover_mismatches(
-    char* const pattern,
+    const char* const pattern,
     const int pattern_length,
-    char* const text,
+    const char* const text,
     const int text_length,
     cigar_t* const cigar) {
   // Refine adding mismatches
@@ -415,7 +418,7 @@ void cigar_discover_mismatches(
  */
 bool cigar_maxtrim_gap_linear(
     cigar_t* const cigar,
-    linear_penalties_t* const penalties) {
+    const linear_penalties_t* const penalties) {
   // Parameters
   const char* const operations = cigar->operations;
   const int begin_offset = cigar->begin_offset;
@@ -469,7 +472,7 @@ bool cigar_maxtrim_gap_linear(
 }
 bool cigar_maxtrim_gap_affine(
     cigar_t* const cigar,
-    affine_penalties_t* const penalties) {
+    const affine_penalties_t* const penalties) {
   // Parameters
   const char* const operations = cigar->operations;
   const int begin_offset = cigar->begin_offset;
@@ -526,7 +529,7 @@ bool cigar_maxtrim_gap_affine(
 int cigar_maxtrim_gap_affine2p_score_op(
     const char operation,
     const int length,
-    affine2p_penalties_t* const penalties,
+    const affine2p_penalties_t* const penalties,
     int* const end_v,
     int* const end_h) {
   switch (operation) {
@@ -557,7 +560,7 @@ int cigar_maxtrim_gap_affine2p_score_op(
 }
 bool cigar_maxtrim_gap_affine2p(
     cigar_t* const cigar,
-    affine2p_penalties_t* const penalties) {
+    const affine2p_penalties_t* const penalties) {
   // Parameters
   const char* const operations = cigar->operations;
   const int begin_offset = cigar->begin_offset;
@@ -617,7 +620,7 @@ bool cigar_check_alignment(
     const int pattern_length,
     const char* const text,
     const int text_length,
-    cigar_t* const cigar,
+    const cigar_t* const cigar,
     const bool verbose) {
   // Parameters
   char* const operations = cigar->operations;
@@ -630,7 +633,7 @@ bool cigar_check_alignment(
         if (pattern[pattern_pos] != text[text_pos]) {
           if (verbose) {
             fprintf(stream,
-                "[AlignCheck] Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
+                "[CIGAR] Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
                 pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
           }
           return false;
@@ -643,7 +646,7 @@ bool cigar_check_alignment(
         if (pattern[pattern_pos] == text[text_pos]) {
           if (verbose) {
             fprintf(stream,
-                "[AlignCheck] Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
+                "[CIGAR] Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
                 pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
           }
           return false;
@@ -658,7 +661,7 @@ bool cigar_check_alignment(
         ++pattern_pos;
         break;
       default:
-        fprintf(stderr,"[AlignCheck] Unknown edit operation '%c'\n",operations[i]);
+        fprintf(stream,"[CIGAR] Unknown edit operation '%c'\n",operations[i]);
         exit(1);
         break;
     }
@@ -667,7 +670,7 @@ bool cigar_check_alignment(
   if (pattern_pos != pattern_length) {
     if (verbose) {
       fprintf(stream,
-          "[AlignCheck] Alignment incorrect length (pattern-aligned=%d,pattern-length=%d)\n",
+          "[CIGAR] Alignment incorrect length (pattern-aligned=%d,pattern-length=%d)\n",
           pattern_pos,pattern_length);
     }
     return false;
@@ -675,7 +678,7 @@ bool cigar_check_alignment(
   if (text_pos != text_length) {
     if (verbose) {
       fprintf(stream,
-          "[AlignCheck] Alignment incorrect length (text-aligned=%d,text-length=%d)\n",
+          "[CIGAR] Alignment incorrect length (text-aligned=%d,text-length=%d)\n",
           text_pos,text_length);
     }
     return false;
@@ -688,12 +691,13 @@ bool cigar_check_alignment(
  */
 void cigar_print(
     FILE* const stream,
-    cigar_t* const cigar,
+    const cigar_t* const cigar,
     const bool print_matches) {
   // Check null
   if (cigar_is_null(cigar)) return;
   // Generate and print operations
-  char* const buffer = malloc(2*(cigar->end_offset-cigar->begin_offset)+10);
+  const int buffer_length = 2*(cigar->end_offset-cigar->begin_offset)+20;
+  char* const buffer = malloc(buffer_length);
   cigar_sprint(buffer,cigar,print_matches);
   fprintf(stream,"%s",buffer); // Print
   // Free
@@ -701,7 +705,7 @@ void cigar_print(
 }
 int cigar_sprint(
     char* const buffer,
-    cigar_t* const cigar,
+    const cigar_t* const cigar,
     const bool print_matches) {
   // Check null
   if (cigar_is_null(cigar)) {
@@ -741,7 +745,8 @@ void cigar_print_SAM_CIGAR(
   // Check null
   if (cigar_is_null(cigar)) return;
   // Generate and print operations
-  char* const buffer = malloc(2*(cigar->end_offset-cigar->begin_offset));
+  const int buffer_length = 4*(cigar->end_offset-cigar->begin_offset)+20;
+  char* const buffer = malloc(buffer_length);
   cigar_sprint_SAM_CIGAR(buffer,cigar,show_mismatches);
   fprintf(stream,"%s",buffer); // Print
   // Free
@@ -758,9 +763,15 @@ int cigar_sprint_SAM_CIGAR(
   // Print CIGAR-operations
   int i, cursor = 0;
   for (i=0;i<cigar_length;++i) {
-    cursor += sprintf(buffer+cursor,"%d%c",
-        cigar_buffer[i]>>4,
-        "MIDN---=X"[cigar_buffer[i]&0xf]);
+    const int op_idx = cigar_buffer[i] & 0xf;
+    if (op_idx <= 8) {
+      cursor += sprintf(buffer+cursor,"%d%c",
+          cigar_buffer[i]>>4,
+          "MIDN---=X"[cigar_buffer[i]&0xf]);
+    } else {
+      cursor += sprintf(buffer+cursor,"%d%c",
+          cigar_buffer[i]>>4,'?');
+    }
   }
   // Return
   buffer[cursor] = '\0';
