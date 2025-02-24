@@ -609,7 +609,11 @@ namespace skch
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  query_sf.emplace([&, i]() {
+                                  // Thread-local storage for results - shared across all fragments for this query
+                                  thread_local std::vector<MappingResult> all_fragment_results;
+                                  all_fragment_results.clear();  // Clear from any previous use
+
+                                  query_sf.emplace([&, i, &all_fragment_results]() {
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
@@ -618,15 +622,14 @@ namespace skch
                                           queryName,
                                           refGroup,
                                           i,
-                                          output,
-                                          std::make_shared<std::atomic<int>>(0)
-                                          );
-                        
+                                          output
+                                      );
+
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                   });
                               }
 
