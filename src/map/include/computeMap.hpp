@@ -609,11 +609,10 @@ namespace skch
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  // Thread-local storage for results - shared across all fragments for this query
-                                  thread_local std::vector<MappingResult> all_fragment_results;
-                                  all_fragment_results.clear();  // Clear from any previous use
-
-                                  query_sf.emplace([&, i, &all_fragment_results]() {
+                                  query_sf.emplace([&, i]() {
+                                      // Thread-local storage for results
+                                      thread_local std::vector<MappingResult> all_fragment_results;
+                                      all_fragment_results.clear();  // Clear from any previous use
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
@@ -635,7 +634,10 @@ namespace skch
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&, &all_fragment_results]() {
+                                  query_sf.emplace([&]() {
+                                      // Thread-local storage for results
+                                      thread_local std::vector<MappingResult> all_fragment_results;
+                                      all_fragment_results.clear();  // Clear from any previous use
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + input->len - param.segLength,
                                           static_cast<int>(param.segLength),
@@ -1237,7 +1239,8 @@ namespace skch
               FragmentData* fragment = nullptr;
               if (fragment_queue.try_pop(fragment)) {
                   if (fragment) {
-                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                      std::vector<MappingResult> thread_local_results;
+                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, thread_local_results);
                   }
               } else {
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
