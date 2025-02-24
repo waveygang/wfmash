@@ -73,16 +73,13 @@ namespace skch
       int refGroup;
       int fragmentIndex;
       std::shared_ptr<QueryMappingOutput> output;
-      std::shared_ptr<std::atomic<int>> fragments_processed;
 
       // Add constructor for convenience
       FragmentData(const char* s, int l, int fl, seqno_t sid, 
                    const std::string& sn, int rg, int idx,
-                   std::shared_ptr<QueryMappingOutput> out, 
-                   std::shared_ptr<std::atomic<int>> fp)
+                   std::shared_ptr<QueryMappingOutput> out)
           : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
-            refGroup(rg), fragmentIndex(idx), output(out), 
-            fragments_processed(fp) {}
+            refGroup(rg), fragmentIndex(idx), output(out) {}
   };
 
   // Manages fragment lifetime and processing
@@ -199,9 +196,8 @@ namespace skch
                          std::vector<IntervalPoint>& intervalPoints,
                          std::vector<L1_candidateLocus_t>& l1Mappings,
                          MappingResultsVector_t& l2Mappings,
-                         QueryMetaData<MinVec_Type>& Q) {
-        auto output = fragment.output; // Keep shared_ptr alive
-        auto fragments_processed = fragment.fragments_processed; // Keep shared_ptr alive
+                         QueryMetaData<MinVec_Type>& Q,
+                         std::vector<MappingResult>& thread_local_results) {
         
         intervalPoints.clear();
         l1Mappings.clear();
@@ -222,20 +218,14 @@ namespace skch
             e.queryEndPos = e.queryStartPos + fragment.len;
         });
 
-        if (output) { // Check if output is still valid
-            std::lock_guard<std::mutex> lock(output->mutex);
-            output->results.insert(output->results.end(), l2Mappings.begin(), l2Mappings.end());
-            // Initialize mergedResults with same mappings
-            if (param.mergeMappings && param.split) {
-                output->mergedResults.insert(output->mergedResults.end(), l2Mappings.begin(), l2Mappings.end());
-            }
-            
-            // Update progress after processing the fragment
-            output->progress.increment(fragment.len);
+        if (!l2Mappings.empty()) {
+            thread_local_results.insert(thread_local_results.end(), 
+                                       l2Mappings.begin(), 
+                                       l2Mappings.end());
         }
-
-        if (fragments_processed) { // Check if counter is still valid
-            fragments_processed->fetch_add(1, std::memory_order_relaxed);
+        
+        if (fragment.output) {
+            fragment.output->progress.increment(fragment.len);
         }
     }
       
@@ -642,7 +632,7 @@ namespace skch
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&]() {
+                                  query_sf.emplace([&, &all_fragment_results]() {
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + input->len - param.segLength,
                                           static_cast<int>(param.segLength),
@@ -651,16 +641,21 @@ namespace skch
                                           queryName,
                                           refGroup,
                                           noOverlapFragmentCount,
-                                          output,
-                                          std::make_shared<std::atomic<int>>(0)
-                                          );
-                        
+                                          output
+                                      );
+
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q);
+                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                   });
+
+                                  // Join ensures all fragments complete before finalization
+                                  query_sf.join();
+
+                                  // After all fragments are processed, set the output results
+                                  output->results = std::move(all_fragment_results);
                               }
 
                               // Join ensures all fragments complete before finalization
