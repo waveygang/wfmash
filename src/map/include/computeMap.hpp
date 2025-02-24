@@ -204,6 +204,7 @@ namespace skch
         intervalPoints.clear();
         l1Mappings.clear();
         l2Mappings.clear();
+        thread_local_results.clear(); // Ensure we start with an empty results vector
 
         Q.seq = const_cast<char*>(fragment.seq);
         Q.len = fragment.len;
@@ -609,12 +610,14 @@ namespace skch
                               int refGroup = idManager->getRefGroup(seqId);
                               int noOverlapFragmentCount = input->len / param.segLength;
 
+                              // Create a mutex to protect access to output->results
+                              std::mutex results_mutex;
+
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  query_sf.emplace([&, i]() {
+                                  query_sf.emplace([&, i, &results_mutex]() {
                                       // Thread-local storage for results
-                                      thread_local std::vector<MappingResult> all_fragment_results;
-                                      all_fragment_results.clear();  // Clear from any previous use
+                                      std::vector<MappingResult> all_fragment_results;
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
@@ -631,15 +634,24 @@ namespace skch
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
                                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
+                                      
+                                      // Safely merge results into output
+                                      if (!all_fragment_results.empty()) {
+                                          std::lock_guard<std::mutex> lock(results_mutex);
+                                          output->results.insert(
+                                              output->results.end(),
+                                              all_fragment_results.begin(),
+                                              all_fragment_results.end()
+                                          );
+                                      }
                                   });
                               }
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&]() {
+                                  query_sf.emplace([&, &results_mutex]() {
                                       // Thread-local storage for results
-                                      thread_local std::vector<MappingResult> all_fragment_results;
-                                      all_fragment_results.clear();  // Clear from any previous use
+                                      std::vector<MappingResult> all_fragment_results;
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + input->len - param.segLength,
                                           static_cast<int>(param.segLength),
@@ -656,33 +668,23 @@ namespace skch
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
                                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
+                                      
+                                      // Safely merge results into output
+                                      if (!all_fragment_results.empty()) {
+                                          std::lock_guard<std::mutex> lock(results_mutex);
+                                          output->results.insert(
+                                              output->results.end(),
+                                              all_fragment_results.begin(),
+                                              all_fragment_results.end()
+                                          );
+                                      }
                                   });
-
-                                  // Join ensures all fragments complete before finalization
-                                  query_sf.join();
-
-                                  // After all fragments are processed, set the output results
-                                  mappingBoundarySanityCheck(input.get(), output->results);
-                                  auto [nonMergedMappings, mergedMappings] = 
-                                      filterSubsetMappings(output->results, output->progress);
-
-                                  // Store results
-                                  {
-                                      std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
-                                      auto& mappings = param.mergeMappings && param.split ?
-                                          mergedMappings : nonMergedMappings;
-                                      (*subsetMappings)[seqId].insert(
-                                          (*subsetMappings)[seqId].end(),
-                                          std::make_move_iterator(mappings.begin()),
-                                          std::make_move_iterator(mappings.end())
-                                      );
-                                  }
                               }
 
                               // Join ensures all fragments complete before finalization
                               query_sf.join();
 
-                              // Finalize this query's results
+                              // After all fragments are processed, set the output results
                               mappingBoundarySanityCheck(input.get(), output->results);
                               auto [nonMergedMappings, mergedMappings] = 
                                   filterSubsetMappings(output->results, output->progress);
@@ -696,8 +698,10 @@ namespace skch
                                       (*subsetMappings)[seqId].end(),
                                       std::make_move_iterator(mappings.begin()),
                                       std::make_move_iterator(mappings.end())
-                                      );
+                                  );
                               }
+
+                              // No need for another join or processing here since it's already done above
                           }).name("query_" + queryName);
                       });
               }).name("process_queries");
@@ -743,19 +747,28 @@ namespace skch
 
           // Final results processing
           tf::Taskflow final_flow;
-          //std::cerr << "[DEBUG] Creating final processing task" << std::endl;
+          std::cerr << "[wfmash::mashmap] Processing final results" << std::endl;
           auto final_task = final_flow.emplace([&]() {
-              //std::cerr << "[DEBUG] Starting final result processing" << std::endl;
               std::ofstream outstrm(param.outFileName);
+              
+              // Count total mappings for logging
+              size_t total_mappings = 0;
+              for (auto& [querySeqId, mappings] : combinedMappings) {
+                  total_mappings += mappings.size();
+              }
+              std::cerr << "[wfmash::mashmap] Writing " << total_mappings 
+                        << " mappings from " << combinedMappings.size() 
+                        << " queries to " << param.outFileName << std::endl;
+              
               // Process final results
               for (auto& [querySeqId, mappings] : combinedMappings) {
                   std::string queryName = idManager->getSequenceName(querySeqId);
                   reportReadMappings(mappings, queryName, outstrm);
               }
+              
+              std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
           });
-          //std::cerr << "[DEBUG] Running final taskflow" << std::endl;
           executor.run(final_flow).wait();
-          //std::cerr << "[DEBUG] Final taskflow completed" << std::endl;
       }
 
       void mapQueryOld()
