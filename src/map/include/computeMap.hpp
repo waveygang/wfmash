@@ -659,15 +659,22 @@ namespace skch
                                   // Join ensures all fragments complete before finalization
                                   query_sf.join();
 
-                                  // After all fragments are processed, combine results
-                                  std::vector<MappingResult> combined_results;
-                                  for (const auto& fragment : fragments) {
-                                      auto& thread_results = fragment->results;
-                                      combined_results.insert(combined_results.end(),
-                                                           thread_results.begin(),
-                                                           thread_results.end());
+                                  // After all fragments are processed, set the output results
+                                  mappingBoundarySanityCheck(input.get(), output->results);
+                                  auto [nonMergedMappings, mergedMappings] = 
+                                      filterSubsetMappings(output->results, output->progress);
+
+                                  // Store results
+                                  {
+                                      std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
+                                      auto& mappings = param.mergeMappings && param.split ?
+                                          mergedMappings : nonMergedMappings;
+                                      (*subsetMappings)[seqId].insert(
+                                          (*subsetMappings)[seqId].end(),
+                                          std::make_move_iterator(mappings.begin()),
+                                          std::make_move_iterator(mappings.end())
+                                      );
                                   }
-                                  output->results = std::move(combined_results);
                               }
 
                               // Join ensures all fragments complete before finalization
