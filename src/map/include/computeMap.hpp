@@ -73,13 +73,15 @@ namespace skch
       int refGroup;
       int fragmentIndex;
       std::shared_ptr<QueryMappingOutput> output;
+      std::shared_ptr<std::atomic<int>> processedCounter;
 
       // Add constructor for convenience
       FragmentData(const char* s, int l, int fl, seqno_t sid, 
                    const std::string& sn, int rg, int idx,
-                   std::shared_ptr<QueryMappingOutput> out)
+                   std::shared_ptr<QueryMappingOutput> out,
+                   std::shared_ptr<std::atomic<int>> counter = nullptr)
           : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
-            refGroup(rg), fragmentIndex(idx), output(out) {}
+            refGroup(rg), fragmentIndex(idx), output(out), processedCounter(counter) {}
   };
 
   // Manages fragment lifetime and processing
