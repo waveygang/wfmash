@@ -615,7 +615,7 @@ namespace skch
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  query_sf.emplace([&, i, &results_mutex]() {
+                                  query_sf.emplace([&, i]() {
                                       // Thread-local storage for results
                                       std::vector<MappingResult> all_fragment_results;
                                       auto fragment = std::make_shared<FragmentData>(
@@ -649,7 +649,7 @@ namespace skch
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&, &results_mutex]() {
+                                  query_sf.emplace([&]() {
                                       // Thread-local storage for results
                                       std::vector<MappingResult> all_fragment_results;
                                       auto fragment = std::make_shared<FragmentData>(
