@@ -659,8 +659,15 @@ namespace skch
                                   // Join ensures all fragments complete before finalization
                                   query_sf.join();
 
-                                  // After all fragments are processed, set the output results
-                                  output->results = std::move(all_fragment_results);
+                                  // After all fragments are processed, combine results
+                                  std::vector<MappingResult> combined_results;
+                                  for (const auto& fragment : fragments) {
+                                      auto& thread_results = fragment->results;
+                                      combined_results.insert(combined_results.end(),
+                                                           thread_results.begin(),
+                                                           thread_results.end());
+                                  }
+                                  output->results = std::move(combined_results);
                               }
 
                               // Join ensures all fragments complete before finalization
