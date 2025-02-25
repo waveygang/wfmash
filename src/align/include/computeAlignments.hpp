@@ -272,7 +272,7 @@ void computeAlignmentsTaskflow() {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     // Create storage for pipeline data
-    const size_t num_pipeline_lines = std::max(size_t(4), param.threads * 2);
+    const size_t num_pipeline_lines = std::max<size_t>(4, param.threads * 2);
     std::vector<std::string> all_lines;
     std::vector<seq_record_t*> records(num_pipeline_lines, nullptr);
     std::vector<std::string> alignment_outputs(num_pipeline_lines);
