@@ -285,7 +285,7 @@ void computeAlignmentsTaskflow() {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     // Create concurrent queues for communication between stages
-    const size_t queue_capacity = 2048;
+    const size_t queue_capacity = 8192; // Increased from 2048 to buffer more records
     atomic_queue::AtomicQueue<std::string*, queue_capacity, nullptr> line_queue;
     std::atomic<bool> reader_done(false);
     std::atomic<uint64_t> total_alignments_processed(0);
@@ -320,15 +320,56 @@ void computeAlignmentsTaskflow() {
             throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
         }
         
+        // Use batch reading to reduce overhead
+        const size_t batch_size = 100;
+        std::vector<std::string> batch_lines;
+        batch_lines.reserve(batch_size);
+        
         std::string line;
-        while(std::getline(mappingStream, line)) {
-            if(!line.empty()) {
-                // Create a new string on the heap and push to the queue
-                std::string* line_ptr = new std::string(std::move(line));
+        while(true) {
+            // Read a batch of lines
+            batch_lines.clear();
+            for (size_t i = 0; i < batch_size && std::getline(mappingStream, line); ++i) {
+                if (!line.empty()) {
+                    batch_lines.push_back(std::move(line));
+                }
+                line.clear(); // Ensure line is empty for next read
+            }
+            
+            // If no lines were read, we're done
+            if (batch_lines.empty()) {
+                break;
+            }
+            
+            // Process the batch
+            std::vector<std::string*> line_ptrs;
+            line_ptrs.reserve(batch_lines.size());
+            
+            // Create heap strings
+            for (auto& bline : batch_lines) {
+                line_ptrs.push_back(new std::string(std::move(bline)));
+            }
+            
+            // Push batch to queue with adaptive backoff
+            size_t pushed = 0;
+            size_t backoff_time = 1; // Start with 1ms
+            
+            while (pushed < line_ptrs.size()) {
+                bool made_progress = false;
                 
-                // Wait until there's space in the queue
-                while(!line_queue.try_push(line_ptr)) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                // Try to push as many as possible
+                while (pushed < line_ptrs.size() && line_queue.try_push(line_ptrs[pushed])) {
+                    ++pushed;
+                    made_progress = true;
+                    backoff_time = 1; // Reset backoff on progress
+                }
+                
+                // If we couldn't push everything, wait with adaptive backoff
+                if (pushed < line_ptrs.size()) {
+                    if (!made_progress) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(backoff_time));
+                        backoff_time = std::min(backoff_time * 2, size_t(100)); // Exponential backoff, max 100ms
+                    }
                 }
             }
         }
@@ -340,7 +381,7 @@ void computeAlignmentsTaskflow() {
     reader_executor.run(reader_taskflow);
     
     // Create storage for pipeline data
-    const size_t num_pipeline_lines = std::max<size_t>(16, param.threads * 4);
+    const size_t num_pipeline_lines = std::max<size_t>(32, param.threads * 8);
     std::vector<seq_record_t*> records(num_pipeline_lines, nullptr);
     std::vector<std::string> alignment_outputs(num_pipeline_lines);
     
@@ -352,10 +393,19 @@ void computeAlignmentsTaskflow() {
     tf::Pipeline pipeline(num_pipeline_lines,
         // Stage 1: Parse mapping record (SERIAL)
         tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
-            // Try to get a line from the queue
+            // Try to get a line from the queue with retry logic
             std::string* line_ptr = nullptr;
             
-            if (line_queue.try_pop(line_ptr)) {
+            // Try a few times with short intervals before yielding
+            for (int retry = 0; retry < 3; ++retry) {
+                if (line_queue.try_pop(line_ptr)) {
+                    break;
+                }
+                // Very short pause between immediate retries
+                std::this_thread::sleep_for(std::chrono::microseconds(10));
+            }
+            
+            if (line_ptr) {
                 // Parse the current record
                 MappingBoundaryRow currentRecord;
                 parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
@@ -372,8 +422,16 @@ void computeAlignmentsTaskflow() {
                 return;
             } else {
                 // Queue is temporarily empty but reader is still working
-                // Skip this token and try again with the next one
-                std::this_thread::yield();
+                // Use a progressive backoff strategy rather than just yielding
+                static thread_local int empty_count = 0;
+                if (++empty_count > 10) {
+                    // If we've had many empty attempts, sleep for a bit longer
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    empty_count = 0;
+                } else {
+                    // Otherwise just yield to give other tasks a chance
+                    std::this_thread::yield();
+                }
             }
         }},
         
