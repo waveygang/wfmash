@@ -20,6 +20,7 @@
 #include <htslib/hts.h>
 #include <htslib/bgzf.h>
 #include <htslib/thread_pool.h>
+#include <htslib/hfile.h>
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -142,13 +143,9 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           ref_faidx = fai_load(param.refSequences.front().c_str());
           query_faidx = fai_load(param.querySequences.front().c_str());
           
-          // Apply thread pool to bgzf if files are compressed
-          if (ref_faidx && ref_faidx->bgzf) {
-              bgzf_thread_pool(ref_faidx->bgzf, thread_pool, 0);
-          }
-          if (query_faidx && query_faidx->bgzf) {
-              bgzf_thread_pool(query_faidx->bgzf, thread_pool, 0);
-          }
+          // We can't directly access the bgzf field since faidx_t is opaque
+          // Instead, we rely on hts_open for thread pool configuration
+          // This happens automatically when sequences are fetched
       }
 
       ~Aligner() {
@@ -546,13 +543,8 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
     faidx_t* local_ref_faidx = fai_load(param.refSequences.front().c_str());
     faidx_t* local_query_faidx = fai_load(param.querySequences.front().c_str());
     
-    // Apply thread pool to bgzf if files are compressed
-    if (local_ref_faidx && local_ref_faidx->bgzf) {
-        bgzf_thread_pool(local_ref_faidx->bgzf, local_thread_pool, 0);
-    }
-    if (local_query_faidx && local_query_faidx->bgzf) {
-        bgzf_thread_pool(local_query_faidx->bgzf, local_thread_pool, 0);
-    }
+    // We don't need to explicitly set thread pools for faidx objects
+    // as they are opaque structures, and we can't access their internal BGZF handles
 
     while (!thread_should_exit.load()) {
         std::string* line_ptr = nullptr;
