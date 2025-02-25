@@ -157,11 +157,14 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           }
           
           // Attach thread pool to faidx objects using the proper API
-          if (fai_thread_pool(ref_faidx, thread_pool, 0) != 0) {
+          // Calculate optimal queue size based on thread count (1/4 of threads)
+          int bgzf_queue_size = std::max(1, param.threads / 4);
+          
+          if (fai_thread_pool(ref_faidx, thread_pool, bgzf_queue_size) != 0) {
               std::cerr << "[wfmash::align] Warning: Failed to attach thread pool to reference FASTA index" << std::endl;
           }
           
-          if (fai_thread_pool(query_faidx, thread_pool, 0) != 0) {
+          if (fai_thread_pool(query_faidx, thread_pool, bgzf_queue_size) != 0) {
               std::cerr << "[wfmash::align] Warning: Failed to attach thread pool to query FASTA index" << std::endl;
           }
       }
@@ -664,11 +667,12 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
     
     // Attach thread pool to faidx objects if available
     if (local_thread_pool) {
-        if (local_ref_faidx && fai_thread_pool(local_ref_faidx, local_thread_pool, 0) != 0) {
+        // Single-threaded pool, so use queue size of 1
+        if (local_ref_faidx && fai_thread_pool(local_ref_faidx, local_thread_pool, 1) != 0) {
             std::cerr << "[wfmash::align] Warning: Failed to attach local thread pool to reference FASTA index" << std::endl;
         }
         
-        if (local_query_faidx && fai_thread_pool(local_query_faidx, local_thread_pool, 0) != 0) {
+        if (local_query_faidx && fai_thread_pool(local_query_faidx, local_thread_pool, 1) != 0) {
             std::cerr << "[wfmash::align] Warning: Failed to attach local thread pool to query FASTA index" << std::endl;
         }
     }
