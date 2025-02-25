@@ -285,7 +285,7 @@ void computeAlignmentsTaskflow() {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     // Create concurrent queues for communication between stages
-    const size_t queue_capacity = 8192; // Increased from 2048 to buffer more records
+    const size_t queue_capacity = 65536; // Increased 8x from 8192 to buffer more records (2^16)
     atomic_queue::AtomicQueue<std::string*, queue_capacity, nullptr> line_queue;
     std::atomic<bool> reader_done(false);
     std::atomic<uint64_t> total_alignments_processed(0);
@@ -381,7 +381,7 @@ void computeAlignmentsTaskflow() {
     reader_executor.run(reader_taskflow);
     
     // Create storage for pipeline data
-    const size_t num_pipeline_lines = std::max<size_t>(32, param.threads * 8);
+    const size_t num_pipeline_lines = std::max<size_t>(256, param.threads * 64);
     std::vector<seq_record_t*> records(num_pipeline_lines, nullptr);
     std::vector<std::string> alignment_outputs(num_pipeline_lines);
     
