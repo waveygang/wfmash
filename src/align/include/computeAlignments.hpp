@@ -237,10 +237,6 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
   private:
 
 void computeAlignmentsTaskflow() {
-    // Create a TaskFlow for the pipeline
-    tf::Taskflow taskflow;
-    tf::Executor executor(param.threads);
-    
     // Calculate total alignment length for progress tracking
     uint64_t total_alignment_length = 0;
     {
@@ -272,89 +268,72 @@ void computeAlignmentsTaskflow() {
         write_sam_header(outstream);
     }
     
-    // Shared data between tasks
-    std::vector<std::string> all_lines;
-    std::vector<seq_record_t*> records;
-    std::vector<std::string> alignment_outputs;
-    std::mutex align_mutex;
+    // Start timing
+    auto start_time = std::chrono::high_resolution_clock::now();
     
-    // Define tasks for the different stages
-    auto read_task = taskflow.emplace([&, this]() {
+    // Create storage for pipeline data
+    std::vector<std::string> all_lines;
+    std::vector<seq_record_t*> records(param.threads, nullptr);
+    std::vector<std::string> alignment_outputs(param.threads);
+    
+    // Read all mapping lines first
+    {
         std::ifstream mappingStream(param.mashmapPafFile);
         if (!mappingStream.is_open()) {
             throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
         }
         
         std::string line;
-        all_lines.clear();
-        
         while(std::getline(mappingStream, line)) {
             if(!line.empty()) {
                 all_lines.push_back(line);
             }
         }
-        
-        mappingStream.close();
-    }).name("read_mappings");
+    }
     
-    auto process_task = taskflow.emplace([&, this]() {
-        records.clear();
-        for(const auto& line : all_lines) {
+    // Create a taskflow for the pipeline
+    tf::Taskflow taskflow;
+    tf::Executor executor(param.threads);
+    
+    // Define our pipeline
+    tf::Pipeline pipeline(param.threads,
+        // Stage 1: Parse mapping record (SERIAL)
+        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+            if (pf.token() >= all_lines.size()) {
+                pf.stop();
+                return;
+            }
+            
+            // Parse the current record
             MappingBoundaryRow currentRecord;
-            parseMashmapRow(line, currentRecord, param.target_padding);
+            parseMashmapRow(all_lines[pf.token()], currentRecord, param.target_padding);
             
-            seq_record_t* rec = createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
-            records.push_back(rec);
-        }
-    }).name("process_mappings");
-    
-    auto align_task = taskflow.emplace([&, this]() {
-        alignment_outputs.clear();
+            // Create seq_record_t
+            records[pf.line()] = createSeqRecord(currentRecord, all_lines[pf.token()], 
+                                                this->ref_faidx, this->query_faidx);
+        }},
         
-        tf::Taskflow align_flow;
-        std::atomic<size_t> record_index(0);
-        
-        // Process records in parallel
-        for(size_t i = 0; i < param.threads; i++) {
-            align_flow.emplace([&, this]() {
-                size_t idx = record_index.fetch_add(1);
-                while(idx < records.size()) {
-                    seq_record_t* rec = records[idx];
-                    
-                    if(rec != nullptr) {
-                        std::string alignment_output = processAlignment(rec);
-                        
-                        // Update progress meter and processed alignment length
-                        uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
-                        progress.increment(alignment_length);
-                        processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-                        total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-                        
-                        // Store output
-                        {
-                            std::lock_guard<std::mutex> lock(align_mutex);
-                            alignment_outputs.push_back(alignment_output);
-                        }
-                        
-                        delete rec; // Clean up
-                    }
-                    
-                    idx = record_index.fetch_add(1);
-                }
-            });
-        }
-        
-        // Execute the alignment flow
-        tf::Executor align_executor(param.threads);
-        align_executor.run(align_flow).wait();
-    }).name("align_mappings");
-    
-    auto write_task = taskflow.emplace([&]() {
-        for(const auto& alignment_output : alignment_outputs) {
-            if (alignment_output.empty()) continue;
+        // Stage 2: Perform alignment (PARALLEL)
+        tf::Pipe{tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
+            // Process alignment for this record
+            seq_record_t* rec = records[pf.line()];
+            if (rec == nullptr) return;
             
-            // Parse the alignment output and write to the output file
-            std::stringstream ss(alignment_output);
+            alignment_outputs[pf.line()] = processAlignment(rec);
+            
+            // Update progress
+            uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
+            progress.increment(alignment_length);
+            processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+            total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+        }},
+        
+        // Stage 3: Write results (SERIAL)
+        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+            // Write the output for this record
+            if (alignment_outputs[pf.line()].empty()) return;
+            
+            std::stringstream ss(alignment_outputs[pf.line()]);
             std::string line;
             while (std::getline(ss, line)) {
                 if (line.empty()) continue;
@@ -389,20 +368,18 @@ void computeAlignmentsTaskflow() {
             }
             
             outstream.flush();
-        }
-    }).name("write_output");
+            
+            // Clean up
+            delete records[pf.line()];
+            records[pf.line()] = nullptr;
+            alignment_outputs[pf.line()].clear();
+        }}
+    );
     
-    // Create dependencies between tasks
-    read_task.precede(process_task);
-    process_task.precede(align_task);
-    align_task.precede(write_task);
+    // Build the pipeline task
+    tf::Task task = taskflow.composed_of(pipeline).name("alignment_pipeline");
     
-    // Start timing
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    // Execute the taskflow
-    
-    // Execute the taskflow
+    // Run the pipeline
     executor.run(taskflow).wait();
     
     // Close output stream
