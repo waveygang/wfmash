@@ -30,6 +30,7 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 #include "common/utils.hpp"
+#include <taskflow/taskflow.hpp>
 
 namespace align
 {
@@ -142,7 +143,7 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 
       void compute()
       {
-        this->computeAlignments();
+        this->computeAlignmentsTaskflow();
       }
 
       /**
