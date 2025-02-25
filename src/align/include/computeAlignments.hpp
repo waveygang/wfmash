@@ -272,6 +272,12 @@ void computeAlignmentsTaskflow() {
         write_sam_header(outstream);
     }
     
+    // Shared data between tasks
+    std::vector<std::string> all_lines;
+    std::vector<seq_record_t*> records;
+    std::vector<std::string> alignment_outputs;
+    std::mutex align_mutex;
+    
     // Define tasks for the different stages
     auto read_task = taskflow.emplace([&, this]() {
         std::ifstream mappingStream(param.mashmapPafFile);
@@ -280,7 +286,7 @@ void computeAlignmentsTaskflow() {
         }
         
         std::string line;
-        std::vector<std::string> all_lines;
+        all_lines.clear();
         
         while(std::getline(mappingStream, line)) {
             if(!line.empty()) {
@@ -289,23 +295,21 @@ void computeAlignmentsTaskflow() {
         }
         
         mappingStream.close();
-        return all_lines;
     }).name("read_mappings");
     
-    auto process_task = taskflow.emplace([&, this](std::vector<std::string> lines) {
-        std::vector<seq_record_t*> records;
-        for(const auto& line : lines) {
+    auto process_task = taskflow.emplace([&, this]() {
+        records.clear();
+        for(const auto& line : all_lines) {
             MappingBoundaryRow currentRecord;
             parseMashmapRow(line, currentRecord, param.target_padding);
             
             seq_record_t* rec = createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
             records.push_back(rec);
         }
-        return records;
     }).name("process_mappings");
     
-    auto align_task = taskflow.emplace([&, this](std::vector<seq_record_t*> records) {
-        std::vector<std::string> alignment_outputs;
+    auto align_task = taskflow.emplace([&, this]() {
+        alignment_outputs.clear();
         
         tf::Taskflow align_flow;
         std::atomic<size_t> record_index(0);
@@ -327,8 +331,10 @@ void computeAlignmentsTaskflow() {
                         total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
                         
                         // Store output
-                        std::lock_guard<std::mutex> lock(align_mutex);
-                        alignment_outputs.push_back(alignment_output);
+                        {
+                            std::lock_guard<std::mutex> lock(align_mutex);
+                            alignment_outputs.push_back(alignment_output);
+                        }
                         
                         delete rec; // Clean up
                     }
@@ -341,11 +347,9 @@ void computeAlignmentsTaskflow() {
         // Execute the alignment flow
         tf::Executor align_executor(param.threads);
         align_executor.run(align_flow).wait();
-        
-        return alignment_outputs;
     }).name("align_mappings");
     
-    auto write_task = taskflow.emplace([&](std::vector<std::string> alignment_outputs) {
+    auto write_task = taskflow.emplace([&]() {
         for(const auto& alignment_output : alignment_outputs) {
             if (alignment_output.empty()) continue;
             
@@ -387,9 +391,6 @@ void computeAlignmentsTaskflow() {
             outstream.flush();
         }
     }).name("write_output");
-    
-    // Set up mutex for alignment output collection
-    std::mutex align_mutex;
     
     // Create dependencies between tasks
     read_task.precede(process_task);
