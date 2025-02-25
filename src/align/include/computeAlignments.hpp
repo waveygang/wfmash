@@ -270,42 +270,54 @@ void computeAlignmentsTaskflow() {
         write_sam_header(outstream);
     }
     
-    // Define the data pipeline
-    tf::DataPipeline pipeline(
+    // Define the pipeline with 4 stages
+    tf::Pipeline pipeline(
         param.threads,
         
         // Stage 1: Read mapping record (Serial)
-        tf::make_data_pipe<void, std::string>(tf::PipeType::SERIAL, 
-            [&, this](tf::Pipeflow& pf) -> std::string {
+        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+            if(pf.token() == 0) {
                 static std::ifstream mappingStream(param.mashmapPafFile);
                 if (!mappingStream.is_open()) {
                     throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
                 }
                 
-                std::string line;
-                if(!std::getline(mappingStream, line) || line.empty()) {
+                std::string* line = new std::string();
+                if(!std::getline(mappingStream, *line) || line->empty()) {
+                    delete line;
                     pf.stop();
-                    return "";
+                    return;
                 }
                 
-                return line;
-            }),
-            
+                pf.data(*line);
+            }
+        }},
+        
         // Stage 2: Parse mapping and extract sequences (Serial)
-        tf::make_data_pipe<std::string, seq_record_t*>(tf::PipeType::SERIAL,
-            [&, this](std::string& line) -> seq_record_t* {
-                if (line.empty()) return nullptr;
+        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+            if(pf.token() == 1) {
+                std::string& line = std::any_cast<std::string&>(pf.data());
+                if (line.empty()) {
+                    pf.data(static_cast<seq_record_t*>(nullptr));
+                    return;
+                }
                 
                 MappingBoundaryRow currentRecord;
                 parseMashmapRow(line, currentRecord, param.target_padding);
                 
-                return createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
-            }),
-            
+                seq_record_t* rec = createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
+                pf.data(rec);
+            }
+        }},
+        
         // Stage 3: Perform alignment (Parallel - compute intensive)
-        tf::make_data_pipe<seq_record_t*, std::string>(tf::PipeType::PARALLEL,
-            [&, this](seq_record_t*& rec) -> std::string {
-                if (!rec) return "";
+        tf::Pipe{tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
+            if(pf.token() == 2) {
+                seq_record_t* rec = std::any_cast<seq_record_t*>(pf.data());
+                if (!rec) {
+                    pf.data(std::string(""));
+                    return;
+                }
                 
                 std::string alignment_output = processAlignment(rec);
                 
@@ -316,12 +328,14 @@ void computeAlignmentsTaskflow() {
                 total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
                 
                 delete rec; // Clean up
-                return alignment_output;
-            }),
-            
+                pf.data(alignment_output);
+            }
+        }},
+        
         // Stage 4: Process and write output (Serial)
-        tf::make_data_pipe<std::string, void>(tf::PipeType::SERIAL,
-            [&](std::string& alignment_output) {
+        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+            if(pf.token() == 3) {
+                std::string& alignment_output = std::any_cast<std::string&>(pf.data());
                 if (alignment_output.empty()) return;
                 
                 // Parse the alignment output and write to the output file
@@ -360,14 +374,15 @@ void computeAlignmentsTaskflow() {
                 }
                 
                 outstream.flush();
-            })
+            }
+        }}
     );
     
     // Start timing
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // Build the pipeline into the taskflow
-    taskflow.composed_of(pipeline);
+    // Add the pipeline to the taskflow
+    taskflow.composed_of(pipeline).name("alignment-pipeline");
     
     // Execute the taskflow
     executor.run(taskflow).wait();
