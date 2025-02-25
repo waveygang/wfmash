@@ -30,6 +30,7 @@
 #include "common/seqiter.hpp"
 #include "common/progress.hpp"
 #include "common/utils.hpp"
+#include <any>
 #include <taskflow/taskflow.hpp>
 #include <taskflow/algorithm/pipeline.hpp>
 
@@ -235,6 +236,13 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 
   private:
 
+// A structure to hold data for our pipeline stages
+struct PipelineData {
+    std::string input_line;
+    seq_record_t* record;
+    std::string alignment_output;
+};
+
 void computeAlignmentsTaskflow() {
     // Create a TaskFlow for the pipeline
     tf::Taskflow taskflow;
@@ -273,110 +281,107 @@ void computeAlignmentsTaskflow() {
     
     // Define the pipeline with 4 stages
     tf::Pipeline pipeline(
+        // Maximum parallelism for the pipeline
         param.threads,
         
         // Stage 1: Read mapping record (Serial)
-        tf::Pipe(tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
-            if(pf.token() == 0) {
-                static std::ifstream mappingStream(param.mashmapPafFile);
-                if (!mappingStream.is_open()) {
-                    throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
-                }
-                
-                std::string* line = new std::string();
-                if(!std::getline(mappingStream, *line) || line->empty()) {
-                    delete line;
-                    pf.stop();
-                    return;
-                }
-                
-                pf.data(*line);
+        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+            static std::ifstream mappingStream(param.mashmapPafFile);
+            if (!mappingStream.is_open()) {
+                throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
             }
-        }),
+            
+            // Get the pipeline data
+            PipelineData& data = pf.data<PipelineData>();
+            
+            if(!std::getline(mappingStream, data.input_line) || data.input_line.empty()) {
+                pf.stop();
+                return;
+            }
+        }},
         
         // Stage 2: Parse mapping and extract sequences (Serial)
-        tf::Pipe(tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
-            if(pf.token() == 1) {
-                std::string& line = std::any_cast<std::string&>(pf.data());
-                if (line.empty()) {
-                    pf.data(static_cast<seq_record_t*>(nullptr));
-                    return;
-                }
-                
-                MappingBoundaryRow currentRecord;
-                parseMashmapRow(line, currentRecord, param.target_padding);
-                
-                seq_record_t* rec = createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
-                pf.data(rec);
+        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+            // Get the pipeline data
+            PipelineData& data = pf.data<PipelineData>();
+            
+            if(data.input_line.empty()) {
+                data.record = nullptr;
+                return;
             }
-        }),
+            
+            MappingBoundaryRow currentRecord;
+            parseMashmapRow(data.input_line, currentRecord, param.target_padding);
+            
+            data.record = createSeqRecord(currentRecord, data.input_line, this->ref_faidx, this->query_faidx);
+        }},
         
         // Stage 3: Perform alignment (Parallel - compute intensive)
-        tf::Pipe(tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
-            if(pf.token() == 2) {
-                seq_record_t* rec = std::any_cast<seq_record_t*>(pf.data());
-                if (!rec) {
-                    pf.data(std::string(""));
-                    return;
-                }
-                
-                std::string alignment_output = processAlignment(rec);
-                
-                // Update progress meter and processed alignment length
-                uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
-                progress.increment(alignment_length);
-                processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-                total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-                
-                delete rec; // Clean up
-                pf.data(alignment_output);
+        tf::Pipe{tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
+            // Get the pipeline data
+            PipelineData& data = pf.data<PipelineData>();
+            
+            if (!data.record) {
+                data.alignment_output = "";
+                return;
             }
-        }),
+            
+            data.alignment_output = processAlignment(data.record);
+            
+            // Update progress meter and processed alignment length
+            uint64_t alignment_length = data.record->currentRecord.qEndPos - data.record->currentRecord.qStartPos;
+            progress.increment(alignment_length);
+            processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+            total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+            
+            delete data.record; // Clean up
+            data.record = nullptr;
+        }},
         
         // Stage 4: Process and write output (Serial)
-        tf::Pipe(tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
-            if(pf.token() == 3) {
-                std::string& alignment_output = std::any_cast<std::string&>(pf.data());
-                if (alignment_output.empty()) return;
+        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+            // Get the pipeline data
+            PipelineData& data = pf.data<PipelineData>();
+            
+            if (data.alignment_output.empty()) return;
+            
+            // Parse the alignment output and write to the output file
+            std::stringstream ss(data.alignment_output);
+            std::string line;
+            while (std::getline(ss, line)) {
+                if (line.empty()) continue;
                 
-                // Parse the alignment output and write to the output file
-                std::stringstream ss(alignment_output);
-                std::string line;
-                while (std::getline(ss, line)) {
-                    if (line.empty()) continue;
-                    
-                    std::vector<std::string> fields;
-                    std::stringstream field_ss(line);
-                    std::string field;
-                    while (field_ss >> field) {
-                        fields.push_back(field);
-                    }
-
-                    // Find the CIGAR string field (should be after cg:Z:)
-                    auto cigar_it = std::find_if(fields.begin(), fields.end(),
-                        [](const std::string& s) { 
-                            return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
-                        });
-                    
-                    if (cigar_it != fields.end()) {
-                        // Reconstruct the line
-                        std::string new_line;
-                        for (const auto& f : fields) {
-                            if (!new_line.empty()) new_line += '\t';
-                            new_line += f;
-                        }
-                        new_line += '\n';
-                        
-                        outstream << new_line;
-                    } else {
-                        // If no CIGAR string found, output the line unchanged
-                        outstream << line << '\n';
-                    }
+                std::vector<std::string> fields;
+                std::stringstream field_ss(line);
+                std::string field;
+                while (field_ss >> field) {
+                    fields.push_back(field);
                 }
+
+                // Find the CIGAR string field (should be after cg:Z:)
+                auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                    [](const std::string& s) { 
+                        return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
+                    });
                 
-                outstream.flush();
+                if (cigar_it != fields.end()) {
+                    // Reconstruct the line
+                    std::string new_line;
+                    for (const auto& f : fields) {
+                        if (!new_line.empty()) new_line += '\t';
+                        new_line += f;
+                    }
+                    new_line += '\n';
+                    
+                    outstream << new_line;
+                } else {
+                    // If no CIGAR string found, output the line unchanged
+                    outstream << line << '\n';
+                }
             }
-        })
+            
+            outstream.flush();
+        }}
     );
     
     // Start timing
