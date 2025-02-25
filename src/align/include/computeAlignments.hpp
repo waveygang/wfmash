@@ -31,6 +31,7 @@
 #include "common/progress.hpp"
 #include "common/utils.hpp"
 #include <taskflow/taskflow.hpp>
+#include <taskflow/algorithm/pipeline.hpp>
 
 namespace align
 {
@@ -275,7 +276,7 @@ void computeAlignmentsTaskflow() {
         param.threads,
         
         // Stage 1: Read mapping record (Serial)
-        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+        tf::Pipe(tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
             if(pf.token() == 0) {
                 static std::ifstream mappingStream(param.mashmapPafFile);
                 if (!mappingStream.is_open()) {
@@ -291,10 +292,10 @@ void computeAlignmentsTaskflow() {
                 
                 pf.data(*line);
             }
-        }},
+        }),
         
         // Stage 2: Parse mapping and extract sequences (Serial)
-        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
+        tf::Pipe(tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
             if(pf.token() == 1) {
                 std::string& line = std::any_cast<std::string&>(pf.data());
                 if (line.empty()) {
@@ -308,10 +309,10 @@ void computeAlignmentsTaskflow() {
                 seq_record_t* rec = createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
                 pf.data(rec);
             }
-        }},
+        }),
         
         // Stage 3: Perform alignment (Parallel - compute intensive)
-        tf::Pipe{tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
+        tf::Pipe(tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
             if(pf.token() == 2) {
                 seq_record_t* rec = std::any_cast<seq_record_t*>(pf.data());
                 if (!rec) {
@@ -330,10 +331,10 @@ void computeAlignmentsTaskflow() {
                 delete rec; // Clean up
                 pf.data(alignment_output);
             }
-        }},
+        }),
         
         // Stage 4: Process and write output (Serial)
-        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+        tf::Pipe(tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
             if(pf.token() == 3) {
                 std::string& alignment_output = std::any_cast<std::string&>(pf.data());
                 if (alignment_output.empty()) return;
@@ -375,7 +376,7 @@ void computeAlignmentsTaskflow() {
                 
                 outstream.flush();
             }
-        }}
+        })
     );
     
     // Start timing
