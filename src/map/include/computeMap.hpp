@@ -147,8 +147,6 @@ namespace skch
 
       //algorithm parameters  
       skch::Parameters param;
-      static constexpr size_t DEFAULT_BATCH_SIZE = 100;
-      size_t query_batch_size;
 
       //reference sketch
       skch::Sketch* refSketch;
@@ -230,11 +228,9 @@ namespace skch
        * @param[in] f           optional user defined custom function to post process the reported mapping results
        */
       Map(skch::Parameters p, 
-          PostProcessResultsFn_t f = nullptr,
-          size_t batch_size = DEFAULT_BATCH_SIZE) :
+          PostProcessResultsFn_t f = nullptr) :
         param(p),
         processMappingResults(f),
-        query_batch_size(batch_size),
         sketchCutoffs(std::min<double>(p.sketchSize, skch::fixed::ss_table_max) + 1, 1),
         idManager(std::make_unique<SequenceIdManager>(
             p.querySequences,
