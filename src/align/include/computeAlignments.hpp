@@ -138,14 +138,32 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
           
           // Initialize thread pool
           thread_pool = hts_tpool_init(param.threads);
+          if (!thread_pool) {
+              throw std::runtime_error("[wfmash::align] Error! Failed to create thread pool");
+          }
           
           // Load faidx indices
           ref_faidx = fai_load(param.refSequences.front().c_str());
-          query_faidx = fai_load(param.querySequences.front().c_str());
+          if (!ref_faidx) {
+              hts_tpool_destroy(thread_pool);
+              throw std::runtime_error("[wfmash::align] Error! Failed to load reference FASTA index: " + param.refSequences.front());
+          }
           
-          // We can't directly access the bgzf field since faidx_t is opaque
-          // Instead, we rely on hts_open for thread pool configuration
-          // This happens automatically when sequences are fetched
+          query_faidx = fai_load(param.querySequences.front().c_str());
+          if (!query_faidx) {
+              fai_destroy(ref_faidx);
+              hts_tpool_destroy(thread_pool);
+              throw std::runtime_error("[wfmash::align] Error! Failed to load query FASTA index: " + param.querySequences.front());
+          }
+          
+          // Attach thread pool to faidx objects using the proper API
+          if (fai_thread_pool(ref_faidx, thread_pool, 0) != 0) {
+              std::cerr << "[wfmash::align] Warning: Failed to attach thread pool to reference FASTA index" << std::endl;
+          }
+          
+          if (fai_thread_pool(query_faidx, thread_pool, 0) != 0) {
+              std::cerr << "[wfmash::align] Warning: Failed to attach thread pool to query FASTA index" << std::endl;
+          }
       }
 
       ~Aligner() {
@@ -538,13 +556,24 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
                       std::atomic<bool>& thread_should_exit) {
     // Create a local thread pool for this thread
     hts_tpool* local_thread_pool = hts_tpool_init(1); // Single thread pool for this thread
+    if (!local_thread_pool) {
+        std::cerr << "[wfmash::align] Warning: Failed to create local thread pool in processor thread" << std::endl;
+    }
     
     // Load FASTA indices
     faidx_t* local_ref_faidx = fai_load(param.refSequences.front().c_str());
     faidx_t* local_query_faidx = fai_load(param.querySequences.front().c_str());
     
-    // We don't need to explicitly set thread pools for faidx objects
-    // as they are opaque structures, and we can't access their internal BGZF handles
+    // Attach thread pool to faidx objects if available
+    if (local_thread_pool) {
+        if (local_ref_faidx && fai_thread_pool(local_ref_faidx, local_thread_pool, 0) != 0) {
+            std::cerr << "[wfmash::align] Warning: Failed to attach local thread pool to reference FASTA index" << std::endl;
+        }
+        
+        if (local_query_faidx && fai_thread_pool(local_query_faidx, local_thread_pool, 0) != 0) {
+            std::cerr << "[wfmash::align] Warning: Failed to attach local thread pool to query FASTA index" << std::endl;
+        }
+    }
 
     while (!thread_should_exit.load()) {
         std::string* line_ptr = nullptr;
