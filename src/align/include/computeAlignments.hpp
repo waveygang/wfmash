@@ -234,6 +234,160 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 
   private:
 
+void computeAlignmentsTaskflow() {
+    // Create a TaskFlow for the pipeline
+    tf::Taskflow taskflow;
+    tf::Executor executor(param.threads);
+    
+    // Calculate total alignment length for progress tracking
+    uint64_t total_alignment_length = 0;
+    {
+        std::ifstream mappingListStream(param.mashmapPafFile);
+        std::string mappingRecordLine;
+        MappingBoundaryRow currentRecord;
+
+        while(std::getline(mappingListStream, mappingRecordLine)) {
+            if (!mappingRecordLine.empty()) {
+                parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
+                total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+            }
+        }
+    }
+    
+    // Progress meter and counters
+    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
+    std::atomic<uint64_t> processed_alignment_length(0);
+    std::atomic<size_t> total_alignments_processed(0);
+    
+    // Prepare output file
+    std::ofstream outstream(param.pafOutputFile);
+    if (!outstream.is_open()) {
+        throw std::runtime_error("[wfmash::align] Error! Failed to open output file: " + param.pafOutputFile);
+    }
+    
+    // Write SAM header if needed
+    if (param.sam_format) {
+        write_sam_header(outstream);
+    }
+    
+    // Define the data pipeline
+    tf::DataPipeline pipeline(
+        param.threads,
+        
+        // Stage 1: Read mapping record (Serial)
+        tf::make_data_pipe<void, std::string>(tf::PipeType::SERIAL, 
+            [&, this](tf::Pipeflow& pf) -> std::string {
+                static std::ifstream mappingStream(param.mashmapPafFile);
+                if (!mappingStream.is_open()) {
+                    throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
+                }
+                
+                std::string line;
+                if(!std::getline(mappingStream, line) || line.empty()) {
+                    pf.stop();
+                    return "";
+                }
+                
+                return line;
+            }),
+            
+        // Stage 2: Parse mapping and extract sequences (Serial)
+        tf::make_data_pipe<std::string, seq_record_t*>(tf::PipeType::SERIAL,
+            [&, this](std::string& line) -> seq_record_t* {
+                if (line.empty()) return nullptr;
+                
+                MappingBoundaryRow currentRecord;
+                parseMashmapRow(line, currentRecord, param.target_padding);
+                
+                return createSeqRecord(currentRecord, line, this->ref_faidx, this->query_faidx);
+            }),
+            
+        // Stage 3: Perform alignment (Parallel - compute intensive)
+        tf::make_data_pipe<seq_record_t*, std::string>(tf::PipeType::PARALLEL,
+            [&, this](seq_record_t*& rec) -> std::string {
+                if (!rec) return "";
+                
+                std::string alignment_output = processAlignment(rec);
+                
+                // Update progress meter and processed alignment length
+                uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
+                progress.increment(alignment_length);
+                processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+                total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+                
+                delete rec; // Clean up
+                return alignment_output;
+            }),
+            
+        // Stage 4: Process and write output (Serial)
+        tf::make_data_pipe<std::string, void>(tf::PipeType::SERIAL,
+            [&](std::string& alignment_output) {
+                if (alignment_output.empty()) return;
+                
+                // Parse the alignment output and write to the output file
+                std::stringstream ss(alignment_output);
+                std::string line;
+                while (std::getline(ss, line)) {
+                    if (line.empty()) continue;
+                    
+                    std::vector<std::string> fields;
+                    std::stringstream field_ss(line);
+                    std::string field;
+                    while (field_ss >> field) {
+                        fields.push_back(field);
+                    }
+
+                    // Find the CIGAR string field (should be after cg:Z:)
+                    auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                        [](const std::string& s) { 
+                            return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
+                        });
+                    
+                    if (cigar_it != fields.end()) {
+                        // Reconstruct the line
+                        std::string new_line;
+                        for (const auto& f : fields) {
+                            if (!new_line.empty()) new_line += '\t';
+                            new_line += f;
+                        }
+                        new_line += '\n';
+                        
+                        outstream << new_line;
+                    } else {
+                        // If no CIGAR string found, output the line unchanged
+                        outstream << line << '\n';
+                    }
+                }
+                
+                outstream.flush();
+            })
+    );
+    
+    // Start timing
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // Build the pipeline into the taskflow
+    taskflow.composed_of(pipeline);
+    
+    // Execute the taskflow
+    executor.run(taskflow).wait();
+    
+    // Close output stream
+    outstream.close();
+    
+    // End timing
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    
+    // Finish progress meter
+    progress.finish();
+    
+    std::cerr << "[wfmash::align] "
+              << "total aligned records = " << total_alignments_processed.load()
+              << ", total aligned bp = " << processed_alignment_length.load()
+              << ", time taken = " << duration.count() << " seconds" << std::endl;
+}
+
 seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord, 
                               const std::string& mappingRecordLine,
                               faidx_t* ref_faidx,
