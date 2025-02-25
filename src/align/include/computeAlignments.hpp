@@ -17,6 +17,9 @@
 #include <thread>
 #include <memory>
 #include <htslib/faidx.h>
+#include <htslib/hts.h>
+#include <htslib/bgzf.h>
+#include <htslib/thread_pool.h>
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -124,19 +127,34 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
 
       faidx_t* ref_faidx;
       faidx_t* query_faidx;
+      hts_tpool* thread_pool;
 
     public:
 
       explicit Aligner(const align::Parameters &p) : param(p) {
           assert(param.refSequences.size() == 1);
           assert(param.querySequences.size() == 1);
+          
+          // Initialize thread pool
+          thread_pool = hts_tpool_init(param.threads);
+          
+          // Load faidx indices
           ref_faidx = fai_load(param.refSequences.front().c_str());
           query_faidx = fai_load(param.querySequences.front().c_str());
+          
+          // Apply thread pool to bgzf if files are compressed
+          if (ref_faidx && ref_faidx->bgzf) {
+              bgzf_thread_pool(ref_faidx->bgzf, thread_pool, 0);
+          }
+          if (query_faidx && query_faidx->bgzf) {
+              bgzf_thread_pool(query_faidx->bgzf, thread_pool, 0);
+          }
       }
 
       ~Aligner() {
           fai_destroy(ref_faidx);
-          fai_destroy(query_faidx);  
+          fai_destroy(query_faidx);
+          hts_tpool_destroy(thread_pool);
       }
       
       /**
@@ -309,7 +327,7 @@ void computeAlignmentsTaskflow() {
             MappingBoundaryRow currentRecord;
             parseMashmapRow(all_lines[pf.token()], currentRecord, param.target_padding);
             
-            // Create seq_record_t
+            // Create seq_record_t using the thread-pool enabled faidx
             records[pf.line()] = createSeqRecord(currentRecord, all_lines[pf.token()], 
                                                 this->ref_faidx, this->query_faidx);
         }},
@@ -521,8 +539,20 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
                       atomic_queue::AtomicQueue<std::string*, 1024>& line_queue,
                       seq_atomic_queue_t& seq_queue,
                       std::atomic<bool>& thread_should_exit) {
+    // Create a local thread pool for this thread
+    hts_tpool* local_thread_pool = hts_tpool_init(1); // Single thread pool for this thread
+    
+    // Load FASTA indices
     faidx_t* local_ref_faidx = fai_load(param.refSequences.front().c_str());
     faidx_t* local_query_faidx = fai_load(param.querySequences.front().c_str());
+    
+    // Apply thread pool to bgzf if files are compressed
+    if (local_ref_faidx && local_ref_faidx->bgzf) {
+        bgzf_thread_pool(local_ref_faidx->bgzf, local_thread_pool, 0);
+    }
+    if (local_query_faidx && local_query_faidx->bgzf) {
+        bgzf_thread_pool(local_query_faidx->bgzf, local_thread_pool, 0);
+    }
 
     while (!thread_should_exit.load()) {
         std::string* line_ptr = nullptr;
@@ -554,6 +584,7 @@ void processor_thread(std::atomic<size_t>& total_alignments_queued,
 cleanup:
     fai_destroy(local_ref_faidx);
     fai_destroy(local_query_faidx);
+    hts_tpool_destroy(local_thread_pool);
 }
 
 void processor_manager(seq_atomic_queue_t& seq_queue,
