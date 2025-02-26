@@ -414,6 +414,7 @@ void computeAlignmentsTaskflow() {
                 parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
                 
                 // Create seq_record_t using the thread-pool enabled faidx
+                // (using main class faidx with optimized BGZF queue size of threads/4)
                 records[pf.line()] = createSeqRecord(currentRecord, *line_ptr, 
                                                     this->ref_faidx, this->query_faidx);
                 
