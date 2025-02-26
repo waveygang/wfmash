@@ -283,14 +283,14 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
               currentRecord.qEndPos = std::stoi(std::string(tokens[3]));
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = std::string(tokens[5]);  // Need to copy ID strings
-              const uint64_t ref_len = std::stoi(std::string(tokens[6]));
+              const uint64_t ref_len = std::stoull(std::string(tokens[6]));
               currentRecord.chain_id = chain_id;
               currentRecord.chain_length = chain_length;
               currentRecord.chain_pos = chain_pos;
               
               // Apply target padding while ensuring we don't go below 0 or above reference length
-              uint64_t rStartPos = std::stoi(tokens[7]);
-              uint64_t rEndPos = std::stoi(tokens[8]);
+              uint64_t rStartPos = std::stoi(std::string(tokens[7]));
+              uint64_t rEndPos = std::stoi(std::string(tokens[8]));
               
               // Always apply target padding
               if (target_padding > 0) {
