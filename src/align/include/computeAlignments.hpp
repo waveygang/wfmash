@@ -54,8 +54,15 @@ long double float2phred(long double prob) {
 struct seq_record_t {
     MappingBoundaryRow currentRecord;
     std::string mappingRecordLine;
-    std::string refSequence;  
-    std::string querySequence;
+    
+    // Raw pointers that own the memory
+    char* raw_ref_sequence = nullptr;
+    char* raw_query_sequence = nullptr;
+    
+    // Non-owning views of the sequences
+    std::string_view refSequence;
+    std::string_view querySequence;
+    
     uint64_t refStartPos;
     uint64_t refLen;
     uint64_t refTotalLength;
@@ -64,12 +71,14 @@ struct seq_record_t {
     uint64_t queryTotalLength;
 
     seq_record_t(const MappingBoundaryRow& c, const std::string& r, 
-                 const std::string& ref, uint64_t refStart, uint64_t refLength, uint64_t refTotalLength,
-                 const std::string& query, uint64_t queryStart, uint64_t queryLength, uint64_t queryTotalLength)
+                 char* ref_seq, uint64_t refStart, uint64_t refLength, uint64_t refTotalLength,
+                 char* query_seq, uint64_t queryStart, uint64_t queryLength, uint64_t queryTotalLength)
         : currentRecord(c)
         , mappingRecordLine(r)
-        , refSequence(ref)
-        , querySequence(query)
+        , raw_ref_sequence(ref_seq)
+        , raw_query_sequence(query_seq)
+        , refSequence(ref_seq, refLength)
+        , querySequence(query_seq, queryLength)
         , refStartPos(refStart)
         , refLen(refLength)
         , refTotalLength(refTotalLength)
@@ -77,6 +86,11 @@ struct seq_record_t {
         , queryLen(queryLength)
         , queryTotalLength(queryTotalLength)
         { }
+    
+    ~seq_record_t() {
+        free(raw_ref_sequence);
+        free(raw_query_sequence);
+    }
 };
 
 /**
@@ -562,36 +576,38 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
     char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
                                         currentRecord.qStartPos, currentRecord.qEndPos - 1, &query_len);
 
-    // Create a new seq_record_t object for the alignment
+    // Create a new seq_record_t object that takes ownership of the sequences
     seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
-                                         std::string(ref_seq, ref_len), 
+                                         ref_seq, // Transfer ownership of ref_seq
                                          currentRecord.rStartPos - head_padding, ref_len, ref_size,
-                                         std::string(query_seq, query_len), 
+                                         query_seq, // Transfer ownership of query_seq
                                          currentRecord.qStartPos, query_len, query_size);
 
-    // Clean up
-    free(ref_seq);
-    free(query_seq);
+    // No free() calls here - the seq_record_t destructor will handle cleanup
 
     return rec;
 }
 
 std::string processAlignment(seq_record_t* rec) {
-    std::string& ref_seq = rec->refSequence;
-    std::string& query_seq = rec->querySequence;
-
-    skch::CommonFunc::makeUpperCaseAndValidDNA(ref_seq.data(), ref_seq.length());
-    skch::CommonFunc::makeUpperCaseAndValidDNA(query_seq.data(), query_seq.length());
+    // Thread-local buffer for query strand
+    thread_local std::vector<char> queryRegionStrand;
+    
+    // Resize buffer only if needed
+    if (queryRegionStrand.size() < rec->querySequence.size() + 1) {
+        queryRegionStrand.resize(rec->querySequence.size() + 1);
+    }
+    
+    // Make sequences uppercase and valid DNA
+    skch::CommonFunc::makeUpperCaseAndValidDNA(rec->raw_ref_sequence, rec->refLen);
+    skch::CommonFunc::makeUpperCaseAndValidDNA(rec->raw_query_sequence, rec->queryLen);
 
     // Adjust the reference sequence to start from the original start position
-    char* ref_seq_ptr = &ref_seq[rec->currentRecord.rStartPos - rec->refStartPos];
-
-    std::vector<char> queryRegionStrand(query_seq.size() + 1);
+    char* ref_seq_ptr = &rec->raw_ref_sequence[rec->currentRecord.rStartPos - rec->refStartPos];
 
     if(rec->currentRecord.strand == skch::strnd::FWD) {
-        std::copy(query_seq.begin(), query_seq.end(), queryRegionStrand.begin());
+        std::copy(rec->querySequence.begin(), rec->querySequence.end(), queryRegionStrand.begin());
     } else {
-        skch::CommonFunc::reverseComplement(query_seq.data(), queryRegionStrand.data(), query_seq.size());
+        skch::CommonFunc::reverseComplement(rec->raw_query_sequence, queryRegionStrand.data(), rec->queryLen);
     }
 
     // Set up penalties for biWFA
