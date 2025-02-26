@@ -41,6 +41,47 @@
 namespace align
 {
 
+// String_view based version of split
+inline std::vector<std::string_view> split_view(std::string_view s, char delim) {
+    std::vector<std::string_view> result;
+    size_t pos = 0;
+    size_t found;
+    
+    while ((found = s.find(delim, pos)) != std::string_view::npos) {
+        result.emplace_back(s.substr(pos, found - pos));
+        pos = found + 1;
+    }
+    
+    // Add the last part
+    if (pos <= s.size()) {
+        result.emplace_back(s.substr(pos));
+    }
+    
+    return result;
+}
+
+// String_view based version of whitespace tokenization
+inline std::vector<std::string_view> tokenize_view(std::string_view s) {
+    std::vector<std::string_view> tokens;
+    size_t pos = 0;
+    size_t start;
+    
+    while (pos < s.size()) {
+        // Skip whitespace
+        while (pos < s.size() && std::isspace(s[pos])) pos++;
+        if (pos >= s.size()) break;
+        
+        // Find token end
+        start = pos;
+        while (pos < s.size() && !std::isspace(s[pos])) pos++;
+        
+        // Create string_view (zero copy)
+        tokens.emplace_back(s.substr(start, pos - start));
+    }
+    
+    return tokens;
+}
+
 long double float2phred(long double prob) {
     if (prob == 1)
         return 255;  // guards against "-0"
@@ -204,50 +245,45 @@ typedef atomic_queue::AtomicQueue<std::string*, 1024, nullptr, true, true, false
        * @param[out]  currentRecord
        */
       inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding) {
-          std::stringstream ss(mappingRecordLine); // Insert the string into a stream
-          std::string word; // Have a buffer string
-
-          vector<std::string> tokens; // Create vector to hold our words
-
-          while (ss >> word) {
-              tokens.push_back(word);
-          }
-
+          auto tokens = tokenize_view(mappingRecordLine);
+          
           // Check if the number of tokens is at least 13
           if (tokens.size() < 13) {
               throw std::runtime_error("[wfmash::align::parseMashmapRow] Error! Invalid mashmap mapping record: " + mappingRecordLine);
           }
 
           // Extract the mashmap identity from the string
-          const vector<string> mm_id_vec = skch::CommonFunc::split(tokens[12], ':');
+          const auto mm_id_vec = split_view(std::string_view(tokens[12]), ':');
           // if the estimated identity is missing, avoid assuming too low values
-          const float mm_id = wfmash::is_a_number(mm_id_vec.back()) ? std::stof(mm_id_vec.back()) : skch::fixed::percentage_identity;
+          const float mm_id = !mm_id_vec.empty() && wfmash::is_a_number(std::string(mm_id_vec.back())) 
+                              ? std::stof(std::string(mm_id_vec.back())) 
+                              : skch::fixed::percentage_identity;
 
           // Parse chain info if present (expecting format "chain:i:id.pos.len" in tokens[14])
           int32_t chain_id = -1;
           int32_t chain_length = 1;
           int32_t chain_pos = 1;
           if (tokens.size() > 14) {
-              const vector<string> chain_vec = skch::CommonFunc::split(tokens[14], ':');
+              const auto chain_vec = split_view(std::string_view(tokens[14]), ':');
               if (chain_vec.size() == 3 && chain_vec[0] == "chain" && chain_vec[1] == "i") {
                   // Split the id.pos.len format
-                  const vector<string> chain_parts = skch::CommonFunc::split(chain_vec[2], '.');
+                  const auto chain_parts = split_view(std::string_view(chain_vec[2]), '.');
                   if (chain_parts.size() == 3) {
-                      chain_id = std::stoi(chain_parts[0]);
-                      chain_pos = std::stoi(chain_parts[1]); 
-                      chain_length = std::stoi(chain_parts[2]);
+                      chain_id = std::stoi(std::string(chain_parts[0]));
+                      chain_pos = std::stoi(std::string(chain_parts[1])); 
+                      chain_length = std::stoi(std::string(chain_parts[2]));
                   }
               }
           }
 
-          // Save words into currentRecord
+          // Save values into currentRecord
           {
-              currentRecord.qId = tokens[0];
-              currentRecord.qStartPos = std::stoi(tokens[2]);
-              currentRecord.qEndPos = std::stoi(tokens[3]);
+              currentRecord.qId = std::string(tokens[0]);  // Need to copy ID strings
+              currentRecord.qStartPos = std::stoi(std::string(tokens[2]));
+              currentRecord.qEndPos = std::stoi(std::string(tokens[3]));
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
-              currentRecord.refId = tokens[5];
-              const uint64_t ref_len = std::stoi(tokens[6]);
+              currentRecord.refId = std::string(tokens[5]);  // Need to copy ID strings
+              const uint64_t ref_len = std::stoi(std::string(tokens[6]));
               currentRecord.chain_id = chain_id;
               currentRecord.chain_length = chain_length;
               currentRecord.chain_pos = chain_pos;
@@ -474,38 +510,43 @@ void computeAlignmentsTaskflow() {
             if (records[pf.line()] == nullptr) return;
             if (alignment_outputs[pf.line()].empty()) return;
             
-            std::stringstream ss(alignment_outputs[pf.line()]);
-            std::string line;
-            while (std::getline(ss, line)) {
-                if (line.empty()) continue;
-                
-                std::vector<std::string> fields;
-                std::stringstream field_ss(line);
-                std::string field;
-                while (field_ss >> field) {
-                    fields.push_back(field);
-                }
-
-                // Find the CIGAR string field (should be after cg:Z:)
-                auto cigar_it = std::find_if(fields.begin(), fields.end(),
-                    [](const std::string& s) { 
-                        return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
-                    });
-                
-                if (cigar_it != fields.end()) {
-                    // Reconstruct the line
-                    std::string new_line;
-                    for (const auto& f : fields) {
-                        if (!new_line.empty()) new_line += '\t';
-                        new_line += f;
-                    }
-                    new_line += '\n';
+            std::string_view output(alignment_outputs[pf.line()]);
+            size_t start = 0;
+            size_t end = output.find('\n');
+            
+            while (end != std::string_view::npos) {
+                // Process one line at a time without copying
+                std::string_view line = output.substr(start, end - start);
+                if (!line.empty()) {
+                    // Parse fields using string_view
+                    auto fields = tokenize_view(line);
                     
-                    outstream << new_line;
-                } else {
-                    // If no CIGAR string found, output the line unchanged
-                    outstream << line << '\n';
+                    // Find the CIGAR string field (should be after cg:Z:)
+                    auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                        [](std::string_view s) { 
+                            return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
+                        });
+                    
+                    if (cigar_it != fields.end()) {
+                        // Reconstruct the line efficiently with a single allocation
+                        std::string new_line;
+                        new_line.reserve(line.size() + 1); // +1 for newline
+                        
+                        for (const auto& f : fields) {
+                            if (!new_line.empty()) new_line += '\t';
+                            new_line.append(f.data(), f.size());
+                        }
+                        new_line += '\n';
+                        
+                        outstream << new_line;
+                    } else {
+                        // If no CIGAR string found, output the line unchanged
+                        outstream << line << '\n';
+                    }
                 }
+                
+                start = end + 1;
+                end = output.find('\n', start);
             }
             
             outstream.flush();
@@ -800,46 +841,51 @@ void worker_thread(uint64_t tid,
             is_working.store(true);
             std::string alignment_output = processAlignment(rec);
 
-            // Parse the alignment output to find CIGAR string and coordinates
-            std::stringstream ss(alignment_output);
-            std::string line;
-            while (std::getline(ss, line)) {
-                if (line.empty()) continue;
-                
-                std::vector<std::string> fields;
-                std::stringstream field_ss(line);
-                std::string field;
-                while (field_ss >> field) {
-                    fields.push_back(field);
-                }
-
-                // Find the CIGAR string field (should be after cg:Z:)
-                auto cigar_it = std::find_if(fields.begin(), fields.end(),
-                    [](const std::string& s) { return s.substr(0, 5) == "cg:Z:"; });
-                
-                if (cigar_it != fields.end()) {
-                    std::string cigar = cigar_it->substr(5); // Remove cg:Z: prefix
-                    uint64_t ref_start = std::stoull(fields[7]);
-                    uint64_t ref_end = std::stoull(fields[8]);
-
-
-                    // Just pass through the CIGAR string and coordinates unchanged
-                    // The trimming is now handled in wflign namespace
-
-                    // Reconstruct the line
-                    std::string new_line;
-                    for (const auto& f : fields) {
-                        if (!new_line.empty()) new_line += '\t';
-                        new_line += f;
-                    }
-                    new_line += '\n';
+            // Parse the alignment output to find CIGAR string and coordinates using string_view
+            std::string_view output(alignment_output);
+            size_t start = 0;
+            size_t end = output.find('\n');
+            
+            while (end != std::string_view::npos) {
+                // Process one line at a time without copying
+                std::string_view line = output.substr(start, end - start);
+                if (!line.empty()) {
+                    // Parse fields using string_view
+                    auto fields = tokenize_view(line);
                     
-                    // Push the modified alignment output to the paf_queue
-                    paf_queue.push(new std::string(std::move(new_line)));
-                } else {
-                    // If no CIGAR string found, output the line unchanged
-                    paf_queue.push(new std::string(line + '\n'));
+                    // Find the CIGAR string field (should be after cg:Z:)
+                    auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                        [](std::string_view s) { 
+                            return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
+                        });
+                    
+                    if (cigar_it != fields.end()) {
+                        std::string_view cigar = cigar_it->substr(5); // Remove cg:Z: prefix
+                        uint64_t ref_start = std::stoull(std::string(fields[7]));
+                        uint64_t ref_end = std::stoull(std::string(fields[8]));
+                        
+                        // Reconstruct the line efficiently
+                        std::string new_line;
+                        new_line.reserve(line.size() + 1); // +1 for newline
+                        
+                        for (const auto& f : fields) {
+                            if (!new_line.empty()) new_line += '\t';
+                            new_line.append(f.data(), f.size());
+                        }
+                        new_line += '\n';
+                        
+                        // Push the modified alignment output to the paf_queue
+                        paf_queue.push(new std::string(std::move(new_line)));
+                    } else {
+                        // If no CIGAR string found, output the line unchanged
+                        std::string new_line(line);
+                        new_line += '\n';
+                        paf_queue.push(new std::string(std::move(new_line)));
+                    }
                 }
+                
+                start = end + 1;
+                end = output.find('\n', start);
             }
             
             // Update progress meter and processed alignment length
