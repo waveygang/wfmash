@@ -533,6 +533,8 @@ void computeAlignmentsTaskflow() {
               << ", time taken = " << duration.count() << " seconds" << std::endl;
 }
 
+// Creates a sequence record using the provided faidx objects
+// When called from taskflow pipeline, this uses the optimized thread pool with BGZF queue size of threads/4
 seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord, 
                               const std::string& mappingRecordLine,
                               faidx_t* ref_faidx,
