@@ -469,16 +469,34 @@ namespace skch
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset]() {
+              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
                   if (param.create_index_only) {
                       refSketch = new skch::Sketch(param, *idManager, target_subset);
-                      refSketch->writeIndex(target_subset, param.indexFilename.string(), false);
-                  } else {
-                      if (!param.indexFilename.empty()) {
-                          refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr);
-                      } else {
-                          refSketch = new skch::Sketch(param, *idManager, target_subset);
+                  
+                      // Construct proper sub-index filename if needed
+                      std::string indexFilename = param.indexFilename.string();
+                      if (total_subsets > 1) {
+                          indexFilename = indexFilename + "." + std::to_string(subset_idx);
                       }
+                  
+                      refSketch->writeIndex(target_subset, indexFilename, false, subset_idx, total_subsets);
+                  } else if (!param.indexFilename.empty()) {
+                      // Load existing index
+                      std::string indexFilename = param.indexFilename.string();
+                      if (total_subsets > 1) {
+                          indexFilename = indexFilename + "." + std::to_string(subset_idx);
+                      }
+                  
+                      std::ifstream indexStream(indexFilename, std::ios::binary);
+                      if (!indexStream) {
+                          std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
+                          exit(1);
+                      }
+                  
+                      refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+                  } else {
+                      // Build index in memory
+                      refSketch = new skch::Sketch(param, *idManager, target_subset);
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 

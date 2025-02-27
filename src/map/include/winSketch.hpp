@@ -532,7 +532,7 @@ namespace skch
       /**
        * @brief  Write all index data structures to disk
        */
-      void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false) 
+      void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false, size_t batch_idx = 0, size_t total_batches = 1) 
       {
         fs::path indexFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
         std::ofstream outStream;
@@ -545,7 +545,7 @@ namespace skch
             std::cerr << "Error: Unable to open index file for writing: " << indexFilename << std::endl;
             exit(1);
         }
-        writeSubIndexHeader(outStream, target_subset);
+        writeSubIndexHeader(outStream, target_subset, batch_idx, total_batches);
         writeParameters(outStream);
         writeSketchBinary(outStream);
         writePosListBinary(outStream);
@@ -553,10 +553,15 @@ namespace skch
         outStream.close();
       }
 
-      void writeSubIndexHeader(std::ofstream& outStream, const std::vector<std::string>& target_subset) 
+      void writeSubIndexHeader(std::ofstream& outStream, const std::vector<std::string>& target_subset, size_t batch_idx = 0, size_t total_batches = 1) 
       {
         const uint64_t magic_number = 0xDEADBEEFCAFEBABE;
         outStream.write(reinterpret_cast<const char*>(&magic_number), sizeof(magic_number));
+  
+        // Write batch information
+        outStream.write(reinterpret_cast<const char*>(&batch_idx), sizeof(batch_idx));
+        outStream.write(reinterpret_cast<const char*>(&total_batches), sizeof(total_batches));
+  
         uint64_t num_sequences = target_subset.size();
         outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
         for (const auto& seqName : target_subset) {
@@ -649,7 +654,8 @@ namespace skch
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
         std::cerr << "[wfmash::mashmap] Reading index" << std::endl;
-        if (!readSubIndexHeader(inStream, targetSequenceNames)) {
+        size_t batch_idx, total_batches;
+        if (!readSubIndexHeader(inStream, targetSequenceNames, batch_idx, total_batches)) {
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);
         }
@@ -659,7 +665,7 @@ namespace skch
         // Removed readFreqKmersBinary call
       }
 
-      bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
+      bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames, size_t& batch_idx, size_t& total_batches) 
       {
         uint64_t magic_number = 0;
         inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
@@ -667,6 +673,11 @@ namespace skch
             std::cerr << "Error: Invalid magic number in index file." << std::endl;
             exit(1);
         }
+  
+        // Read batch information
+        inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+        inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+  
         uint64_t num_sequences = 0;
         inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
         std::vector<std::string> sequenceNames;
@@ -677,7 +688,7 @@ namespace skch
             inStream.read(&seqName[0], name_length);
             sequenceNames.push_back(seqName);
         }
-        
+  
         return sequenceNames == targetSequenceNames;
       }
 
