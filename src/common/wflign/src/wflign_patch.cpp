@@ -2236,9 +2236,9 @@ query_start : query_end)
                     target_length,
                     min_identity,
                     mashmap_estimated_identity,
+                    0, 0, 0,
                     false,  // Don't add an endline after each alignment
-                    true,
-                    0,0,0);  // This is a reverse complement alignment
+                    true);  // This is a reverse complement alignment
             if (wrote) {
                 // write tag indicating that this is a multipatch alignment
                 out << "\t" << "pt:Z:true" << "\t"
