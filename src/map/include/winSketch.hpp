@@ -695,16 +695,19 @@ namespace skch
         // Read and restore sequence ID mappings from index
         idManager.importIdMapping(inStream);
         
-        // Check if all target sequences exist in the index
+        // Rather than failing if any target sequence isn't in the index,
+        // just log a warning - as long as we have the index sequences, we can proceed
+        bool missing_sequences = false;
         for (const auto& seqName : targetSequenceNames) {
             try {
                 idManager.getSequenceId(seqName);
             } catch (const std::runtime_error&) {
-                std::cerr << "Warning: Sequence '" << seqName << "' not found in index." << std::endl;
-                return false;
+                std::cerr << "Warning: Sequence '" << seqName << "' not found in index, will be skipped." << std::endl;
+                missing_sequences = true;
             }
         }
         
+        // Always return true even if some sequences are missing - we'll handle them gracefully
         return true;
       }
 

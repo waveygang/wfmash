@@ -56,9 +56,11 @@ public:
     
     // Import ID mapping information
     void importIdMapping(std::ifstream& inStream) {
-        // Clear existing mappings
+        // Save a copy of existing mappings
+        auto existingNames = sequenceNameToId;
+        
+        // Clear current mappings to load from index
         sequenceNameToId.clear();
-        metadata.clear();
         
         uint64_t mapSize = 0;
         inStream.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
@@ -263,7 +265,10 @@ private:
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
             // If we already have this sequence, update its length if needed
-            if (metadata[it->second].len != length) {
+            if (metadata.size() <= it->second) {
+                metadata.resize(it->second + 1);
+                metadata[it->second] = ContigInfo{sequenceName, length};
+            } else if (metadata[it->second].len != length) {
                 metadata[it->second].len = length;
             }
             return it->second;
