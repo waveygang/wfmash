@@ -529,22 +529,50 @@ namespace skch
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
                       
-                      // Use a static filestream to maintain position between reads
+                      // Use static file stream to maintain position between reads
                       static std::ifstream indexStream;
                       static bool index_opened = false;
+                      static size_t file_subset_count = 0;
                       
                       if (!index_opened) {
-                          // Only open the file once for the first subset
+                          // First read - validate the index file and get metadata
                           indexStream.open(indexFilename, std::ios::binary);
                           if (!indexStream) {
                               std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
                               exit(1);
                           }
+                          
+                          // Read the magic number to verify it's a valid index
+                          uint64_t magic_number = 0;
+                          indexStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+                          if (magic_number != 0xDEADBEEFCAFEBABE) {
+                              std::cerr << "Error: Invalid index file format (wrong magic number)" << std::endl;
+                              exit(1);
+                          }
+                          
+                          // Read subset count
+                          size_t batch_idx, total_batches;
+                          indexStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+                          indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+                          
+                          // Store and display subset count
+                          file_subset_count = total_batches;
+                          std::cerr << "[wfmash::mashmap] Index file contains " << file_subset_count 
+                                    << " subsets" << std::endl;
+                          
+                          // Read batch size if available
+                          uint64_t batch_size = 0;
+                          indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+                          if (batch_size > 0) {
+                              param.index_by_size = batch_size;
+                              std::cerr << "[wfmash::mashmap] Using batch size " << batch_size 
+                                        << " from index" << std::endl;
+                          }
+                          
+                          // Return to beginning of file
+                          indexStream.seekg(0, std::ios::beg);
                           index_opened = true;
                       }
-                      
-                      // No need to seek - we'll read sequentially through the file
-                      // Each subset will be read in order
                       
                       // Create sketch from current file position
                       refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
