@@ -475,43 +475,38 @@ namespace skch
           // Create the index subsets
           auto target_subsets = createTargetSubsets(targetSequenceNames);
 
-          // Check if we're only creating the index
-          if (param.create_index_only) {
-              std::cerr << "[wfmash::mashmap] Creating " << target_subsets.size() << " index file(s)..." << std::endl;
-                  
-              // Process each subset SERIALLY to control memory - index creation only
-              for (size_t subset_idx = 0; subset_idx < target_subsets.size(); ++subset_idx) {
-                  const auto& target_subset = target_subsets[subset_idx];
-                  if(target_subset.empty()) continue;
-                      
-                  // Construct proper sub-index filename if needed
-                  std::string indexFilename = param.indexFilename.string();
-                  if (target_subsets.size() > 1) {
-                      indexFilename = indexFilename + "." + std::to_string(subset_idx);
-                  }
-                      
-                  std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
-                            << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
-                      
-                  // Build the index directly
-                  refSketch = new skch::Sketch(param, *idManager, target_subset);
-                  refSketch->writeIndex(target_subset, indexFilename, false, subset_idx, target_subsets.size());
-                      
-                  // Clean up
-                  delete refSketch;
-                  refSketch = nullptr;
-              }
-                  
-              std::cerr << "[wfmash::mashmap] All indices created successfully. Exiting." << std::endl;
-              exit(0);
-          }
+          // Flag for whether we're done after creating indices
+          bool exit_after_indices = param.create_index_only;
 
           // Process each subset SERIALLY to control memory
           for (size_t subset_idx = 0; subset_idx < target_subsets.size(); ++subset_idx) {
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
-
-              // Create taskflow for this subset's processing
+              
+              // Construct proper sub-index filename if needed
+              std::string indexFilename = param.indexFilename.string();
+              if (target_subsets.size() > 1) {
+                  indexFilename = indexFilename + "." + std::to_string(subset_idx);
+              }
+              
+              // Handle index creation
+              if (param.create_index_only) {
+                  std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
+                            << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
+                  
+                  // Build the index directly
+                  refSketch = new skch::Sketch(param, *idManager, target_subset);
+                  refSketch->writeIndex(target_subset, indexFilename, false, subset_idx, target_subsets.size());
+                  
+                  // Clean up
+                  delete refSketch;
+                  refSketch = nullptr;
+                  
+                  // Continue to next subset without mapping
+                  continue;
+              }
+              
+              // If we're doing mapping, set up the taskflow
               auto subset_flow = std::make_shared<tf::Taskflow>();
 
               // Initialize progress meter
@@ -705,7 +700,11 @@ namespace skch
               progress->finish();
           }
 
-          // The create_index_only case is now handled earlier
+          // If we're only creating indices, exit now
+          if (exit_after_indices) {
+              std::cerr << "[wfmash::mashmap] All indices created successfully. Exiting." << std::endl;
+              exit(0);
+          }
 
           // Final results processing
           tf::Taskflow final_flow;
