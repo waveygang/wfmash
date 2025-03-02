@@ -826,9 +826,8 @@ namespace skch
             exit(1);
         }
         
-        if (batch_size > 0) {
-            param.index_by_size = batch_size;
-        }
+        // Always update the batch size parameter from the index
+        param.index_by_size = batch_size;
   
         uint64_t num_sequences = 0;
         inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));

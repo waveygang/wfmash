@@ -443,13 +443,23 @@ namespace skch
         uint64_t current_subset_size = 0;
         std::vector<std::string> current_subset;
 
+        // If index_by_size is invalid, set a reasonable default
+        uint64_t batch_size = param.index_by_size;
+        if (batch_size <= 0) {
+            batch_size = 5000000;  // Default to 5MB if not specified
+            if (!param.indexFilename.empty() && !param.create_index_only) {
+                std::cerr << "[wfmash::mashmap] Warning: Invalid batch size in index, using default: " 
+                          << batch_size << std::endl;
+            }
+        }
+
         for (const auto& seqName : targetSequenceNames) {
             seqno_t seqId = idManager->getSequenceId(seqName);
             offset_t seqLen = idManager->getSequenceLength(seqId);
             current_subset.push_back(seqName);
             current_subset_size += seqLen;
 
-            if (current_subset_size >= param.index_by_size || &seqName == &targetSequenceNames.back()) {
+            if (current_subset_size >= batch_size || &seqName == &targetSequenceNames.back()) {
                 if (!current_subset.empty()) {
                     target_subsets.push_back(current_subset);
                 }
@@ -471,6 +481,38 @@ namespace skch
           // Storage for combining results across all subsets
           std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
           std::mutex combinedMappings_mutex;
+
+          // If we're using an index file, read its header to get batch size
+          if (!param.indexFilename.empty() && !param.create_index_only) {
+              std::ifstream indexStream(param.indexFilename.string(), std::ios::binary);
+              if (!indexStream) {
+                  std::cerr << "Error: Unable to open index file for reading: " << param.indexFilename << std::endl;
+                  exit(1);
+              }
+              
+              // Read the magic number to verify it's a valid index
+              uint64_t magic_number = 0;
+              indexStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+              if (magic_number != 0xDEADBEEFCAFEBABE) {
+                  std::cerr << "Error: Invalid index file format (wrong magic number)" << std::endl;
+                  exit(1);
+              }
+              
+              // Read subset count and batch index
+              size_t batch_idx, total_batches;
+              indexStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+              indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+              
+              // Read batch size
+              uint64_t batch_size = 0;
+              indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+              if (batch_size > 0) {
+                  param.index_by_size = batch_size;
+                  std::cerr << "[wfmash::mashmap] Using batch size " << batch_size 
+                            << " from index file (" << total_batches << " subsets)" << std::endl;
+              }
+              indexStream.close();
+          }
 
           // Create the index subsets
           auto target_subsets = createTargetSubsets(targetSequenceNames);
