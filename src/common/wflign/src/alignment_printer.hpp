@@ -54,6 +54,9 @@ bool write_alignment_paf(
     const uint64_t& target_length,
     const float& min_identity,
     const float& mashmap_estimated_identity,
+    const int32_t& chain_id,
+    const int32_t& chain_length,
+    const int32_t& chain_pos,
     const bool& with_endline = true,
     const bool& is_rev_patch = false);
 

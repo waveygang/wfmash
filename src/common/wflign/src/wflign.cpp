@@ -112,7 +112,10 @@ void do_biwfa_alignment(
                 target_offset,
                 target_length,
                 min_identity,
-                mashmap_estimated_identity);
+                mashmap_estimated_identity,
+                chain_id,
+                chain_length,
+                chain_pos);
         } else {
             // Write SAM output directly
             write_alignment_sam(
@@ -1179,7 +1182,8 @@ void WFlign::wflign_affine_wavefront(
                             target_offset,
                             target_length,
                             min_identity,
-                            mashmap_estimated_identity);
+                            mashmap_estimated_identity,
+                            0, 0, 0);
                 }
             }
         }
