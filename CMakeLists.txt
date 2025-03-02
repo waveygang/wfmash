@@ -271,6 +271,11 @@ add_test(
   COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -Q Y12 > x.paf && wgatools paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz x.paf > x.maf && test $(wgatools stat x.maf | cut -f 7 | awk '{ s+=$1 } END { print s }') -gt 11000000"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_test(
+  NAME wfmash-multi-subset-index
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -b 1m -T S288C -W index.idx && ${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -I index.idx -Q Y12 > index.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai index.paf 0.9"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 install(TARGETS wfmash DESTINATION bin)
 
 if (BUILD_STATIC)
