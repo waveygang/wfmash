@@ -569,6 +569,9 @@ namespace skch
             outStream.write(reinterpret_cast<const char*>(&name_length), sizeof(name_length));
             outStream.write(seqName.c_str(), name_length);
         }
+        
+        // Write sequence ID mappings to ensure consistency
+        idManager.exportIdMapping(outStream);
       }
 
       /**
@@ -688,8 +691,21 @@ namespace skch
             inStream.read(&seqName[0], name_length);
             sequenceNames.push_back(seqName);
         }
-  
-        return sequenceNames == targetSequenceNames;
+        
+        // Read and restore sequence ID mappings from index
+        idManager.importIdMapping(inStream);
+        
+        // Check if all target sequences exist in the index
+        for (const auto& seqName : targetSequenceNames) {
+            try {
+                idManager.getSequenceId(seqName);
+            } catch (const std::runtime_error&) {
+                std::cerr << "Warning: Sequence '" << seqName << "' not found in index." << std::endl;
+                return false;
+            }
+        }
+        
+        return true;
       }
 
 

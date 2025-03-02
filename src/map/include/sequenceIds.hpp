@@ -21,6 +21,7 @@ private:
     std::vector<std::string> targetSequenceNames;
     std::vector<std::string> allPrefixes;
     std::string prefixDelim;
+    seqno_t nextId = 0;
 
 public:
     SequenceIdManager(const std::vector<std::string>& queryFiles,
@@ -35,6 +36,53 @@ public:
         allPrefixes.insert(allPrefixes.end(), targetPrefixes.begin(), targetPrefixes.end());
         populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefixes, prefixDelim, queryList, targetList);
         buildRefGroups();
+    }
+    
+    // Export ID mapping information
+    void exportIdMapping(std::ofstream& outStream) const {
+        uint64_t mapSize = sequenceNameToId.size();
+        outStream.write(reinterpret_cast<const char*>(&mapSize), sizeof(mapSize));
+        
+        for (const auto& [seqName, seqId] : sequenceNameToId) {
+            uint64_t nameLength = seqName.size();
+            outStream.write(reinterpret_cast<const char*>(&nameLength), sizeof(nameLength));
+            outStream.write(seqName.c_str(), nameLength);
+            outStream.write(reinterpret_cast<const char*>(&seqId), sizeof(seqId));
+        }
+        
+        // Also export the next ID to use
+        outStream.write(reinterpret_cast<const char*>(&nextId), sizeof(nextId));
+    }
+    
+    // Import ID mapping information
+    void importIdMapping(std::ifstream& inStream) {
+        // Clear existing mappings
+        sequenceNameToId.clear();
+        metadata.clear();
+        
+        uint64_t mapSize = 0;
+        inStream.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
+        
+        for (uint64_t i = 0; i < mapSize; ++i) {
+            uint64_t nameLength = 0;
+            inStream.read(reinterpret_cast<char*>(&nameLength), sizeof(nameLength));
+            
+            std::string seqName(nameLength, '\0');
+            inStream.read(&seqName[0], nameLength);
+            
+            seqno_t seqId;
+            inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
+            
+            sequenceNameToId[seqName] = seqId;
+            
+            // Ensure metadata vector has enough capacity
+            if (seqId >= metadata.size()) {
+                metadata.resize(seqId + 1);
+            }
+        }
+        
+        // Import the next ID to use
+        inStream.read(reinterpret_cast<char*>(&nextId), sizeof(nextId));
     }
 
     seqno_t getSequenceId(const std::string& sequenceName) const {
@@ -214,11 +262,23 @@ private:
     seqno_t addSequence(const std::string& sequenceName, offset_t length) {
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
+            // If we already have this sequence, update its length if needed
+            if (metadata[it->second].len != length) {
+                metadata[it->second].len = length;
+            }
             return it->second;
         }
-        seqno_t newId = metadata.size();
+        
+        // Use nextId as the new sequence ID
+        seqno_t newId = nextId++;
         sequenceNameToId[sequenceName] = newId;
-        metadata.push_back(ContigInfo{sequenceName, length});
+        
+        // Ensure metadata vector has enough capacity
+        if (newId >= metadata.size()) {
+            metadata.resize(newId + 1);
+        }
+        
+        metadata[newId] = ContigInfo{sequenceName, length};
         return newId;
     }
 };
