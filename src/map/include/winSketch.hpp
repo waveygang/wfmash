@@ -661,9 +661,17 @@ namespace skch
        * @return bool       True if successful
        */
       static bool skipSubsetInStream(std::ifstream& inStream) {
+        // Save position for potential error recovery
+        std::streampos startPos = inStream.tellg();
+        
         uint64_t magic_number = 0;
         inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
-        if (magic_number != 0xDEADBEEFCAFEBABE) {
+        if (!inStream || magic_number != 0xDEADBEEFCAFEBABE) {
+            std::cerr << "Error: Invalid magic number (0x" << std::hex << magic_number 
+                      << std::dec << ") when skipping subset" << std::endl;
+            // Try to recover
+            inStream.clear();
+            inStream.seekg(startPos);
             return false;
         }
         
@@ -671,6 +679,13 @@ namespace skch
         size_t batch_idx, total_batches;
         inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
         inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+        
+        if (!inStream || batch_idx >= total_batches || total_batches > 1000) {
+            std::cerr << "Error: Invalid batch data: " << batch_idx << "/" << total_batches << std::endl;
+            inStream.clear();
+            inStream.seekg(startPos);
+            return false;
+        }
         
         // Skip batch size
         uint64_t batch_size;
@@ -744,7 +759,11 @@ namespace skch
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
         std::cerr << "[wfmash::mashmap] Reading index" << std::endl;
+        
+        // Get current stream position to check if we're at the beginning of a subset
+        std::streampos currentPos = inStream.tellg();
         size_t batch_idx, total_batches;
+        
         if (!readSubIndexHeader(inStream, targetSequenceNames, batch_idx, total_batches)) {
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);
@@ -761,10 +780,23 @@ namespace skch
 
       bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames, size_t& batch_idx, size_t& total_batches) 
       {
+        // Check stream state before reading
+        if (!inStream || inStream.eof()) {
+            std::cerr << "Error: Invalid index file stream state." << std::endl;
+            return false;
+        }
+        
+        // Save position for potential error recovery
+        std::streampos headerStart = inStream.tellg();
+        
         uint64_t magic_number = 0;
         inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
-        if (magic_number != 0xDEADBEEFCAFEBABE) {
-            std::cerr << "Error: Invalid magic number in index file." << std::endl;
+        if (!inStream || magic_number != 0xDEADBEEFCAFEBABE) {
+            std::cerr << "Error: Invalid magic number in index file: 0x" 
+                      << std::hex << magic_number << std::dec << std::endl;
+            // Try to recover from byte alignment issues
+            inStream.clear();
+            inStream.seekg(headerStart);
             exit(1);
         }
   
@@ -772,9 +804,20 @@ namespace skch
         inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
         inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
         
+        if (!inStream || total_batches < 1 || total_batches > 1000 || batch_idx >= total_batches) {
+            std::cerr << "Error: Invalid batch information: batch " << batch_idx 
+                      << " of " << total_batches << std::endl;
+            exit(1);
+        }
+        
         // Read batch size
         uint64_t batch_size = 0;
         inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+        if (!inStream) {
+            std::cerr << "Error: Failed to read batch size from index" << std::endl;
+            exit(1);
+        }
+        
         if (batch_size > 0) {
             param.index_by_size = batch_size;
         }

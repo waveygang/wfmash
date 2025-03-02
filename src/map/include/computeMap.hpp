@@ -529,26 +529,24 @@ namespace skch
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
                       
-                      // Open the index file
-                      std::ifstream indexStream(indexFilename, std::ios::binary);
-                      if (!indexStream) {
-                          std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
-                          exit(1);
+                      // Use a static filestream to maintain position between reads
+                      static std::ifstream indexStream;
+                      static bool index_opened = false;
+                      
+                      if (!index_opened) {
+                          // Only open the file once for the first subset
+                          indexStream.open(indexFilename, std::ios::binary);
+                          if (!indexStream) {
+                              std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
+                              exit(1);
+                          }
+                          index_opened = true;
                       }
                       
-                      // For multi-subset indices, seek to the correct subset
-                      if (total_subsets > 1 && subset_idx > 0) {
-                          // Skip through previous subsets in the file
-                          for (size_t i = 0; i < subset_idx; i++) {
-                              skch::Sketch::skipSubsetInStream(indexStream);
-                              if (!indexStream) {
-                                  std::cerr << "Error: Failed to locate subset " << subset_idx 
-                                           << " in index file." << std::endl;
-                                  exit(1);
-                              }
-                          }
-                      }
-                  
+                      // No need to seek - we'll read sequentially through the file
+                      // Each subset will be read in order
+                      
+                      // Create sketch from current file position
                       refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
                   } else {
                       // Build index in memory
