@@ -248,8 +248,15 @@ namespace skch
               if (!param.query_prefix.empty()) {
                   this->querySequenceNames.clear();
                   for (const auto& name : idManager->getQuerySequenceNames()) {
-                      // Check if it starts with the query prefix
-                      if (name.compare(0, param.query_prefix.size(), param.query_prefix) == 0) {
+                      // Check if it starts with any of the query prefixes
+                      bool prefix_match = false;
+                      for (const auto& prefix : param.query_prefix) {
+                          if (name.compare(0, prefix.size(), prefix) == 0) {
+                              prefix_match = true;
+                              break;
+                          }
+                      }
+                      if (prefix_match) {
                           this->querySequenceNames.push_back(name);
                       }
                   }
