@@ -244,8 +244,30 @@ namespace skch
         cached_minimum_hits(p.minimum_hits > 0 ? p.minimum_hits : Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval))
           {
               // Initialize sequence names right after creating idManager
-              this->querySequenceNames = idManager->getQuerySequenceNames();
-              this->targetSequenceNames = idManager->getTargetSequenceNames();
+              // Important: Apply any prefix filters here to ensure consistent query/target list
+              if (!param.query_prefix.empty()) {
+                  this->querySequenceNames.clear();
+                  for (const auto& name : idManager->getQuerySequenceNames()) {
+                      // Check if it starts with the query prefix
+                      if (name.compare(0, param.query_prefix.size(), param.query_prefix) == 0) {
+                          this->querySequenceNames.push_back(name);
+                      }
+                  }
+              } else {
+                  this->querySequenceNames = idManager->getQuerySequenceNames();
+              }
+              
+              if (!param.target_prefix.empty()) {
+                  this->targetSequenceNames.clear();
+                  for (const auto& name : idManager->getTargetSequenceNames()) {
+                      // Check if it starts with the target prefix
+                      if (name.compare(0, param.target_prefix.size(), param.target_prefix) == 0) {
+                          this->targetSequenceNames.push_back(name);
+                      }
+                  }
+              } else {
+                  this->targetSequenceNames = idManager->getTargetSequenceNames();
+              }
 
               // Calculate total target length
               uint64_t total_target_length = 0;

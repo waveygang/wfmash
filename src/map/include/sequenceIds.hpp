@@ -56,15 +56,17 @@ public:
     
     // Import ID mapping information
     void importIdMapping(std::ifstream& inStream) {
-        // Save a copy of existing mappings
-        auto existingNames = sequenceNameToId;
-        
-        // Clear current mappings to load from index
-        sequenceNameToId.clear();
+        // Store existing mappings to preserve them
+        auto existingMappings = sequenceNameToId;
         
         uint64_t mapSize = 0;
         inStream.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
         
+        // First expand metadata if needed to accommodate all IDs
+        seqno_t maxId = 0;
+        
+        // Read all mappings from the index
+        std::unordered_map<std::string, seqno_t> indexMappings;
         for (uint64_t i = 0; i < mapSize; ++i) {
             uint64_t nameLength = 0;
             inStream.read(reinterpret_cast<char*>(&nameLength), sizeof(nameLength));
@@ -75,16 +77,27 @@ public:
             seqno_t seqId;
             inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
             
-            sequenceNameToId[seqName] = seqId;
+            indexMappings[seqName] = seqId;
+            maxId = std::max(maxId, seqId);
+        }
+        
+        // Now merge the mappings, prioritizing the index mappings
+        for (const auto& [name, id] : indexMappings) {
+            sequenceNameToId[name] = id;
             
             // Ensure metadata vector has enough capacity
-            if (seqId >= metadata.size()) {
-                metadata.resize(seqId + 1);
+            if (id >= metadata.size()) {
+                metadata.resize(id + 1);
+                metadata[id].name = name;
             }
         }
         
-        // Import the next ID to use
-        inStream.read(reinterpret_cast<char*>(&nextId), sizeof(nextId));
+        // Read the next ID
+        seqno_t indexNextId;
+        inStream.read(reinterpret_cast<char*>(&indexNextId), sizeof(indexNextId));
+        
+        // Ensure our nextId is at least as large as the one from the index
+        nextId = std::max(nextId, indexNextId);
     }
 
     seqno_t getSequenceId(const std::string& sequenceName) const {
@@ -92,7 +105,20 @@ public:
         if (it != sequenceNameToId.end()) {
             return it->second;
         }
-        throw std::runtime_error("Sequence name not found: " + sequenceName);
+        
+        // More detailed error message with available sequence names
+        std::stringstream error_msg;
+        error_msg << "Sequence name not found: '" << sequenceName << "'\nAvailable sequences:";
+        int count = 0;
+        for (const auto& [name, id] : sequenceNameToId) {
+            if (count++ < 10) {
+                error_msg << "\n  - '" << name << "' (ID: " << id << ")";
+            }
+        }
+        if (count > 10) {
+            error_msg << "\n  ... and " << (count - 10) << " more";
+        }
+        throw std::runtime_error(error_msg.str());
     }
 
     const ContigInfo& getContigInfo(seqno_t id) const {

@@ -697,17 +697,27 @@ namespace skch
         
         // Rather than failing if any target sequence isn't in the index,
         // just log a warning - as long as we have the index sequences, we can proceed
-        bool missing_sequences = false;
+        std::vector<std::string> missing;
         for (const auto& seqName : targetSequenceNames) {
             try {
                 idManager.getSequenceId(seqName);
             } catch (const std::runtime_error&) {
-                std::cerr << "Warning: Sequence '" << seqName << "' not found in index, will be skipped." << std::endl;
-                missing_sequences = true;
+                missing.push_back(seqName);
             }
         }
         
-        // Always return true even if some sequences are missing - we'll handle them gracefully
+        if (!missing.empty()) {
+            std::cerr << "Warning: " << missing.size() << " sequence(s) not found in index:" << std::endl;
+            for (size_t i = 0; i < std::min(missing.size(), size_t(5)); ++i) {
+                std::cerr << "  - '" << missing[i] << "'" << std::endl;
+            }
+            if (missing.size() > 5) {
+                std::cerr << "  - ... and " << (missing.size() - 5) << " more" << std::endl;
+            }
+            std::cerr << "These sequences will be skipped during mapping." << std::endl;
+        }
+        
+        // Always return true and continue with the sequences we do have
         return true;
       }
 
