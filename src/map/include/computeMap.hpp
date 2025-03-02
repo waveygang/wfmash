@@ -518,7 +518,9 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping (" + 
+                  "[wfmash::mashmap] mapping to " + 
+                  std::to_string(target_subset.size()) + " target" + 
+                  (target_subset.size() > 1 ? "s" : "") + " (" + 
                   std::to_string(subset_idx + 1) + "/" + 
                   std::to_string(target_subsets.size()) + ")"
                   );
@@ -576,6 +578,9 @@ namespace skch
                       
                       // Create sketch from current file position
                       refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+                      
+                      // Get the number of sequences from the sketch
+                      size_t seq_count = refSketch->getSequenceCount();
                   } else {
                       // Build index in memory
                       refSketch = new skch::Sketch(param, *idManager, target_subset);

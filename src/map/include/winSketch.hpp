@@ -758,8 +758,6 @@ namespace skch
        */
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
-        std::cerr << "[wfmash::mashmap] Reading index" << std::endl;
-        
         // Get current stream position to check if we're at the beginning of a subset
         std::streampos currentPos = inStream.tellg();
         size_t batch_idx, total_batches;
@@ -769,9 +767,7 @@ namespace skch
             exit(1);
         }
         
-        // Print information about which subset is being read
-        std::cerr << "[wfmash::mashmap] Reading subset " << (batch_idx + 1) 
-                  << " of " << total_batches << std::endl;
+        // We don't print subset info here anymore - it will be combined with mapping progress
         readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
@@ -848,8 +844,7 @@ namespace skch
         // Read and restore sequence ID mappings from index
         idManager.importIdMapping(inStream);
         
-        // Debug output of sequence ID mappings
-        std::cerr << "[wfmash::mashmap] Index contains " << sequenceNames.size() << " sequences." << std::endl;
+        // Don't print here, we'll include this info in the mapping progress line
         
         // Check for sequence name matches
         bool all_found = true;
