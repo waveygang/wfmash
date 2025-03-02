@@ -82,6 +82,18 @@ namespace skch
 
       public:
         uint64_t total_seq_length = 0;
+          
+        /**
+         * @brief Get the number of sequences in this sketch
+         * @return The number of unique sequences
+         */
+        size_t getSequenceCount() const {
+            std::unordered_set<seqno_t> unique_seqs;
+            for (const auto& mi : minmerIndex) {
+                unique_seqs.insert(mi.seqId);
+            }
+            return unique_seqs.size();
+        }
 
       //Index for fast seed lookup (unordered_map)
       /*
