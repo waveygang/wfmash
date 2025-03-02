@@ -561,6 +561,10 @@ namespace skch
         // Write batch information
         outStream.write(reinterpret_cast<const char*>(&batch_idx), sizeof(batch_idx));
         outStream.write(reinterpret_cast<const char*>(&total_batches), sizeof(total_batches));
+        
+        // Store batch size parameter
+        uint64_t batch_size = param.index_by_size;
+        outStream.write(reinterpret_cast<const char*>(&batch_size), sizeof(batch_size));
   
         uint64_t num_sequences = target_subset.size();
         outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
@@ -652,6 +656,89 @@ namespace skch
 
 
       /**
+       * @brief  Skip a subset in the input stream without loading it
+       * @param  inStream   Input stream to read from
+       * @return bool       True if successful
+       */
+      static bool skipSubsetInStream(std::ifstream& inStream) {
+        uint64_t magic_number = 0;
+        inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+        if (magic_number != 0xDEADBEEFCAFEBABE) {
+            return false;
+        }
+        
+        // Skip batch information
+        size_t batch_idx, total_batches;
+        inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+        inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+        
+        // Skip batch size
+        uint64_t batch_size;
+        inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+        
+        // Skip sequence names
+        uint64_t num_sequences = 0;
+        inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
+        
+        for (uint64_t i = 0; i < num_sequences; ++i) {
+            uint64_t name_length = 0;
+            inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            inStream.seekg(name_length, std::ios::cur);  // Skip the name
+        }
+        
+        // Skip ID mapping section
+        uint64_t mapping_size = 0;
+        inStream.read(reinterpret_cast<char*>(&mapping_size), sizeof(mapping_size));
+        for (uint64_t i = 0; i < mapping_size; ++i) {
+            // Skip each entry (seqno_t + string length + string data)
+            seqno_t seqId;
+            inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
+            
+            uint64_t name_length = 0;
+            inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            inStream.seekg(name_length, std::ios::cur);
+            
+            // Skip length
+            offset_t length;
+            inStream.read(reinterpret_cast<char*>(&length), sizeof(length));
+            
+            // Skip refGroup 
+            int refGroup;
+            inStream.read(reinterpret_cast<char*>(&refGroup), sizeof(refGroup));
+        }
+        
+        // Skip parameters
+        decltype(param.segLength) segLength;
+        decltype(param.sketchSize) sketchSize;
+        decltype(param.kmerSize) kmerSize;
+        inStream.read(reinterpret_cast<char*>(&segLength), sizeof(segLength));
+        inStream.read(reinterpret_cast<char*>(&sketchSize), sizeof(sketchSize));
+        inStream.read(reinterpret_cast<char*>(&kmerSize), sizeof(kmerSize));
+        
+        // Skip minmer index
+        typename MI_Type::size_type size = 0;
+        inStream.read(reinterpret_cast<char*>(&size), sizeof(size));
+        inStream.seekg(size * sizeof(MinmerInfo), std::ios::cur);
+        
+        // Skip position lookup index
+        typename MI_Map_t::size_type numKeys = 0;
+        inStream.read(reinterpret_cast<char*>(&numKeys), sizeof(numKeys));
+        
+        for (auto idx = 0; idx < numKeys; idx++) {
+            // Skip key
+            MinmerMapKeyType key;
+            inStream.read(reinterpret_cast<char*>(&key), sizeof(key));
+            
+            // Skip value vector size and data
+            typename MinmerMapValueType::size_type valueSize = 0;
+            inStream.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
+            inStream.seekg(valueSize * sizeof(MinmerMapValueType::value_type), std::ios::cur);
+        }
+        
+        return true;
+      }
+
+      /**
        * @brief  Read all index data structures from file
        */
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
@@ -662,6 +749,10 @@ namespace skch
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);
         }
+        
+        // Print information about which subset is being read
+        std::cerr << "[wfmash::mashmap] Reading subset " << (batch_idx + 1) 
+                  << " of " << total_batches << std::endl;
         readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
@@ -680,6 +771,13 @@ namespace skch
         // Read batch information
         inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
         inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+        
+        // Read batch size
+        uint64_t batch_size = 0;
+        inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+        if (batch_size > 0) {
+            param.index_by_size = batch_size;
+        }
   
         uint64_t num_sequences = 0;
         inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));

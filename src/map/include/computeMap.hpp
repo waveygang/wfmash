@@ -483,25 +483,25 @@ namespace skch
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
               
-              // Construct proper sub-index filename if needed
+              // Use a single index filename for all subsets
               std::string indexFilename = param.indexFilename.string();
-              if (target_subsets.size() > 1) {
-                  indexFilename = indexFilename + "." + std::to_string(subset_idx);
-              }
               
               // Handle index creation
               if (param.create_index_only) {
                   std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
                             << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
-                  
+    
                   // Build the index directly
                   refSketch = new skch::Sketch(param, *idManager, target_subset);
-                  refSketch->writeIndex(target_subset, indexFilename, false, subset_idx, target_subsets.size());
-                  
+    
+                  // Append to the same file for all but the first subset
+                  bool append = (subset_idx > 0);
+                  refSketch->writeIndex(target_subset, indexFilename, append, subset_idx, target_subsets.size());
+    
                   // Clean up
                   delete refSketch;
                   refSketch = nullptr;
-                  
+    
                   // Continue to next subset without mapping
                   continue;
               }
@@ -528,14 +528,25 @@ namespace skch
                   if (!param.indexFilename.empty()) {
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
-                      if (total_subsets > 1) {
-                          indexFilename = indexFilename + "." + std::to_string(subset_idx);
-                      }
-                  
+                      
+                      // Open the index file
                       std::ifstream indexStream(indexFilename, std::ios::binary);
                       if (!indexStream) {
                           std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
                           exit(1);
+                      }
+                      
+                      // For multi-subset indices, seek to the correct subset
+                      if (total_subsets > 1 && subset_idx > 0) {
+                          // Skip through previous subsets in the file
+                          for (size_t i = 0; i < subset_idx; i++) {
+                              skch::Sketch::skipSubsetInStream(indexStream);
+                              if (!indexStream) {
+                                  std::cerr << "Error: Failed to locate subset " << subset_idx 
+                                           << " in index file." << std::endl;
+                                  exit(1);
+                              }
+                          }
                       }
                   
                       refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
