@@ -683,10 +683,22 @@ namespace skch
   
         uint64_t num_sequences = 0;
         inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
+        
+        if (num_sequences > 1000000) { // Sanity check
+            std::cerr << "Error: Invalid number of sequences in index file: " << num_sequences << std::endl;
+            exit(1);
+        }
+        
         std::vector<std::string> sequenceNames;
         for (uint64_t i = 0; i < num_sequences; ++i) {
             uint64_t name_length = 0;
             inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            
+            if (name_length > 10000) { // Sanity check
+                std::cerr << "Error: Invalid sequence name length in index file: " << name_length << std::endl;
+                exit(1);
+            }
+            
             std::string seqName(name_length, '\0');
             inStream.read(&seqName[0], name_length);
             sequenceNames.push_back(seqName);
@@ -695,14 +707,18 @@ namespace skch
         // Read and restore sequence ID mappings from index
         idManager.importIdMapping(inStream);
         
-        // Rather than failing if any target sequence isn't in the index,
-        // just log a warning - as long as we have the index sequences, we can proceed
+        // Debug output of sequence ID mappings
+        std::cerr << "[wfmash::mashmap] Index contains " << sequenceNames.size() << " sequences." << std::endl;
+        
+        // Check for sequence name matches
+        bool all_found = true;
         std::vector<std::string> missing;
         for (const auto& seqName : targetSequenceNames) {
             try {
                 idManager.getSequenceId(seqName);
             } catch (const std::runtime_error&) {
                 missing.push_back(seqName);
+                all_found = false;
             }
         }
         
@@ -714,10 +730,24 @@ namespace skch
             if (missing.size() > 5) {
                 std::cerr << "  - ... and " << (missing.size() - 5) << " more" << std::endl;
             }
-            std::cerr << "These sequences will be skipped during mapping." << std::endl;
+            
+            if (targetSequenceNames.size() == missing.size()) {
+                std::cerr << "ERROR: None of the target sequences found in index!" << std::endl;
+                
+                // Print first few index sequences to help debugging
+                std::cerr << "Index contains these sequences:" << std::endl;
+                for (size_t i = 0; i < std::min(sequenceNames.size(), size_t(5)); ++i) {
+                    std::cerr << "  - '" << sequenceNames[i] << "'" << std::endl;
+                }
+                if (sequenceNames.size() > 5) {
+                    std::cerr << "  - ... and " << (sequenceNames.size() - 5) << " more" << std::endl;
+                }
+            } else {
+                std::cerr << "These sequences will be skipped during mapping." << std::endl;
+            }
         }
         
-        // Always return true and continue with the sequences we do have
+        // Allow proceeding even with missing sequences
         return true;
       }
 
