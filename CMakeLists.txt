@@ -273,7 +273,7 @@ add_test(
 
 add_test(
   NAME wfmash-multi-subset-index
-  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -b 1m -T S288C -W index.idx && ${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -I index.idx -Q Y12 > index.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai index.paf 0.9"
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 16 -b 1m -T S288C -W index.idx && ${INVOKE} data/scerevisiae8.fa.gz -t 16 -T S288C -I index.idx -Q Y12 > index.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai index.paf 0.9 'Y12\|S288C'"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS wfmash DESTINATION bin)
