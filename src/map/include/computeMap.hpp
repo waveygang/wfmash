@@ -244,8 +244,37 @@ namespace skch
         cached_minimum_hits(p.minimum_hits > 0 ? p.minimum_hits : Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval))
           {
               // Initialize sequence names right after creating idManager
-              this->querySequenceNames = idManager->getQuerySequenceNames();
-              this->targetSequenceNames = idManager->getTargetSequenceNames();
+              // Important: Apply any prefix filters here to ensure consistent query/target list
+              if (!param.query_prefix.empty()) {
+                  this->querySequenceNames.clear();
+                  for (const auto& name : idManager->getQuerySequenceNames()) {
+                      // Check if it starts with any of the query prefixes
+                      bool prefix_match = false;
+                      for (const auto& prefix : param.query_prefix) {
+                          if (name.compare(0, prefix.size(), prefix) == 0) {
+                              prefix_match = true;
+                              break;
+                          }
+                      }
+                      if (prefix_match) {
+                          this->querySequenceNames.push_back(name);
+                      }
+                  }
+              } else {
+                  this->querySequenceNames = idManager->getQuerySequenceNames();
+              }
+              
+              if (!param.target_prefix.empty()) {
+                  this->targetSequenceNames.clear();
+                  for (const auto& name : idManager->getTargetSequenceNames()) {
+                      // Check if it starts with the target prefix
+                      if (name.compare(0, param.target_prefix.size(), param.target_prefix) == 0) {
+                          this->targetSequenceNames.push_back(name);
+                      }
+                  }
+              } else {
+                  this->targetSequenceNames = idManager->getTargetSequenceNames();
+              }
 
               // Calculate total target length
               uint64_t total_target_length = 0;
@@ -414,13 +443,23 @@ namespace skch
         uint64_t current_subset_size = 0;
         std::vector<std::string> current_subset;
 
+        // If index_by_size is invalid, set a reasonable default
+        uint64_t batch_size = param.index_by_size;
+        if (batch_size <= 0) {
+            batch_size = 5000000;  // Default to 5MB if not specified
+            if (!param.indexFilename.empty() && !param.create_index_only) {
+                std::cerr << "[wfmash::mashmap] Warning: Invalid batch size in index, using default: " 
+                          << batch_size << std::endl;
+            }
+        }
+
         for (const auto& seqName : targetSequenceNames) {
             seqno_t seqId = idManager->getSequenceId(seqName);
             offset_t seqLen = idManager->getSequenceLength(seqId);
             current_subset.push_back(seqName);
             current_subset_size += seqLen;
 
-            if (current_subset_size >= param.index_by_size || &seqName == &targetSequenceNames.back()) {
+            if (current_subset_size >= batch_size || &seqName == &targetSequenceNames.back()) {
                 if (!current_subset.empty()) {
                     target_subsets.push_back(current_subset);
                 }
@@ -443,15 +482,73 @@ namespace skch
           std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
           std::mutex combinedMappings_mutex;
 
+          // If we're using an index file, read its header to get batch size
+          if (!param.indexFilename.empty() && !param.create_index_only) {
+              std::ifstream indexStream(param.indexFilename.string(), std::ios::binary);
+              if (!indexStream) {
+                  std::cerr << "Error: Unable to open index file for reading: " << param.indexFilename << std::endl;
+                  exit(1);
+              }
+              
+              // Read the magic number to verify it's a valid index
+              uint64_t magic_number = 0;
+              indexStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+              if (magic_number != 0xDEADBEEFCAFEBABE) {
+                  std::cerr << "Error: Invalid index file format (wrong magic number)" << std::endl;
+                  exit(1);
+              }
+              
+              // Read subset count and batch index
+              size_t batch_idx, total_batches;
+              indexStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+              indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+              
+              // Read batch size
+              uint64_t batch_size = 0;
+              indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+              if (batch_size > 0) {
+                  param.index_by_size = batch_size;
+                  std::cerr << "[wfmash::mashmap] Using batch size " << batch_size 
+                            << " from index file (" << total_batches << " subsets)" << std::endl;
+              }
+              indexStream.close();
+          }
+
           // Create the index subsets
           auto target_subsets = createTargetSubsets(targetSequenceNames);
+
+          // Flag for whether we're done after creating indices
+          bool exit_after_indices = param.create_index_only;
 
           // Process each subset SERIALLY to control memory
           for (size_t subset_idx = 0; subset_idx < target_subsets.size(); ++subset_idx) {
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
-
-              // Create taskflow for this subset's processing
+              
+              // Use a single index filename for all subsets
+              std::string indexFilename = param.indexFilename.string();
+              
+              // Handle index creation
+              if (param.create_index_only) {
+                  std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
+                            << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
+    
+                  // Build the index directly
+                  refSketch = new skch::Sketch(param, *idManager, target_subset);
+    
+                  // Append to the same file for all but the first subset
+                  bool append = (subset_idx > 0);
+                  refSketch->writeIndex(target_subset, indexFilename, append, subset_idx, target_subsets.size());
+    
+                  // Clean up
+                  delete refSketch;
+                  refSketch = nullptr;
+    
+                  // Continue to next subset without mapping
+                  continue;
+              }
+              
+              // If we're doing mapping, set up the taskflow
               auto subset_flow = std::make_shared<tf::Taskflow>();
 
               // Initialize progress meter
@@ -463,22 +560,72 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping (" + 
+                  "[wfmash::mashmap] mapping to " + 
+                  std::to_string(target_subset.size()) + " target" + 
+                  (target_subset.size() > 1 ? "s" : "") + " (" + 
                   std::to_string(subset_idx + 1) + "/" + 
                   std::to_string(target_subsets.size()) + ")"
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset]() {
-                  if (param.create_index_only) {
-                      refSketch = new skch::Sketch(param, *idManager, target_subset);
-                      refSketch->writeIndex(target_subset, param.indexFilename.string(), false);
-                  } else {
-                      if (!param.indexFilename.empty()) {
-                          refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr);
-                      } else {
-                          refSketch = new skch::Sketch(param, *idManager, target_subset);
+              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
+                  if (!param.indexFilename.empty()) {
+                      // Load existing index
+                      std::string indexFilename = param.indexFilename.string();
+                      
+                      // Use static file stream to maintain position between reads
+                      static std::ifstream indexStream;
+                      static bool index_opened = false;
+                      static size_t file_subset_count = 0;
+                      
+                      if (!index_opened) {
+                          // First read - validate the index file and get metadata
+                          indexStream.open(indexFilename, std::ios::binary);
+                          if (!indexStream) {
+                              std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
+                              exit(1);
+                          }
+                          
+                          // Read the magic number to verify it's a valid index
+                          uint64_t magic_number = 0;
+                          indexStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+                          if (magic_number != 0xDEADBEEFCAFEBABE) {
+                              std::cerr << "Error: Invalid index file format (wrong magic number)" << std::endl;
+                              exit(1);
+                          }
+                          
+                          // Read subset count
+                          size_t batch_idx, total_batches;
+                          indexStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+                          indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+                          
+                          // Store and display subset count
+                          file_subset_count = total_batches;
+                          std::cerr << "[wfmash::mashmap] Index file contains " << file_subset_count 
+                                    << " subsets" << std::endl;
+                          
+                          // Read batch size if available
+                          uint64_t batch_size = 0;
+                          indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+                          if (batch_size > 0) {
+                              param.index_by_size = batch_size;
+                              std::cerr << "[wfmash::mashmap] Using batch size " << batch_size 
+                                        << " from index" << std::endl;
+                          }
+                          
+                          // Return to beginning of file
+                          indexStream.seekg(0, std::ios::beg);
+                          index_opened = true;
                       }
+                      
+                      // Create sketch from current file position
+                      refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+                      
+                      // Get the number of sequences from the sketch
+                      size_t seq_count = refSketch->getSequenceCount();
+                  } else {
+                      // Build index in memory
+                      refSketch = new skch::Sketch(param, *idManager, target_subset);
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
@@ -637,7 +784,8 @@ namespace skch
               progress->finish();
           }
 
-          if (param.create_index_only) {
+          // If we're only creating indices, exit now
+          if (exit_after_indices) {
               std::cerr << "[wfmash::mashmap] All indices created successfully. Exiting." << std::endl;
               exit(0);
           }

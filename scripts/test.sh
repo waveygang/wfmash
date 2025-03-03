@@ -3,6 +3,7 @@
 FASTA_FAI=$1
 PAF=$2
 COVERAGE=$3
+PREFIX=${4:-""}  # Optional prefix to filter sequences, defaults to empty string
 
 cat $FASTA_FAI | awk -v OFS='\t' '{print($1,"0",$2)}' > $PAF.sequences.bed
 cat \
@@ -28,7 +29,7 @@ cat \
     <(head -n 1 $PAF.coverage.txt) \
     <(sed '1d' $PAF.coverage.txt | sort -k 2,2nr -k 1,1) | column -t
 
-awk -v threshold=$COVERAGE 'NR > 1 && $2 < threshold {
+awk -v threshold=$COVERAGE -v prefix="$PREFIX" 'NR > 1 && (prefix=="" || index($1, prefix) == 1) && $2 < threshold {
     print "Low coverage for sequence " $1 " with coverage " $2;
     flag = 1
 } END {

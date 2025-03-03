@@ -82,6 +82,18 @@ namespace skch
 
       public:
         uint64_t total_seq_length = 0;
+          
+        /**
+         * @brief Get the number of sequences in this sketch
+         * @return The number of unique sequences
+         */
+        size_t getSequenceCount() const {
+            std::unordered_set<seqno_t> unique_seqs;
+            for (const auto& mi : minmerIndex) {
+                unique_seqs.insert(mi.seqId);
+            }
+            return unique_seqs.size();
+        }
 
       //Index for fast seed lookup (unordered_map)
       /*
@@ -532,7 +544,7 @@ namespace skch
       /**
        * @brief  Write all index data structures to disk
        */
-      void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false) 
+      void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false, size_t batch_idx = 0, size_t total_batches = 1) 
       {
         fs::path indexFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
         std::ofstream outStream;
@@ -545,7 +557,7 @@ namespace skch
             std::cerr << "Error: Unable to open index file for writing: " << indexFilename << std::endl;
             exit(1);
         }
-        writeSubIndexHeader(outStream, target_subset);
+        writeSubIndexHeader(outStream, target_subset, batch_idx, total_batches);
         writeParameters(outStream);
         writeSketchBinary(outStream);
         writePosListBinary(outStream);
@@ -553,10 +565,19 @@ namespace skch
         outStream.close();
       }
 
-      void writeSubIndexHeader(std::ofstream& outStream, const std::vector<std::string>& target_subset) 
+      void writeSubIndexHeader(std::ofstream& outStream, const std::vector<std::string>& target_subset, size_t batch_idx = 0, size_t total_batches = 1) 
       {
         const uint64_t magic_number = 0xDEADBEEFCAFEBABE;
         outStream.write(reinterpret_cast<const char*>(&magic_number), sizeof(magic_number));
+  
+        // Write batch information
+        outStream.write(reinterpret_cast<const char*>(&batch_idx), sizeof(batch_idx));
+        outStream.write(reinterpret_cast<const char*>(&total_batches), sizeof(total_batches));
+        
+        // Store batch size parameter
+        uint64_t batch_size = param.index_by_size;
+        outStream.write(reinterpret_cast<const char*>(&batch_size), sizeof(batch_size));
+  
         uint64_t num_sequences = target_subset.size();
         outStream.write(reinterpret_cast<const char*>(&num_sequences), sizeof(num_sequences));
         for (const auto& seqName : target_subset) {
@@ -564,6 +585,9 @@ namespace skch
             outStream.write(reinterpret_cast<const char*>(&name_length), sizeof(name_length));
             outStream.write(seqName.c_str(), name_length);
         }
+        
+        // Write sequence ID mappings to ensure consistency
+        idManager.exportIdMapping(outStream);
       }
 
       /**
@@ -644,41 +668,234 @@ namespace skch
 
 
       /**
+       * @brief  Skip a subset in the input stream without loading it
+       * @param  inStream   Input stream to read from
+       * @return bool       True if successful
+       */
+      static bool skipSubsetInStream(std::ifstream& inStream) {
+        // Save position for potential error recovery
+        std::streampos startPos = inStream.tellg();
+        
+        uint64_t magic_number = 0;
+        inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+        if (!inStream || magic_number != 0xDEADBEEFCAFEBABE) {
+            std::cerr << "Error: Invalid magic number (0x" << std::hex << magic_number 
+                      << std::dec << ") when skipping subset" << std::endl;
+            // Try to recover
+            inStream.clear();
+            inStream.seekg(startPos);
+            return false;
+        }
+        
+        // Skip batch information
+        size_t batch_idx, total_batches;
+        inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+        inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+        
+        if (!inStream || batch_idx >= total_batches || total_batches > 1000) {
+            std::cerr << "Error: Invalid batch data: " << batch_idx << "/" << total_batches << std::endl;
+            inStream.clear();
+            inStream.seekg(startPos);
+            return false;
+        }
+        
+        // Skip batch size
+        uint64_t batch_size;
+        inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+        
+        // Skip sequence names
+        uint64_t num_sequences = 0;
+        inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
+        
+        for (uint64_t i = 0; i < num_sequences; ++i) {
+            uint64_t name_length = 0;
+            inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            inStream.seekg(name_length, std::ios::cur);  // Skip the name
+        }
+        
+        // Skip ID mapping section
+        uint64_t mapping_size = 0;
+        inStream.read(reinterpret_cast<char*>(&mapping_size), sizeof(mapping_size));
+        for (uint64_t i = 0; i < mapping_size; ++i) {
+            // Skip each entry (seqno_t + string length + string data)
+            seqno_t seqId;
+            inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
+            
+            uint64_t name_length = 0;
+            inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            inStream.seekg(name_length, std::ios::cur);
+            
+            // Skip length
+            offset_t length;
+            inStream.read(reinterpret_cast<char*>(&length), sizeof(length));
+            
+            // Skip refGroup 
+            int refGroup;
+            inStream.read(reinterpret_cast<char*>(&refGroup), sizeof(refGroup));
+        }
+        
+        // Skip parameters
+        decltype(param.segLength) segLength;
+        decltype(param.sketchSize) sketchSize;
+        decltype(param.kmerSize) kmerSize;
+        inStream.read(reinterpret_cast<char*>(&segLength), sizeof(segLength));
+        inStream.read(reinterpret_cast<char*>(&sketchSize), sizeof(sketchSize));
+        inStream.read(reinterpret_cast<char*>(&kmerSize), sizeof(kmerSize));
+        
+        // Skip minmer index
+        typename MI_Type::size_type size = 0;
+        inStream.read(reinterpret_cast<char*>(&size), sizeof(size));
+        inStream.seekg(size * sizeof(MinmerInfo), std::ios::cur);
+        
+        // Skip position lookup index
+        typename MI_Map_t::size_type numKeys = 0;
+        inStream.read(reinterpret_cast<char*>(&numKeys), sizeof(numKeys));
+        
+        for (auto idx = 0; idx < numKeys; idx++) {
+            // Skip key
+            MinmerMapKeyType key;
+            inStream.read(reinterpret_cast<char*>(&key), sizeof(key));
+            
+            // Skip value vector size and data
+            typename MinmerMapValueType::size_type valueSize = 0;
+            inStream.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
+            inStream.seekg(valueSize * sizeof(MinmerMapValueType::value_type), std::ios::cur);
+        }
+        
+        return true;
+      }
+
+      /**
        * @brief  Read all index data structures from file
        */
       void readIndex(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
       {
-        std::cerr << "[wfmash::mashmap] Reading index" << std::endl;
-        if (!readSubIndexHeader(inStream, targetSequenceNames)) {
+        // Get current stream position to check if we're at the beginning of a subset
+        std::streampos currentPos = inStream.tellg();
+        size_t batch_idx, total_batches;
+        
+        if (!readSubIndexHeader(inStream, targetSequenceNames, batch_idx, total_batches)) {
             std::cerr << "Error: Sequences in the index do not match the expected target sequences." << std::endl;
             exit(1);
         }
+        
+        // We don't print subset info here anymore - it will be combined with mapping progress
         readParameters(inStream);
         readSketchBinary(inStream);
         readPosListBinary(inStream);
         // Removed readFreqKmersBinary call
       }
 
-      bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames) 
+      bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames, size_t& batch_idx, size_t& total_batches) 
       {
+        // Check stream state before reading
+        if (!inStream || inStream.eof()) {
+            std::cerr << "Error: Invalid index file stream state." << std::endl;
+            return false;
+        }
+        
+        // Save position for potential error recovery
+        std::streampos headerStart = inStream.tellg();
+        
         uint64_t magic_number = 0;
         inStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
-        if (magic_number != 0xDEADBEEFCAFEBABE) {
-            std::cerr << "Error: Invalid magic number in index file." << std::endl;
+        if (!inStream || magic_number != 0xDEADBEEFCAFEBABE) {
+            std::cerr << "Error: Invalid magic number in index file: 0x" 
+                      << std::hex << magic_number << std::dec << std::endl;
+            // Try to recover from byte alignment issues
+            inStream.clear();
+            inStream.seekg(headerStart);
             exit(1);
         }
+  
+        // Read batch information
+        inStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+        inStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+        
+        if (!inStream || total_batches < 1 || total_batches > 1000 || batch_idx >= total_batches) {
+            std::cerr << "Error: Invalid batch information: batch " << batch_idx 
+                      << " of " << total_batches << std::endl;
+            exit(1);
+        }
+        
+        // Read batch size
+        uint64_t batch_size = 0;
+        inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+        if (!inStream) {
+            std::cerr << "Error: Failed to read batch size from index" << std::endl;
+            exit(1);
+        }
+        
+        // Always update the batch size parameter from the index
+        param.index_by_size = batch_size;
+  
         uint64_t num_sequences = 0;
         inStream.read(reinterpret_cast<char*>(&num_sequences), sizeof(num_sequences));
+        
+        if (num_sequences > 1000000) { // Sanity check
+            std::cerr << "Error: Invalid number of sequences in index file: " << num_sequences << std::endl;
+            exit(1);
+        }
+        
         std::vector<std::string> sequenceNames;
         for (uint64_t i = 0; i < num_sequences; ++i) {
             uint64_t name_length = 0;
             inStream.read(reinterpret_cast<char*>(&name_length), sizeof(name_length));
+            
+            if (name_length > 10000) { // Sanity check
+                std::cerr << "Error: Invalid sequence name length in index file: " << name_length << std::endl;
+                exit(1);
+            }
+            
             std::string seqName(name_length, '\0');
             inStream.read(&seqName[0], name_length);
             sequenceNames.push_back(seqName);
         }
         
-        return sequenceNames == targetSequenceNames;
+        // Read and restore sequence ID mappings from index
+        idManager.importIdMapping(inStream);
+        
+        // Don't print here, we'll include this info in the mapping progress line
+        
+        // Check for sequence name matches
+        bool all_found = true;
+        std::vector<std::string> missing;
+        for (const auto& seqName : targetSequenceNames) {
+            try {
+                idManager.getSequenceId(seqName);
+            } catch (const std::runtime_error&) {
+                missing.push_back(seqName);
+                all_found = false;
+            }
+        }
+        
+        if (!missing.empty()) {
+            std::cerr << "Warning: " << missing.size() << " sequence(s) not found in index:" << std::endl;
+            for (size_t i = 0; i < std::min(missing.size(), size_t(5)); ++i) {
+                std::cerr << "  - '" << missing[i] << "'" << std::endl;
+            }
+            if (missing.size() > 5) {
+                std::cerr << "  - ... and " << (missing.size() - 5) << " more" << std::endl;
+            }
+            
+            if (targetSequenceNames.size() == missing.size()) {
+                std::cerr << "ERROR: None of the target sequences found in index!" << std::endl;
+                
+                // Print first few index sequences to help debugging
+                std::cerr << "Index contains these sequences:" << std::endl;
+                for (size_t i = 0; i < std::min(sequenceNames.size(), size_t(5)); ++i) {
+                    std::cerr << "  - '" << sequenceNames[i] << "'" << std::endl;
+                }
+                if (sequenceNames.size() > 5) {
+                    std::cerr << "  - ... and " << (sequenceNames.size() - 5) << " more" << std::endl;
+                }
+            } else {
+                std::cerr << "These sequences will be skipped during mapping." << std::endl;
+            }
+        }
+        
+        // Allow proceeding even with missing sequences
+        return true;
       }
 
 

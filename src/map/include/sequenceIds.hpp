@@ -21,6 +21,7 @@ private:
     std::vector<std::string> targetSequenceNames;
     std::vector<std::string> allPrefixes;
     std::string prefixDelim;
+    seqno_t nextId = 0;
 
 public:
     SequenceIdManager(const std::vector<std::string>& queryFiles,
@@ -36,13 +37,124 @@ public:
         populateFromFiles(queryFiles, targetFiles, queryPrefixes, targetPrefixes, prefixDelim, queryList, targetList);
         buildRefGroups();
     }
+    
+    // Export ID mapping information
+    void exportIdMapping(std::ofstream& outStream) const {
+        uint64_t mapSize = sequenceNameToId.size();
+        outStream.write(reinterpret_cast<const char*>(&mapSize), sizeof(mapSize));
+        
+        for (const auto& [seqName, seqId] : sequenceNameToId) {
+            uint64_t nameLength = seqName.size();
+            outStream.write(reinterpret_cast<const char*>(&nameLength), sizeof(nameLength));
+            outStream.write(seqName.c_str(), nameLength);
+            outStream.write(reinterpret_cast<const char*>(&seqId), sizeof(seqId));
+        }
+        
+        // Also export the next ID to use
+        outStream.write(reinterpret_cast<const char*>(&nextId), sizeof(nextId));
+    }
+    
+    // Import ID mapping information
+    void importIdMapping(std::ifstream& inStream) {
+        // Save original mappings in case we need to restore them
+        auto originalMappings = sequenceNameToId;
+        auto originalMetadata = metadata;
+        auto originalNextId = nextId;
+        
+        try {
+            // Clear current mappings to start fresh
+            sequenceNameToId.clear();
+            
+            uint64_t mapSize = 0;
+            inStream.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
+            
+            if (mapSize > 1000000) { // Sanity check - no realistic sequence set has millions of sequences
+                throw std::runtime_error("Invalid mapping size in index file");
+            }
+            
+            // First expand metadata to accommodate all IDs
+            seqno_t maxId = 0;
+            
+            // Read all mappings from the index
+            for (uint64_t i = 0; i < mapSize; ++i) {
+                uint64_t nameLength = 0;
+                inStream.read(reinterpret_cast<char*>(&nameLength), sizeof(nameLength));
+                
+                if (nameLength > 10000) { // Sanity check - no sequence name is this long
+                    throw std::runtime_error("Invalid sequence name length in index file");
+                }
+                
+                std::string seqName(nameLength, '\0');
+                inStream.read(&seqName[0], nameLength);
+                
+                seqno_t seqId;
+                inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
+                
+                sequenceNameToId[seqName] = seqId;
+                maxId = std::max(maxId, seqId);
+            }
+            
+            // Resize metadata to accommodate all IDs
+            metadata.resize(maxId + 1);
+            
+            // Update metadata for all mapped sequences
+            for (const auto& [name, id] : sequenceNameToId) {
+                if (id < metadata.size()) {
+                    metadata[id].name = name;
+                    
+                    // Try to preserve sequence lengths from original metadata if available
+                    auto origIt = originalMappings.find(name);
+                    if (origIt != originalMappings.end() && origIt->second < originalMetadata.size()) {
+                        metadata[id].len = originalMetadata[origIt->second].len;
+                    }
+                }
+            }
+            
+            // Read the next ID
+            seqno_t indexNextId;
+            inStream.read(reinterpret_cast<char*>(&indexNextId), sizeof(indexNextId));
+            
+            // Ensure our nextId is at least as large as the one from the index
+            nextId = std::max(indexNextId, maxId + 1);
+            
+        } catch (const std::exception& e) {
+            // Restore original state on error
+            sequenceNameToId = originalMappings;
+            metadata = originalMetadata;
+            nextId = originalNextId;
+            std::cerr << "Error importing ID mappings: " << e.what() << std::endl;
+            std::cerr << "Restored original ID mappings" << std::endl;
+        }
+    }
 
     seqno_t getSequenceId(const std::string& sequenceName) const {
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
             return it->second;
         }
-        throw std::runtime_error("Sequence name not found: " + sequenceName);
+        
+        // Try a prefix-based lookup as a fallback
+        for (const auto& [name, id] : sequenceNameToId) {
+            if (name.find(sequenceName) == 0 || sequenceName.find(name) == 0) {
+                std::cerr << "Warning: Using partial match for sequence '" << sequenceName 
+                          << "' -> '" << name << "'" << std::endl;
+                return id;
+            }
+        }
+        
+        // More detailed error message with available sequence names
+        std::stringstream error_msg;
+        error_msg << "Sequence name not found: '" << sequenceName << "'\nAvailable sequences:";
+        int count = 0;
+        for (const auto& [name, id] : sequenceNameToId) {
+            if (count++ < 10) {
+                error_msg << "\n  - '" << name << "' (ID: " << id << ")";
+            }
+        }
+        if (count > 10) {
+            error_msg << "\n  ... and " << (count - 10) << " more";
+        }
+        throw std::runtime_error(error_msg.str());
     }
 
     const ContigInfo& getContigInfo(seqno_t id) const {
@@ -214,11 +326,26 @@ private:
     seqno_t addSequence(const std::string& sequenceName, offset_t length) {
         auto it = sequenceNameToId.find(sequenceName);
         if (it != sequenceNameToId.end()) {
+            // If we already have this sequence, update its length if needed
+            if (metadata.size() <= it->second) {
+                metadata.resize(it->second + 1);
+                metadata[it->second] = ContigInfo{sequenceName, length};
+            } else if (metadata[it->second].len != length) {
+                metadata[it->second].len = length;
+            }
             return it->second;
         }
-        seqno_t newId = metadata.size();
+        
+        // Use nextId as the new sequence ID
+        seqno_t newId = nextId++;
         sequenceNameToId[sequenceName] = newId;
-        metadata.push_back(ContigInfo{sequenceName, length});
+        
+        // Ensure metadata vector has enough capacity
+        if (newId >= metadata.size()) {
+            metadata.resize(newId + 1);
+        }
+        
+        metadata[newId] = ContigInfo{sequenceName, length};
         return newId;
     }
 };

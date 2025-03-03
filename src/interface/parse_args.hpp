@@ -659,17 +659,16 @@ void parse_args(int argc,
         //map_parameters.world_minimizers = true;
     //}
 
-    if (read_index || write_index)
-    {
-      map_parameters.indexFilename = args::get(read_index);
-    } else {
-      map_parameters.indexFilename = "";
-    }
-
     if (write_index) {
+        map_parameters.indexFilename = args::get(write_index);
         map_parameters.overwrite_index = true;
         map_parameters.create_index_only = true;
+    } else if (read_index) {
+        map_parameters.indexFilename = args::get(read_index);
+        map_parameters.overwrite_index = false;
+        map_parameters.create_index_only = false;
     } else {
+        map_parameters.indexFilename = "";
         map_parameters.overwrite_index = false;
         map_parameters.create_index_only = false;
     }
