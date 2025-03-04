@@ -2236,6 +2236,7 @@ query_start : query_end)
                     target_length,
                     min_identity,
                     mashmap_estimated_identity,
+                    0, 0, 0,
                     false,  // Don't add an endline after each alignment
                     true);  // This is a reverse complement alignment
             if (wrote) {
@@ -2468,6 +2469,9 @@ bool write_alignment_paf(
         const uint64_t& target_length, // unused
         const float& min_identity,
         const float& mashmap_estimated_identity,
+        const int32_t& chain_id,
+        const int32_t& chain_length,
+        const int32_t& chain_pos,
         const bool& with_endline,
         const bool& is_rev_patch) {
     bool ret = false;  // return true if we wrote the alignment
@@ -2542,6 +2546,7 @@ bool write_alignment_paf(
                 << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:" << block_identity << "\t"
                 << "md:f:" << mashmap_estimated_identity << "\t"
+                << (chain_length > 0 ? (std::string("chain:i:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos) + "\t") : "")
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
                 //<< "\t" << "ni:i:" << insertions
