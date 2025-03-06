@@ -10,7 +10,7 @@
 \usepackage{listings}
 \usepackage{fullpage}
 
-\title{WFMash: A Pangenome-Scale Aligner Based on MashMap 3.5}
+\title{WFMash: The MashMap Module for Pangenome-Scale Alignment}
 \author{Technical Documentation}
 \date{\today}
 
@@ -23,7 +23,7 @@
 \section{Introduction}
 \subsection{Whole Genome Alignment at Pangenome Scale}
 
-WFMash is a pangenome-scale aligner designed to make whole genome alignment easy and efficient, even for gigabase-scale genomes with high sequence divergence. At its core, WFMash uses MashMap 3.5 for efficient approximate mapping combined with Wave Front Alignment (WFA) to produce base-level alignments. This document focuses on the mapping component of WFMash, which enables the identification of homologous regions between genomes that can subsequently be aligned at the base level.
+WFMash is a pangenome-scale aligner designed to make whole genome alignment easy and efficient, even for gigabase-scale genomes with high sequence divergence. At its core, WFMash uses an enhanced version of MashMap for efficient approximate mapping combined with Wave Front Alignment (WFA) to produce base-level alignments. This mapping component is based on MashMap v3, with significant enhancements that could be considered as MashMap v3.5. This document focuses on the mapping component of WFMash, which enables the identification of homologous regions between genomes that can subsequently be aligned at the base level.
 
 Whole genome alignment is a critical component of pangenome construction and analysis, enabling the identification of shared and unique regions across multiple genomes. It presents significant computational challenges when working with large numbers of diverse genomes, particularly when dealing with repetitive sequences and regions of high divergence. Traditional approaches often struggle to balance speed, scalability, and sensitivity when aligning highly divergent genomes (as low as 70\% sequence identity), especially in the presence of repetitive elements.
 
