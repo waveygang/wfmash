@@ -117,6 +117,8 @@ MashMap employs a sophisticated parallelization strategy to leverage multi-core 
 
 Minmer sketching is a dimensionality reduction technique that represents sequences by a subset of their k-mers, significantly reducing the computational burden of sequence comparison. The theoretical foundation of minmer sketching is based on the concept of locality-sensitive hashing, where similar sequences are likely to share a subset of minmers.
 
+Minmers, as implemented in MashMap 3.5, are a generalization of minimizers. While traditional minimizer schemes select only the single smallest k-mer from each window of consecutive k-mers, minmers select the \(s\) smallest k-mers from each window. This key difference enables minmers to provide an unbiased estimation of Jaccard similarity between sequences, which was not possible with the original minimizer approach.
+
 \subsection{MinHash and Jaccard Similarity}
 
 MashMap uses MinHash (minmer hashing) to estimate the Jaccard similarity between sequences. Let \(A\) and \(B\) be the sets of k-mers in two sequences. The Jaccard similarity is defined as:
@@ -126,6 +128,8 @@ J(A, B) = \frac{|A \cap B|}{|A \cup B|}
 \end{equation}
 
 Using MinHash, we can estimate this similarity by comparing minmer sketches, where minmers are a generalization of minimizers. Unlike minimizers which select only the single minimum-hash k-mer in each window, minmers select the \(s\) smallest k-mers from each window of \(w\) consecutive k-mers. This generalization enables an unbiased estimation of Jaccard similarity between sequences, with the probability that two sketches share minmers proportional to their Jaccard similarity.
+
+The key advantage of minmers over minimizers is that they eliminate the bias present in minimizer-based Jaccard estimation. As shown by Kille et al. (2023), no matter the length of the sequences, the bias of minimizer-based winnowed minhash estimators is never zero. By selecting multiple k-mers per window instead of just one, minmers ensure that the set of sampled k-mers is guaranteed to be a superset of the bottom-s sketch of that window, yielding an unbiased Jaccard estimator.
 
 \subsection{Minmer Selection Algorithm}
 
@@ -157,6 +161,8 @@ The algorithm for selecting minmers is as follows:
 \end{algorithm}
 
 Unlike minimizers which select only the single minimum-hash k-mer from each window, the minmer scheme selects the $s$ smallest k-mers from each window of length $w$. This generalization provides a $(w,s)$-window guarantee, ensuring that for every window of $w$ k-mers, there are at least $\min(distinct, s)$ k-mers sampled from the window, where $distinct$ is the number of distinct k-mers in the window.
+
+It's worth noting that when discussing k-mer selection throughout this document, we often use the terms "minimizer" and "minmer" somewhat interchangeably, as they share conceptual similarities. However, the actual implementation in MashMap 3.5 uses the minmer scheme, which is crucial for obtaining unbiased Jaccard estimates. Traditional minimizers can be viewed as a special case of minmers where $s=1$.
 
 \subsection{Index Data Structure}
 
