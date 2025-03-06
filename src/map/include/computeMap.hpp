@@ -884,7 +884,6 @@ namespace skch
           } else {
               std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
           }
-          executor.run(final_flow).wait();
           
           // Final cleanup
           combinedMappings.clear();
