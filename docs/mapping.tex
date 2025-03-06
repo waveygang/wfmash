@@ -36,7 +36,7 @@ MashMap 3.5, as implemented in WFMash, provides an approximate mapping approach 
     
     \item \textbf{Tolerance for Divergence}: Effective mapping even in sequences with as low as 70\% nucleotide identity, capturing evolutionary relationships across diverse species and strains.
     
-    \item \textbf{Handling Repetitive Sequences}: The k-mer based approach with careful filtering strategies enables working with repetitive regions that pose challenges for many other aligners.
+    \item \textbf{Handling Repetitive Sequences}: The segmentation approach using kmer sketches makes homology matches in repetitive regions more computationally tractable than methods that rely on exact kmer or minimizer matching, enabling effective analysis of sequences that pose challenges for many other aligners.
     
     \item \textbf{Computational Efficiency}: On modest computing hardware, whole genome alignments of gigabase-scale genomes can be completed in minutes to hours, depending on sequence divergence.
 \end{itemize}
