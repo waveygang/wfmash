@@ -50,11 +50,11 @@ The mapping component of WFMash extends MashMap with sophisticated techniques de
     
     \item \textbf{Advanced Filtering}: Sophisticated filtering strategies including hypergeometric filtering, structural coherence checks, and scaffold-based filtering to retain biologically meaningful mappings while eliminating spurious matches.
     
-    \item \textbf{Two-stage Mapping}: A highly efficient two-stage approach where the first stage (L1) rapidly identifies candidate regions using minimizer matching, and the second stage (L2) refines these to obtain precise mapping coordinates.
+    \item \textbf{Two-stage Mapping}: A highly efficient two-stage approach where the first stage (L1) rapidly identifies candidate regions using minmer matching, and the second stage (L2) refines these to obtain precise mapping coordinates.
     
     \item \textbf{Intelligent Chaining}: Advanced algorithms to merge and chain mappings across genomic gaps and rearrangements, resulting in coherent representations of complex evolutionary relationships.
     
-    \item \textbf{Minimizer-based Sketching}: A 15-mer-based sketching approach that balances sensitivity and specificity, enabling detection of homology even in highly divergent regions.
+    \item \textbf{Minmer-based Sketching}: A 15-mer-based sketching approach that balances sensitivity and specificity, enabling detection of homology even in highly divergent regions.
 \end{itemize}
 
 This document provides a comprehensive description of the WFMash mapping algorithm as implemented in computeMap.hpp, detailing its algorithmic foundations, implementation strategies, optimization techniques, and parameter considerations for producing optimal mappings for pangenome construction.
@@ -127,15 +127,15 @@ J(A, B) = \frac{|A \cap B|}{|A \cup B|}
 
 Using MinHash, we can estimate this similarity by comparing minimizer sketches, where each minimizer is the k-mer with the smallest hash value within a window of consecutive k-mers. The probability that two sketches share a minimizer is approximately equal to the Jaccard similarity.
 
-\subsection{Minimizer Selection Algorithm}
+\subsection{Minmer Selection Algorithm}
 
-The algorithm for selecting minimizers is as follows:
+The algorithm for selecting minmers is as follows:
 
 \begin{algorithm}
-\caption{Minimizer Selection}
+\caption{Minmer Selection}
 \begin{algorithmic}[1]
-\Procedure{SelectMinimizers}{$sequence, k, w$}
-\State $minimizers \gets \emptyset$
+\Procedure{SelectMinmers}{$sequence, k, w$}
+\State $minmers \gets \emptyset$
 \For{$i \gets 0$ \textbf{to} $length(sequence) - k$}
     \State $kmer \gets sequence[i:i+k]$
     \State $hash \gets hash(kmer)$
@@ -144,22 +144,22 @@ The algorithm for selecting minimizers is as follows:
         \State $outgoing\_kmer \gets sequence[window\_start-1:window\_start+k-1]$
         \State $outgoing\_hash \gets hash(outgoing\_kmer)$
         \If{$outgoing\_hash$ is minimal in current window}
-            \State Remove $outgoing\_hash$ from $minimizers$
-            \State Find new minimal hash in current window and add to $minimizers$
+            \State Remove $outgoing\_hash$ from $minmers$
+            \State Find new minimal hash in current window and add to $minmers$
         \EndIf
     \EndIf
     \If{$hash$ is minimal in current window}
-        \State Add $hash$ to $minimizers$
+        \State Add $hash$ to $minmers$
     \EndIf
 \EndFor
-\State \textbf{return} $minimizers$
+\State \textbf{return} $minmers$
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
 
 \subsection{Index Data Structure}
 
-The minimizer index is implemented as a hash table, where the keys are minimizer hashes and the values are lists of positions where the minimizer occurs. This structure allows for efficient lookup of minimizers during the mapping process.
+The minmer index is implemented as a hash table, where the keys are minmer hashes and the values are lists of positions where the minmer occurs. This structure allows for efficient lookup of minmers during the mapping process.
 
 \begin{algorithm}
 \caption{Index Building}
@@ -167,9 +167,9 @@ The minimizer index is implemented as a hash table, where the keys are minimizer
 \Procedure{BuildIndex}{$references, k, w$}
 \State $index \gets$ empty hash table
 \For{each $reference$ in $references$}
-    \State $minimizers \gets$ \Call{SelectMinimizers}{$reference, k, w$}
-    \For{each $(minimizer, position)$ in $minimizers$}
-        \State $index[minimizer] \gets index[minimizer] \cup \{(reference\_id, position)\}$
+    \State $minmers \gets$ \Call{SelectMinmers}{$reference, k, w$}
+    \For{each $(minmer, position)$ in $minmers$}
+        \State $index[minmer] \gets index[minmer] \cup \{(reference\_id, position)\}$
     \EndFor
 \EndFor
 \State \textbf{return} $index$

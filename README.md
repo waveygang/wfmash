@@ -14,7 +14,7 @@ _**a pangenome-scale aligner**_
 
 ## Process
 
-By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA. This length limit is important because WFA's computational complexity is quadratic in the number of differences between sequences, not their percent divergence - meaning longer sequences with the same divergence percentage require dramatically more compute time.
+By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap with minmer sketches. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA. This length limit is important because WFA's computational complexity is quadratic in the number of differences between sequences, not their percent divergence - meaning longer sequences with the same divergence percentage require dramatically more compute time.
 
 For longer sequences, use `-m/--approx-mapping` to get approximate mappings only, which allows working with much larger segment and mapping lengths.
 
