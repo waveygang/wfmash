@@ -1,0 +1,653 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fullpage}
+
+\title{MashMap: Fast Approximate Long-Read and Contig Mapper Using Minimizer Sketches}
+\author{Technical Documentation}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\subsection{The Challenge of Sequence Mapping}
+
+In the field of genomics, sequence mapping is a fundamental computational task that involves locating the position of a query sequence within a reference genome. This problem is of paramount importance in various applications, including genome assembly, variant calling, metagenomics, and comparative genomics. As sequencing technologies continue to evolve, producing longer reads with higher error rates, the challenge of efficient and accurate mapping becomes increasingly complex.
+
+Traditional mapping algorithms often rely on exact matching approaches, which work well for short reads with low error rates. However, these methods face significant challenges when dealing with long reads or contigs, which may contain higher error rates, structural variations, or evolutionary divergence from the reference. Additionally, the exponential growth of genomic data requires scalable solutions that can handle large datasets without compromising accuracy.
+
+\subsection{Motivation for Approximate Mapping}
+
+Approximate mapping addresses these challenges by focusing on identifying regions of high similarity rather than exact matches. This approach offers several advantages:
+
+\begin{itemize}
+    \item \textbf{Efficiency}: By using dimensionality reduction techniques like minimizer sketching, approximate mapping algorithms can significantly reduce the computational overhead compared to exact alignment methods.
+    
+    \item \textbf{Robustness}: Approximate mapping is less sensitive to sequencing errors, structural variations, and evolutionary divergence, making it suitable for diverse applications.
+    
+    \item \textbf{Scalability}: The reduced computational requirements allow for processing of larger datasets, which is crucial for analyzing complex genomes or metagenomic samples.
+\end{itemize}
+
+\subsection{The MashMap Approach}
+
+MashMap is an approximate mapping algorithm designed specifically for long reads and contigs. It combines efficient minimizer sketching with a sophisticated two-stage mapping process to achieve both speed and accuracy. The key innovations of MashMap include:
+
+\begin{itemize}
+    \item \textbf{Minimizer-based sketching}: Instead of comparing entire sequences, MashMap uses a k-mer minimizer approach to create compact "sketches" of sequences, dramatically reducing the computational burden.
+    
+    \item \textbf{Two-stage mapping}: The algorithm employs a two-stage approach, where the first stage (L1) identifies candidate regions using minimizer matching, and the second stage (L2) refines these candidates to obtain precise mapping coordinates.
+    
+    \item \textbf{Adaptive filtering}: MashMap implements various filtering strategies to retain only the most significant mappings, balancing sensitivity and specificity.
+    
+    \item \textbf{Chaining and merging}: For split-read mapping, MashMap employs chaining and merging techniques to combine fragmented mappings into coherent alignments.
+\end{itemize}
+
+This document provides a comprehensive description of the MashMap algorithm, detailing the mathematical foundations, implementation strategies, and parameter considerations for optimal performance across different applications.
+
+\section{System Architecture}
+
+\subsection{Overview}
+
+MashMap's architecture consists of several interconnected components, each responsible for a specific aspect of the mapping process. The system is designed to be modular, allowing for flexibility and extensibility while maintaining high performance. The major components include:
+
+\begin{itemize}
+    \item \textbf{Index Builder}: Responsible for creating minimizer-based sketches of reference sequences.
+    
+    \item \textbf{Mapper}: Implements the two-stage mapping process, identifying candidate regions and refining mapping coordinates.
+    
+    \item \textbf{Filter}: Applies various filtering strategies to retain only the most significant mappings.
+    
+    \item \textbf{Chain Merger}: Combines fragmented mappings into coherent alignments for split-read mapping.
+\end{itemize}
+
+\subsection{Data Flow}
+
+The flow of data through the MashMap system follows a well-defined pipeline:
+
+\begin{enumerate}
+    \item \textbf{Input Preparation}: Reference and query sequences are loaded from FASTA/FASTQ files.
+    
+    \item \textbf{Index Building}: Reference sequences are processed to create minimizer sketches, which are stored in an efficient data structure for rapid querying.
+    
+    \item \textbf{Query Processing}: Query sequences are similarly sketched and compared against the reference index.
+    
+    \item \textbf{L1 Mapping}: Candidate regions are identified based on minimizer matches.
+    
+    \item \textbf{L2 Mapping}: Candidate regions are refined to obtain precise mapping coordinates.
+    
+    \item \textbf{Filtering}: Various filtering strategies are applied to retain only significant mappings.
+    
+    \item \textbf{Chaining and Merging}: Fragmented mappings are combined into coherent alignments.
+    
+    \item \textbf{Output Generation}: Mappings are reported in PAF (Pairwise Alignment Format) or SAM format.
+\end{enumerate}
+
+\subsection{Parallelization Strategy}
+
+MashMap employs a sophisticated parallelization strategy to leverage multi-core architectures:
+
+\begin{itemize}
+    \item \textbf{Task-based Parallelism}: The mapping process is divided into independent tasks, each handling a subset of queries or reference sequences.
+    
+    \item \textbf{ThreadPool}: A thread pool is used to efficiently distribute tasks among available cores, maximizing resource utilization.
+    
+    \item \textbf{Atomic Operations}: Critical sections are protected using atomic operations to ensure thread safety.
+    
+    \item \textbf{Work Stealing}: A work-stealing approach is implemented to balance load among threads dynamically.
+\end{itemize}
+
+\section{Minimizer-based Indexing}
+
+\subsection{Theoretical Foundation}
+
+Minimizer sketching is a dimensionality reduction technique that represents sequences by a subset of their k-mers, significantly reducing the computational burden of sequence comparison. The theoretical foundation of minimizer sketching is based on the concept of locality-sensitive hashing, where similar sequences are likely to share a subset of minimizers.
+
+\subsection{MinHash and Jaccard Similarity}
+
+MashMap uses MinHash (minimizer hashing) to estimate the Jaccard similarity between sequences. Let \(A\) and \(B\) be the sets of k-mers in two sequences. The Jaccard similarity is defined as:
+
+\begin{equation}
+J(A, B) = \frac{|A \cap B|}{|A \cup B|}
+\end{equation}
+
+Using MinHash, we can estimate this similarity by comparing minimizer sketches, where each minimizer is the k-mer with the smallest hash value within a window of consecutive k-mers. The probability that two sketches share a minimizer is approximately equal to the Jaccard similarity.
+
+\subsection{Minimizer Selection Algorithm}
+
+The algorithm for selecting minimizers is as follows:
+
+\begin{algorithm}
+\caption{Minimizer Selection}
+\begin{algorithmic}[1]
+\Procedure{SelectMinimizers}{$sequence, k, w$}
+\State $minimizers \gets \emptyset$
+\For{$i \gets 0$ \textbf{to} $length(sequence) - k$}
+    \State $kmer \gets sequence[i:i+k]$
+    \State $hash \gets hash(kmer)$
+    \If{$i \geq w$}
+        \State $window\_start \gets i - w + 1$
+        \State $outgoing\_kmer \gets sequence[window\_start-1:window\_start+k-1]$
+        \State $outgoing\_hash \gets hash(outgoing\_kmer)$
+        \If{$outgoing\_hash$ is minimal in current window}
+            \State Remove $outgoing\_hash$ from $minimizers$
+            \State Find new minimal hash in current window and add to $minimizers$
+        \EndIf
+    \EndIf
+    \If{$hash$ is minimal in current window}
+        \State Add $hash$ to $minimizers$
+    \EndIf
+\EndFor
+\State \textbf{return} $minimizers$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Index Data Structure}
+
+The minimizer index is implemented as a hash table, where the keys are minimizer hashes and the values are lists of positions where the minimizer occurs. This structure allows for efficient lookup of minimizers during the mapping process.
+
+\begin{algorithm}
+\caption{Index Building}
+\begin{algorithmic}[1]
+\Procedure{BuildIndex}{$references, k, w$}
+\State $index \gets$ empty hash table
+\For{each $reference$ in $references$}
+    \State $minimizers \gets$ \Call{SelectMinimizers}{$reference, k, w$}
+    \For{each $(minimizer, position)$ in $minimizers$}
+        \State $index[minimizer] \gets index[minimizer] \cup \{(reference\_id, position)\}$
+    \EndFor
+\EndFor
+\State \textbf{return} $index$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\section{Two-stage Mapping Algorithm}
+
+\subsection{L1 Mapping: Candidate Identification}
+
+The first stage of the mapping process, L1 mapping, identifies candidate regions in the reference that may contain the query sequence. This stage uses the minimizer index to quickly locate regions with a significant number of shared minimizers.
+
+\begin{algorithm}
+\caption{L1 Mapping}
+\begin{algorithmic}[1]
+\Procedure{L1Mapping}{$query, index, minimumHits$}
+\State $candidates \gets \emptyset$
+\State $queryMinimizers \gets$ \Call{SelectMinimizers}{$query, k, w$}
+\State $hitCounts \gets$ empty hash map
+\For{each $(minimizer, position)$ in $queryMinimizers$}
+    \If{$minimizer$ exists in $index$}
+        \For{each $(reference\_id, ref\_position)$ in $index[minimizer]$}
+            \State $hitCounts[(reference\_id, ref\_position - position)] \gets hitCounts[(reference\_id, ref\_position - position)] + 1$
+        \EndFor
+    \EndIf
+\EndFor
+\For{each $((reference\_id, offset), count)$ in $hitCounts$}
+    \If{$count \geq minimumHits$}
+        \State $candidates \gets candidates \cup \{(reference\_id, offset, count)\}$
+    \EndIf
+\EndFor
+\State \textbf{return} $candidates$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+The minimum number of hits required for a region to be considered a candidate is determined adaptively based on the sequence length, k-mer size, and desired identity threshold.
+
+\subsection{L2 Mapping: Precise Mapping}
+
+The second stage, L2 mapping, refines the candidate regions identified in L1 to obtain precise mapping coordinates. This stage uses a sliding window approach to compute a more accurate estimate of sequence similarity.
+
+\begin{algorithm}
+\caption{L2 Mapping}
+\begin{algorithmic}[1]
+\Procedure{L2Mapping}{$query, reference, candidates, window\_size$}
+\State $mappings \gets \emptyset$
+\For{each $(reference\_id, offset, count)$ in $candidates$}
+    \State $reference\_region \gets$ extract region from reference based on candidate
+    \State $best\_score \gets 0$
+    \State $best\_position \gets 0$
+    \For{$i \gets 0$ \textbf{to} $length(reference\_region) - length(query)$}
+        \State $window \gets reference\_region[i:i+length(query)]$
+        \State $score \gets$ \Call{ComputeSimilarity}{$query, window$}
+        \If{$score > best\_score$}
+            \State $best\_score \gets score$
+            \State $best\_position \gets i$
+        \EndIf
+    \EndFor
+    \If{$best\_score \geq threshold$}
+        \State $mappings \gets mappings \cup \{(reference\_id, offset + best\_position, best\_score)\}$
+    \EndIf
+\EndFor
+\State \textbf{return} $mappings$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Mapping Quality Estimation}
+
+MashMap estimates mapping quality based on the Jaccard similarity between the query and the reference region. This similarity is converted to a nucleotide identity estimate using the following formula:
+
+\begin{equation}
+ANI \approx 1 - \frac{-\ln(2J/(1+J))}{k}
+\end{equation}
+
+where $J$ is the Jaccard similarity and $k$ is the k-mer size. This equation accounts for the relationship between Jaccard similarity and edit distance, providing a more accurate estimate of sequence identity.
+
+\section{Filtering and Post-processing}
+
+\subsection{Filtering Strategies}
+
+MashMap implements several filtering strategies to retain only the most significant mappings:
+
+\begin{itemize}
+    \item \textbf{MAP mode}: Retains the best mappings for each query sequence.
+    
+    \item \textbf{One-to-One mode}: Retains mappings that are best from both query and reference perspective.
+    
+    \item \textbf{No Filter mode}: Retains all mappings above the identity threshold.
+\end{itemize}
+
+\begin{algorithm}
+\caption{Mapping Filtering}
+\begin{algorithmic}[1]
+\Procedure{FilterMappings}{$mappings, filter\_mode$}
+\If{$filter\_mode = \text{MAP}$}
+    \State Sort $mappings$ by query sequence and position
+    \State Use plane sweep to identify best mappings for each query position
+\ElsIf{$filter\_mode = \text{ONE\_TO\_ONE}$}
+    \State Filter mappings using MAP mode
+    \State Sort filtered mappings by reference sequence and position
+    \State Use plane sweep to identify best mappings for each reference position
+\ElsIf{$filter\_mode = \text{NONE}$}
+    \State Return all mappings
+\EndIf
+\State \textbf{return} filtered mappings
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Chaining and Merging}
+
+For split-read mapping, MashMap employs chaining and merging techniques to combine fragmented mappings into coherent alignments:
+
+\begin{algorithm}
+\caption{Chaining and Merging}
+\begin{algorithmic}[1]
+\Procedure{ChainAndMerge}{$mappings, chain\_gap$}
+\State Sort $mappings$ by query sequence, reference sequence, and query position
+\State $chains \gets \emptyset$
+\State $current\_chain \gets \emptyset$
+\For{each $mapping$ in $mappings$}
+    \If{$current\_chain$ is empty}
+        \State Add $mapping$ to $current\_chain$
+    \ElsIf{$mapping$ can be chained with $current\_chain$ (within $chain\_gap$)}
+        \State Add $mapping$ to $current\_chain$
+    \Else
+        \State $chains \gets chains \cup \{current\_chain\}$
+        \State $current\_chain \gets \{mapping\}$
+    \EndIf
+\EndFor
+\If{$current\_chain$ is not empty}
+    \State $chains \gets chains \cup \{current\_chain\}$
+\EndIf
+\State $merged\_mappings \gets \emptyset$
+\For{each $chain$ in $chains$}
+    \State $merged\_mapping \gets$ \Call{MergeChain}{$chain$}
+    \State $merged\_mappings \gets merged\_mappings \cup \{merged\_mapping\}$
+\EndFor
+\State \textbf{return} $merged\_mappings$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Scaffold-based Filtering}
+
+MashMap implements scaffold-based filtering to identify and retain mappings that are consistent with larger-scale genomic structures:
+
+\begin{algorithm}
+\caption{Scaffold-based Filtering}
+\begin{algorithmic}[1]
+\Procedure{ScaffoldFilter}{$mappings, scaffold\_gap, scaffold\_min\_length, scaffold\_max\_deviation$}
+\State Sort $mappings$ by query sequence, reference sequence
+\State Group $mappings$ by query and reference sequence
+\For{each $(query, reference)$ group $G$ in $mappings$}
+    \State Generate super-chains from $G$ using aggressive chaining
+    \State Identify scaffolds as super-chains longer than $scaffold\_min\_length$
+    \State Use coordinate projection to filter mappings that deviate from scaffolds by more than $scaffold\_max\_deviation$
+\EndFor
+\State \textbf{return} filtered mappings
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\section{Important Algorithm Details from computeMap.hpp}
+
+\subsection{Fragment Processing}
+
+The core of MashMap's mapping algorithm lies in its fragment processing approach. Each query sequence is optionally divided into fixed-length segments (fragments) which are processed independently:
+
+\begin{algorithm}
+\caption{Process Fragment}
+\begin{algorithmic}[1]
+\Procedure{ProcessFragment}{$fragment, intervalPoints, l1Mappings, l2Mappings, Q$}
+\State Clear all containers
+\State Initialize $Q$ with fragment information
+\State Call \Call{MapSingleQueryFrag}{$Q, intervalPoints, l1Mappings, l2Mappings$}
+\State Update mapping coordinates to reflect original query positions
+\State Store results in thread-local container
+\State Update progress meter
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This fragment-based approach enables parallel processing and improves scalability for long sequences.
+
+\subsection{L1 Mapping Implementation}
+
+The L1 mapping stage in computeMap.hpp is implemented using a sophisticated interval-point approach that efficiently tracks overlapping minimizer windows:
+
+\begin{algorithm}
+\caption{Compute L1 Candidate Regions}
+\begin{algorithmic}[1]
+\Procedure{ComputeL1CandidateRegions}{$Q, ip\_begin, ip\_end, minimumHits, l1Mappings$}
+\State Initialize counters and data structures
+\State $windowLen \gets \max(0, Q.len - segmentLength)$
+\State $trailingIt \gets ip\_begin$
+\State $leadingIt \gets ip\_begin$
+\State $clusterLen \gets segmentLength$
+\State Initialize $hash\_to\_freq$ map
+\State Initialize $overlapCount \gets 0$
+\State Initialize $bestIntersectionSize \gets 0$
+
+\While{$leadingIt \neq ip\_end$}
+    \State Advance $trailingIt$ to maintain sliding window
+    \State Update $overlapCount$ based on opening/closing intervals
+    \State Update $bestIntersectionSize$ if necessary
+\EndWhile
+
+\State Apply filtering based on intersection size
+\State Group proximal candidate regions
+\State \textbf{return} filtered candidate regions
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This implementation efficiently computes the intersection size between query and reference minimizer sets without explicitly constructing these sets, leading to significant performance improvements.
+
+\subsection{L2 Mapping Implementation}
+
+The L2 mapping stage refines candidate regions using a sliding window approach to compute more accurate similarity estimates:
+
+\begin{algorithm}
+\caption{Compute L2 Mapped Regions}
+\begin{algorithmic}[1]
+\Procedure{ComputeL2MappedRegions}{$Q, candidateLocus, l2\_vec\_out$}
+\State Initialize sliding window data structures
+\State Find starting point in minimizer index
+\State Initialize $slideMap$ for tracking minimizer overlaps
+\State Initialize $bestSketchSize \gets 1$
+\State Initialize $bestIntersectionSize \gets 0$
+\State Initialize $in\_candidate \gets false$
+\State Initialize $l2\_out$ structure
+
+\While{more windows to process}
+    \State Update sliding window by removing expired minimizers
+    \State Add new minimizers to window
+    \State Update $bestIntersectionSize$
+    
+    \If{$slideMap.sharedSketchElements > bestSketchSize$}
+        \State Clear previous candidates
+        \State Update $bestSketchSize$ and $l2\_out$
+        \State Set $in\_candidate \gets true$
+    \ElsIf{$slideMap.sharedSketchElements = bestSketchSize$}
+        \State Update $l2\_out$ end position
+    \Else
+        \If{$in\_candidate$}
+            \State Finalize current candidate
+            \State Add to $l2\_vec\_out$ if appropriate
+            \State Reset $l2\_out$
+        \EndIf
+        \State Set $in\_candidate \gets false$
+    \EndIf
+\EndWhile
+
+\If{$in\_candidate$}
+    \State Finalize and add final candidate
+\EndIf
+\State \textbf{return} refined mappings
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This implementation uses a dynamic sliding window approach to efficiently compute Jaccard similarity between query and reference segments, utilizing both forward and reverse strand information.
+
+\subsection{Plane Sweep Filtering}
+
+MashMap uses a plane sweep algorithm for filtering mappings, which is highly efficient for processing large numbers of overlapping mappings:
+
+\begin{algorithm}
+\caption{L1 Filter Algorithm (Plane Sweep)}
+\begin{algorithmic}[1]
+\Procedure{LiFilterAlgorithm}{$readMappings, secondaryToKeep, dropRand, overlapThreshold$}
+\State Mark all mappings as bad initially
+\State Initialize helper object for comparing mappings
+\State Initialize binary search tree ordered by mapping scores
+\State Generate event schedule (start/end events for each mapping)
+\State Sort event schedule by position
+
+\For{each position in event schedule}
+    \State Find all events at current position
+    \State Update sweep line status (add/remove mappings)
+    \State Mark best mappings as good using helper.markGood
+\EndFor
+
+\State Remove bad mappings
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This implementation efficiently filters mappings while preserving those with the highest scores at each position, ensuring optimal coverage of the query sequence.
+
+\section{Parameter Effects and Tuning}
+
+\subsection{Key Parameters and Their Effects}
+
+\begin{itemize}
+    \item \textbf{Segment Length (-s)}: Controls the granularity of mapping. Smaller values provide higher resolution but increase computational cost. In computeMap.hpp, this parameter (cached\_segment\_length) determines the size of fragments for split mapping.
+    
+    \item \textbf{K-mer Size (-k)}: Affects the specificity and sensitivity of mapping. Larger k-mers increase specificity but reduce sensitivity for divergent sequences. The implementation in computeMap.hpp uses this parameter for minimizer selection.
+    
+    \item \textbf{Chain Gap (-c)}: Controls the maximum distance for chaining mappings. Larger values allow more distant mappings to be chained, potentially spanning structural variations. The mergeMappingsInRange function in computeMap.hpp uses this parameter.
+    
+    \item \textbf{Scaffold Parameters (-S)}: Controls scaffold-based filtering. The filterByScaffolds function uses these parameters to identify and retain mappings consistent with larger-scale structures.
+    
+    \item \textbf{Minimum Hits}: Determines the minimum number of shared minimizers required for L1 mapping. In computeMap.hpp, this is calculated adaptively based on sequence length, k-mer size, and identity threshold.
+\end{itemize}
+
+\subsection{Adaptive Parameter Tuning}
+
+MashMap implements adaptive parameter tuning to optimize performance for different scenarios:
+
+\begin{itemize}
+    \item \textbf{Minimum Hits Estimation}: The cached\_minimum\_hits parameter is computed using statistical models that account for sequence length, k-mer size, and desired identity threshold.
+    
+    \item \textbf{ANI Filtering}: The stage1\_topANI\_filter parameter determines whether hypergeometric filtering is used to retain only mappings with ANI close to the best mapping.
+    
+    \item \textbf{Sketch Size}: The sketchSize parameter is adjusted based on sequence length and identity threshold to optimize the trade-off between sensitivity and specificity.
+\end{itemize}
+
+\section{Implementation Details}
+
+\subsection{Parallelization in computeMap.hpp}
+
+The implementation in computeMap.hpp uses a sophisticated parallelization strategy:
+
+\begin{itemize}
+    \item \textbf{TaskFlow Framework}: The mapQuery method uses the TaskFlow library to create a parallel execution graph, efficiently distributing work across available threads.
+    
+    \item \textbf{Two-level Parallelism}: The implementation uses two levels of parallelism: at the query sequence level and at the fragment level.
+    
+    \item \textbf{Fragment-based Processing}: Each query is divided into fragments that are processed independently in parallel, with results combined at the end.
+    
+    \item \textbf{Atomic Operations}: Critical sections are protected using atomic operations, such as the maxChainIdSeen counter for assigning unique chain IDs.
+\end{itemize}
+
+\subsection{Memory Management}
+
+The implementation in computeMap.hpp employs several strategies for efficient memory management:
+
+\begin{itemize}
+    \item \textbf{Serial Processing of Subsets}: Target sequences are processed in subsets to control memory usage, with each subset having its own index.
+    
+    \item \textbf{Temporary Containers}: Thread-local containers are used to avoid contention and reduce synchronization overhead.
+    
+    \item \textbf{Efficient Data Structures}: Specialized data structures like SlideMapper and DisjointSets are used to minimize memory overhead.
+    
+    \item \textbf{Shared Pointers}: The code uses shared\_ptr for managing the lifetime of shared resources, ensuring proper cleanup.
+\end{itemize}
+
+\section{Advanced Features}
+
+\subsection{Scaffold-based Filtering}
+
+The filterByScaffolds method in computeMap.hpp implements a sophisticated approach to identify and retain mappings consistent with larger-scale genomic structures:
+
+\begin{itemize}
+    \item \textbf{Coordinate Projection}: Mappings are projected onto a diagonal or antidiagonal coordinate system to identify those that follow consistent patterns.
+    
+    \item \textbf{Sweep Line Algorithm}: A 2D sweep line algorithm efficiently identifies overlapping intervals in the projected space.
+    
+    \item \textbf{Envelope Construction}: Each mapping defines an "envelope" in the projected space, with mappings that fit within scaffold envelopes being retained.
+    
+    \item \textbf{Adaptive Projection}: The algorithm automatically determines whether to use diagonal or antidiagonal projection based on the orientation of mappings.
+\end{itemize}
+
+\subsection{Chain Merging with Length Constraints}
+
+The mergeMappingsInRange method implements an advanced approach to merge consecutive mappings while respecting maximum length constraints:
+
+\begin{itemize}
+    \item \textbf{Union-Find Data Structure}: A disjoint-sets data structure efficiently tracks chains of related mappings.
+    
+    \item \textbf{Distance-based Chaining}: Mappings are chained if they are within a specified distance in both query and reference coordinates.
+    
+    \item \textbf{Length-constrained Splitting}: Chains that exceed the maximum mapping length are split into smaller fragments while preserving the chaining relationships.
+    
+    \item \textbf{Statistics Propagation}: Mapping statistics (identity, complexity, etc.) are properly propagated to merged mappings.
+\end{itemize}
+
+\section{Conclusion}
+
+This document has provided a comprehensive description of the mapping algorithm implemented in computeMap.hpp, focusing on its theoretical foundations, implementation details, and parameter considerations. The algorithm represents a significant advancement in approximate sequence mapping, offering a balance of speed, accuracy, and scalability that makes it suitable for a wide range of genomic applications.
+
+\appendix
+\section{Parameter Reference}
+
+\subsection{Command Line Parameters}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}llp{8cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{CLI Option} & \textbf{Description} \\
+\midrule
+K-mer Size & \texttt{-k, --kmer-size} & The k-mer size used for minimizer selection. Larger values increase specificity but reduce sensitivity. Default: 15. \\
+\addlinespace
+Segment Length & \texttt{-s, --segment-length} & The length of query segments for split mapping. Sequences shorter than this value are mapped as single units. Default: 1000. \\
+\addlinespace
+Block Length & \texttt{-l, --block-length} & Minimum length of merged mappings to retain. Default: 3 × segment length. \\
+\addlinespace
+Chain Gap & \texttt{-c, --chain-gap} & Maximum distance to chain mappings in query and target. Default: 2000. \\
+\addlinespace
+Percent Identity & \texttt{-p, --map-pct-id} & Minimum mapping identity threshold (0-100). Default: 70. \\
+\addlinespace
+Number of Mappings & \texttt{-n, --mappings} & Number of mappings to retain per segment. Default: 1. \\
+\addlinespace
+Sketch Size & \texttt{-w, --sketch-size} & Number of minimizers to use for sketching. Default: Automatically determined. \\
+\addlinespace
+Filter Mode & \texttt{-f, --filter-mode} & Filtering strategy: 'map', 'one-to-one', or 'none'. Default: 'map'. \\
+\addlinespace
+No Split & \texttt{-N, --no-split} & Disable splitting of input sequences during mapping. Default: False (splitting enabled). \\
+\addlinespace
+No Merge & \texttt{-M, --no-merge} & Disable merging of consecutive mappings. Default: False (merging enabled). \\
+\addlinespace
+Threads & \texttt{-t, --threads} & Number of threads for parallel execution. Default: 1. \\
+\addlinespace
+K-mer Complexity & \texttt{-J, --kmer-cmplx} & Minimum k-mer complexity threshold (0-1). Default: 0. \\
+\addlinespace
+Max K-mer Frequency & \texttt{-F, --filter-freq} & Filter minimizers occurring more than this fraction. Default: 0.0002. \\
+\addlinespace
+Scaffold Parameters & \texttt{-S, --scaffolding} & Parameters for scaffolding: gap,length,deviation. Default: 100k,10k,100k. \\
+\bottomrule
+\end{tabular}
+\caption{Command Line Parameters}
+\label{tab:cli-params}
+\end{table}
+
+\subsection{Internal Parameters}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Description} \\
+\midrule
+confidenceInterval & Confidence interval for relaxing jaccard cutoff (0-1). Default: 0.95. \\
+\addlinespace
+ANIDiff & ANI difference threshold below best mapping to retain. Default: 0.0. \\
+\addlinespace
+ANIDiffConf & Confidence of ANI filtering threshold. Default: 0.999. \\
+\addlinespace
+minHits & Minimum number of minimizer hits required for L1 filtering. Default: Automatically determined. \\
+\addlinespace
+sparsityHashThreshold & Threshold for sparsifying mappings. Default: Maximum value (no sparsification). \\
+\addlinespace
+overlapThreshold & Maximum overlap with better mappings (1.0 = keep all). Default: 1.0. \\
+\bottomrule
+\end{tabular}
+\caption{Internal Parameters}
+\label{tab:internal-params}
+\end{table}
+
+\subsection{Parameter Effects}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Effect on Mapping} \\
+\midrule
+K-mer Size & Larger values increase specificity but reduce sensitivity. For divergent sequences, smaller values (e.g., 15) are recommended. For closely related sequences, larger values (e.g., 19) may provide better precision. \\
+\addlinespace
+Segment Length & Determines the granularity of split mapping. Smaller values provide higher resolution but may increase computational cost and fragmentation. \\
+\addlinespace
+Block Length & Filters out short mappings that may be spurious. Larger values ensure that only significant mappings are reported. \\
+\addlinespace
+Chain Gap & Controls the aggressiveness of chaining. Larger values allow more distant mappings to be chained, potentially spanning structural variations. \\
+\addlinespace
+Percent Identity & Sets the minimum identity threshold for reporting mappings. Lower values increase sensitivity but may introduce false positives. \\
+\addlinespace
+Number of Mappings & Controls the number of alternative mappings reported per segment. Higher values capture ambiguous mappings but increase output size. \\
+\addlinespace
+Filter Mode & Determines how mappings are filtered. 'map' mode is suitable for most applications, while 'one-to-one' is useful for comparing genomes with unique correspondences. \\
+\addlinespace
+Scaffold Parameters & Controls how mappings are filtered based on scaffold information. Larger gap and deviation values allow more flexible scaffolding, while larger length values require more substantial evidence for scaffolds. \\
+\bottomrule
+\end{tabular}
+\caption{Parameter Effects}
+\label{tab:param-effects}
+\end{table}
+
+\end{document}
