@@ -111,21 +111,21 @@ MashMap employs a sophisticated parallelization strategy to leverage multi-core 
     \item \textbf{Work Stealing}: A work-stealing approach is implemented to balance load among threads dynamically.
 \end{itemize}
 
-\section{Minimizer-based Indexing}
+\section{Minmer-based Indexing}
 
 \subsection{Theoretical Foundation}
 
-Minimizer sketching is a dimensionality reduction technique that represents sequences by a subset of their k-mers, significantly reducing the computational burden of sequence comparison. The theoretical foundation of minimizer sketching is based on the concept of locality-sensitive hashing, where similar sequences are likely to share a subset of minimizers.
+Minmer sketching is a dimensionality reduction technique that represents sequences by a subset of their k-mers, significantly reducing the computational burden of sequence comparison. The theoretical foundation of minmer sketching is based on the concept of locality-sensitive hashing, where similar sequences are likely to share a subset of minmers.
 
 \subsection{MinHash and Jaccard Similarity}
 
-MashMap uses MinHash (minimizer hashing) to estimate the Jaccard similarity between sequences. Let \(A\) and \(B\) be the sets of k-mers in two sequences. The Jaccard similarity is defined as:
+MashMap uses MinHash (minmer hashing) to estimate the Jaccard similarity between sequences. Let \(A\) and \(B\) be the sets of k-mers in two sequences. The Jaccard similarity is defined as:
 
 \begin{equation}
 J(A, B) = \frac{|A \cap B|}{|A \cup B|}
 \end{equation}
 
-Using MinHash, we can estimate this similarity by comparing minimizer sketches, where each minimizer is the k-mer with the smallest hash value within a window of consecutive k-mers. The probability that two sketches share a minimizer is approximately equal to the Jaccard similarity.
+Using MinHash, we can estimate this similarity by comparing minmer sketches, where each minmer is the k-mer with the smallest hash value within a window of consecutive k-mers. The probability that two sketches share a minmer is approximately equal to the Jaccard similarity.
 
 \subsection{Minmer Selection Algorithm}
 
