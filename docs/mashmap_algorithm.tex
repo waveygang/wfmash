@@ -10,7 +10,7 @@
 \usepackage{listings}
 \usepackage{fullpage}
 
-\title{MashMap: Fast Approximate Long-Read and Contig Mapper Using Minimizer Sketches}
+\title{WFMash: A Pangenome-Scale Aligner Based on MashMap 3.5}
 \author{Technical Documentation}
 \date{\today}
 
@@ -21,39 +21,43 @@
 \newpage
 
 \section{Introduction}
-\subsection{The Challenge of Sequence Mapping}
+\subsection{Whole Genome Alignment at Pangenome Scale}
 
-In the field of genomics, sequence mapping is a fundamental computational task that involves locating the position of a query sequence within a reference genome. This problem is of paramount importance in various applications, including genome assembly, variant calling, metagenomics, and comparative genomics. As sequencing technologies continue to evolve, producing longer reads with higher error rates, the challenge of efficient and accurate mapping becomes increasingly complex.
+WFMash is a pangenome-scale aligner designed to make whole genome alignment easy and efficient, even for gigabase-scale genomes with high sequence divergence. At its core, WFMash uses MashMap 3.5 for efficient approximate mapping combined with Wave Front Alignment (WFA) to produce base-level alignments. This document focuses on the mapping component of WFMash, which enables the identification of homologous regions between genomes that can subsequently be aligned at the base level.
 
-Traditional mapping algorithms often rely on exact matching approaches, which work well for short reads with low error rates. However, these methods face significant challenges when dealing with long reads or contigs, which may contain higher error rates, structural variations, or evolutionary divergence from the reference. Additionally, the exponential growth of genomic data requires scalable solutions that can handle large datasets without compromising accuracy.
+Whole genome alignment is a critical component of pangenome construction and analysis, enabling the identification of shared and unique regions across multiple genomes. It presents significant computational challenges when working with large numbers of diverse genomes, particularly when dealing with repetitive sequences and regions of high divergence. Traditional approaches often struggle to balance speed, scalability, and sensitivity when aligning highly divergent genomes (as low as 70\% sequence identity), especially in the presence of repetitive elements.
 
-\subsection{Motivation for Approximate Mapping}
+\subsection{MashMap 3.5 for Pangenome Construction}
 
-Approximate mapping addresses these challenges by focusing on identifying regions of high similarity rather than exact matches. This approach offers several advantages:
-
-\begin{itemize}
-    \item \textbf{Efficiency}: By using dimensionality reduction techniques like minimizer sketching, approximate mapping algorithms can significantly reduce the computational overhead compared to exact alignment methods.
-    
-    \item \textbf{Robustness}: Approximate mapping is less sensitive to sequencing errors, structural variations, and evolutionary divergence, making it suitable for diverse applications.
-    
-    \item \textbf{Scalability}: The reduced computational requirements allow for processing of larger datasets, which is crucial for analyzing complex genomes or metagenomic samples.
-\end{itemize}
-
-\subsection{The MashMap Approach}
-
-MashMap is an approximate mapping algorithm designed specifically for long reads and contigs. It combines efficient minimizer sketching with a sophisticated two-stage mapping process to achieve both speed and accuracy. The key innovations of MashMap include:
+MashMap 3.5, as implemented in WFMash, provides an approximate mapping approach specifically optimized for pangenome construction. This approach is particularly valuable for multiple reasons:
 
 \begin{itemize}
-    \item \textbf{Minimizer-based sketching}: Instead of comparing entire sequences, MashMap uses a k-mer minimizer approach to create compact "sketches" of sequences, dramatically reducing the computational burden.
+    \item \textbf{Performance at Scale}: The algorithm can align hundreds of human genomes in an all-to-all configuration, making it suitable for large-scale pangenome projects.
     
-    \item \textbf{Two-stage mapping}: The algorithm employs a two-stage approach, where the first stage (L1) identifies candidate regions using minimizer matching, and the second stage (L2) refines these candidates to obtain precise mapping coordinates.
+    \item \textbf{Tolerance for Divergence}: Effective mapping even in sequences with as low as 70\% nucleotide identity, capturing evolutionary relationships across diverse species and strains.
     
-    \item \textbf{Adaptive filtering}: MashMap implements various filtering strategies to retain only the most significant mappings, balancing sensitivity and specificity.
+    \item \textbf{Handling Repetitive Sequences}: The k-mer based approach with careful filtering strategies enables working with repetitive regions that pose challenges for many other aligners.
     
-    \item \textbf{Chaining and merging}: For split-read mapping, MashMap employs chaining and merging techniques to combine fragmented mappings into coherent alignments.
+    \item \textbf{Computational Efficiency}: On modest computing hardware, whole genome alignments of gigabase-scale genomes can be completed in minutes to hours, depending on sequence divergence.
 \end{itemize}
 
-This document provides a comprehensive description of the MashMap algorithm, detailing the mathematical foundations, implementation strategies, and parameter considerations for optimal performance across different applications.
+\subsection{The WFMash Mapping Algorithm}
+
+The mapping component of WFMash extends MashMap with sophisticated techniques designed specifically for pangenome construction. Key features include:
+
+\begin{itemize}
+    \item \textbf{Fragment-based Processing}: Sequences are broken into non-overlapping segments (default 1kb) and mapped independently, with subsequent merging of consecutive mappings to form longer alignments.
+    
+    \item \textbf{Advanced Filtering}: Sophisticated filtering strategies including hypergeometric filtering, structural coherence checks, and scaffold-based filtering to retain biologically meaningful mappings while eliminating spurious matches.
+    
+    \item \textbf{Two-stage Mapping}: A highly efficient two-stage approach where the first stage (L1) rapidly identifies candidate regions using minimizer matching, and the second stage (L2) refines these to obtain precise mapping coordinates.
+    
+    \item \textbf{Intelligent Chaining}: Advanced algorithms to merge and chain mappings across genomic gaps and rearrangements, resulting in coherent representations of complex evolutionary relationships.
+    
+    \item \textbf{Minimizer-based Sketching}: A 15-mer-based sketching approach that balances sensitivity and specificity, enabling detection of homology even in highly divergent regions.
+\end{itemize}
+
+This document provides a comprehensive description of the WFMash mapping algorithm as implemented in computeMap.hpp, detailing its algorithmic foundations, implementation strategies, optimization techniques, and parameter considerations for producing optimal mappings for pangenome construction.
 
 \section{System Architecture}
 
