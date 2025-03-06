@@ -125,7 +125,7 @@ MashMap uses MinHash (minmer hashing) to estimate the Jaccard similarity between
 J(A, B) = \frac{|A \cap B|}{|A \cup B|}
 \end{equation}
 
-Using MinHash, we can estimate this similarity by comparing minmer sketches, where each minmer is the k-mer with the smallest hash value within a window of consecutive k-mers. The probability that two sketches share a minmer is approximately equal to the Jaccard similarity.
+Using MinHash, we can estimate this similarity by comparing minmer sketches, where minmers are a generalization of minimizers. Unlike minimizers which select only the single minimum-hash k-mer in each window, minmers select the \(s\) smallest k-mers from each window of \(w\) consecutive k-mers. This generalization enables an unbiased estimation of Jaccard similarity between sequences, with the probability that two sketches share minmers proportional to their Jaccard similarity.
 
 \subsection{Minmer Selection Algorithm}
 
@@ -134,28 +134,29 @@ The algorithm for selecting minmers is as follows:
 \begin{algorithm}
 \caption{Minmer Selection}
 \begin{algorithmic}[1]
-\Procedure{SelectMinmers}{$sequence, k, w$}
+\Procedure{SelectMinmers}{$sequence, k, w, s$}
 \State $minmers \gets \emptyset$
 \For{$i \gets 0$ \textbf{to} $length(sequence) - k$}
     \State $kmer \gets sequence[i:i+k]$
     \State $hash \gets hash(kmer)$
     \If{$i \geq w$}
         \State $window\_start \gets i - w + 1$
-        \State $outgoing\_kmer \gets sequence[window\_start-1:window\_start+k-1]$
-        \State $outgoing\_hash \gets hash(outgoing\_kmer)$
-        \If{$outgoing\_hash$ is minimal in current window}
-            \State Remove $outgoing\_hash$ from $minmers$
-            \State Find new minimal hash in current window and add to $minmers$
+        \State $outgoing\_window \gets [window\_start-1, window\_start+w-1]$
+        \State Update $s$-smallest hashes for windows affected by removal of outgoing k-mer
+    \EndIf
+    \State Update $s$-smallest hashes for windows that include the new k-mer
+    \For{each window containing position $i$}
+        \If{$hash$ is among the $s$ smallest hashes in window}
+            \State Add $(hash, i)$ to $minmers$
         \EndIf
-    \EndIf
-    \If{$hash$ is minimal in current window}
-        \State Add $hash$ to $minmers$
-    \EndIf
+    \EndFor
 \EndFor
 \State \textbf{return} $minmers$
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
+
+Unlike minimizers which select only the single minimum-hash k-mer from each window, the minmer scheme selects the $s$ smallest k-mers from each window of length $w$. This generalization provides a $(w,s)$-window guarantee, ensuring that for every window of $w$ k-mers, there are at least $\min(distinct, s)$ k-mers sampled from the window, where $distinct$ is the number of distinct k-mers in the window.
 
 \subsection{Index Data Structure}
 
