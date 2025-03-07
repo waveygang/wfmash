@@ -59,6 +59,13 @@ namespace skch
       QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
                         const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
           : queryName(name), results(r), mergedResults(mr), progress(p) {}
+      
+      // Add destructor to clean up resources
+      ~QueryMappingOutput() {
+          // Free vector memory completely
+          std::vector<MappingResult>().swap(results);
+          std::vector<MappingResult>().swap(mergedResults);
+      }
   };
 
   struct FragmentData {
@@ -69,7 +76,7 @@ namespace skch
       std::string seqName;
       int refGroup;
       int fragmentIndex;
-      std::shared_ptr<QueryMappingOutput> output;
+      std::weak_ptr<QueryMappingOutput> output; // Use weak_ptr to avoid reference cycles
       std::shared_ptr<std::atomic<int>> processedCounter;
 
       // Add constructor for convenience
@@ -221,8 +228,9 @@ namespace skch
         intervalPoints.clear();
         l1Mappings.clear();
         
-        if (fragment.output) {
-            fragment.output->progress.increment(fragment.len);
+        // Safely access the output through weak_ptr
+        if (auto outputPtr = fragment.output.lock()) {
+            outputPtr->progress.increment(fragment.len);
         }
     }
       
@@ -706,8 +714,8 @@ namespace skch
                                           std::lock_guard<std::mutex> lock(results_mutex);
                                           output->results.insert(
                                               output->results.end(),
-                                              all_fragment_results.begin(),
-                                              all_fragment_results.end()
+                                              std::make_move_iterator(all_fragment_results.begin()),
+                                              std::make_move_iterator(all_fragment_results.end())
                                           );
                                       }
                                   });
@@ -784,6 +792,10 @@ namespace skch
                               output->results.clear();
                               targetGroupedMappings.clear();
                               
+                              // Explicitly clean up to break potential reference cycles
+                              output.reset();
+                              input.reset();
+                              
                               // Write results immediately if not one-to-one filtering
                               if (param.filterMode != filter::ONETOONE) {
                                   std::lock_guard<std::mutex> lock(outstrm_mutex);
@@ -821,8 +833,12 @@ namespace skch
                       }
                   }
                   
-                  // Clear the subset mappings to free memory
+                  // Clear the subset mappings to free memory and shrink capacity
                   subsetMappings->clear();
+                  for (auto& [querySeqId, mappings] : *subsetMappings) {
+                      // Free vector's underlying memory completely
+                      MappingResultsVector_t().swap(mappings);
+                  }
               }).name("merge_results");
 
               // Cleanup task
@@ -843,6 +859,10 @@ namespace skch
 
               // Run this subset's taskflow
               executor.run(*subset_flow).wait();
+              
+              // Explicitly clear tasks to release resources
+              subset_flow->clear();
+              subset_flow.reset();
         
               progress->finish();
           }
@@ -874,8 +894,8 @@ namespace skch
                       std::string queryName = idManager->getSequenceName(querySeqId);
                       reportReadMappings(mappings, queryName, outstrm);
                       
-                      // Free memory as we go
-                      mappings.clear();
+                      // Free memory as we go - more aggressive cleanup
+                      MappingResultsVector_t().swap(mappings); // Completely deallocate memory
                   }
                   
                   std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
@@ -2282,9 +2302,8 @@ namespace skch
           scaffoldParam.chain_gap *= 2;  // More aggressive merging for scaffolds
           auto superChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, progress);
           
-          // Free memory as soon as possible
-          scaffoldMappings.clear();
-          scaffoldMappings.shrink_to_fit();
+          // Free memory as soon as possible - more aggressive cleanup
+          MappingResultsVector_t().swap(scaffoldMappings); // Completely deallocate memory
           
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
@@ -2908,9 +2927,8 @@ namespace skch
               }
           }
           
-          // Free memory as soon as possible
-          rawMappings.clear();
-          rawMappings.shrink_to_fit();
+          // Free memory as soon as possible - more aggressive cleanup
+          MappingResultsVector_t().swap(rawMappings); // Completely deallocate memory
 
           // Build dense chain ID mapping
           std::unordered_map<offset_t, offset_t> id_map;
