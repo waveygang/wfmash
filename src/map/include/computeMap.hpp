@@ -59,13 +59,6 @@ namespace skch
       QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
                         const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
           : queryName(name), results(r), mergedResults(mr), progress(p) {}
-      
-      // Add destructor to clean up resources
-      ~QueryMappingOutput() {
-          // Free vector memory completely
-          std::vector<MappingResult>().swap(results);
-          std::vector<MappingResult>().swap(mergedResults);
-      }
   };
 
   struct FragmentData {
@@ -76,7 +69,7 @@ namespace skch
       std::string seqName;
       int refGroup;
       int fragmentIndex;
-      std::weak_ptr<QueryMappingOutput> output; // Use weak_ptr to avoid reference cycles
+      std::shared_ptr<QueryMappingOutput> output;
       std::shared_ptr<std::atomic<int>> processedCounter;
 
       // Add constructor for convenience
@@ -219,18 +212,10 @@ namespace skch
             thread_local_results.insert(thread_local_results.end(), 
                                        l2Mappings.begin(), 
                                        l2Mappings.end());
-            
-            // Clear l2Mappings to free memory immediately
-            l2Mappings.clear();
         }
         
-        // Also clear other temporary data structures
-        intervalPoints.clear();
-        l1Mappings.clear();
-        
-        // Safely access the output through weak_ptr
-        if (auto outputPtr = fragment.output.lock()) {
-            outputPtr->progress.increment(fragment.len);
+        if (fragment.output) {
+            fragment.output->progress.increment(fragment.len);
         }
     }
       
@@ -644,26 +629,27 @@ namespace skch
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
-              // Storage for this subset's mappings
+              // Storage for this subset's mappings (only used for ONETOONE mode)
               auto subsetMappings = std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
               auto subsetMappings_mutex = std::make_shared<std::mutex>();
 
-
-              // Process queries using subflows for parallelism
-              // Set up per-subset file output if we're not doing one-to-one filtering
-              std::mutex outstrm_mutex;
-              std::ofstream outstrm;
+              // Create output stream for non-ONETOONE modes
+              auto outstream = std::make_shared<std::ofstream>();
+              auto outstream_mutex = std::make_shared<std::mutex>();
+              
+              // Open output file if we're not in ONETOONE mode (for immediate output)
               if (param.filterMode != filter::ONETOONE) {
-                  if (subset_idx == 0) {
-                      // Create new file on first subset
-                      outstrm.open(param.outFileName);
-                  } else {
-                      // Append to existing file for subsequent subsets
-                      outstrm.open(param.outFileName, std::ios::app);
+                  bool append = subset_idx > 0;  // Append for all but first subset
+                  outstream->open(param.outFileName, append ? std::ios::app : std::ios::out);
+                  if (!outstream->is_open()) {
+                      std::cerr << "Error: Could not open output file for writing: " << param.outFileName << std::endl;
+                      exit(1);
                   }
               }
 
-              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, subset_flow, &outstrm, &outstrm_mutex](tf::Subflow& sf) {
+              // Process queries using subflows for parallelism
+              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
+                                                           outstream, outstream_mutex, subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   // Directly iterate over sequences using seqiter's random access
@@ -714,8 +700,8 @@ namespace skch
                                           std::lock_guard<std::mutex> lock(results_mutex);
                                           output->results.insert(
                                               output->results.end(),
-                                              std::make_move_iterator(all_fragment_results.begin()),
-                                              std::make_move_iterator(all_fragment_results.end())
+                                              all_fragment_results.begin(),
+                                              all_fragment_results.end()
                                           );
                                       }
                                   });
@@ -760,68 +746,37 @@ namespace skch
 
                               // After all fragments are processed, set the output results
                               mappingBoundarySanityCheck(input.get(), output->results);
-                              
-                              // Group mappings by target for more efficient processing
-                              robin_hood::unordered_map<seqno_t, MappingResultsVector_t> targetGroupedMappings;
-                              for (const auto& mapping : output->results) {
-                                  targetGroupedMappings[mapping.refSeqId].push_back(mapping);
-                              }
-                              
-                              // Process each target group separately to reduce memory usage
-                              MappingResultsVector_t finalMappings;
-                              MappingResultsVector_t finalMergedMappings;
-                              
-                              for (auto& [targetSeqId, targetMappings] : targetGroupedMappings) {
-                                  // Process this query-target pair
-                                  auto [nonMergedMappings, mergedMappings] = 
-                                      filterSubsetMappings(targetMappings, output->progress);
-                                      
-                                  // Collect results
-                                  finalMappings.insert(finalMappings.end(), 
-                                                     nonMergedMappings.begin(), 
-                                                     nonMergedMappings.end());
-                                  finalMergedMappings.insert(finalMergedMappings.end(), 
-                                                          mergedMappings.begin(), 
-                                                          mergedMappings.end());
-                                  
-                                  // Free memory
-                                  targetMappings.clear();
-                              }
-                              
-                              // Free the original results now that we've processed them
-                              output->results.clear();
-                              targetGroupedMappings.clear();
-                              
-                              // Explicitly clean up to break potential reference cycles
-                              output.reset();
-                              input.reset();
-                              
-                              // Write results immediately if not one-to-one filtering
-                              if (param.filterMode != filter::ONETOONE) {
-                                  std::lock_guard<std::mutex> lock(outstrm_mutex);
-                                  auto& mappingsToWrite = param.mergeMappings && param.split ?
-                                      finalMergedMappings : finalMappings;
-                                  reportReadMappings(mappingsToWrite, queryName, outstrm);
-                              } else {
-                                  // Only store results for one-to-one filtering mode
+                              auto [nonMergedMappings, mergedMappings] = 
+                                  filterSubsetMappings(output->results, output->progress);
+
+                              // Select the appropriate mappings
+                              auto& mappings = param.mergeMappings && param.split ?
+                                    mergedMappings : nonMergedMappings;
+
+                              // Handle based on filter mode
+                              if (param.filterMode == filter::ONETOONE) {
+                                  // For ONETOONE mode, store mappings for later merging across subsets
                                   std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
-                                  auto& mappings = param.mergeMappings && param.split ?
-                                      finalMergedMappings : finalMappings;
                                   (*subsetMappings)[seqId].insert(
                                       (*subsetMappings)[seqId].end(),
                                       std::make_move_iterator(mappings.begin()),
                                       std::make_move_iterator(mappings.end())
                                   );
+                              } else {
+                                  // For non-ONETOONE modes, write mappings immediately
+                                  std::lock_guard<std::mutex> lock(*outstream_mutex);
+                                  reportReadMappings(mappings, queryName, *outstream);
                               }
                           }).name("query_" + queryName);
                       });
               }).name("process_queries");
 
-              // Merge subset results into combined mappings (only needed for one-to-one mode)
+              // Merge subset results into combined mappings (only for ONETOONE mode)
               auto merge_task = subset_flow->emplace([this,
                                                     subsetMappings,
                                                     &combinedMappings,
                                                     &combinedMappings_mutex]() {
+                  // Only merge results if we're in ONETOONE mode
                   if (param.filterMode == filter::ONETOONE) {
                       std::lock_guard<std::mutex> lock(combinedMappings_mutex);
                       for (auto& [querySeqId, mappings] : *subsetMappings) {
@@ -832,24 +787,17 @@ namespace skch
                               );
                       }
                   }
-                  
-                  // Clear the subset mappings to free memory and shrink capacity
-                  subsetMappings->clear();
-                  for (auto& [querySeqId, mappings] : *subsetMappings) {
-                      // Free vector's underlying memory completely
-                      MappingResultsVector_t().swap(mappings);
-                  }
               }).name("merge_results");
 
               // Cleanup task
-              auto cleanup_task = subset_flow->emplace([this, &outstrm]() {
+              auto cleanup_task = subset_flow->emplace([this, outstream]() {
+                  // Close output file if it's open (for non-ONETOONE modes)
+                  if (param.filterMode != filter::ONETOONE && outstream->is_open()) {
+                      outstream->close();
+                  }
+                  
                   delete refSketch;
                   refSketch = nullptr;
-                  
-                  // Flush file after each subset
-                  if (param.filterMode != filter::ONETOONE) {
-                      outstrm.flush();
-                  }
               }).name("cleanup");
 
               // Set up dependencies
@@ -859,10 +807,6 @@ namespace skch
 
               // Run this subset's taskflow
               executor.run(*subset_flow).wait();
-              
-              // Explicitly clear tasks to release resources
-              subset_flow->clear();
-              subset_flow.reset();
         
               progress->finish();
           }
@@ -873,40 +817,68 @@ namespace skch
               exit(0);
           }
 
-          // Final results processing (only needed for one-to-one mode)
-          if (param.filterMode == filter::ONETOONE) {
+          // Final results processing (only needed for ONETOONE mode)
+          if (param.filterMode == filter::ONETOONE && !exit_after_indices) {
               tf::Taskflow final_flow;
-              std::cerr << "[wfmash::mashmap] Processing final one-to-one filtration results" << std::endl;
+              std::cerr << "[wfmash::mashmap] Processing final one-to-one filtering" << std::endl;
+              
               auto final_task = final_flow.emplace([&]() {
-                  std::ofstream outstrm(param.outFileName);
-                  
                   // Count total mappings for logging
                   size_t total_mappings = 0;
                   for (auto& [querySeqId, mappings] : combinedMappings) {
                       total_mappings += mappings.size();
                   }
-                  std::cerr << "[wfmash::mashmap] Writing " << total_mappings 
+                  std::cerr << "[wfmash::mashmap] Processing " << total_mappings 
                             << " mappings from " << combinedMappings.size() 
-                            << " queries to " << param.outFileName << std::endl;
+                            << " queries for one-to-one filtering" << std::endl;
                   
-                  // Process final results
+                  // Reorganize mappings by target for reference-based filtering
+                  std::unordered_map<seqno_t, MappingResultsVector_t> targetMappings;
                   for (auto& [querySeqId, mappings] : combinedMappings) {
-                      std::string queryName = idManager->getSequenceName(querySeqId);
-                      reportReadMappings(mappings, queryName, outstrm);
-                      
-                      // Free memory as we go - more aggressive cleanup
-                      MappingResultsVector_t().swap(mappings); // Completely deallocate memory
+                      for (auto& mapping : mappings) {
+                          targetMappings[mapping.refSeqId].push_back(mapping);
+                      }
                   }
                   
+                  // Use a progress meter for the filtering step
+                  auto filterProgress = std::make_shared<progress_meter::ProgressMeter>(
+                      targetMappings.size(), "[wfmash::mashmap] One-to-one reference filtering");
+                  
+                  // Filter mappings by reference
+                  std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;
+                  for (auto& [targetSeqId, mappings] : targetMappings) {
+                      MappingResultsVector_t filteredMappings;
+                      filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
+                                   true, *idManager, *filterProgress);
+                      
+                      // Organize by query ID for output
+                      for (auto& mapping : filteredMappings) {
+                          finalMappings[mapping.querySeqId].push_back(mapping);
+                      }
+                      filterProgress->increment(1);
+                  }
+                  filterProgress->finish();
+                  
+                  // Write the final filtered mappings
+                  std::ofstream outstrm(param.outFileName);
+                  size_t final_mapping_count = 0;
+                  for (auto& [querySeqId, mappings] : finalMappings) {
+                      std::string queryName = idManager->getSequenceName(querySeqId);
+                      reportReadMappings(mappings, queryName, outstrm);
+                      final_mapping_count += mappings.size();
+                  }
+                  
+                  std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
+                            << " mappings after one-to-one filtering" << std::endl;
                   std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
               });
+              
               executor.run(final_flow).wait();
-          } else {
+          } else if (!exit_after_indices) {
+              // For non-ONETOONE modes, we've already written all results
               std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
           }
-          
-          // Final cleanup
-          combinedMappings.clear();
+          // Final flow execution is now handled inside the conditional block above
       }
 
 
@@ -2286,25 +2258,14 @@ namespace skch
           if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
               return;
           }
-          
-          // Early return if there's nothing to filter
-          if (readMappings.empty() || mergedMappings.empty()) {
-              return;
-          }
 
-          // Build scaffold mappings from the maximally merged mappings (with memory optimization)
-          MappingResultsVector_t scaffoldMappings;
-          scaffoldMappings.reserve(mergedMappings.size());
-          std::copy(mergedMappings.begin(), mergedMappings.end(), std::back_inserter(scaffoldMappings));
+          // Build scaffold mappings from the maximally merged mappings
+          MappingResultsVector_t scaffoldMappings = mergedMappings;
 
           // Merge with aggressive gap to create scaffolds
           Parameters scaffoldParam = param;
           scaffoldParam.chain_gap *= 2;  // More aggressive merging for scaffolds
           auto superChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, progress);
-          
-          // Free memory as soon as possible - more aggressive cleanup
-          MappingResultsVector_t().swap(scaffoldMappings); // Completely deallocate memory
-          
           filterMaximallyMerged(superChains, std::floor(param.scaffold_min_length / param.segLength), progress);
 
           // Expand scaffold mappings by half the max deviation on each end
@@ -2647,15 +2608,7 @@ namespace skch
       VecIn mergeMappingsInRange(VecIn &readMappings,
                                  int max_dist,
                                  progress_meter::ProgressMeter& progress) {
-          if (!param.split || readMappings.size() < 2) {
-              // Create a copy to avoid modifying original when returning
-              VecIn copy;
-              if (!readMappings.empty()) {
-                  copy.reserve(readMappings.size());
-                  std::copy(readMappings.begin(), readMappings.end(), std::back_inserter(copy));
-              }
-              return copy;
-          }
+          if (!param.split || readMappings.size() < 2) return readMappings;
 
           //Sort the mappings by query position, then reference sequence id, then reference position
           std::sort(
@@ -2902,12 +2855,8 @@ namespace skch
       std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
 
-          // Make a copy of the raw mappings for scaffolding (only if scaffold filtering needed)
-          MappingResultsVector_t rawMappings;
-          if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-              rawMappings.reserve(mappings.size());
-              std::copy(mappings.begin(), mappings.end(), std::back_inserter(rawMappings));
-          }
+          // Make a copy of the raw mappings for scaffolding
+          MappingResultsVector_t rawMappings = mappings;
           
           // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
@@ -2915,20 +2864,12 @@ namespace skch
           // Process both merged and non-merged mappings
           if (param.mergeMappings && param.split) {
               filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
-              // Apply scaffold filtering to merged mappings only if needed
-              if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-                  filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
-              }
+              // Also apply scaffold filtering to merged mappings
+              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
           } else {
               filterNonMergedMappings(mappings, param, progress);
-              // Apply scaffold filtering to non-merged mappings only if needed
-              if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-                  filterByScaffolds(mappings, rawMappings, param, progress);
-              }
+              filterByScaffolds(mappings, rawMappings, param, progress);
           }
-          
-          // Free memory as soon as possible - more aggressive cleanup
-          MappingResultsVector_t().swap(rawMappings); // Completely deallocate memory
 
           // Build dense chain ID mapping
           std::unordered_map<offset_t, offset_t> id_map;
