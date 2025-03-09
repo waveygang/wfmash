@@ -6,7 +6,7 @@ _**a pangenome-scale aligner**_
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](https://anaconda.org/bioconda/wfmash)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6949373.svg)](https://doi.org/10.5281/zenodo.6949373)
 
-`wfmash` is an aligner for pangenomes that combines efficient homology mapping with base-level alignment. It uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) to obtain base-level alignments.
+`wfmash` is an aligner for pangenomes that combines efficient homology mapping with base-level alignment. It uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) to obtain base-level alignments. MashMap 3.5 employs minmers, a generalization of minimizers that provides unbiased Jaccard similarity estimation for improved mapping accuracy.
 
 `wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
 
@@ -14,7 +14,7 @@ _**a pangenome-scale aligner**_
 
 ## Process
 
-By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA. This length limit is important because WFA's computational complexity is quadratic in the number of differences between sequences, not their percent divergence - meaning longer sequences with the same divergence percentage require dramatically more compute time.
+By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap with minmer sketches. Minmers are a generalization of minimizers that select multiple smallest k-mers per window, enabling unbiased Jaccard similarity estimation. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA. This length limit is important because WFA's computational complexity is quadratic in the number of differences between sequences, not their percent divergence - meaning longer sequences with the same divergence percentage require dramatically more compute time.
 
 For longer sequences, use `-m/--approx-mapping` to get approximate mappings only, which allows working with much larger segment and mapping lengths.
 
@@ -391,6 +391,8 @@ This emits a `results/wfmash` folder which stores all the `wfmash` output.
 - **Santiago Marco-Sola, Jordan M. Eizenga, Andrea Guarracino, Benedict Paten, Erik Garrison, and Miquel Moreto**. ["Optimal gap-affine alignment in O (s) space"](https://doi.org/10.1093/bioinformatics/btad074). *Bioinformatics*, 2023.
 
 - **Santiago Marco-Sola, Juan Carlos Moure, Miquel Moreto, and Antonio Espinosa** ["Fast gap-affine pairwise alignment using the wavefront algorithm"](https://doi.org/10.1093/bioinformatics/btaa777) *Bioinformatics*, 2020.
+
+- **Bryce Kille, Erik Garrison, Todd J. Treangen, Adam M. Phillippy**. ["Minmers are a generalization of minimizers that enable unbiased local Jaccard estimation"](https://doi.org/10.1093/bioinformatics/btad512). *Bioinformatics*, 2023.
 
 - **Chirag Jain, Sergey Koren, Alexander Dilthey, Adam M. Phillippy, and Srinivas Aluru**. ["A Fast Adaptive Algorithm for Computing Whole-Genome Homology Maps"](https://doi.org/10.1093/bioinformatics/bty597). *Bioinformatics (ECCB issue)*, 2018.
 
