@@ -629,13 +629,27 @@ namespace skch
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
-              // Storage for this subset's mappings
+              // Storage for this subset's mappings (only used for ONETOONE mode)
               auto subsetMappings = std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
               auto subsetMappings_mutex = std::make_shared<std::mutex>();
 
+              // Create output stream for non-ONETOONE modes
+              auto outstream = std::make_shared<std::ofstream>();
+              auto outstream_mutex = std::make_shared<std::mutex>();
+              
+              // Open output file if we're not in ONETOONE mode (for immediate output)
+              if (param.filterMode != filter::ONETOONE) {
+                  bool append = subset_idx > 0;  // Append for all but first subset
+                  outstream->open(param.outFileName, append ? std::ios::app : std::ios::out);
+                  if (!outstream->is_open()) {
+                      std::cerr << "Error: Could not open output file for writing: " << param.outFileName << std::endl;
+                      exit(1);
+                  }
+              }
 
               // Process queries using subflows for parallelism
-              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, subset_flow](tf::Subflow& sf) {
+              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
+                                                           outstream, outstream_mutex, subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   // Directly iterate over sequences using seqiter's random access
@@ -735,40 +749,53 @@ namespace skch
                               auto [nonMergedMappings, mergedMappings] = 
                                   filterSubsetMappings(output->results, output->progress);
 
-                              // Store results
-                              {
+                              // Select the appropriate mappings
+                              auto& mappings = param.mergeMappings && param.split ?
+                                    mergedMappings : nonMergedMappings;
+
+                              // Handle based on filter mode
+                              if (param.filterMode == filter::ONETOONE) {
+                                  // For ONETOONE mode, store mappings for later merging across subsets
                                   std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
-                                  auto& mappings = param.mergeMappings && param.split ?
-                                      mergedMappings : nonMergedMappings;
                                   (*subsetMappings)[seqId].insert(
                                       (*subsetMappings)[seqId].end(),
                                       std::make_move_iterator(mappings.begin()),
                                       std::make_move_iterator(mappings.end())
                                   );
+                              } else {
+                                  // For non-ONETOONE modes, write mappings immediately
+                                  std::lock_guard<std::mutex> lock(*outstream_mutex);
+                                  reportReadMappings(mappings, queryName, *outstream);
                               }
-
-                              // No need for another join or processing here since it's already done above
                           }).name("query_" + queryName);
                       });
               }).name("process_queries");
 
-              // Merge subset results into combined mappings
+              // Merge subset results into combined mappings (only for ONETOONE mode)
               auto merge_task = subset_flow->emplace([this,
                                                     subsetMappings,
                                                     &combinedMappings,
                                                     &combinedMappings_mutex]() {
-                  std::lock_guard<std::mutex> lock(combinedMappings_mutex);
-                  for (auto& [querySeqId, mappings] : *subsetMappings) {
-                      combinedMappings[querySeqId].insert(
-                          combinedMappings[querySeqId].end(),
-                          std::make_move_iterator(mappings.begin()),
-                          std::make_move_iterator(mappings.end())
-                          );
+                  // Only merge results if we're in ONETOONE mode
+                  if (param.filterMode == filter::ONETOONE) {
+                      std::lock_guard<std::mutex> lock(combinedMappings_mutex);
+                      for (auto& [querySeqId, mappings] : *subsetMappings) {
+                          combinedMappings[querySeqId].insert(
+                              combinedMappings[querySeqId].end(),
+                              std::make_move_iterator(mappings.begin()),
+                              std::make_move_iterator(mappings.end())
+                              );
+                      }
                   }
               }).name("merge_results");
 
               // Cleanup task
-              auto cleanup_task = subset_flow->emplace([this]() {
+              auto cleanup_task = subset_flow->emplace([this, outstream]() {
+                  // Close output file if it's open (for non-ONETOONE modes)
+                  if (param.filterMode != filter::ONETOONE && outstream->is_open()) {
+                      outstream->close();
+                  }
+                  
                   delete refSketch;
                   refSketch = nullptr;
               }).name("cleanup");
@@ -790,30 +817,68 @@ namespace skch
               exit(0);
           }
 
-          // Final results processing
-          tf::Taskflow final_flow;
-          std::cerr << "[wfmash::mashmap] Processing final results" << std::endl;
-          auto final_task = final_flow.emplace([&]() {
-              std::ofstream outstrm(param.outFileName);
+          // Final results processing (only needed for ONETOONE mode)
+          if (param.filterMode == filter::ONETOONE && !exit_after_indices) {
+              tf::Taskflow final_flow;
+              std::cerr << "[wfmash::mashmap] Processing final one-to-one filtering" << std::endl;
               
-              // Count total mappings for logging
-              size_t total_mappings = 0;
-              for (auto& [querySeqId, mappings] : combinedMappings) {
-                  total_mappings += mappings.size();
-              }
-              std::cerr << "[wfmash::mashmap] Writing " << total_mappings 
-                        << " mappings from " << combinedMappings.size() 
-                        << " queries to " << param.outFileName << std::endl;
+              auto final_task = final_flow.emplace([&]() {
+                  // Count total mappings for logging
+                  size_t total_mappings = 0;
+                  for (auto& [querySeqId, mappings] : combinedMappings) {
+                      total_mappings += mappings.size();
+                  }
+                  std::cerr << "[wfmash::mashmap] Processing " << total_mappings 
+                            << " mappings from " << combinedMappings.size() 
+                            << " queries for one-to-one filtering" << std::endl;
+                  
+                  // Reorganize mappings by target for reference-based filtering
+                  std::unordered_map<seqno_t, MappingResultsVector_t> targetMappings;
+                  for (auto& [querySeqId, mappings] : combinedMappings) {
+                      for (auto& mapping : mappings) {
+                          targetMappings[mapping.refSeqId].push_back(mapping);
+                      }
+                  }
+                  
+                  // Use a progress meter for the filtering step
+                  auto filterProgress = std::make_shared<progress_meter::ProgressMeter>(
+                      targetMappings.size(), "[wfmash::mashmap] One-to-one reference filtering");
+                  
+                  // Filter mappings by reference
+                  std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;
+                  for (auto& [targetSeqId, mappings] : targetMappings) {
+                      MappingResultsVector_t filteredMappings;
+                      filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
+                                   true, *idManager, *filterProgress);
+                      
+                      // Organize by query ID for output
+                      for (auto& mapping : filteredMappings) {
+                          finalMappings[mapping.querySeqId].push_back(mapping);
+                      }
+                      filterProgress->increment(1);
+                  }
+                  filterProgress->finish();
+                  
+                  // Write the final filtered mappings
+                  std::ofstream outstrm(param.outFileName);
+                  size_t final_mapping_count = 0;
+                  for (auto& [querySeqId, mappings] : finalMappings) {
+                      std::string queryName = idManager->getSequenceName(querySeqId);
+                      reportReadMappings(mappings, queryName, outstrm);
+                      final_mapping_count += mappings.size();
+                  }
+                  
+                  std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
+                            << " mappings after one-to-one filtering" << std::endl;
+                  std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
+              });
               
-              // Process final results
-              for (auto& [querySeqId, mappings] : combinedMappings) {
-                  std::string queryName = idManager->getSequenceName(querySeqId);
-                  reportReadMappings(mappings, queryName, outstrm);
-              }
-              
+              executor.run(final_flow).wait();
+          } else if (!exit_after_indices) {
+              // For non-ONETOONE modes, we've already written all results
               std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
-          });
-          executor.run(final_flow).wait();
+          }
+          // Final flow execution is now handled inside the conditional block above
       }
 
 
