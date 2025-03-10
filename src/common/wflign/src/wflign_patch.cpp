@@ -2412,7 +2412,7 @@ void write_alignment_sam(
         out << query_name << "\t"
             << (query_is_rev ^ patch_aln.is_rev ? "16" : "0") << "\t"
             << target_name << "\t"
-            << target_offset + patch_aln.i + 1 << "\t"
+            << new_ref_start + 1 << "\t"
             << std::round(float2phred(1.0 - patch_block_identity)) << "\t"
             << patch_cigar << "\t"
             << "*\t0\t0\t";
