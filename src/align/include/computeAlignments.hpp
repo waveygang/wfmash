@@ -333,13 +333,13 @@ void computeAlignmentsTaskflow() {
     tf::Executor writer_executor(1);  // Single writer thread
     
     // Create thread-safe queues for communication between tasks
-    using MappingQueue = tf::BoundedTaskQueue<std::string>;
-    using ResultQueue = tf::BoundedTaskQueue<alignment_result_t>;
+    // Note: BoundedTaskQueue requires pointer types
+    using MappingQueue = tf::BoundedTaskQueue<std::string*>;
+    using ResultQueue = tf::BoundedTaskQueue<alignment_result_t*>;
     
-    // Create queues with reasonable capacity for our workload
-    constexpr size_t queue_capacity = 1024;
-    auto mapping_queue = std::make_shared<MappingQueue>(queue_capacity);
-    auto result_queue = std::make_shared<ResultQueue>(queue_capacity);
+    // Create queues
+    auto mapping_queue = std::make_shared<MappingQueue>();
+    auto result_queue = std::make_shared<ResultQueue>();
     
     // Signal flags for completion
     std::atomic<bool> reader_done(false);
@@ -356,7 +356,9 @@ void computeAlignmentsTaskflow() {
         size_t count = 0;
         while(std::getline(mappingStream, line)) {
             if (!line.empty()) {
-                mapping_queue->push(std::move(line));
+                // Allocate string on heap and push pointer
+                std::string* line_ptr = new std::string(line);
+                mapping_queue->push(line_ptr);
                 count++;
             }
         }
@@ -376,9 +378,9 @@ void computeAlignmentsTaskflow() {
             
             while (true) {
                 // Try to get work from the queue
-                bool got_work = mapping_queue->pop(mapping_record);
+                std::string* mapping_record_ptr = mapping_queue->pop();
                 
-                if (!got_work) {
+                if (mapping_record_ptr == nullptr) {
                     // If reader is done and queue is empty, we're done
                     if (reader_done.load() && mapping_queue->empty()) {
                         break;
@@ -389,6 +391,10 @@ void computeAlignmentsTaskflow() {
                 }
                 
                 try {
+                    // Make a copy of the mapping record
+                    mapping_record = *mapping_record_ptr;
+                    delete mapping_record_ptr; // Free memory
+                    
                     // Process the mapping record
                     MappingBoundaryRow currentRecord;
                     parseMashmapRow(mapping_record, currentRecord, param.target_padding);
@@ -403,7 +409,9 @@ void computeAlignmentsTaskflow() {
                     // Push result to output queue
                     uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
                     if (!alignment_output.empty()) {
-                        result_queue->push(alignment_result_t(std::move(alignment_output), alignment_length));
+                        // Allocate result on heap
+                        alignment_result_t* result_ptr = new alignment_result_t(std::move(alignment_output), alignment_length);
+                        result_queue->push(result_ptr);
                     }
                     
                     // Update progress and stats
@@ -430,9 +438,9 @@ void computeAlignmentsTaskflow() {
         
         while (true) {
             // Try to get a result from the queue
-            bool got_result = result_queue->pop(result);
+            alignment_result_t* result_ptr = result_queue->pop();
             
-            if (!got_result) {
+            if (result_ptr == nullptr) {
                 // If all workers are done and queue is empty, we're done
                 if (all_workers_done.load() && result_queue->empty()) {
                     break;
@@ -442,9 +450,9 @@ void computeAlignmentsTaskflow() {
                 continue;
             }
             
-            if (result.success) {
+            if (result_ptr->success) {
                 // Process the alignment output
-                std::string_view output(result.output);
+                std::string_view output(result_ptr->output);
                 size_t start = 0;
                 size_t end = output.find('\n');
                 
@@ -485,6 +493,11 @@ void computeAlignmentsTaskflow() {
                 
                 outstream.flush();
                 written++;
+                
+                // Free memory
+                delete result_ptr;
+            } else {
+                delete result_ptr;
             }
         }
         
