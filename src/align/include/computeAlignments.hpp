@@ -35,7 +35,8 @@
 #include "common/utils.hpp"
 #include <any>
 #include <taskflow/taskflow.hpp>
-#include <taskflow/algorithm/pipeline.hpp>
+#include <taskflow/algorithm/for_each.hpp>
+#include <taskflow/algorithm/partitioner.hpp>
 
 namespace align
 {
