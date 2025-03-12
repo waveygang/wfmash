@@ -331,9 +331,6 @@ void computeAlignmentsTaskflow() {
                                 + param.mashmapPafFile);
     }
     
-    // Mutex to protect file reading
-    std::mutex file_mutex;
-    
     // Progress meter
     progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
     
@@ -376,21 +373,17 @@ void computeAlignmentsTaskflow() {
             }
             data.valid = false;
             
-            // Read the next line from the file with mutex protection
-            {
-                std::lock_guard<std::mutex> lock(file_mutex);
-                
-                // Check if we've reached EOF
-                if (mapping_file->eof() || !mapping_file->good()) {
-                    pf.stop();
-                    return;
-                }
-                
-                // Read the next line
-                if (!std::getline(*mapping_file, data.mapping_record) || data.mapping_record.empty()) {
-                    pf.stop();
-                    return;
-                }
+            // Read the next line from the file
+            // Check if we've reached EOF
+            if (mapping_file->eof() || !mapping_file->good()) {
+                pf.stop();
+                return;
+            }
+            
+            // Read the next line
+            if (!std::getline(*mapping_file, data.mapping_record) || data.mapping_record.empty()) {
+                pf.stop();
+                return;
             }
             
             try {
