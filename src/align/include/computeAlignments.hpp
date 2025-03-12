@@ -16,11 +16,11 @@
 #include <cassert>
 #include <thread>
 #include <memory>
-#include <htslib/faidx.h>
 #include <htslib/hts.h>
 #include <htslib/bgzf.h>
 #include <htslib/thread_pool.h>
 #include <htslib/hfile.h>
+#include "common/thread_safe_faidx.hpp"
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -147,8 +147,8 @@ struct seq_record_t {
       //algorithm parameters
       const align::Parameters &param;
 
-      faidx_t* ref_faidx;
-      faidx_t* query_faidx;
+      ts_faidx::FastaReader* ref_faidx;
+      ts_faidx::FastaReader* query_faidx;
       hts_tpool* thread_pool;
 
     public:
@@ -163,36 +163,30 @@ struct seq_record_t {
               throw std::runtime_error("[wfmash::align] Error! Failed to create thread pool");
           }
           
-          // Load faidx indices
-          ref_faidx = fai_load(param.refSequences.front().c_str());
-          if (!ref_faidx) {
+          // Load thread-safe FASTA readers
+          try {
+              ref_faidx = new ts_faidx::FastaReader(param.refSequences.front());
+          } catch (const std::exception& e) {
               hts_tpool_destroy(thread_pool);
-              throw std::runtime_error("[wfmash::align] Error! Failed to load reference FASTA index: " + param.refSequences.front());
+              throw std::runtime_error("[wfmash::align] Error! Failed to load reference FASTA index: " 
+                                      + param.refSequences.front() + " - " + e.what());
           }
           
-          query_faidx = fai_load(param.querySequences.front().c_str());
-          if (!query_faidx) {
-              fai_destroy(ref_faidx);
+          try {
+              query_faidx = new ts_faidx::FastaReader(param.querySequences.front());
+          } catch (const std::exception& e) {
+              delete ref_faidx;
               hts_tpool_destroy(thread_pool);
-              throw std::runtime_error("[wfmash::align] Error! Failed to load query FASTA index: " + param.querySequences.front());
+              throw std::runtime_error("[wfmash::align] Error! Failed to load query FASTA index: " 
+                                      + param.querySequences.front() + " - " + e.what());
           }
           
-          // Attach thread pool to faidx objects using the proper API
-          // Calculate optimal queue size based on thread count (1/4 of threads)
-          int bgzf_queue_size = std::max(1, param.threads / 4);
-          
-          if (fai_thread_pool(ref_faidx, thread_pool, bgzf_queue_size) != 0) {
-              std::cerr << "[wfmash::align] Warning: Failed to attach thread pool to reference FASTA index" << std::endl;
-          }
-          
-          if (fai_thread_pool(query_faidx, thread_pool, bgzf_queue_size) != 0) {
-              std::cerr << "[wfmash::align] Warning: Failed to attach thread pool to query FASTA index" << std::endl;
-          }
+          std::cerr << "[wfmash::align] Successfully loaded thread-safe FASTA indices" << std::endl;
       }
 
       ~Aligner() {
-          fai_destroy(ref_faidx);
-          fai_destroy(query_faidx);
+          delete ref_faidx;
+          delete query_faidx;
           hts_tpool_destroy(thread_pool);
       }
       
@@ -555,44 +549,58 @@ void computeAlignmentsTaskflow() {
               << ", time taken = " << duration.count() << " seconds" << std::endl;
 }
 
-// Creates a sequence record using the provided faidx objects
-// When called from taskflow pipeline, this uses the optimized thread pool with BGZF queue size of threads/4
+// Creates a sequence record using the thread-safe FASTA readers
 seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord, 
                               const std::string& mappingRecordLine,
-                              faidx_t* ref_faidx,
-                              faidx_t* query_faidx) {
-    // Get the reference sequence length
-    const int64_t ref_size = faidx_seq_len(ref_faidx, currentRecord.refId.c_str());
-    // Get the query sequence length
-    const int64_t query_size = faidx_seq_len(query_faidx, currentRecord.qId.c_str());
+                              ts_faidx::FastaReader* ref_faidx,
+                              ts_faidx::FastaReader* query_faidx) {
+    try {
+        // Get the reference sequence length
+        const int64_t ref_size = ref_faidx->get_sequence_length(currentRecord.refId);
+        if (ref_size < 0) {
+            throw std::runtime_error("Reference sequence not found: " + currentRecord.refId);
+        }
+        
+        // Get the query sequence length
+        const int64_t query_size = query_faidx->get_sequence_length(currentRecord.qId);
+        if (query_size < 0) {
+            throw std::runtime_error("Query sequence not found: " + currentRecord.qId);
+        }
 
-    // Compute padding for sequence extraction
-    const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : currentRecord.rStartPos;
-    const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
-        ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
+        // Compute padding for sequence extraction
+        const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor
+            ? param.wflign_max_len_minor : currentRecord.rStartPos;
+        const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
+            ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
 
-    // Extract reference sequence
-    int64_t ref_len;
-    char* ref_seq = faidx_fetch_seq64(ref_faidx, currentRecord.refId.c_str(),
-                                      currentRecord.rStartPos - head_padding, 
-                                      currentRecord.rEndPos - 1 + tail_padding, &ref_len);
+        // Extract reference sequence (thread-safe)
+        std::string ref_seq_str = ref_faidx->fetch_sequence(
+            currentRecord.refId,
+            currentRecord.rStartPos - head_padding,
+            currentRecord.rEndPos + tail_padding);
+        int64_t ref_len = ref_seq_str.length();
+        char* ref_seq = strdup(ref_seq_str.c_str());
 
-    // Extract query sequence
-    int64_t query_len;
-    char* query_seq = faidx_fetch_seq64(query_faidx, currentRecord.qId.c_str(),
-                                        currentRecord.qStartPos, currentRecord.qEndPos - 1, &query_len);
+        // Extract query sequence (thread-safe)
+        std::string query_seq_str = query_faidx->fetch_sequence(
+            currentRecord.qId,
+            currentRecord.qStartPos,
+            currentRecord.qEndPos);
+        int64_t query_len = query_seq_str.length();
+        char* query_seq = strdup(query_seq_str.c_str());
 
-    // Create a new seq_record_t object that takes ownership of the sequences
-    seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
-                                         ref_seq, // Transfer ownership of ref_seq
-                                         currentRecord.rStartPos - head_padding, ref_len, ref_size,
-                                         query_seq, // Transfer ownership of query_seq
-                                         currentRecord.qStartPos, query_len, query_size);
+        // Create a new seq_record_t object that takes ownership of the sequences
+        seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
+                                           ref_seq, // Transfer ownership of ref_seq
+                                           currentRecord.rStartPos - head_padding, ref_len, ref_size,
+                                           query_seq, // Transfer ownership of query_seq
+                                           currentRecord.qStartPos, query_len, query_size);
 
-    // No free() calls here - the seq_record_t destructor will handle cleanup
-
-    return rec;
+        return rec;
+    } catch (const std::exception& e) {
+        std::cerr << "[wfmash::align] Error extracting sequence: " << e.what() << std::endl;
+        throw;
+    }
 }
 
 std::string processAlignment(seq_record_t* rec) {
@@ -657,29 +665,10 @@ std::string processAlignment(seq_record_t* rec) {
 }
 
 void write_sam_header(std::ofstream& outstream) {
-    for(const auto &fileName : param.refSequences) {
-        // check if there is a .fai
-        std::string fai_name = fileName + ".fai";
-        if (fs::exists(fai_name)) {
-            // if so, process the .fai to determine our sequence length
-            std::string line;
-            std::ifstream in(fai_name.c_str());
-            while (std::getline(in, line)) {
-                auto line_split = skch::CommonFunc::split(line, '\t');
-                const std::string seq_name = line_split[0];
-                const uint64_t seq_len = std::stoull(line_split[1]);
-                outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
-            }
-        } else {
-            // if not, warn that this is expensive
-            std::cerr << "[wfmash::align] WARNING, no .fai index found for " << fileName << ", reading the file to prepare SAM header (slow)" << std::endl;
-            seqiter::for_each_seq_in_file(
-                fileName, {}, "",
-                [&](const std::string& seq_name,
-                    const std::string& seq) {
-                    outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq.length() << "\n";
-                });
-        }
+    // Use our thread-safe FastaReader to get sequence names and lengths
+    for (const auto& seq_name : ref_faidx->get_sequence_names()) {
+        int64_t seq_len = ref_faidx->get_sequence_length(seq_name);
+        outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
     }
     outstream << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFMASH_GIT_VERSION << "\tCL:wfmash\n";
 }
