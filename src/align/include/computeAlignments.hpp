@@ -368,14 +368,12 @@ void computeAlignmentsTaskflow() {
                     
                     // Keep trying to push until successful, with backoff
                     while (!pushed && retries < 100) {
-                        pushed = mapping_queue->push(line_ptr, [&]() {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(10 * (1 + retries)));
-                            retries++;
-                            return true; // retry
-                        });
+                        // Using without retry callback, manually retry instead
+                        pushed = mapping_queue->try_push(line_ptr);
                         
                         if (!pushed) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            std::this_thread::sleep_for(std::chrono::milliseconds(10 * (1 + retries)));
+                            retries++;
                         }
                     }
                     
@@ -466,14 +464,12 @@ void computeAlignmentsTaskflow() {
                         int retries = 0;
                         
                         while (!pushed && retries < 100) {
-                            pushed = result_queue->push(result_ptr, [&]() {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(10 * (1 + retries)));
-                                retries++;
-                                return true; // retry
-                            });
+                            // Using without retry callback, manually retry instead
+                            pushed = result_queue->try_push(result_ptr);
                             
                             if (!pushed) {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                std::this_thread::sleep_for(std::chrono::milliseconds(10 * (1 + retries)));
+                                retries++;
                             }
                         }
                         
