@@ -351,7 +351,8 @@ void computeAlignmentsTaskflow() {
         std::string mapping_record;
         MappingBoundaryRow record;
         seq_record_t* seq_rec = nullptr;
-        std::string alignment_output;
+        std::string alignment_output;        // Raw alignment output from WFA
+        std::string formatted_output;        // Preprocessed output ready for writing
         uint64_t alignment_length = 0;
         bool valid = false;
         // Add batch processing capability
@@ -422,7 +423,7 @@ void computeAlignmentsTaskflow() {
             }
         }},
         
-        // Stage 2: Process alignment (parallel)
+        // Stage 2: Process alignment (parallel) and prepare formatted output
         tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
             size_t idx = pf.line();
             PipelineData& data = pipe_data[idx];
@@ -438,43 +439,8 @@ void computeAlignmentsTaskflow() {
                 data.alignment_output = processAlignment(data.seq_rec);
                 data.alignment_length = data.record.qEndPos - data.record.qStartPos;
                 
-                // Use fetch_add with relaxed ordering for better performance
-                processed_alignment_length.fetch_add(data.alignment_length, std::memory_order_relaxed);
-                total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-                
-                // Update progress (this is thread-safe)
-                progress.increment(data.alignment_length);
-            } catch (const std::exception& e) {
-                std::cerr << "[wfmash::align] Error in stage 2: " << e.what() << std::endl;
-                data.valid = false;
-                
-                // Clean up if necessary
-                if (data.seq_rec != nullptr) {
-                    delete data.seq_rec;
-                    data.seq_rec = nullptr;
-                }
-            }
-        }},
-        
-        // Stage 3: Write output (PARALLEL to allow for more CPU utilization)
-        tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
-            size_t idx = pf.line();
-            PipelineData& data = pipe_data[idx];
-            
-            if (!data.valid || data.alignment_output.empty()) {
-                // Clean up if necessary
-                if (data.seq_rec != nullptr) {
-                    delete data.seq_rec;
-                    data.seq_rec = nullptr;
-                }
-                return;
-            }
-            
-            try {
-                // Process output for writing - create a buffer to reduce lock contention
-                std::stringstream output_buffer;
-                
-                // Process output for writing
+                // Format the output in parallel (moved from Stage 3)
+                std::stringstream formatted_buffer;
                 std::string_view output(data.alignment_output);
                 size_t start = 0;
                 size_t end = output.find('\n');
@@ -503,10 +469,10 @@ void computeAlignmentsTaskflow() {
                             }
                             new_line += '\n';
                             
-                            output_buffer << new_line;
+                            formatted_buffer << new_line;
                         } else {
                             // If no CIGAR string found, output the line unchanged
-                            output_buffer << line << '\n';
+                            formatted_buffer << line << '\n';
                         }
                     }
                     
@@ -514,10 +480,49 @@ void computeAlignmentsTaskflow() {
                     end = output.find('\n', start);
                 }
                 
-                // Lock only when writing to the output stream
+                // Store the fully formatted output
+                data.formatted_output = formatted_buffer.str();
+                
+                // Clear the raw alignment output to save memory
+                data.alignment_output.clear();
+                
+                // Use fetch_add with relaxed ordering for better performance
+                processed_alignment_length.fetch_add(data.alignment_length, std::memory_order_relaxed);
+                total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+                
+                // Update progress (this is thread-safe)
+                progress.increment(data.alignment_length);
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash::align] Error in stage 2: " << e.what() << std::endl;
+                data.valid = false;
+                
+                // Clean up if necessary
+                if (data.seq_rec != nullptr) {
+                    delete data.seq_rec;
+                    data.seq_rec = nullptr;
+                }
+            }
+        }},
+        
+        // Stage 3: Write output (PARALLEL for parallelized I/O)
+        tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
+            size_t idx = pf.line();
+            PipelineData& data = pipe_data[idx];
+            
+            if (!data.valid || data.formatted_output.empty()) {
+                // Clean up if necessary
+                if (data.seq_rec != nullptr) {
+                    delete data.seq_rec;
+                    data.seq_rec = nullptr;
+                }
+                return;
+            }
+            
+            try {
+                // Lock only when writing to the output stream - write already formatted data
                 {
                     std::lock_guard<std::mutex> lock(output_mutex);
-                    outstream << output_buffer.str();
+                    outstream << data.formatted_output;
                     // Only flush occasionally to reduce I/O overhead
                     if (total_alignments_processed.load(std::memory_order_relaxed) % 1000 == 0) {
                         outstream.flush();
@@ -532,6 +537,9 @@ void computeAlignmentsTaskflow() {
                 delete data.seq_rec;
                 data.seq_rec = nullptr;
             }
+            
+            // Clear the formatted output to save memory
+            data.formatted_output.clear();
         }}
     );
     
