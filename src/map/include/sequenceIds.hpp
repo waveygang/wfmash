@@ -38,6 +38,65 @@ public:
         buildRefGroups();
     }
     
+    // Add a new query sequence to the ID manager
+    seqno_t addQuerySequence(const std::string& sequenceName, offset_t length) {
+        seqno_t seqId = addSequence(sequenceName, length);
+        // Add to query sequence names if not already present
+        if (std::find(querySequenceNames.begin(), querySequenceNames.end(), sequenceName) == querySequenceNames.end()) {
+            querySequenceNames.push_back(sequenceName);
+        }
+        return seqId;
+    }
+    
+    // Getter for the sequence name to ID map
+    const std::unordered_map<std::string, seqno_t>& getSequenceNameToIdMap() const {
+        return sequenceNameToId;
+    }
+    
+    // Load query sequences from FAI files
+    void loadQuerySequences(const std::vector<std::string>& queryFiles, 
+                           const std::vector<std::string>& queryPrefixes,
+                           const std::string& prefixDelim,
+                           const std::string& queryList = "") {
+        std::unordered_set<std::string> allowedQueryNames;
+        if (!queryList.empty()) {
+            std::ifstream file(queryList);
+            std::string name;
+            while (std::getline(file, name)) {
+                allowedQueryNames.insert(name);
+            }
+        }
+        
+        for (const auto& fileName : queryFiles) {
+            std::string faiName = fileName + ".fai";
+            std::ifstream faiFile(faiName);
+            if (!faiFile.is_open()) {
+                std::cerr << "Error: Unable to open query FAI file: " << faiName << std::endl;
+                exit(1);
+            }
+            
+            std::string line;
+            while (std::getline(faiFile, line)) {
+                std::istringstream iss(line);
+                std::string seqName;
+                offset_t seqLength;
+                iss >> seqName >> seqLength;
+                
+                // Check if this sequence should be included based on prefix
+                bool prefixMatch = queryPrefixes.empty() || std::any_of(queryPrefixes.begin(), queryPrefixes.end(),
+                    [&](const std::string& prefix) { return seqName.compare(0, prefix.size(), prefix) == 0; });
+                
+                if (prefixMatch && (allowedQueryNames.empty() || allowedQueryNames.find(seqName) != allowedQueryNames.end())) {
+                    // Add to ID manager if not already present
+                    addQuerySequence(seqName, seqLength);
+                }
+            }
+        }
+        
+        std::cerr << "[wfmash::mashmap] Loaded " << querySequenceNames.size() 
+                  << " query sequences" << std::endl;
+    }
+    
     // Export ID mapping information
     void exportIdMapping(std::ofstream& outStream) const {
         uint64_t mapSize = sequenceNameToId.size();
@@ -60,10 +119,22 @@ public:
         auto originalMappings = sequenceNameToId;
         auto originalMetadata = metadata;
         auto originalNextId = nextId;
+        auto originalQueryNames = querySequenceNames;
+        auto originalTargetNames = targetSequenceNames;
         
         try {
-            // Clear current mappings to start fresh
+            // Clear current mappings to start fresh, but preserve query sequences
+            std::unordered_map<std::string, seqno_t> queryMappings;
+            for (const auto& name : querySequenceNames) {
+                auto it = sequenceNameToId.find(name);
+                if (it != sequenceNameToId.end()) {
+                    queryMappings[it->first] = it->second;
+                }
+            }
+            
+            // Clear and rebuild target sequences
             sequenceNameToId.clear();
+            targetSequenceNames.clear();
             
             uint64_t mapSize = 0;
             inStream.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
@@ -91,6 +162,7 @@ public:
                 inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
                 
                 sequenceNameToId[seqName] = seqId;
+                targetSequenceNames.push_back(seqName);
                 maxId = std::max(maxId, seqId);
             }
             
@@ -117,11 +189,19 @@ public:
             // Ensure our nextId is at least as large as the one from the index
             nextId = std::max(indexNextId, maxId + 1);
             
+            // Preserve query sequence names from original state
+            querySequenceNames = originalQueryNames;
+            
+            std::cerr << "[wfmash::mashmap] Imported " << targetSequenceNames.size() 
+                      << " target sequences from index" << std::endl;
+            
         } catch (const std::exception& e) {
             // Restore original state on error
             sequenceNameToId = originalMappings;
             metadata = originalMetadata;
             nextId = originalNextId;
+            querySequenceNames = originalQueryNames;
+            targetSequenceNames = originalTargetNames;
             std::cerr << "Error importing ID mappings: " << e.what() << std::endl;
             std::cerr << "Restored original ID mappings" << std::endl;
         }
@@ -268,17 +348,18 @@ private:
                            const std::string& prefixDelim,
                            const std::string& queryList,
                            const std::string& targetList) {
-        std::unordered_set<std::string> allowedQueryNames;
         std::unordered_set<std::string> allowedTargetNames;
+        std::unordered_set<std::string> allowedQueryNames;
 
-        if (!queryList.empty()) readAllowedNames(queryList, allowedQueryNames);
         if (!targetList.empty()) readAllowedNames(targetList, allowedTargetNames);
+        if (!queryList.empty()) readAllowedNames(queryList, allowedQueryNames);
 
-        for (const auto& file : queryFiles) {
-            readFAI(file, queryPrefixes, prefixDelim, allowedQueryNames, true);
-        }
+        // Put target sequences first to keep their IDs stable with/without query sequences (useful for index generation)
         for (const auto& file : targetFiles) {
             readFAI(file, targetPrefixes, prefixDelim, allowedTargetNames, false);
+        }
+        for (const auto& file : queryFiles) {
+            readFAI(file, queryPrefixes, prefixDelim, allowedQueryNames, true);
         }
     }
 
