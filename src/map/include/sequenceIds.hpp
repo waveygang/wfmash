@@ -268,17 +268,18 @@ private:
                            const std::string& prefixDelim,
                            const std::string& queryList,
                            const std::string& targetList) {
-        std::unordered_set<std::string> allowedQueryNames;
         std::unordered_set<std::string> allowedTargetNames;
+        std::unordered_set<std::string> allowedQueryNames;
 
-        if (!queryList.empty()) readAllowedNames(queryList, allowedQueryNames);
         if (!targetList.empty()) readAllowedNames(targetList, allowedTargetNames);
+        if (!queryList.empty()) readAllowedNames(queryList, allowedQueryNames);
 
-        for (const auto& file : queryFiles) {
-            readFAI(file, queryPrefixes, prefixDelim, allowedQueryNames, true);
-        }
+        // Put target sequences first to keep their IDs stable with/without query sequences (useful for index generation)
         for (const auto& file : targetFiles) {
             readFAI(file, targetPrefixes, prefixDelim, allowedTargetNames, false);
+        }
+        for (const auto& file : queryFiles) {
+            readFAI(file, queryPrefixes, prefixDelim, allowedQueryNames, true);
         }
     }
 
