@@ -358,7 +358,11 @@ void computeAlignmentsTaskflow() {
             if (!line.empty()) {
                 // Allocate string on heap and push pointer
                 std::string* line_ptr = new std::string(line);
-                mapping_queue->push(line_ptr);
+                // Add a callback for when queue is full (retry with backoff)
+                mapping_queue->push(line_ptr, [&line_ptr](){ 
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    return true; // retry
+                });
                 count++;
             }
         }
@@ -411,7 +415,11 @@ void computeAlignmentsTaskflow() {
                     if (!alignment_output.empty()) {
                         // Allocate result on heap
                         alignment_result_t* result_ptr = new alignment_result_t(std::move(alignment_output), alignment_length);
-                        result_queue->push(result_ptr);
+                        // Add a callback for when queue is full (retry with backoff)
+                        result_queue->push(result_ptr, [&result_ptr](){ 
+                            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                            return true; // retry
+                        });
                     }
                     
                     // Update progress and stats
