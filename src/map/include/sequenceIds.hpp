@@ -60,10 +60,22 @@ public:
         auto originalMappings = sequenceNameToId;
         auto originalMetadata = metadata;
         auto originalNextId = nextId;
+        auto originalQueryNames = querySequenceNames;
+        auto originalTargetNames = targetSequenceNames;
         
         try {
-            // Clear current mappings to start fresh
+            // Clear current mappings to start fresh, but preserve query sequences
+            std::unordered_map<std::string, seqno_t> queryMappings;
+            for (const auto& name : querySequenceNames) {
+                auto it = sequenceNameToId.find(name);
+                if (it != sequenceNameToId.end()) {
+                    queryMappings[it->first] = it->second;
+                }
+            }
+            
+            // Clear and rebuild target sequences
             sequenceNameToId.clear();
+            targetSequenceNames.clear();
             
             uint64_t mapSize = 0;
             inStream.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
@@ -91,6 +103,7 @@ public:
                 inStream.read(reinterpret_cast<char*>(&seqId), sizeof(seqId));
                 
                 sequenceNameToId[seqName] = seqId;
+                targetSequenceNames.push_back(seqName);
                 maxId = std::max(maxId, seqId);
             }
             
@@ -117,11 +130,19 @@ public:
             // Ensure our nextId is at least as large as the one from the index
             nextId = std::max(indexNextId, maxId + 1);
             
+            // Preserve query sequence names from original state
+            querySequenceNames = originalQueryNames;
+            
+            std::cerr << "[wfmash::mashmap] Imported " << targetSequenceNames.size() 
+                      << " target sequences from index" << std::endl;
+            
         } catch (const std::exception& e) {
             // Restore original state on error
             sequenceNameToId = originalMappings;
             metadata = originalMetadata;
             nextId = originalNextId;
+            querySequenceNames = originalQueryNames;
+            targetSequenceNames = originalTargetNames;
             std::cerr << "Error importing ID mappings: " << e.what() << std::endl;
             std::cerr << "Restored original ID mappings" << std::endl;
         }
