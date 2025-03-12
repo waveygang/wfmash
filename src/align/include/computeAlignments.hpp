@@ -149,7 +149,6 @@ struct seq_record_t {
 
       ts_faidx::FastaReader* ref_faidx;
       ts_faidx::FastaReader* query_faidx;
-      hts_tpool* thread_pool;
 
     public:
 
@@ -157,17 +156,10 @@ struct seq_record_t {
           assert(param.refSequences.size() == 1);
           assert(param.querySequences.size() == 1);
           
-          // Initialize thread pool
-          thread_pool = hts_tpool_init(param.threads);
-          if (!thread_pool) {
-              throw std::runtime_error("[wfmash::align] Error! Failed to create thread pool");
-          }
-          
           // Load thread-safe FASTA readers
           try {
               ref_faidx = new ts_faidx::FastaReader(param.refSequences.front());
           } catch (const std::exception& e) {
-              hts_tpool_destroy(thread_pool);
               throw std::runtime_error("[wfmash::align] Error! Failed to load reference FASTA index: " 
                                       + param.refSequences.front() + " - " + e.what());
           }
@@ -176,7 +168,6 @@ struct seq_record_t {
               query_faidx = new ts_faidx::FastaReader(param.querySequences.front());
           } catch (const std::exception& e) {
               delete ref_faidx;
-              hts_tpool_destroy(thread_pool);
               throw std::runtime_error("[wfmash::align] Error! Failed to load query FASTA index: " 
                                       + param.querySequences.front() + " - " + e.what());
           }
@@ -187,7 +178,6 @@ struct seq_record_t {
       ~Aligner() {
           delete ref_faidx;
           delete query_faidx;
-          hts_tpool_destroy(thread_pool);
       }
       
       /**
@@ -297,16 +287,9 @@ void computeAlignmentsTaskflow() {
     // Start timing
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // Create concurrent queues for communication between stages
-    const size_t queue_capacity = 65536; // Increased 8x from 8192 to buffer more records (2^16)
-    atomic_queue::AtomicQueue<std::string*, queue_capacity, nullptr> line_queue;
-    std::atomic<bool> reader_done(false);
+    // Tracking variables for statistics
     std::atomic<uint64_t> total_alignments_processed(0);
     std::atomic<uint64_t> processed_alignment_length(0);
-    
-    // Create a taskflow to manage the reading task
-    tf::Taskflow reader_taskflow;
-    tf::Executor reader_executor(1); // Single thread for reading
     
     // Calculate total alignment length for progress tracking
     uint64_t total_alignment_length = 0;
@@ -326,151 +309,49 @@ void computeAlignmentsTaskflow() {
     // Progress meter
     progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
     
-    // Create a task to read input in a separate thread
-    auto read_task = reader_taskflow.emplace([&]() {
+    // Read in all mapping records
+    std::vector<std::string> mapping_records;
+    {
         std::ifstream mappingStream(param.mashmapPafFile);
         if (!mappingStream.is_open()) {
             throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
         }
         
-        // Use batch reading to reduce overhead
-        const size_t batch_size = 100;
-        std::vector<std::string> batch_lines;
-        batch_lines.reserve(batch_size);
-        
         std::string line;
-        while(true) {
-            // Read a batch of lines
-            batch_lines.clear();
-            for (size_t i = 0; i < batch_size && std::getline(mappingStream, line); ++i) {
-                if (!line.empty()) {
-                    batch_lines.push_back(std::move(line));
-                }
-                line.clear(); // Ensure line is empty for next read
-            }
-            
-            // If no lines were read, we're done
-            if (batch_lines.empty()) {
-                break;
-            }
-            
-            // Process the batch
-            std::vector<std::string*> line_ptrs;
-            line_ptrs.reserve(batch_lines.size());
-            
-            // Create heap strings
-            for (auto& bline : batch_lines) {
-                line_ptrs.push_back(new std::string(std::move(bline)));
-            }
-            
-            // Push batch to queue with adaptive backoff
-            size_t pushed = 0;
-            size_t backoff_time = 1; // Start with 1ms
-            
-            while (pushed < line_ptrs.size()) {
-                bool made_progress = false;
-                
-                // Try to push as many as possible
-                while (pushed < line_ptrs.size() && line_queue.try_push(line_ptrs[pushed])) {
-                    ++pushed;
-                    made_progress = true;
-                    backoff_time = 1; // Reset backoff on progress
-                }
-                
-                // If we couldn't push everything, wait with adaptive backoff
-                if (pushed < line_ptrs.size()) {
-                    if (!made_progress) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(backoff_time));
-                        backoff_time = std::min(backoff_time * 2, size_t(100)); // Exponential backoff, max 100ms
-                    }
-                }
+        while(std::getline(mappingStream, line)) {
+            if (!line.empty()) {
+                mapping_records.push_back(std::move(line));
             }
         }
-        
-        reader_done.store(true);
-    }).name("read_input_file");
+    }
     
-    // Launch reader task asynchronously
-    reader_executor.run(reader_taskflow);
+    std::cerr << "[wfmash::align] Loaded " << mapping_records.size() << " mapping records" << std::endl;
     
-    // Create storage for pipeline data
-    const size_t num_pipeline_lines = std::max<size_t>(256, param.threads * 64);
-    std::vector<seq_record_t*> records(num_pipeline_lines, nullptr);
-    std::vector<std::string> alignment_outputs(num_pipeline_lines);
+    // Create a mutex for output synchronization
+    std::mutex output_mutex;
     
-    // Create a taskflow for the pipeline
+    // Create a taskflow and executor
     tf::Taskflow taskflow;
     tf::Executor executor(param.threads);
     
-    // Define our pipeline
-    tf::Pipeline pipeline(num_pipeline_lines,
-        // Stage 1: Parse mapping record (SERIAL)
-        tf::Pipe{tf::PipeType::SERIAL, [&, this](tf::Pipeflow& pf) {
-            // Try to get a line from the queue with retry logic
-            std::string* line_ptr = nullptr;
-            
-            // Try a few times with short intervals before yielding
-            for (int retry = 0; retry < 3; ++retry) {
-                if (line_queue.try_pop(line_ptr)) {
-                    break;
-                }
-                // Very short pause between immediate retries
-                std::this_thread::sleep_for(std::chrono::microseconds(10));
-            }
-            
-            if (line_ptr) {
-                // Parse the current record
-                MappingBoundaryRow currentRecord;
-                parseMashmapRow(*line_ptr, currentRecord, param.target_padding);
-                
-                // Create seq_record_t using the thread-pool enabled faidx
-                // (using main class faidx with optimized BGZF queue size of threads/4)
-                records[pf.line()] = createSeqRecord(currentRecord, *line_ptr, 
-                                                    this->ref_faidx, this->query_faidx);
-                
-                // Clean up the line
-                delete line_ptr;
-            } else if (reader_done.load() && line_queue.was_empty()) {
-                // No more input to process
-                pf.stop();
-                return;
-            } else {
-                // Queue is temporarily empty but reader is still working
-                // Use a progressive backoff strategy rather than just yielding
-                static thread_local int empty_count = 0;
-                if (++empty_count > 10) {
-                    // If we've had many empty attempts, sleep for a bit longer
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                    empty_count = 0;
-                } else {
-                    // Otherwise just yield to give other tasks a chance
-                    std::this_thread::yield();
-                }
-            }
-        }},
+    // Process records in parallel
+    taskflow.for_each_index(0, mapping_records.size(), 1, [&, this](int i) {
+        // Parse the mapping record
+        MappingBoundaryRow currentRecord;
+        parseMashmapRow(mapping_records[i], currentRecord, param.target_padding);
         
-        // Stage 2: Perform alignment (PARALLEL)
-        tf::Pipe{tf::PipeType::PARALLEL, [&, this](tf::Pipeflow& pf) {
-            // Process alignment for this record
-            seq_record_t* rec = records[pf.line()];
-            if (rec == nullptr) return;
-            
-            alignment_outputs[pf.line()] = processAlignment(rec);
-            
-            // Update progress
-            uint64_t alignment_length = rec->currentRecord.qEndPos - rec->currentRecord.qStartPos;
-            progress.increment(alignment_length);
-            processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-            total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-        }},
+        // Create sequence record by fetching from thread-safe readers
+        seq_record_t* rec = createSeqRecord(currentRecord, mapping_records[i], 
+                                          this->ref_faidx, this->query_faidx);
         
-        // Stage 3: Write results (SERIAL)
-        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
-            // Write the output for this record
-            if (records[pf.line()] == nullptr) return;
-            if (alignment_outputs[pf.line()].empty()) return;
+        // Process the alignment
+        std::string alignment_output = processAlignment(rec);
+        
+        // Write output with mutex protection
+        if (!alignment_output.empty()) {
+            std::lock_guard<std::mutex> lock(output_mutex);
             
-            std::string_view output(alignment_outputs[pf.line()]);
+            std::string_view output(alignment_output);
             size_t start = 0;
             size_t end = output.find('\n');
             
@@ -510,28 +391,20 @@ void computeAlignmentsTaskflow() {
             }
             
             outstream.flush();
-            
-            // Clean up
-            delete records[pf.line()];
-            records[pf.line()] = nullptr;
-            alignment_outputs[pf.line()].clear();
-        }}
-    );
+        }
+        
+        // Update progress
+        uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
+        progress.increment(alignment_length);
+        processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+        total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+        
+        // Clean up
+        delete rec;
+    });
     
-    // Build the pipeline task
-    tf::Task task = taskflow.composed_of(pipeline).name("alignment_pipeline");
-    
-    // Run the pipeline and wait for completion
+    // Run the taskflow and wait for completion
     executor.run(taskflow).wait();
-    
-    // Wait for reader to finish (should already be done)
-    reader_executor.wait_for_all();
-    
-    // Clean up any remaining items in the line queue
-    std::string* remaining_line = nullptr;
-    while (line_queue.try_pop(remaining_line)) {
-        delete remaining_line;
-    }
     
     // Close output stream
     outstream.close();
