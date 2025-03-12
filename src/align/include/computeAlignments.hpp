@@ -333,7 +333,7 @@ void computeAlignmentsTaskflow() {
     // Mutex for synchronized output writing
     std::mutex output_mutex;
     
-    // Create a taskflow pipeline with 3 stages
+    // Create a taskflow with pipeline
     const size_t num_tokens = std::min<size_t>(param.threads * 3, 1024);  // Number of tokens in flight
     
     tf::Taskflow taskflow;
@@ -351,9 +351,8 @@ void computeAlignmentsTaskflow() {
     // Vector to store pipeline data for all tokens
     std::vector<PipelineData> pipe_data(num_tokens);
     
-    tf::Pipeline pipeline = taskflow.pipeline(
-        // Number of tokens
-        num_tokens,
+    // Create the pipeline object
+    tf::Pipeline pipeline(num_tokens,
         
         // Stage 1: Read mapping record and extract sequences (serial)
         tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
@@ -486,7 +485,10 @@ void computeAlignmentsTaskflow() {
         }}
     );
     
-    // Run the pipeline
+    // Add the pipeline to the taskflow
+    tf::Task pipeline_task = taskflow.composed_of(pipeline);
+    
+    // Run the taskflow
     executor.run(taskflow).wait();
     
     // Clean up any remaining pipeline data
