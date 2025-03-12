@@ -305,6 +305,7 @@ void computeAlignmentsTaskflow() {
     // Calculate total alignment length for progress tracking
     uint64_t total_alignment_length = 0;
     size_t total_records = 0;
+    std::vector<std::string> mapping_records;
     {
         std::ifstream mappingListStream(param.mashmapPafFile);
         std::string mappingRecordLine;
@@ -315,231 +316,125 @@ void computeAlignmentsTaskflow() {
                 parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
                 total_records++;
+                mapping_records.push_back(std::move(mappingRecordLine));
             }
         }
     }
+    
+    std::cerr << "[wfmash::align] Loaded " << mapping_records.size() 
+              << " mapping records for alignment" << std::endl;
     
     // Progress meter
     progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
     
-    // Create three taskflows with separate executors
-    tf::Taskflow reader_taskflow;
-    tf::Taskflow worker_taskflow;
-    tf::Taskflow writer_taskflow;
+    // Create taskflow executor with thread count
+    tf::Executor executor(param.threads);
     
-    // Executors with appropriate thread counts
-    tf::Executor reader_executor(1);  // Single reader thread
-    tf::Executor worker_executor(param.threads);  // Worker threads for alignment
-    tf::Executor writer_executor(1);  // Single writer thread
+    // Mutex for synchronized output writing
+    std::mutex output_mutex;
     
-    // Create thread-safe queues for communication between tasks
-    // Note: BoundedTaskQueue requires pointer types
-    using MappingQueue = tf::BoundedTaskQueue<std::string*>;
-    using ResultQueue = tf::BoundedTaskQueue<alignment_result_t*>;
+    // Create a taskflow pipeline with 3 stages
+    const size_t num_tokens = std::min<size_t>(param.threads * 3, 1024);  // Number of tokens in flight
     
-    // Create queues
-    auto mapping_queue = std::make_shared<MappingQueue>();
-    auto result_queue = std::make_shared<ResultQueue>();
+    tf::Taskflow taskflow;
     
-    // Signal flags and counters for completion and tracking
-    std::atomic<bool> reader_done(false);
-    std::atomic<bool> all_workers_done(false);
-    std::atomic<size_t> records_read(0);
-    std::atomic<size_t> records_processed(0);
-    std::atomic<size_t> results_pushed(0);
-    std::atomic<size_t> results_written(0);
+    // Helper struct to store data during pipeline processing
+    struct PipelineData {
+        std::string mapping_record;
+        MappingBoundaryRow record;
+        seq_record_t* seq_rec = nullptr;
+        std::string alignment_output;
+        uint64_t alignment_length = 0;
+        bool valid = false;
+    };
     
-    // Create reader task - reads mapping records and pushes to mapping_queue
-    auto reader_task = reader_taskflow.emplace([&]() {
-        try {
-            std::ifstream mappingStream(param.mashmapPafFile);
-            if (!mappingStream.is_open()) {
-                throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
-            }
-            
-            std::string line;
-            size_t count = 0;
-            while(std::getline(mappingStream, line)) {
-                if (!line.empty()) {
-                    // Allocate string on heap and push pointer
-                    std::string* line_ptr = new std::string(line);
-                    bool pushed = false;
-                    int retries = 0;
-                    
-                    // Keep trying to push until successful, with backoff
-                    while (!pushed && retries < 100) {
-                        // Using without retry callback, manually retry instead
-                        pushed = mapping_queue->try_push(line_ptr);
-                        
-                        if (!pushed) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(10 * (1 + retries)));
-                            retries++;
-                        }
-                    }
-                    
-                    if (!pushed) {
-                        std::cerr << "[wfmash::align] Warning: Failed to push record after max retries" << std::endl;
-                        delete line_ptr;
-                        continue;
-                    }
-                    
-                    count++;
-                    records_read.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-            
-            std::cerr << "[wfmash::align] Reader task completed, pushed " << count << " records" << std::endl;
-        } catch (const std::exception& e) {
-            std::cerr << "[wfmash::align] Reader error: " << e.what() << std::endl;
-        }
+    // Vector to store pipeline data for all tokens
+    std::vector<PipelineData> pipe_data(num_tokens);
+    
+    tf::Pipeline pipeline = taskflow.pipeline(
+        // Number of tokens
+        num_tokens,
         
-        // Signal that reading is done
-        reader_done.store(true, std::memory_order_release);
-    });
-    
-    // Create worker tasks - take records from mapping_queue, process, push results to result_queue
-    const int num_workers = param.threads;
-    std::vector<tf::Task> worker_tasks;
-    
-    for (int i = 0; i < num_workers; i++) {
-        worker_tasks.push_back(worker_taskflow.emplace([&, this, i]() {
-            std::string mapping_record;
-            size_t processed = 0;
-            
-            while (true) {
-                // Try to get work from the queue
-                std::string* mapping_record_ptr = nullptr;
-                
-                // First check if we should exit
-                if (reader_done.load(std::memory_order_acquire)) {
-                    // Double-check queue is empty before exiting
-                    mapping_record_ptr = mapping_queue->pop();
-                    if (mapping_record_ptr == nullptr) {
-                        // Wait a bit to ensure queue is truly empty (other threads might be pushing)
-                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                        mapping_record_ptr = mapping_queue->pop();
-                        if (mapping_record_ptr == nullptr && mapping_queue->empty()) {
-                            break;
-                        }
-                    }
-                } else {
-                    // Normal operation - get a record
-                    mapping_record_ptr = mapping_queue->pop();
-                    if (mapping_record_ptr == nullptr) {
-                        // If no work, yield and try again
-                        std::this_thread::yield();
-                        continue;
-                    }
-                }
-                
-                // If we reach here and have a null pointer, continue
-                if (mapping_record_ptr == nullptr) {
-                    continue;
-                }
-                
-                try {
-                    // Make a copy of the mapping record
-                    mapping_record = *mapping_record_ptr;
-                    delete mapping_record_ptr; // Free memory
-                    
-                    // Process the mapping record
-                    MappingBoundaryRow currentRecord;
-                    parseMashmapRow(mapping_record, currentRecord, param.target_padding);
-                    
-                    // Create sequence record by fetching from thread-safe readers
-                    seq_record_t* rec = createSeqRecord(currentRecord, mapping_record, 
-                                                   this->ref_faidx, this->query_faidx);
-                    
-                    // Process the alignment
-                    std::string alignment_output = processAlignment(rec);
-                    
-                    // Push result to output queue
-                    uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
-                    if (!alignment_output.empty()) {
-                        // Allocate result on heap
-                        alignment_result_t* result_ptr = new alignment_result_t(std::move(alignment_output), alignment_length);
-                        
-                        // Keep trying to push until successful, with backoff
-                        bool pushed = false;
-                        int retries = 0;
-                        
-                        while (!pushed && retries < 100) {
-                            // Using without retry callback, manually retry instead
-                            pushed = result_queue->try_push(result_ptr);
-                            
-                            if (!pushed) {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(10 * (1 + retries)));
-                                retries++;
-                            }
-                        }
-                        
-                        if (pushed) {
-                            results_pushed.fetch_add(1, std::memory_order_relaxed);
-                        } else {
-                            std::cerr << "[wfmash::align] Warning: Failed to push result after max retries" << std::endl;
-                            delete result_ptr;
-                        }
-                    }
-                    
-                    // Update progress and stats
-                    progress.increment(alignment_length);
-                    processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-                    total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-                    
-                    // Update progress and stats
-                    records_processed.fetch_add(1, std::memory_order_relaxed);
-                    
-                    // Clean up
-                    delete rec;
-                    processed++;
-                } catch (const std::exception& e) {
-                    std::cerr << "[wfmash::align] Worker " << i << " error: " << e.what() << std::endl;
-                }
+        // Stage 1: Read mapping record and extract sequences (serial)
+        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+            if (pf.token() >= mapping_records.size()) {
+                pf.stop();
+                return;
             }
             
-            std::cerr << "[wfmash::align] Worker " << i << " processed " << processed << " records" << std::endl;
-        }));
-    }
-    
-    // Create writer task - takes results from result_queue and writes to output file
-    auto writer_task = writer_taskflow.emplace([&]() {
-        size_t written = 0;
+            size_t idx = pf.line();
+            PipelineData& data = pipe_data[idx];
+            
+            // Clear any previous data
+            if (data.seq_rec != nullptr) {
+                delete data.seq_rec;
+                data.seq_rec = nullptr;
+            }
+            data.valid = false;
+            
+            try {
+                // Get the mapping record
+                data.mapping_record = mapping_records[pf.token()];
+                
+                // Parse the record
+                parseMashmapRow(data.mapping_record, data.record, param.target_padding);
+                
+                // Set as valid for next stage
+                data.valid = true;
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash::align] Error in stage 1: " << e.what() << std::endl;
+            }
+        }},
         
-        while (true) {
-            // Try to get a result from the queue
-            alignment_result_t* result_ptr = nullptr;
+        // Stage 2: Process alignment (parallel)
+        tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
+            size_t idx = pf.line();
+            PipelineData& data = pipe_data[idx];
             
-            // First check if we should exit
-            if (all_workers_done.load(std::memory_order_acquire)) {
-                // Double-check queue is empty before exiting
-                result_ptr = result_queue->pop();
-                if (result_ptr == nullptr) {
-                    // Wait a bit to ensure queue is truly empty
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    result_ptr = result_queue->pop();
-                    if (result_ptr == nullptr && result_queue->empty() && 
-                        results_written.load() >= results_pushed.load()) {
-                        break;
-                    }
-                }
-            } else {
-                // Normal operation - get a result
-                result_ptr = result_queue->pop();
-                if (result_ptr == nullptr) {
-                    // If no result, yield and try again
-                    std::this_thread::yield();
-                    continue;
+            if (!data.valid) return;
+            
+            try {
+                // Create sequence record using thread-safe readers
+                data.seq_rec = createSeqRecord(data.record, data.mapping_record, 
+                                              ref_faidx, query_faidx);
+                
+                // Process the alignment
+                data.alignment_output = processAlignment(data.seq_rec);
+                data.alignment_length = data.record.qEndPos - data.record.qStartPos;
+                
+                // Update progress
+                progress.increment(data.alignment_length);
+                processed_alignment_length.fetch_add(data.alignment_length, std::memory_order_relaxed);
+                total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash::align] Error in stage 2: " << e.what() << std::endl;
+                data.valid = false;
+                
+                // Clean up if necessary
+                if (data.seq_rec != nullptr) {
+                    delete data.seq_rec;
+                    data.seq_rec = nullptr;
                 }
             }
+        }},
+        
+        // Stage 3: Write output (serial)
+        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+            size_t idx = pf.line();
+            PipelineData& data = pipe_data[idx];
             
-            // If we reach here and have a null pointer, continue
-            if (result_ptr == nullptr) {
-                continue;
+            if (!data.valid || data.alignment_output.empty()) {
+                // Clean up if necessary
+                if (data.seq_rec != nullptr) {
+                    delete data.seq_rec;
+                    data.seq_rec = nullptr;
+                }
+                return;
             }
             
-            if (result_ptr->success) {
-                // Process the alignment output
-                std::string_view output(result_ptr->output);
+            try {
+                // Process output for writing
+                std::string_view output(data.alignment_output);
                 size_t start = 0;
                 size_t end = output.find('\n');
                 
@@ -579,50 +474,27 @@ void computeAlignmentsTaskflow() {
                 }
                 
                 outstream.flush();
-                written++;
-                results_written.fetch_add(1, std::memory_order_relaxed);
-                
-                // Free memory
-                delete result_ptr;
-            } else {
-                delete result_ptr;
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash::align] Error in stage 3: " << e.what() << std::endl;
             }
+            
+            // Clean up
+            if (data.seq_rec != nullptr) {
+                delete data.seq_rec;
+                data.seq_rec = nullptr;
+            }
+        }}
+    );
+    
+    // Run the pipeline
+    executor.run(taskflow).wait();
+    
+    // Clean up any remaining pipeline data
+    for (auto& data : pipe_data) {
+        if (data.seq_rec != nullptr) {
+            delete data.seq_rec;
+            data.seq_rec = nullptr;
         }
-        
-        std::cerr << "[wfmash::align] Writer task completed, wrote " << written << " records" << std::endl;
-    });
-    
-    // Start the reader task
-    reader_executor.run(reader_taskflow);
-    
-    // Start the worker tasks
-    worker_executor.run(worker_taskflow);
-    
-    // Start the writer task
-    writer_executor.run(writer_taskflow);
-    
-    // Wait for reader task to complete
-    reader_executor.wait_for_all();
-    
-    // Wait for worker tasks to complete
-    worker_executor.wait_for_all();
-    
-    // Signal that all workers are done
-    all_workers_done.store(true, std::memory_order_release);
-    
-    // Wait for writer task to complete
-    writer_executor.wait_for_all();
-    
-    // Verify all records were processed
-    std::cerr << "[wfmash::align] Pipeline statistics:" << std::endl
-              << "  Records read: " << records_read.load() << std::endl
-              << "  Records processed: " << records_processed.load() << std::endl
-              << "  Results pushed: " << results_pushed.load() << std::endl
-              << "  Results written: " << results_written.load() << std::endl;
-    
-    if (records_read.load() != records_processed.load() || 
-        results_pushed.load() != results_written.load()) {
-        std::cerr << "[wfmash::align] Warning: Record count mismatch in pipeline!" << std::endl;
     }
     
     // Close output stream
