@@ -341,25 +341,26 @@ void computeAlignmentsTaskflow() {
     // Mutex for synchronized output writing
     std::mutex output_mutex;
     
-    // Instead of using for_each with a lambda, use a parallel for loop with our function
-    const size_t num_records = mapping_records.size();
+    // Use for_each with iterators instead of for_each_index
+    auto process_record = [&](const std::string& record) {
+        processMappingRecord(
+            record,
+            ref_faidx,
+            query_faidx,
+            param,
+            total_alignments_processed,
+            processed_alignment_length,
+            progress,
+            output_mutex,
+            outstream
+        );
+    };
     
-    taskflow.for_each_index(
-        0, num_records, 1,
-        [&](size_t i) {
-            processMappingRecord(
-                mapping_records[i],
-                ref_faidx,
-                query_faidx,
-                param,
-                total_alignments_processed,
-                processed_alignment_length,
-                progress,
-                output_mutex,
-                outstream
-            );
-        },
-        tf::DynamicPartitioner() // Use dynamic partitioning for uneven workloads
+    // Using for_each with iterators instead of for_each_index with a lambda
+    taskflow.for_each(
+        mapping_records.begin(), 
+        mapping_records.end(),
+        process_record
     );
     
     // Run the taskflow
