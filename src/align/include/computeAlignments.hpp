@@ -334,74 +334,79 @@ void computeAlignmentsTaskflow() {
     tf::Taskflow taskflow;
     tf::Executor executor(param.threads);
     
-    // Process records in parallel
-    taskflow.for_each_index(0, mapping_records.size(), 1, [&, this](int i) {
-        // Parse the mapping record
-        MappingBoundaryRow currentRecord;
-        parseMashmapRow(mapping_records[i], currentRecord, param.target_padding);
-        
-        // Create sequence record by fetching from thread-safe readers
-        seq_record_t* rec = createSeqRecord(currentRecord, mapping_records[i], 
-                                          this->ref_faidx, this->query_faidx);
-        
-        // Process the alignment
-        std::string alignment_output = processAlignment(rec);
-        
-        // Write output with mutex protection
-        if (!alignment_output.empty()) {
-            std::lock_guard<std::mutex> lock(output_mutex);
+    // Create tasks for each record
+    std::vector<tf::Task> tasks;
+    tasks.reserve(mapping_records.size());
+    
+    for (size_t i = 0; i < mapping_records.size(); i++) {
+        tasks.push_back(taskflow.emplace([&, this, i]() {
+            // Parse the mapping record
+            MappingBoundaryRow currentRecord;
+            parseMashmapRow(mapping_records[i], currentRecord, param.target_padding);
             
-            std::string_view output(alignment_output);
-            size_t start = 0;
-            size_t end = output.find('\n');
+            // Create sequence record by fetching from thread-safe readers
+            seq_record_t* rec = createSeqRecord(currentRecord, mapping_records[i], 
+                                             this->ref_faidx, this->query_faidx);
             
-            while (end != std::string_view::npos) {
-                // Process one line at a time without copying
-                std::string_view line = output.substr(start, end - start);
-                if (!line.empty()) {
-                    // Parse fields using string_view
-                    auto fields = tokenize_view(line);
-                    
-                    // Find the CIGAR string field (should be after cg:Z:)
-                    auto cigar_it = std::find_if(fields.begin(), fields.end(),
-                        [](std::string_view s) { 
-                            return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
-                        });
-                    
-                    if (cigar_it != fields.end()) {
-                        // Reconstruct the line efficiently with a single allocation
-                        std::string new_line;
-                        new_line.reserve(line.size() + 1); // +1 for newline
+            // Process the alignment
+            std::string alignment_output = processAlignment(rec);
+            
+            // Write output with mutex protection
+            if (!alignment_output.empty()) {
+                std::lock_guard<std::mutex> lock(output_mutex);
+                
+                std::string_view output(alignment_output);
+                size_t start = 0;
+                size_t end = output.find('\n');
+                
+                while (end != std::string_view::npos) {
+                    // Process one line at a time without copying
+                    std::string_view line = output.substr(start, end - start);
+                    if (!line.empty()) {
+                        // Parse fields using string_view
+                        auto fields = tokenize_view(line);
                         
-                        for (const auto& f : fields) {
-                            if (!new_line.empty()) new_line += '\t';
-                            new_line.append(f.data(), f.size());
+                        // Find the CIGAR string field (should be after cg:Z:)
+                        auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                            [](std::string_view s) { 
+                                return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
+                            });
+                        
+                        if (cigar_it != fields.end()) {
+                            // Reconstruct the line efficiently with a single allocation
+                            std::string new_line;
+                            new_line.reserve(line.size() + 1); // +1 for newline
+                            
+                            for (const auto& f : fields) {
+                                if (!new_line.empty()) new_line += '\t';
+                                new_line.append(f.data(), f.size());
+                            }
+                            new_line += '\n';
+                            
+                            outstream << new_line;
+                        } else {
+                            // If no CIGAR string found, output the line unchanged
+                            outstream << line << '\n';
                         }
-                        new_line += '\n';
-                        
-                        outstream << new_line;
-                    } else {
-                        // If no CIGAR string found, output the line unchanged
-                        outstream << line << '\n';
                     }
+                    
+                    start = end + 1;
+                    end = output.find('\n', start);
                 }
                 
-                start = end + 1;
-                end = output.find('\n', start);
+                outstream.flush();
             }
             
-            outstream.flush();
-        }
-        
-        // Update progress
-        uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
-        progress.increment(alignment_length);
-        processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-        total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-        
-        // Clean up
-        delete rec;
-    });
+            // Update progress
+            uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
+            progress.increment(alignment_length);
+            processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+            total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+            
+            // Clean up
+            delete rec;
+        }));
+    }
     
     // Run the taskflow and wait for completion
     executor.run(taskflow).wait();
