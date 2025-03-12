@@ -333,11 +333,13 @@ void computeAlignmentsTaskflow() {
     tf::Executor writer_executor(1);  // Single writer thread
     
     // Create thread-safe queues for communication between tasks
-    using MappingQueue = tf::SharedTaskQueue<std::string>;
-    using ResultQueue = tf::SharedTaskQueue<alignment_result_t>;
+    using MappingQueue = tf::BoundedTaskQueue<std::string>;
+    using ResultQueue = tf::BoundedTaskQueue<alignment_result_t>;
     
-    auto mapping_queue = std::make_shared<MappingQueue>();
-    auto result_queue = std::make_shared<ResultQueue>();
+    // Create queues with reasonable capacity for our workload
+    constexpr size_t queue_capacity = 1024;
+    auto mapping_queue = std::make_shared<MappingQueue>(queue_capacity);
+    auto result_queue = std::make_shared<ResultQueue>(queue_capacity);
     
     // Signal flags for completion
     std::atomic<bool> reader_done(false);
