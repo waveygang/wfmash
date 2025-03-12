@@ -272,6 +272,17 @@ struct seq_record_t {
 
   private:
 
+// Structure to hold alignment results and metadata for transmission between tasks
+struct alignment_result_t {
+    std::string output;
+    uint64_t alignment_length;
+    bool success = false;
+
+    alignment_result_t() = default;
+    alignment_result_t(std::string&& out, uint64_t len) 
+        : output(std::move(out)), alignment_length(len), success(true) {}
+};
+
 void computeAlignmentsTaskflow() {
     // Prepare output file
     std::ofstream outstream(param.pafOutputFile);
@@ -293,6 +304,7 @@ void computeAlignmentsTaskflow() {
     
     // Calculate total alignment length for progress tracking
     uint64_t total_alignment_length = 0;
+    size_t total_records = 0;
     {
         std::ifstream mappingListStream(param.mashmapPafFile);
         std::string mappingRecordLine;
@@ -302,6 +314,7 @@ void computeAlignmentsTaskflow() {
             if (!mappingRecordLine.empty()) {
                 parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                total_records++;
             }
         }
     }
@@ -309,53 +322,127 @@ void computeAlignmentsTaskflow() {
     // Progress meter
     progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
     
-    // Read in all mapping records
-    std::vector<std::string> mapping_records;
-    {
+    // Create three taskflows with separate executors
+    tf::Taskflow reader_taskflow;
+    tf::Taskflow worker_taskflow;
+    tf::Taskflow writer_taskflow;
+    
+    // Executors with appropriate thread counts
+    tf::Executor reader_executor(1);  // Single reader thread
+    tf::Executor worker_executor(param.threads);  // Worker threads for alignment
+    tf::Executor writer_executor(1);  // Single writer thread
+    
+    // Create thread-safe queues for communication between tasks
+    using MappingQueue = tf::SharedTaskQueue<std::string>;
+    using ResultQueue = tf::SharedTaskQueue<alignment_result_t>;
+    
+    auto mapping_queue = std::make_shared<MappingQueue>();
+    auto result_queue = std::make_shared<ResultQueue>();
+    
+    // Signal flags for completion
+    std::atomic<bool> reader_done(false);
+    std::atomic<bool> all_workers_done(false);
+    
+    // Create reader task - reads mapping records and pushes to mapping_queue
+    auto reader_task = reader_taskflow.emplace([&]() {
         std::ifstream mappingStream(param.mashmapPafFile);
         if (!mappingStream.is_open()) {
             throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " + param.mashmapPafFile);
         }
         
         std::string line;
+        size_t count = 0;
         while(std::getline(mappingStream, line)) {
             if (!line.empty()) {
-                mapping_records.push_back(std::move(line));
+                mapping_queue->push(std::move(line));
+                count++;
             }
         }
+        
+        std::cerr << "[wfmash::align] Reader task completed, pushed " << count << " records" << std::endl;
+        reader_done.store(true);
+    });
+    
+    // Create worker tasks - take records from mapping_queue, process, push results to result_queue
+    const int num_workers = param.threads;
+    std::vector<tf::Task> worker_tasks;
+    
+    for (int i = 0; i < num_workers; i++) {
+        worker_tasks.push_back(worker_taskflow.emplace([&, this, i]() {
+            std::string mapping_record;
+            size_t processed = 0;
+            
+            while (true) {
+                // Try to get work from the queue
+                bool got_work = mapping_queue->pop(mapping_record);
+                
+                if (!got_work) {
+                    // If reader is done and queue is empty, we're done
+                    if (reader_done.load() && mapping_queue->empty()) {
+                        break;
+                    }
+                    // Otherwise, yield and try again
+                    std::this_thread::yield();
+                    continue;
+                }
+                
+                try {
+                    // Process the mapping record
+                    MappingBoundaryRow currentRecord;
+                    parseMashmapRow(mapping_record, currentRecord, param.target_padding);
+                    
+                    // Create sequence record by fetching from thread-safe readers
+                    seq_record_t* rec = createSeqRecord(currentRecord, mapping_record, 
+                                                   this->ref_faidx, this->query_faidx);
+                    
+                    // Process the alignment
+                    std::string alignment_output = processAlignment(rec);
+                    
+                    // Push result to output queue
+                    uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
+                    if (!alignment_output.empty()) {
+                        result_queue->push(alignment_result_t(std::move(alignment_output), alignment_length));
+                    }
+                    
+                    // Update progress and stats
+                    progress.increment(alignment_length);
+                    processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+                    total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+                    
+                    // Clean up
+                    delete rec;
+                    processed++;
+                } catch (const std::exception& e) {
+                    std::cerr << "[wfmash::align] Worker " << i << " error: " << e.what() << std::endl;
+                }
+            }
+            
+            std::cerr << "[wfmash::align] Worker " << i << " processed " << processed << " records" << std::endl;
+        }));
     }
     
-    std::cerr << "[wfmash::align] Loaded " << mapping_records.size() << " mapping records" << std::endl;
-    
-    // Create a mutex for output synchronization
-    std::mutex output_mutex;
-    
-    // Create a taskflow and executor
-    tf::Taskflow taskflow;
-    tf::Executor executor(param.threads);
-    
-    // Create tasks for each record
-    std::vector<tf::Task> tasks;
-    tasks.reserve(mapping_records.size());
-    
-    for (size_t i = 0; i < mapping_records.size(); i++) {
-        tasks.push_back(taskflow.emplace([&, this, i]() {
-            // Parse the mapping record
-            MappingBoundaryRow currentRecord;
-            parseMashmapRow(mapping_records[i], currentRecord, param.target_padding);
+    // Create writer task - takes results from result_queue and writes to output file
+    auto writer_task = writer_taskflow.emplace([&]() {
+        alignment_result_t result;
+        size_t written = 0;
+        
+        while (true) {
+            // Try to get a result from the queue
+            bool got_result = result_queue->pop(result);
             
-            // Create sequence record by fetching from thread-safe readers
-            seq_record_t* rec = createSeqRecord(currentRecord, mapping_records[i], 
-                                             this->ref_faidx, this->query_faidx);
+            if (!got_result) {
+                // If all workers are done and queue is empty, we're done
+                if (all_workers_done.load() && result_queue->empty()) {
+                    break;
+                }
+                // Otherwise, yield and try again
+                std::this_thread::yield();
+                continue;
+            }
             
-            // Process the alignment
-            std::string alignment_output = processAlignment(rec);
-            
-            // Write output with mutex protection
-            if (!alignment_output.empty()) {
-                std::lock_guard<std::mutex> lock(output_mutex);
-                
-                std::string_view output(alignment_output);
+            if (result.success) {
+                // Process the alignment output
+                std::string_view output(result.output);
                 size_t start = 0;
                 size_t end = output.find('\n');
                 
@@ -395,21 +482,31 @@ void computeAlignmentsTaskflow() {
                 }
                 
                 outstream.flush();
+                written++;
             }
-            
-            // Update progress
-            uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
-            progress.increment(alignment_length);
-            processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-            total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-            
-            // Clean up
-            delete rec;
-        }));
-    }
+        }
+        
+        std::cerr << "[wfmash::align] Writer task completed, wrote " << written << " records" << std::endl;
+    });
     
-    // Run the taskflow and wait for completion
-    executor.run(taskflow).wait();
+    // Start the reader task
+    reader_executor.run(reader_taskflow);
+    
+    // Start the worker tasks
+    worker_executor.run(worker_taskflow);
+    
+    // Start the writer task
+    writer_executor.run(writer_taskflow);
+    
+    // Wait for reader and worker tasks to complete
+    reader_executor.wait_for_all();
+    worker_executor.wait_for_all();
+    
+    // Signal that all workers are done
+    all_workers_done.store(true);
+    
+    // Wait for writer task to complete
+    writer_executor.wait_for_all();
     
     // Close output stream
     outstream.close();
