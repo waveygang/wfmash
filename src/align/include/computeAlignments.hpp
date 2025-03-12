@@ -302,146 +302,65 @@ void computeAlignmentsTaskflow() {
     std::atomic<uint64_t> total_alignments_processed(0);
     std::atomic<uint64_t> processed_alignment_length(0);
     
-    // Calculate approximate total alignment length for progress tracking
+    // Read all mapping records upfront
+    std::vector<std::string> mapping_records;
     uint64_t total_alignment_length = 0;
-    size_t total_records = 0;
     {
         std::ifstream mappingListStream(param.mashmapPafFile);
+        if (!mappingListStream.is_open()) {
+            throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " 
+                                    + param.mashmapPafFile);
+        }
+        
         std::string mappingRecordLine;
         MappingBoundaryRow currentRecord;
-
+        
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
-                parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
-                total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                total_records++;
+                try {
+                    parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
+                    total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                    mapping_records.push_back(std::move(mappingRecordLine));
+                } catch (const std::exception& e) {
+                    std::cerr << "[wfmash::align] Warning: Skipping invalid record: " << e.what() << std::endl;
+                }
             }
         }
     }
     
-    std::cerr << "[wfmash::align] Found " << total_records 
+    std::cerr << "[wfmash::align] Found " << mapping_records.size() 
               << " mapping records for alignment" << std::endl;
-    
-    // Create shared file stream to be used by the pipeline
-    std::shared_ptr<std::ifstream> mapping_file = 
-        std::make_shared<std::ifstream>(param.mashmapPafFile);
-    
-    if (!mapping_file->is_open()) {
-        throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " 
-                                + param.mashmapPafFile);
-    }
     
     // Progress meter
     progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
     
     // Create taskflow executor with thread count
     tf::Executor executor(param.threads);
+    tf::Taskflow taskflow;
     
     // Mutex for synchronized output writing
     std::mutex output_mutex;
     
-    // Create a taskflow with pipeline - use a larger buffer to prevent starvation
-    // Ensure we have enough tokens to keep the pipeline full even during I/O operations
-    const size_t num_tokens = std::min<size_t>(param.threads * 10, 2048);  // Increased tokens in flight
-    
-    tf::Taskflow taskflow;
-    
-    // Helper struct to store data during pipeline processing
-    struct PipelineData {
-        std::string mapping_record;
-        MappingBoundaryRow record;
-        seq_record_t* seq_rec = nullptr;
-        std::string alignment_output;        // Raw alignment output from WFA
-        std::string formatted_output;        // Preprocessed output ready for writing
-        uint64_t alignment_length = 0;
-        bool valid = false;
-        // Add batch processing capability
-        std::vector<std::string> batch_records;
-        size_t current_batch_index = 0;
-    };
-    
-    // Vector to store pipeline data for all tokens
-    std::vector<PipelineData> pipe_data(num_tokens);
-    
-    // Size of batch reads from input file
-    const size_t batch_size = 16;  // Read multiple records at once
-    
-    // Create the pipeline object
-    tf::Pipeline pipeline(num_tokens,
-        
-        // Stage 1: Read mapping record and extract sequences (serial but with batching)
-        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
-            size_t idx = pf.line();
-            PipelineData& data = pipe_data[idx];
-            
-            // Clear any previous data
-            if (data.seq_rec != nullptr) {
-                delete data.seq_rec;
-                data.seq_rec = nullptr;
-            }
-            data.valid = false;
-            
-            // If we have no batch records or have processed all of them, read more
-            if (data.batch_records.empty() || data.current_batch_index >= data.batch_records.size()) {
-                data.batch_records.clear();
-                data.current_batch_index = 0;
-                
-                // Read a batch of records
-                std::string line;
-                for (size_t i = 0; i < batch_size && std::getline(*mapping_file, line); ++i) {
-                    if (!line.empty()) {
-                        data.batch_records.push_back(std::move(line));
-                    }
-                    line.clear(); // Reset for next read
-                }
-                
-                // Check if we've reached EOF
-                if (data.batch_records.empty()) {
-                    if (mapping_file->eof() || !mapping_file->good()) {
-                        pf.stop();
-                        return;
-                    }
-                }
-            }
-            
-            // Process the next record from our batch
-            if (!data.batch_records.empty() && data.current_batch_index < data.batch_records.size()) {
-                data.mapping_record = std::move(data.batch_records[data.current_batch_index++]);
-                
-                try {
-                    // Parse the record
-                    parseMashmapRow(data.mapping_record, data.record, param.target_padding);
-                    
-                    // Set as valid for next stage
-                    data.valid = true;
-                } catch (const std::exception& e) {
-                    std::cerr << "[wfmash::align] Error in stage 1: " << e.what() << std::endl;
-                }
-            } else {
-                pf.stop();
-                return;
-            }
-        }},
-        
-        // Stage 2: Process alignment (parallel) and prepare formatted output
-        tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
-            size_t idx = pf.line();
-            PipelineData& data = pipe_data[idx];
-            
-            if (!data.valid) return;
-            
+    // Process each mapping record in parallel
+    taskflow.for_each(mapping_records.begin(), mapping_records.end(), 
+        [&](const std::string& record) {
             try {
-                // Create sequence record using thread-safe readers
-                data.seq_rec = createSeqRecord(data.record, data.mapping_record, 
-                                              ref_faidx, query_faidx);
+                // Parse the mapping record
+                MappingBoundaryRow currentRecord;
+                parseMashmapRow(record, currentRecord, param.target_padding);
                 
-                // Process the alignment
-                data.alignment_output = processAlignment(data.seq_rec);
-                data.alignment_length = data.record.qEndPos - data.record.qStartPos;
+                // Create sequence record
+                std::unique_ptr<seq_record_t> seq_rec(
+                    createSeqRecord(currentRecord, record, ref_faidx, query_faidx)
+                );
                 
-                // Format the output in parallel (moved from Stage 3)
+                // Process alignment
+                std::string alignment_output = processAlignment(seq_rec.get());
+                uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
+                
+                // Format the output
                 std::stringstream formatted_buffer;
-                std::string_view output(data.alignment_output);
+                std::string_view output(alignment_output);
                 size_t start = 0;
                 size_t end = output.find('\n');
                 
@@ -480,82 +399,34 @@ void computeAlignmentsTaskflow() {
                     end = output.find('\n', start);
                 }
                 
-                // Store the fully formatted output
-                data.formatted_output = formatted_buffer.str();
+                // Capture the formatted output
+                std::string formatted_output = formatted_buffer.str();
                 
-                // Clear the raw alignment output to save memory
-                data.alignment_output.clear();
-                
-                // Use fetch_add with relaxed ordering for better performance
-                processed_alignment_length.fetch_add(data.alignment_length, std::memory_order_relaxed);
+                // Update statistics
+                processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
                 total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
                 
-                // Update progress (this is thread-safe)
-                progress.increment(data.alignment_length);
-            } catch (const std::exception& e) {
-                std::cerr << "[wfmash::align] Error in stage 2: " << e.what() << std::endl;
-                data.valid = false;
+                // Update progress
+                progress.increment(alignment_length);
                 
-                // Clean up if necessary
-                if (data.seq_rec != nullptr) {
-                    delete data.seq_rec;
-                    data.seq_rec = nullptr;
-                }
-            }
-        }},
-        
-        // Stage 3: Write output (PARALLEL for parallelized I/O)
-        tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
-            size_t idx = pf.line();
-            PipelineData& data = pipe_data[idx];
-            
-            if (!data.valid || data.formatted_output.empty()) {
-                // Clean up if necessary
-                if (data.seq_rec != nullptr) {
-                    delete data.seq_rec;
-                    data.seq_rec = nullptr;
-                }
-                return;
-            }
-            
-            try {
-                // Lock only when writing to the output stream - write already formatted data
-                {
+                // Write to output with minimal critical section
+                if (!formatted_output.empty()) {
                     std::lock_guard<std::mutex> lock(output_mutex);
-                    outstream << data.formatted_output;
+                    outstream << formatted_output;
                     // Only flush occasionally to reduce I/O overhead
                     if (total_alignments_processed.load(std::memory_order_relaxed) % 1000 == 0) {
                         outstream.flush();
                     }
                 }
+                
             } catch (const std::exception& e) {
-                std::cerr << "[wfmash::align] Error in stage 3: " << e.what() << std::endl;
+                std::cerr << "[wfmash::align] Error processing record: " << e.what() << std::endl;
             }
-            
-            // Clean up
-            if (data.seq_rec != nullptr) {
-                delete data.seq_rec;
-                data.seq_rec = nullptr;
-            }
-            
-            // Clear the formatted output to save memory
-            data.formatted_output.clear();
-        }}
+        }
     );
-    
-    // Add the pipeline to the taskflow
-    tf::Task pipeline_task = taskflow.composed_of(pipeline);
     
     // Run the taskflow
     executor.run(taskflow).wait();
-    
-    // Clean up any remaining pipeline data
-    for (auto& data : pipe_data) {
-        if (data.seq_rec != nullptr) {
-            delete data.seq_rec;
-            data.seq_rec = nullptr;
-        }
-    }
     
     // Close output stream
     outstream.close();
