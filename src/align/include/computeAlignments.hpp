@@ -344,7 +344,7 @@ void computeAlignmentsTaskflow() {
     // Instead of using for_each with a lambda, use a parallel for loop with our function
     const size_t num_records = mapping_records.size();
     
-    taskflow.parallel_for(
+    taskflow.for_each_index(
         0, num_records, 1,
         [&](size_t i) {
             processMappingRecord(
@@ -358,7 +358,8 @@ void computeAlignmentsTaskflow() {
                 output_mutex,
                 outstream
             );
-        }
+        },
+        tf::DynamicPartitioner() // Use dynamic partitioning for uneven workloads
     );
     
     // Run the taskflow
