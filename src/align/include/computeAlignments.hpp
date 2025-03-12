@@ -340,8 +340,9 @@ void computeAlignmentsTaskflow() {
     // Mutex for synchronized output writing
     std::mutex output_mutex;
     
-    // Create a taskflow with pipeline
-    const size_t num_tokens = std::min<size_t>(param.threads * 3, 1024);  // Number of tokens in flight
+    // Create a taskflow with pipeline - use a larger buffer to prevent starvation
+    // Ensure we have enough tokens to keep the pipeline full even during I/O operations
+    const size_t num_tokens = std::min<size_t>(param.threads * 10, 2048);  // Increased tokens in flight
     
     tf::Taskflow taskflow;
     
@@ -353,15 +354,21 @@ void computeAlignmentsTaskflow() {
         std::string alignment_output;
         uint64_t alignment_length = 0;
         bool valid = false;
+        // Add batch processing capability
+        std::vector<std::string> batch_records;
+        size_t current_batch_index = 0;
     };
     
     // Vector to store pipeline data for all tokens
     std::vector<PipelineData> pipe_data(num_tokens);
     
+    // Size of batch reads from input file
+    const size_t batch_size = 16;  // Read multiple records at once
+    
     // Create the pipeline object
     tf::Pipeline pipeline(num_tokens,
         
-        // Stage 1: Read mapping record and extract sequences (serial)
+        // Stage 1: Read mapping record and extract sequences (serial but with batching)
         tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
             size_t idx = pf.line();
             PipelineData& data = pipe_data[idx];
@@ -373,27 +380,45 @@ void computeAlignmentsTaskflow() {
             }
             data.valid = false;
             
-            // Read the next line from the file
-            // Check if we've reached EOF
-            if (mapping_file->eof() || !mapping_file->good()) {
-                pf.stop();
-                return;
-            }
-            
-            // Read the next line
-            if (!std::getline(*mapping_file, data.mapping_record) || data.mapping_record.empty()) {
-                pf.stop();
-                return;
-            }
-            
-            try {
-                // Parse the record
-                parseMashmapRow(data.mapping_record, data.record, param.target_padding);
+            // If we have no batch records or have processed all of them, read more
+            if (data.batch_records.empty() || data.current_batch_index >= data.batch_records.size()) {
+                data.batch_records.clear();
+                data.current_batch_index = 0;
                 
-                // Set as valid for next stage
-                data.valid = true;
-            } catch (const std::exception& e) {
-                std::cerr << "[wfmash::align] Error in stage 1: " << e.what() << std::endl;
+                // Read a batch of records
+                std::string line;
+                for (size_t i = 0; i < batch_size && std::getline(*mapping_file, line); ++i) {
+                    if (!line.empty()) {
+                        data.batch_records.push_back(std::move(line));
+                    }
+                    line.clear(); // Reset for next read
+                }
+                
+                // Check if we've reached EOF
+                if (data.batch_records.empty()) {
+                    if (mapping_file->eof() || !mapping_file->good()) {
+                        pf.stop();
+                        return;
+                    }
+                }
+            }
+            
+            // Process the next record from our batch
+            if (!data.batch_records.empty() && data.current_batch_index < data.batch_records.size()) {
+                data.mapping_record = std::move(data.batch_records[data.current_batch_index++]);
+                
+                try {
+                    // Parse the record
+                    parseMashmapRow(data.mapping_record, data.record, param.target_padding);
+                    
+                    // Set as valid for next stage
+                    data.valid = true;
+                } catch (const std::exception& e) {
+                    std::cerr << "[wfmash::align] Error in stage 1: " << e.what() << std::endl;
+                }
+            } else {
+                pf.stop();
+                return;
             }
         }},
         
@@ -413,10 +438,12 @@ void computeAlignmentsTaskflow() {
                 data.alignment_output = processAlignment(data.seq_rec);
                 data.alignment_length = data.record.qEndPos - data.record.qStartPos;
                 
-                // Update progress
-                progress.increment(data.alignment_length);
+                // Use fetch_add with relaxed ordering for better performance
                 processed_alignment_length.fetch_add(data.alignment_length, std::memory_order_relaxed);
                 total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+                
+                // Update progress (this is thread-safe)
+                progress.increment(data.alignment_length);
             } catch (const std::exception& e) {
                 std::cerr << "[wfmash::align] Error in stage 2: " << e.what() << std::endl;
                 data.valid = false;
@@ -429,8 +456,8 @@ void computeAlignmentsTaskflow() {
             }
         }},
         
-        // Stage 3: Write output (serial)
-        tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
+        // Stage 3: Write output (PARALLEL to allow for more CPU utilization)
+        tf::Pipe{tf::PipeType::PARALLEL, [&](tf::Pipeflow& pf) {
             size_t idx = pf.line();
             PipelineData& data = pipe_data[idx];
             
@@ -444,6 +471,9 @@ void computeAlignmentsTaskflow() {
             }
             
             try {
+                // Process output for writing - create a buffer to reduce lock contention
+                std::stringstream output_buffer;
+                
                 // Process output for writing
                 std::string_view output(data.alignment_output);
                 size_t start = 0;
@@ -473,10 +503,10 @@ void computeAlignmentsTaskflow() {
                             }
                             new_line += '\n';
                             
-                            outstream << new_line;
+                            output_buffer << new_line;
                         } else {
                             // If no CIGAR string found, output the line unchanged
-                            outstream << line << '\n';
+                            output_buffer << line << '\n';
                         }
                     }
                     
@@ -484,7 +514,15 @@ void computeAlignmentsTaskflow() {
                     end = output.find('\n', start);
                 }
                 
-                outstream.flush();
+                // Lock only when writing to the output stream
+                {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    outstream << output_buffer.str();
+                    // Only flush occasionally to reduce I/O overhead
+                    if (total_alignments_processed.load(std::memory_order_relaxed) % 1000 == 0) {
+                        outstream.flush();
+                    }
+                }
             } catch (const std::exception& e) {
                 std::cerr << "[wfmash::align] Error in stage 3: " << e.what() << std::endl;
             }
