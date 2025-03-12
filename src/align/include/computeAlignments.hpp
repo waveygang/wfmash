@@ -302,10 +302,9 @@ void computeAlignmentsTaskflow() {
     std::atomic<uint64_t> total_alignments_processed(0);
     std::atomic<uint64_t> processed_alignment_length(0);
     
-    // Calculate total alignment length for progress tracking
+    // Calculate approximate total alignment length for progress tracking
     uint64_t total_alignment_length = 0;
     size_t total_records = 0;
-    std::vector<std::string> mapping_records;
     {
         std::ifstream mappingListStream(param.mashmapPafFile);
         std::string mappingRecordLine;
@@ -316,13 +315,24 @@ void computeAlignmentsTaskflow() {
                 parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
                 total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
                 total_records++;
-                mapping_records.push_back(std::move(mappingRecordLine));
             }
         }
     }
     
-    std::cerr << "[wfmash::align] Loaded " << mapping_records.size() 
+    std::cerr << "[wfmash::align] Found " << total_records 
               << " mapping records for alignment" << std::endl;
+    
+    // Create shared file stream to be used by the pipeline
+    std::shared_ptr<std::ifstream> mapping_file = 
+        std::make_shared<std::ifstream>(param.mashmapPafFile);
+    
+    if (!mapping_file->is_open()) {
+        throw std::runtime_error("[wfmash::align] Error! Failed to open input mapping file: " 
+                                + param.mashmapPafFile);
+    }
+    
+    // Mutex to protect file reading
+    std::mutex file_mutex;
     
     // Progress meter
     progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
@@ -356,11 +366,6 @@ void computeAlignmentsTaskflow() {
         
         // Stage 1: Read mapping record and extract sequences (serial)
         tf::Pipe{tf::PipeType::SERIAL, [&](tf::Pipeflow& pf) {
-            if (pf.token() >= mapping_records.size()) {
-                pf.stop();
-                return;
-            }
-            
             size_t idx = pf.line();
             PipelineData& data = pipe_data[idx];
             
@@ -371,10 +376,24 @@ void computeAlignmentsTaskflow() {
             }
             data.valid = false;
             
-            try {
-                // Get the mapping record
-                data.mapping_record = mapping_records[pf.token()];
+            // Read the next line from the file with mutex protection
+            {
+                std::lock_guard<std::mutex> lock(file_mutex);
                 
+                // Check if we've reached EOF
+                if (mapping_file->eof() || !mapping_file->good()) {
+                    pf.stop();
+                    return;
+                }
+                
+                // Read the next line
+                if (!std::getline(*mapping_file, data.mapping_record) || data.mapping_record.empty()) {
+                    pf.stop();
+                    return;
+                }
+            }
+            
+            try {
                 // Parse the record
                 parseMashmapRow(data.mapping_record, data.record, param.target_padding);
                 
