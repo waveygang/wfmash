@@ -341,87 +341,23 @@ void computeAlignmentsTaskflow() {
     // Mutex for synchronized output writing
     std::mutex output_mutex;
     
-    // Process each mapping record in parallel
-    taskflow.for_each(mapping_records.begin(), mapping_records.end(), 
-        [&](const std::string& record) {
-            try {
-                // Parse the mapping record
-                MappingBoundaryRow currentRecord;
-                parseMashmapRow(record, currentRecord, param.target_padding);
-                
-                // Create sequence record
-                std::unique_ptr<seq_record_t> seq_rec(
-                    createSeqRecord(currentRecord, record, ref_faidx, query_faidx)
-                );
-                
-                // Process alignment
-                std::string alignment_output = processAlignment(seq_rec.get());
-                uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
-                
-                // Format the output
-                std::stringstream formatted_buffer;
-                std::string_view output(alignment_output);
-                size_t start = 0;
-                size_t end = output.find('\n');
-                
-                while (end != std::string_view::npos) {
-                    // Process one line at a time without copying
-                    std::string_view line = output.substr(start, end - start);
-                    if (!line.empty()) {
-                        // Parse fields using string_view
-                        auto fields = tokenize_view(line);
-                        
-                        // Find the CIGAR string field (should be after cg:Z:)
-                        auto cigar_it = std::find_if(fields.begin(), fields.end(),
-                            [](std::string_view s) { 
-                                return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
-                            });
-                        
-                        if (cigar_it != fields.end()) {
-                            // Reconstruct the line efficiently with a single allocation
-                            std::string new_line;
-                            new_line.reserve(line.size() + 1); // +1 for newline
-                            
-                            for (const auto& f : fields) {
-                                if (!new_line.empty()) new_line += '\t';
-                                new_line.append(f.data(), f.size());
-                            }
-                            new_line += '\n';
-                            
-                            formatted_buffer << new_line;
-                        } else {
-                            // If no CIGAR string found, output the line unchanged
-                            formatted_buffer << line << '\n';
-                        }
-                    }
-                    
-                    start = end + 1;
-                    end = output.find('\n', start);
-                }
-                
-                // Capture the formatted output
-                std::string formatted_output = formatted_buffer.str();
-                
-                // Update statistics
-                processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
-                total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
-                
-                // Update progress
-                progress.increment(alignment_length);
-                
-                // Write to output with minimal critical section
-                if (!formatted_output.empty()) {
-                    std::lock_guard<std::mutex> lock(output_mutex);
-                    outstream << formatted_output;
-                    // Only flush occasionally to reduce I/O overhead
-                    if (total_alignments_processed.load(std::memory_order_relaxed) % 1000 == 0) {
-                        outstream.flush();
-                    }
-                }
-                
-            } catch (const std::exception& e) {
-                std::cerr << "[wfmash::align] Error processing record: " << e.what() << std::endl;
-            }
+    // Instead of using for_each with a lambda, use a parallel for loop with our function
+    const size_t num_records = mapping_records.size();
+    
+    taskflow.parallel_for(
+        0, num_records, 1,
+        [&](size_t i) {
+            processMappingRecord(
+                mapping_records[i],
+                ref_faidx,
+                query_faidx,
+                param,
+                total_alignments_processed,
+                processed_alignment_length,
+                progress,
+                output_mutex,
+                outstream
+            );
         }
     );
     
@@ -442,6 +378,98 @@ void computeAlignmentsTaskflow() {
               << "total aligned records = " << total_alignments_processed.load()
               << ", total aligned bp = " << processed_alignment_length.load()
               << ", time taken = " << duration.count() << " seconds" << std::endl;
+}
+
+// Process a single mapping record (extracted to avoid lambda issues with for_each)
+void processMappingRecord(
+    const std::string& record,
+    ts_faidx::FastaReader* ref_faidx,
+    ts_faidx::FastaReader* query_faidx,
+    const align::Parameters& param,
+    std::atomic<uint64_t>& total_alignments_processed,
+    std::atomic<uint64_t>& processed_alignment_length,
+    progress_meter::ProgressMeter& progress,
+    std::mutex& output_mutex,
+    std::ofstream& outstream) {
+    
+    try {
+        // Parse the mapping record
+        MappingBoundaryRow currentRecord;
+        parseMashmapRow(record, currentRecord, param.target_padding);
+        
+        // Create sequence record
+        std::unique_ptr<seq_record_t> seq_rec(
+            createSeqRecord(currentRecord, record, ref_faidx, query_faidx)
+        );
+        
+        // Process alignment
+        std::string alignment_output = processAlignment(seq_rec.get());
+        uint64_t alignment_length = currentRecord.qEndPos - currentRecord.qStartPos;
+        
+        // Format the output
+        std::stringstream formatted_buffer;
+        std::string_view output(alignment_output);
+        size_t start = 0;
+        size_t end = output.find('\n');
+        
+        while (end != std::string_view::npos) {
+            // Process one line at a time without copying
+            std::string_view line = output.substr(start, end - start);
+            if (!line.empty()) {
+                // Parse fields using string_view
+                auto fields = tokenize_view(line);
+                
+                // Find the CIGAR string field (should be after cg:Z:)
+                auto cigar_it = std::find_if(fields.begin(), fields.end(),
+                    [](std::string_view s) { 
+                        return s.size() >= 5 && s.substr(0, 5) == "cg:Z:"; 
+                    });
+                
+                if (cigar_it != fields.end()) {
+                    // Reconstruct the line efficiently with a single allocation
+                    std::string new_line;
+                    new_line.reserve(line.size() + 1); // +1 for newline
+                    
+                    for (const auto& f : fields) {
+                        if (!new_line.empty()) new_line += '\t';
+                        new_line.append(f.data(), f.size());
+                    }
+                    new_line += '\n';
+                    
+                    formatted_buffer << new_line;
+                } else {
+                    // If no CIGAR string found, output the line unchanged
+                    formatted_buffer << line << '\n';
+                }
+            }
+            
+            start = end + 1;
+            end = output.find('\n', start);
+        }
+        
+        // Capture the formatted output
+        std::string formatted_output = formatted_buffer.str();
+        
+        // Update statistics
+        processed_alignment_length.fetch_add(alignment_length, std::memory_order_relaxed);
+        total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
+        
+        // Update progress
+        progress.increment(alignment_length);
+        
+        // Write to output with minimal critical section
+        if (!formatted_output.empty()) {
+            std::lock_guard<std::mutex> lock(output_mutex);
+            outstream << formatted_output;
+            // Only flush occasionally to reduce I/O overhead
+            if (total_alignments_processed.load(std::memory_order_relaxed) % 1000 == 0) {
+                outstream.flush();
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[wfmash::align] Error processing record: " << e.what() << std::endl;
+    }
 }
 
 // Creates a sequence record using the thread-safe FASTA readers
