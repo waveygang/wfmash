@@ -784,6 +784,17 @@ namespace skch
         readSketchBinary(inStream);
         readPosListBinary(inStream);
         // Removed readFreqKmersBinary call
+        
+        // After loading the index, ensure query sequences are properly loaded
+        // This is necessary because the index only contains target sequence IDs
+        if (!param.querySequences.empty()) {
+            idManager.loadQuerySequences(
+                param.querySequences,
+                std::vector<std::string>{param.query_prefix},
+                std::string(1, param.prefix_delim),
+                param.query_list
+            );
+        }
       }
 
       bool readSubIndexHeader(std::ifstream& inStream, const std::vector<std::string>& targetSequenceNames, size_t& batch_idx, size_t& total_batches) 

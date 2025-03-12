@@ -208,10 +208,9 @@ void parse_args(int argc,
 		map_parameters.query_prefix = skch::CommonFunc::split(args::get(query_prefix), ',');
 	}
 	
-    if (target_sequence_file) {
-        map_parameters.refSequences.push_back(args::get(target_sequence_file));
-        align_parameters.refSequences.push_back(args::get(target_sequence_file));
-    }
+    map_parameters.refSequences.push_back(args::get(target_sequence_file));
+    align_parameters.refSequences.push_back(args::get(target_sequence_file));
+
     map_parameters.referenceSize = skch::CommonFunc::getReferenceSize(map_parameters.refSequences);
 
     if (query_sequence_file) {
@@ -221,7 +220,7 @@ void parse_args(int argc,
 
 
     // If there are no queries, go in all-vs-all mode with the sequences specified in `target_sequence_file`
-    if (target_sequence_file && map_parameters.querySequences.empty()) {
+    if (map_parameters.querySequences.empty()) {
         std::cerr << "[wfmash] Performing all-vs-all mapping including self mappings." << std::endl;
         map_parameters.querySequences.push_back(map_parameters.refSequences.back());
         align_parameters.querySequences.push_back(align_parameters.refSequences.back());
