@@ -55,7 +55,7 @@ else ()
 endif ()
 
 find_package(PkgConfig REQUIRED)
-include(FindCURL) # for htslib?
+# include(FindCURL) # for htslib?
 find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(LibLZMA REQUIRED)
@@ -246,6 +246,12 @@ endif()
 
 set(REGRESSION_TEST_DIR "test/data/regression")
 
+find_program(WGATOOLS "wgatools") # should be in the path
+if (NOT WGATOOLS) # this is a hack when we add the wgatools path to the Guix shell
+   set(WGATOOLS "env LD_LIBRARY_PATH=$GUIX_PROFILE/lib /wgatools/target/release/wgatools")
+endif()
+MESSAGE(${WGATOOLS})
+
 add_test(
   NAME wfmash-time-LPA
   COMMAND bash -c "${INVOKE} data/LPA.subset.fa.gz -p 80 -n 5 -t 4 > wfmash-time-LPA.output"
@@ -268,7 +274,7 @@ add_test(
 
 add_test(
   NAME wfmash-maf-validity
-  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 4 -T S288C -Q Y12 > x.paf && wgatools paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz x.paf > x.maf && test $(wgatools stat x.maf | cut -f 7 | awk '{ s+=$1 } END { print s }') -gt 11000000"
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 4 -T S288C -Q Y12 > x.paf && $(${WGATOOLS} paf2maf --target data/scerevisiae8.fa.gz --query data/scerevisiae8.fa.gz x.paf > x.maf) && test $(${WGATOOLS} stat x.maf | cut -f 7 | awk '{ s+=$1 } END { print s }') -gt 11000000"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(

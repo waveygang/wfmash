@@ -4,15 +4,21 @@
 ;;   guix build -L . wfmash-gcc-git          # stanard gcc build
 ;;   guix build -L . wfmash-gcc-debug-git    # gcc build with debug and ASAN
 ;;   guix build -L . wfmash-gcc-profile-git  # run the profiler!
-;;   guix build -L . wfmash-static-gcc-git   # gcc static build (default)
+;;   guix build -L . wfmash-gcc-static-git   # gcc static build (default)
 ;;   guix build -L . wfmash-clang-git        # clang build
+;;
+;; Note that for abov build commands testing should be disabled.
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
-;;   guix shell --share=$HOME/.cargo -C -D -F -f guix.scm         # default build
-;;   guix shell -L . -C -D -F wfmash-gcc-git # preferred development container
-;;   guix shell -L . -C -D -F wfmash-gcc-static-git
-;;   guix shell -L . -C -D -F wfmash-clang-git
+;;   guix shell --share=$HOME/.cargo -C -D -F -v 3 -f guix.scm            # default build
+;;   guix shell --share=$HOME/.cargo -L . -C -D -F wfmash-gcc-git         # preferred development container
+;;   guix shell --share=$HOME/.cargo -L . -C -D -F wfmash-gcc-static-git
+;;   guix shell --share=$HOME/.cargo -L . -C -D -F wfmash-clang-git
+;;
+;; To include a prebuilt wgatools binary:
+;;
+;;   guix shell --share=$HOME/.cargo -C -D -F -v 3 --expose=../wgatools=/wgatools -L . wfmash-gcc-debug-git
 ;;
 ;; and inside the container
 ;;
@@ -28,6 +34,11 @@
 ;;   cmake -DCMAKE_BUILD_TYPE=Debug ..           # for development (use wfmash-gcc-git)
 ;;   cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..  # for distros including Debian (use wfmash-gcc-git)
 ;;   cmake -DBUILD_STATIC=1 ..                   # static binary (use wfmash-gcc-static-git)
+;;
+;; For tests to work build wgatools in the next directory and add --expose=../wgatools=/wgatools to the shell options above.
+;; Inside the container you should be able to run:
+;;
+;; env LD_LIBRARY_PATH=$GUIX_PROFILE/lib /wgatools/target/release/wgatools
 ;;
 ;; list packages
 ;;
@@ -49,7 +60,7 @@
 ;; If things do not work you may also have to update the guix-daemon in systemd. Guix mostly downloads binary
 ;; substitutes. If it wants to build a lot of software you probably have substitutes misconfigured.
 
-;; by Pjotr Prins & Andrea Guarracino (c) 2023-2024
+;; by Pjotr Prins & Andrea Guarracino (c) 2023-2025
 
 (define-module (guix)
   #:use-module ((guix licenses) #:prefix license:)
@@ -161,27 +172,11 @@
     (version (git-version "0.21" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
-    (inputs
-     `(
-       ("bash" ,bash) ; for testing
-       ("bedtools" ,bedtools) ; for testing
-       ("util-linux" ,util-linux) ; for testing
-       ("samtools" ,samtools) ; for testing
-       ("bzip2" ,bzip2)
-       ("coreutils" ,coreutils) ; for echo and env in tests
-       ("git" ,git)
-       ("gmp" ,gmp)
-       ("gsl" ,gsl)
-       ("htslib" ,htslib)
-       ("jemalloc" ,jemalloc)
-       ("libdeflate" ,libdeflate)
-       ("make" ,gnu-make)
-       ("pkg-config" ,pkg-config)
-       ("xz" ,xz)
-       ("zlib" ,zlib)))
-    (propagated-inputs
-       `(("pafcheck" ,pafcheck-shell-git)
-       ))
+    (inputs (list
+             bash bedtools util-linux samtools ; for testing
+             coreutils bzip2 git gmp gsl htslib libdeflate gnu-make pkg-config xz zlib))
+    (propagated-inputs (list
+                        pafcheck-shell-git))
      (synopsis "wfmash")
      (description
       "wfmash is an aligner for pangenomes that combines efficient homology
@@ -218,8 +213,8 @@ obtain base-level alignments.")
            "-DCMAKE_BUILD_TYPE=Debug"))) ; force cmake static build and do not rewrite RPATH
     (inputs
      (modify-inputs (package-inputs wfmash-gcc-git)
-         (append gperftools
-                 )))
+                    (prepend bzip2)
+                    (append gperftools)))
     (arguments
      `(#:phases (modify-phases %standard-phases
                                (delete 'configure)
@@ -314,15 +309,15 @@ obtain base-level alignments.")
 (define %git-commit
     (read-string (open-pipe "git show HEAD | head -1 | cut -d ' ' -f 2" OPEN_READ)))
 
-(define-public wfmash-static-gcc-git
+(define-public wfmash-gcc-static-git
   "Optimized for latest AMD architecture build and static deployment.
 These binaries can be copied to HPC."
   (package
     (inherit wfmash-base-git)
-    (name "wfmash-static-gcc-git")
+    (name "wfmash-gcc-static-git")
     (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
-     `(;; #:tests? #f
+     `(#:tests? #f
        #:configure-flags
        ,#~(list
            "-DBUILD_STATIC=ON"
@@ -340,4 +335,4 @@ These binaries can be copied to HPC."
                      htslib-static
                      )))))
 
-wfmash-static-gcc-git ;; default optimized static deployment build
+wfmash-gcc-static-git ;; default optimized static deployment build
