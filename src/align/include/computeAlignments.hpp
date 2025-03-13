@@ -475,23 +475,48 @@ void processMappingRecord(
     }
 }
 
+// Thread-local readers that persist for the lifetime of the thread
+struct ThreadLocalReaders {
+    faidx_reader_t* ref_reader;
+    faidx_reader_t* query_reader;
+    
+    ThreadLocalReaders(faidx_meta_t* ref_meta, faidx_meta_t* query_meta) 
+        : ref_reader(nullptr), query_reader(nullptr) {
+        // Create thread-local readers
+        ref_reader = faidx_reader_create(ref_meta);
+        if (!ref_reader) {
+            throw std::runtime_error("Failed to create reference reader");
+        }
+        
+        query_reader = faidx_reader_create(query_meta);
+        if (!query_reader) {
+            faidx_reader_destroy(ref_reader);
+            throw std::runtime_error("Failed to create query reader");
+        }
+    }
+    
+    ~ThreadLocalReaders() {
+        if (ref_reader) faidx_reader_destroy(ref_reader);
+        if (query_reader) faidx_reader_destroy(query_reader);
+    }
+};
+
+// Get thread-local readers from shared metadata
+static ThreadLocalReaders& getThreadLocalReaders(faidx_meta_t* ref_meta, faidx_meta_t* query_meta) {
+    thread_local ThreadLocalReaders readers(ref_meta, query_meta);
+    return readers;
+}
+
 // Creates a sequence record using thread-local FASTA readers from the shared metadata
 seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord, 
                               const std::string& mappingRecordLine,
                               faidx_meta_t* ref_meta,
                               faidx_meta_t* query_meta) {
     try {
-        // Create thread-local readers
-        faidx_reader_t* ref_reader = faidx_reader_create(ref_meta);
-        if (!ref_reader) {
-            throw std::runtime_error("Failed to create reference reader");
-        }
-        
-        faidx_reader_t* query_reader = faidx_reader_create(query_meta);
-        if (!query_reader) {
-            faidx_reader_destroy(ref_reader);
-            throw std::runtime_error("Failed to create query reader");
-        }
+        // Get thread-local readers (created once per thread)
+        ThreadLocalReaders& readers = getThreadLocalReaders(ref_meta, query_meta);
+        faidx_reader_t* ref_reader = readers.ref_reader;
+        faidx_reader_t* query_reader = readers.query_reader;
         
         // Get the reference sequence length
         const hts_pos_t ref_size = faidx_meta_seq_len(ref_meta, currentRecord.refId.c_str());
@@ -553,9 +578,7 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
                                           query_seq, // Transfer ownership
                                           currentRecord.qStartPos, query_len, query_size);
 
-        // Clean up the readers (sequences are now owned by seq_record_t)
-        faidx_reader_destroy(ref_reader);
-        faidx_reader_destroy(query_reader);
+        // Note: We no longer destroy readers here as they are thread-local and will be cleaned up automatically
 
         return rec;
     } catch (const std::exception& e) {
