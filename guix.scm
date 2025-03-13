@@ -1,13 +1,13 @@
 ;; To use this file to build a version of wfmash using git HEAD:
 ;;
 ;;   guix build -f guix.scm                  # default build
-;;   guix build -L . wfmash-gcc-git          # stanard gcc build
+;;   guix build -L . wfmash-gcc-git          # standard gcc build
 ;;   guix build -L . wfmash-gcc-debug-git    # gcc build with debug and ASAN
 ;;   guix build -L . wfmash-gcc-profile-git  # run the profiler!
-;;   guix build -L . wfmash-gcc-static-git   # gcc static build (default)
+;;   guix build -L . wfmash-gcc-static-git --without-tests=wfmash-gcc-static-git # gcc static build (default)
 ;;   guix build -L . wfmash-clang-git        # clang build
 ;;
-;; Note that for abov build commands testing should be disabled.
+;; Note that for abov build commands testing should be disabled with --without-tests=target.
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
@@ -172,6 +172,7 @@
     (version (git-version "0.21" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
+    (properties '((tunable? . #t)))
     (inputs (list
              bash bedtools util-linux samtools ; for testing
              coreutils bzip2 git gmp gsl htslib libdeflate gnu-make pkg-config xz zlib))
@@ -250,8 +251,8 @@ obtain base-level alignments.")
      `(#:tests? #f ;; running tests as profiler
        #:configure-flags
          ,#~(list
-             "-DCMAKE_BUILD_TYPE=Release"
-             "-DBUILD_OPTIMIZED=ON"
+             "-DCMAKE_BUILD_TYPE=Generic"
+             ;; "-DBUILD_OPTIMIZED=ON" -- use --tune switch
              "-DPROFILER=ON")
        #:phases
          ,#~(modify-phases %standard-phases
@@ -317,13 +318,13 @@ These binaries can be copied to HPC."
     (name "wfmash-gcc-static-git")
     (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
-     `(#:tests? #f
+     `(#:tests? #t
        #:configure-flags
        ,#~(list
            "-DBUILD_STATIC=ON"
-           "-DBUILD_OPTIMIZED=ON"
-           "-DCMAKE_BUILD_TYPE=Release"
-           "-DCMAKE_INSTALL_RPATH="))) ; force cmake static build and do not rewrite RPATH
+           ;; "-DBUILD_OPTIMIZED=ON"    ;; we don't use the standard cmake optimizations
+           "-DCMAKE_BUILD_TYPE=Generic" ;; to optimize use --tune=march-type (e.g. --tune=native)
+           "-DCMAKE_INSTALL_RPATH=")))   ; force cmake static build and do not rewrite RPATH
     (inputs
      (modify-inputs (package-inputs wfmash-gcc-git)
                     (prepend

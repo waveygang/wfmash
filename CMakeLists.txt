@@ -70,6 +70,10 @@ endif()
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
+  # This is the default build for the developers. Note that Debian
+  # packagers should use RelWithDebInfo and the Guix version should
+  # use Generic builds below - fine tune through --tune etc. For
+  # debugging you may want to use the Debug version.
   if (BUILD_OPTIMIZED)
     # set(EXTRA_FLAGS "-Ofast -march=native -pipe -msse4.2 -funroll-all-loops") #  -fprofile-generate=../pgo")
     # set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -funroll-all-loops")
@@ -79,13 +83,14 @@ if (${CMAKE_BUILD_TYPE} MATCHES Release)
   else()
     set(EXTRA_FLAGS "-Ofast -march=native")
   endif()
-  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG ${EXTRA_FLAGS}")
-  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG ${EXTRA_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG ${EXTRA_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG ${EXTRA_FLAGS}")
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Generic)
-  set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
-  set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
+  set(EXTRA_FLAGS "-O3 -funroll-all-loops") # march is handled through --tune, see guix.scm
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG ${EXTRA_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG ${EXTRA_FLAGS}")
 endif ()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Debug)
@@ -95,8 +100,8 @@ if (${CMAKE_BUILD_TYPE} MATCHES Debug)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address  -fno-omit-frame-pointer -fno-common")
   endif ()
 else ()
-    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS}")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif ()
 
 if( NOT DISABLE_LTO AND ipo_supported )

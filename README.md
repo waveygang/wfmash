@@ -263,6 +263,20 @@ guix build -f guix.scm
 ```
 
 To build guix in a development container, see the instructions in the header of [guix.scm](./guix.scm).
+Note that our guix setup allows for static builds and specifying the target CPU architecture(!)
+
+For example `--tune=native` builds for skylake on my laptop:
+
+```shell
+guix build -L . wfmash-gcc-static-git --without-tests=wfmash-gcc-static-git --tune=native
+  guix build: tuning wfmash-gcc-static-git@0.21-HEAD.024dcaa for CPU skylake
+  guix build: tuning gsl@2.8 for CPU skylake
+...
+```
+
+To build for x86-64-v4 use `--tune=x86-64-v4`. A complete list can be found [here](https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html).
+
+Of course you may now get an 'Illegal instruction' when you try to run the program on the build system.
 
 #### Docker and Singularity images with nix
 
