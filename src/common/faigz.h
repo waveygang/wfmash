@@ -225,6 +225,8 @@ faidx_meta_t *faidx_meta_load(const char *filename, enum fai_format_options form
     kstring_t fai_kstr = {0}, gzi_kstr = {0};
     faidx_t *fai = NULL;
     faidx_meta_t *meta = NULL;
+    FILE *fp = NULL;
+    int is_bgzf = 0;
     
     /* Handle NULL filename */
     if (!filename) {
@@ -235,6 +237,17 @@ faidx_meta_t *faidx_meta_load(const char *filename, enum fai_format_options form
     /* Construct file paths */
     if (ksprintf(&fai_kstr, "%s.fai", filename) < 0) goto fail;
     if (ksprintf(&gzi_kstr, "%s.gzi", filename) < 0) goto fail;
+    
+    /* Check if file is BGZF compressed */
+    fp = fopen(filename, "rb");
+    if (fp) {
+        unsigned char magic[2];
+        if (fread(magic, 1, 2, fp) == 2) {
+            is_bgzf = (magic[0] == 0x1f && magic[1] == 0x8b);
+        }
+        fclose(fp);
+        fp = NULL;
+    }
     
     /* Load the FASTA/FASTQ index using fai_load3_format which handles either FASTA or FASTQ */
     fai = fai_load3_format(filename, fai_kstr.s, gzi_kstr.s, flags, format);
@@ -252,16 +265,7 @@ faidx_meta_t *faidx_meta_load(const char *filename, enum fai_format_options form
     meta->m = meta->n;  /* We'll allocate exactly what we need */
     meta->format = format;
     meta->ref_count = 1;
-    
-    /* Check if file is BGZF compressed */
-    FILE *fp = fopen(filename, "rb");
-    if (fp) {
-        unsigned char magic[2];
-        if (fread(magic, 1, 2, fp) == 2) {
-            meta->is_bgzf = (magic[0] == 0x1f && magic[1] == 0x8b);
-        }
-        fclose(fp);
-    }
+    meta->is_bgzf = is_bgzf;
     
     /* Copy sequence names */
     meta->name = (char**)malloc(meta->m * sizeof(char*));
