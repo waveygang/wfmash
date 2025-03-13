@@ -20,7 +20,10 @@
 #include <htslib/bgzf.h>
 #include <htslib/thread_pool.h>
 #include <htslib/hfile.h>
-#include "common/thread_safe_faidx.hpp"
+
+// Include the reentrant FASTA/BGZF index implementation
+#define REENTRANT_FAIDX_IMPLEMENTATION
+#include "common/faigz.h"
 
 //Own includes
 #include "align/include/align_types.hpp"
@@ -148,8 +151,9 @@ struct seq_record_t {
       //algorithm parameters
       const align::Parameters &param;
 
-      ts_faidx::FastaReader* ref_faidx;
-      ts_faidx::FastaReader* query_faidx;
+      // Shared FASTA index metadata (thread-safe)
+      faidx_meta_t* ref_meta;
+      faidx_meta_t* query_meta;
 
     public:
 
@@ -157,28 +161,26 @@ struct seq_record_t {
           assert(param.refSequences.size() == 1);
           assert(param.querySequences.size() == 1);
           
-          // Load thread-safe FASTA readers
-          try {
-              ref_faidx = new ts_faidx::FastaReader(param.refSequences.front());
-          } catch (const std::exception& e) {
+          // Load index metadata (shared across threads)
+          ref_meta = faidx_meta_load(param.refSequences.front().c_str(), FAI_FASTA, FAI_CREATE);
+          if (!ref_meta) {
               throw std::runtime_error("[wfmash::align] Error! Failed to load reference FASTA index: " 
-                                      + param.refSequences.front() + " - " + e.what());
+                                      + param.refSequences.front());
           }
           
-          try {
-              query_faidx = new ts_faidx::FastaReader(param.querySequences.front());
-          } catch (const std::exception& e) {
-              delete ref_faidx;
+          query_meta = faidx_meta_load(param.querySequences.front().c_str(), FAI_FASTA, FAI_CREATE);
+          if (!query_meta) {
+              faidx_meta_destroy(ref_meta);
               throw std::runtime_error("[wfmash::align] Error! Failed to load query FASTA index: " 
-                                      + param.querySequences.front() + " - " + e.what());
+                                      + param.querySequences.front());
           }
           
           std::cerr << "[wfmash::align] Successfully loaded thread-safe FASTA indices" << std::endl;
       }
 
       ~Aligner() {
-          delete ref_faidx;
-          delete query_faidx;
+          if (ref_meta) faidx_meta_destroy(ref_meta);
+          if (query_meta) faidx_meta_destroy(query_meta);
       }
       
       /**
@@ -349,8 +351,8 @@ void computeAlignmentsTaskflow() {
         [&](const std::string& record) {
             processMappingRecord(
                 record,
-                ref_faidx,
-                query_faidx,
+                ref_meta,
+                query_meta,
                 param,
                 total_alignments_processed,
                 processed_alignment_length,
@@ -384,8 +386,8 @@ void computeAlignmentsTaskflow() {
 // Process a single mapping record (extracted to avoid lambda issues with for_each)
 void processMappingRecord(
     const std::string& record,
-    ts_faidx::FastaReader* ref_faidx,
-    ts_faidx::FastaReader* query_faidx,
+    faidx_meta_t* ref_meta,
+    faidx_meta_t* query_meta,
     const align::Parameters& param,
     std::atomic<uint64_t>& total_alignments_processed,
     std::atomic<uint64_t>& processed_alignment_length,
@@ -400,7 +402,7 @@ void processMappingRecord(
         
         // Create sequence record
         std::unique_ptr<seq_record_t> seq_rec(
-            createSeqRecord(currentRecord, record, ref_faidx, query_faidx)
+            createSeqRecord(currentRecord, record, ref_meta, query_meta)
         );
         
         // Process alignment
@@ -473,21 +475,37 @@ void processMappingRecord(
     }
 }
 
-// Creates a sequence record using the thread-safe FASTA readers
+// Creates a sequence record using thread-local FASTA readers from the shared metadata
 seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord, 
                               const std::string& mappingRecordLine,
-                              ts_faidx::FastaReader* ref_faidx,
-                              ts_faidx::FastaReader* query_faidx) {
+                              faidx_meta_t* ref_meta,
+                              faidx_meta_t* query_meta) {
     try {
+        // Create thread-local readers
+        faidx_reader_t* ref_reader = faidx_reader_create(ref_meta);
+        if (!ref_reader) {
+            throw std::runtime_error("Failed to create reference reader");
+        }
+        
+        faidx_reader_t* query_reader = faidx_reader_create(query_meta);
+        if (!query_reader) {
+            faidx_reader_destroy(ref_reader);
+            throw std::runtime_error("Failed to create query reader");
+        }
+        
         // Get the reference sequence length
-        const int64_t ref_size = ref_faidx->get_sequence_length(currentRecord.refId);
+        const hts_pos_t ref_size = faidx_meta_seq_len(ref_meta, currentRecord.refId.c_str());
         if (ref_size < 0) {
+            faidx_reader_destroy(ref_reader);
+            faidx_reader_destroy(query_reader);
             throw std::runtime_error("Reference sequence not found: " + currentRecord.refId);
         }
         
         // Get the query sequence length
-        const int64_t query_size = query_faidx->get_sequence_length(currentRecord.qId);
+        const hts_pos_t query_size = faidx_meta_seq_len(query_meta, currentRecord.qId.c_str());
         if (query_size < 0) {
+            faidx_reader_destroy(ref_reader);
+            faidx_reader_destroy(query_reader);
             throw std::runtime_error("Query sequence not found: " + currentRecord.qId);
         }
 
@@ -497,28 +515,47 @@ seq_record_t* createSeqRecord(const MappingBoundaryRow& currentRecord,
         const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor
             ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
 
-        // Extract reference sequence (thread-safe)
-        std::string ref_seq_str = ref_faidx->fetch_sequence(
-            currentRecord.refId,
+        // Extract reference sequence
+        hts_pos_t ref_len;
+        char* ref_seq = faidx_reader_fetch_seq(
+            ref_reader, 
+            currentRecord.refId.c_str(),
             currentRecord.rStartPos - head_padding,
-            currentRecord.rEndPos + tail_padding);
-        int64_t ref_len = ref_seq_str.length();
-        char* ref_seq = strdup(ref_seq_str.c_str());
+            currentRecord.rEndPos + tail_padding - 1, // faigz uses inclusive end
+            &ref_len);
+            
+        if (!ref_seq || ref_len <= 0) {
+            faidx_reader_destroy(ref_reader);
+            faidx_reader_destroy(query_reader);
+            throw std::runtime_error("Failed to fetch reference sequence");
+        }
 
-        // Extract query sequence (thread-safe)
-        std::string query_seq_str = query_faidx->fetch_sequence(
-            currentRecord.qId,
+        // Extract query sequence
+        hts_pos_t query_len;
+        char* query_seq = faidx_reader_fetch_seq(
+            query_reader,
+            currentRecord.qId.c_str(),
             currentRecord.qStartPos,
-            currentRecord.qEndPos);
-        int64_t query_len = query_seq_str.length();
-        char* query_seq = strdup(query_seq_str.c_str());
+            currentRecord.qEndPos - 1, // faigz uses inclusive end
+            &query_len);
+            
+        if (!query_seq || query_len <= 0) {
+            free(ref_seq);
+            faidx_reader_destroy(ref_reader);
+            faidx_reader_destroy(query_reader);
+            throw std::runtime_error("Failed to fetch query sequence");
+        }
 
         // Create a new seq_record_t object that takes ownership of the sequences
         seq_record_t* rec = new seq_record_t(currentRecord, mappingRecordLine,
-                                           ref_seq, // Transfer ownership of ref_seq
-                                           currentRecord.rStartPos - head_padding, ref_len, ref_size,
-                                           query_seq, // Transfer ownership of query_seq
-                                           currentRecord.qStartPos, query_len, query_size);
+                                          ref_seq, // Transfer ownership
+                                          currentRecord.rStartPos - head_padding, ref_len, ref_size,
+                                          query_seq, // Transfer ownership
+                                          currentRecord.qStartPos, query_len, query_size);
+
+        // Clean up the readers (sequences are now owned by seq_record_t)
+        faidx_reader_destroy(ref_reader);
+        faidx_reader_destroy(query_reader);
 
         return rec;
     } catch (const std::exception& e) {
@@ -589,10 +626,14 @@ std::string processAlignment(seq_record_t* rec) {
 }
 
 void write_sam_header(std::ofstream& outstream) {
-    // Use our thread-safe FastaReader to get sequence names and lengths
-    for (const auto& seq_name : ref_faidx->get_sequence_names()) {
-        int64_t seq_len = ref_faidx->get_sequence_length(seq_name);
-        outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
+    // Use the FASTA metadata to get sequence names and lengths
+    int num_seqs = faidx_meta_nseq(ref_meta);
+    for (int i = 0; i < num_seqs; i++) {
+        const char* seq_name = faidx_meta_iseq(ref_meta, i);
+        if (seq_name) {
+            hts_pos_t seq_len = faidx_meta_seq_len(ref_meta, seq_name);
+            outstream << "@SQ\tSN:" << seq_name << "\tLN:" << seq_len << "\n";
+        }
     }
     outstream << "@PG\tID:wfmash\tPN:wfmash\tVN:" << WFMASH_GIT_VERSION << "\tCL:wfmash\n";
 }
