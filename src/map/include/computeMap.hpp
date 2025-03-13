@@ -26,6 +26,10 @@ namespace fs = std::filesystem;
 #include <sstream>
 #include "taskflow/taskflow.hpp"
 
+// Include the reentrant FASTA/BGZF index implementation
+#define REENTRANT_FAIDX_IMPLEMENTATION
+#include "common/faigz.h"
+
 //Own includes
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
@@ -326,16 +330,17 @@ namespace skch
       private:
       void buildMetadataFromIndex() {
           for (const auto& fileName : param.refSequences) {
-              faidx_t* fai = fai_load(fileName.c_str());
-              if (fai == nullptr) {
+              // Use faigz to load the index metadata
+              faidx_meta_t* meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+              if (meta == nullptr) {
                   std::cerr << "Error: Failed to load FASTA index for file " << fileName << std::endl;
                   exit(1);
               }
 
-              int nseq = faidx_nseq(fai);
+              int nseq = faidx_meta_nseq(meta);
               for (int i = 0; i < nseq; ++i) {
-                  const char* seq_name = faidx_iseq(fai, i);
-                  int seq_len = faidx_seq_len(fai, seq_name);
+                  const char* seq_name = faidx_meta_iseq(meta, i);
+                  hts_pos_t seq_len = faidx_meta_seq_len(meta, seq_name);
                   if (seq_len == -1) {
                       std::cerr << "Error: Failed to get length for sequence " << seq_name << std::endl;
                       continue;
@@ -343,7 +348,7 @@ namespace skch
                   // Metadata is now handled by idManager, no need to push_back here
               }
 
-              fai_destroy(fai);
+              faidx_meta_destroy(meta);
           }
       }
 
@@ -652,10 +657,47 @@ namespace skch
                                                            outstream, outstream_mutex, subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
-                  // Directly iterate over sequences using seqiter's random access
-                  seqiter::for_each_seq_in_file(
-                      fileName, querySequenceNames, 
-                      [&](const std::string& queryName, const std::string& sequence) {
+                  // Load the query file index once and share it
+                  faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+                  if (!query_meta) {
+                      std::cerr << "Error: Failed to load query FASTA index: " << fileName << std::endl;
+                      exit(1);
+                  }
+                  
+                  // Helper to get thread-local readers
+                  auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
+                      thread_local faidx_reader_t* reader = nullptr;
+                      if (reader == nullptr) {
+                          reader = faidx_reader_create(meta);
+                          if (!reader) {
+                              throw std::runtime_error("Failed to create thread-local reader");
+                          }
+                      }
+                      return reader;
+                  };
+                  
+                  // Process each query sequence
+                  for (const auto& queryName : querySequenceNames) {
+                      // Get a thread-local reader
+                      faidx_reader_t* reader = getThreadLocalReader(query_meta);
+                      
+                      // Fetch the sequence
+                      hts_pos_t seq_len;
+                      hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
+                      if (seq_total_len <= 0) {
+                          std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
+                          continue;
+                      }
+                      
+                      char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
+                      if (!seq_data) {
+                          std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
+                          continue;
+                      }
+                      
+                      // Create a string from the fetched data (will be copied)
+                      std::string sequence(seq_data, seq_len);
+                      free(seq_data); // Free the raw data after copying
             
                           // Create a subflow for each query that processes its fragments in parallel
                           auto query_task = sf.emplace([&, queryName, sequence](tf::Subflow& query_sf) {
@@ -768,7 +810,10 @@ namespace skch
                                   reportReadMappings(mappings, queryName, *outstream);
                               }
                           }).name("query_" + queryName);
-                      });
+                  }
+                  
+                  // Clean up the shared index
+                  faidx_meta_destroy(query_meta);
               }).name("process_queries");
 
               // Merge subset results into combined mappings (only for ONETOONE mode)
@@ -1547,23 +1592,22 @@ namespace skch
           size_t totalSeqs = 0;
 
           for (const auto& fileName : param.refSequences) {
-              std::string faiName = fileName + ".fai";
-              std::ifstream faiFile(faiName);
-              
-              if (!faiFile.is_open()) {
-                  std::cerr << "Error: Unable to open FAI file: " << faiName << std::endl;
+              // Use faigz to load the index metadata
+              faidx_meta_t* meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+              if (meta == nullptr) {
+                  std::cerr << "Error: Unable to load FASTA index for file: " << fileName << std::endl;
                   exit(1);
               }
 
-              std::string line;
-              while (std::getline(faiFile, line)) {
-                  std::istringstream iss(line);
-                  std::string seqName;
-                  offset_t seqLength;
-                  iss >> seqName >> seqLength;
-
-                  seqInfoWithIndex.emplace_back(seqName, totalSeqs++, seqLength);
+              int nseq = faidx_meta_nseq(meta);
+              for (int i = 0; i < nseq; ++i) {
+                  const char* seq_name = faidx_meta_iseq(meta, i);
+                  hts_pos_t seq_length = faidx_meta_seq_len(meta, seq_name);
+                  
+                  seqInfoWithIndex.emplace_back(seq_name, totalSeqs++, seq_length);
               }
+              
+              faidx_meta_destroy(meta);
           }
 
           std::sort(seqInfoWithIndex.begin(), seqInfoWithIndex.end());
