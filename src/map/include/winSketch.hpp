@@ -197,8 +197,8 @@ namespace skch
 
           // Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool(
-              [this, &sketch_progress](InputSeqContainer* e) { 
-                  return buildHelper(e, &sketch_progress); 
+              [this, sketch_progress](InputSeqContainer* e) { 
+                  return buildHelper(e, sketch_progress.get()); 
               }, 
               param.threads);
 
@@ -428,7 +428,7 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      MI_Type* buildHelper(InputSeqContainer *input, progress_meter::ProgressMeter* progress)
+      MI_Type* buildHelper(InputSeqContainer *input, progress_meter::ProgressMeter* progress = nullptr)
       {
         MI_Type* thread_output = new MI_Type();
 
