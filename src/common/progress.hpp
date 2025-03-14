@@ -47,8 +47,8 @@ public:
         
         start_time = std::chrono::high_resolution_clock::now();
         
-        // Only use progress bar if stderr is a TTY
-        use_progress_bar = isatty(fileno(stderr));
+        // Always use the progress bar for debugging 
+        use_progress_bar = true; // Temporarily disabled TTY check: isatty(fileno(stderr));
         
         // Print start message with timestamp
         std::time_t start_time_t = std::chrono::system_clock::to_time_t(
