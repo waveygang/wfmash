@@ -79,7 +79,7 @@ public:
             // Hide cursor during progress display
             indicators::show_console_cursor(false);
             
-            // Create progress bar with empty prefix (banner already printed above)
+            // Create progress bar with proper prefix
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 progress_bar = std::make_unique<indicators::BlockProgressBar>(
@@ -89,7 +89,7 @@ public:
                     indicators::option::ForegroundColor{indicators::Color::green},
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{""},  // Empty prefix since we already printed banner
+                    indicators::option::PrefixText{banner},  // Use banner as prefix to include [wfmash::...] text
                     indicators::option::FontStyles{
                         std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
                     },
