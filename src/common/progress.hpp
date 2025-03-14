@@ -2,106 +2,104 @@
 
 #include <iostream>
 #include <string>
-#include <atomic>
-#include <thread>
 #include <chrono>
-#include <iomanip>
+#include <atomic>
+#include <mutex>
+#include <memory>
+#include <unistd.h>
+#include "indicators.hpp"
 
 namespace progress_meter {
 
 class ProgressMeter {
 private:
-    const uint64_t update_interval = 500; // ms between updates
-    const uint64_t min_progress_for_update = 1000; // Minimum progress before showing an update
-    std::atomic<bool> running;
-    std::chrono::time_point<std::chrono::steady_clock> last_update;
-
-public:
     std::string banner;
     std::atomic<uint64_t> total;
     std::atomic<uint64_t> completed;
-    std::chrono::time_point<std::chrono::steady_clock> start_time;
-    std::thread logger;
+    std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
+    bool use_progress_bar;
+    bool is_finished;
+    std::mutex mutex;
+    std::unique_ptr<indicators::BlockProgressBar> progress_bar;
+
+public:
     ProgressMeter(uint64_t _total, const std::string& _banner)
-        : total(_total), banner(_banner), running(true) {
-        start_time = std::chrono::steady_clock::now();
-        last_update = start_time;
-        completed = 0;
+        : banner(_banner), total(_total), completed(0), is_finished(false) {
+        start_time = std::chrono::high_resolution_clock::now();
         
-        logger = std::thread([this]() {
-            uint64_t last_completed = 0;
+        // Only use progress bar if stderr is a TTY
+        use_progress_bar = isatty(fileno(stderr));
+        
+        // Print start message with timestamp
+        std::time_t start_time_t = std::chrono::system_clock::to_time_t(
+            std::chrono::system_clock::now());
+        
+        std::cerr << banner << std::endl;
+                 
+        if (use_progress_bar) {
+            progress_bar = std::make_unique<indicators::BlockProgressBar>(
+                indicators::option::BarWidth{50},
+                indicators::option::Start{"["},
+                indicators::option::End{"]"},
+                indicators::option::ForegroundColor{indicators::Color::green},
+                indicators::option::ShowElapsedTime{true},
+                indicators::option::ShowRemainingTime{true},
+                indicators::option::PrefixText{banner},
+                indicators::option::FontStyles{
+                    std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
+                },
+                indicators::option::MaxProgress{total}
+            );
             
-            while (running.load(std::memory_order_relaxed)) {
-                auto now = std::chrono::steady_clock::now();
-                auto time_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update).count();
-                uint64_t current_completed = completed.load(std::memory_order_relaxed);
-                
-                if (time_since_update >= update_interval && 
-                    (current_completed - last_completed >= min_progress_for_update ||
-                     current_completed >= total)) {
-                    do_print();
-                    last_completed = current_completed;
-                    last_update = now;
-                }
-                
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-        });
-    };
-    void do_print(void) {
-        auto curr = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = curr-start_time;
-        double rate = completed / elapsed_seconds.count();
-        double seconds_to_completion = (completed > 0 ? (total - completed) / rate : 0);
-        std::cerr << "\r" << banner << " "
-                  << std::defaultfloat
-                  << std::setfill(' ')
-                  << std::setw(5)
-                  << std::fixed
-                  << std::setprecision(2)
-                  << 100.0 * ((double)completed / (double)total) << "% "
-                  << "in: " << print_time(elapsed_seconds.count()) << " "
-                  << "todo: " << print_time(seconds_to_completion) << " @"
-                  << std::setw(4) << std::scientific << rate << "/s";
-    }
-    void finish() {
-        running.store(false, std::memory_order_relaxed);
-        if (logger.joinable()) {
-            logger.join();
+            // Hide cursor during progress display
+            indicators::show_console_cursor(false);
         }
-        completed.store(total);
-        do_print();
-        std::cerr << std::endl;
     }
-    std::string print_time(const double& _seconds) {
-        int days = 0, hours = 0, minutes = 0, seconds = 0;
-        distribute_seconds(days, hours, minutes, seconds, _seconds);
-        std::stringstream buffer;
-        buffer << std::setfill('0') << std::setw(2) << days << ":"
-               << std::setfill('0') << std::setw(2) << hours << ":"
-               << std::setfill('0') << std::setw(2) << minutes << ":"
-               << std::setfill('0') << std::setw(2) << seconds;
-        return buffer.str();
-    }
-    void distribute_seconds(int& days, int& hours, int& minutes, int& seconds, const double& input_seconds) {
-        const int cseconds_in_day = 86400;
-        const int cseconds_in_hour = 3600;
-        const int cseconds_in_minute = 60;
-        const int cseconds = 1;
-        days = std::floor(input_seconds / cseconds_in_day);
-        hours = std::floor(((int)input_seconds % cseconds_in_day) / cseconds_in_hour);
-        minutes = std::floor((((int)input_seconds % cseconds_in_day) % cseconds_in_hour) / cseconds_in_minute);
-        seconds = ((((int)input_seconds % cseconds_in_day) % cseconds_in_hour) % cseconds_in_minute) / cseconds; // + (input_seconds - std::floor(input_seconds));
-        //std::cerr << input_seconds << " seconds is " << days << " days, " << hours << " hours, " << minutes << " minutes, and " << seconds << " seconds." << std::endl;
-    }
-    void increment(const uint64_t& incr) {
-        completed.fetch_add(incr, std::memory_order_relaxed);
-    }
+
     ~ProgressMeter() {
-        if (running.load(std::memory_order_relaxed)) {
+        if (!is_finished) {
             finish();
         }
+        
+        // Always show cursor when done
+        if (use_progress_bar) {
+            indicators::show_console_cursor(true);
+        }
+    }
+
+    void increment(const uint64_t& incr) {
+        completed.fetch_add(incr, std::memory_order_relaxed);
+        if (use_progress_bar && progress_bar) {
+            std::lock_guard<std::mutex> lock(mutex);
+            progress_bar->set_progress(std::min(completed.load(), total.load()));
+        }
+    }
+
+    void finish() {
+        std::lock_guard<std::mutex> lock(mutex);
+        
+        if (is_finished) {
+            return;
+        }
+        
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+        
+        if (use_progress_bar && progress_bar) {
+            progress_bar->set_option(indicators::option::PrefixText{banner + " [completed]"});
+            progress_bar->set_progress(total);
+            progress_bar->mark_as_completed();
+            
+            // Show cursor again now that we're done
+            indicators::show_console_cursor(true);
+        } else {
+            // If not using progress bar, just print completion message
+            std::cerr << banner << " [completed in " 
+                      << elapsed.count() << "s]" << std::endl;
+        }
+        
+        is_finished = true;
     }
 };
 
-}
+} // namespace progress_meter
