@@ -194,8 +194,7 @@ obtain base-level alignments.")
     (name "wfmash-gcc-git")
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
-         (append gcc
-                 )))))
+         (append gcc)))))
 
 (define-public wfmash-gcc-debug-git
   "Build with debug options"
@@ -221,8 +220,7 @@ obtain base-level alignments.")
                                (delete 'build)
                                (delete 'package)
                                (delete 'check)
-                               (delete 'install)
-                               )))))
+                               (delete 'install))))))
 
 (define-public wfmash-clang-git
   "Clang+LLVM build"
@@ -233,8 +231,7 @@ obtain base-level alignments.")
      (modify-inputs (package-inputs wfmash-base-git)
          (append clang-toolchain-18
                  lld
-                 libomp
-                 )))))
+                 libomp)))))
 
 (define-public wfmash-gcc-profile-git
   "Build wfmash optimally and automatically run profiler on all tests"
@@ -326,7 +323,6 @@ These binaries can be copied to HPC."
                      `(,gsl "static")
                      `(,xz "static")
                      libdeflate-static
-                     htslib-static
-                     )))))
+                     htslib-static)))))
 
 wfmash-gcc-static-git ;; default optimized static deployment build
