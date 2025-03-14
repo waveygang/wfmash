@@ -335,7 +335,7 @@ void computeAlignmentsTaskflow() {
               << " mapping records for alignment" << std::endl;
     
     // Progress meter
-    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligned");
+    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligning");
     
     // Create taskflow executor with thread count
     tf::Executor executor(param.threads);

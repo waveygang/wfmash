@@ -69,10 +69,7 @@ public:
         
         start_time = std::chrono::high_resolution_clock::now();
         
-        // ALWAYS print the logging message to stderr ONCE at initialization
-        std::cerr << banner << std::endl;
-        
-        // Check if stderr is a TTY
+        // Check if stderr is a TTY - don't print any initial banner
         use_progress_bar = isatty(fileno(stderr));
         
         if (use_progress_bar) {
