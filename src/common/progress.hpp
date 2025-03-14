@@ -98,7 +98,7 @@ public:
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
                     indicators::option::PrefixText{module_prefix + " "},
-                    indicators::option::ForegroundColor{indicators::Color::green},
+                    indicators::option::ForegroundColor{indicators::Color::blue},
                     indicators::option::MaxProgress{total},
                     indicators::option::Stream{std::cerr}
                 );
