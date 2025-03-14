@@ -81,14 +81,10 @@ public:
             // Hide cursor during progress display
             indicators::show_console_cursor(false);
             
-            // Extract module prefix from banner (e.g., "[wfmash::mashmap]")
-            std::string module_prefix = banner;
-            size_t space_pos = banner.find(' ');
-            if (space_pos != std::string::npos) {
-                module_prefix = banner.substr(0, space_pos);
-            }
+            // Use the full banner as the prefix text
+            // The banner should look like "[wfmash::mashmap] indexing"
             
-            // Create progress bar with no prefix (since we already printed the banner)
+            // Create progress bar including the full banner text
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 progress_bar = std::make_unique<indicators::BlockProgressBar>(
@@ -97,8 +93,8 @@ public:
                     indicators::option::End{"]"},
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{module_prefix + " "},
-                    indicators::option::ForegroundColor{indicators::Color::blue},
+                    indicators::option::PrefixText{banner + " "},
+                    // Use default color instead of blue for better visibility
                     indicators::option::MaxProgress{total},
                     indicators::option::Stream{std::cerr}
                 );
