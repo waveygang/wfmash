@@ -307,7 +307,8 @@ void computeAlignmentsTaskflow() {
     
     // Read all mapping records upfront
     std::vector<std::string> mapping_records;
-    uint64_t total_alignment_length = 0;
+    uint64_t total_query_length = 0;
+    uint64_t total_target_length = 0;
     {
         std::ifstream mappingListStream(param.mashmapPafFile);
         if (!mappingListStream.is_open()) {
@@ -322,7 +323,8 @@ void computeAlignmentsTaskflow() {
             if (!mappingRecordLine.empty()) {
                 try {
                     parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
-                    total_alignment_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                    total_query_length += currentRecord.qEndPos - currentRecord.qStartPos;
+                    total_target_length += currentRecord.rEndPos - currentRecord.rStartPos;
                     mapping_records.push_back(std::move(mappingRecordLine));
                 } catch (const std::exception& e) {
                     std::cerr << "[wfmash::align] Warning: Skipping invalid record: " << e.what() << std::endl;
@@ -332,10 +334,12 @@ void computeAlignmentsTaskflow() {
     }
     
     std::cerr << "[wfmash::align] Found " << mapping_records.size() 
-              << " mapping records for alignment" << std::endl;
+              << " mapping records for alignment (" 
+              << total_query_length << " query bp, " 
+              << total_target_length << " target bp)" << std::endl;
     
     // Progress meter
-    progress_meter::ProgressMeter progress(total_alignment_length, "[wfmash::align] aligning");
+    progress_meter::ProgressMeter progress(total_query_length, "[wfmash::align] aligning");
     
     // Create taskflow executor with thread count
     tf::Executor executor(param.threads);
