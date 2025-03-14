@@ -33,7 +33,11 @@ private:
             // Update progress bar at regular intervals
             if (use_progress_bar && progress_bar) {
                 std::lock_guard<std::mutex> lock(mutex);
-                progress_bar->set_progress(std::min(completed.load(), total.load()));
+                auto curr_progress = std::min(completed.load(), total.load());
+                progress_bar->set_progress(curr_progress);
+                
+                // Force flush
+                std::cerr.flush();
             }
             
             // Sleep for update interval
@@ -50,6 +54,9 @@ public:
         // Always use the progress bar for debugging 
         use_progress_bar = true; // Temporarily disabled TTY check: isatty(fileno(stderr));
         
+        // Print a message that we're debugging
+        std::cerr << "[DEBUG] Progress meter initialized with " << _total << " total work" << std::endl;
+        
         // Print start message with timestamp
         std::time_t start_time_t = std::chrono::system_clock::to_time_t(
             std::chrono::system_clock::now());
@@ -60,7 +67,7 @@ public:
             // Hide cursor during progress display
             indicators::show_console_cursor(false);
             
-            // Create progress bar
+            // Create progress bar 
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 progress_bar = std::make_unique<indicators::BlockProgressBar>(
@@ -74,8 +81,12 @@ public:
                     indicators::option::FontStyles{
                         std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
                     },
-                    indicators::option::MaxProgress{total}
+                    indicators::option::MaxProgress{total},
+                    indicators::option::Stream{std::cerr} // Explicitly use stderr
                 );
+                
+                // Initial update to show the bar
+                progress_bar->set_progress(0);
             }
             
             // Start the update thread
@@ -101,8 +112,14 @@ public:
     }
 
     void increment(const uint64_t& incr) {
-        completed.fetch_add(incr, std::memory_order_relaxed);
-        // No need to update the bar here, the thread will handle it
+        uint64_t previous = completed.fetch_add(incr, std::memory_order_relaxed);
+        uint64_t new_val = previous + incr;
+        
+        // For large increments, force an immediate update
+        if (incr > total / 10 && use_progress_bar && progress_bar) {
+            std::lock_guard<std::mutex> lock(mutex);
+            progress_bar->set_progress(std::min(new_val, total.load()));
+        }
     }
 
     void finish() {
