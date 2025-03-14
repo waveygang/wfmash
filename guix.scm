@@ -169,7 +169,7 @@
 (define-public wfmash-base-git
   (package
     (name "wfmash-base-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
+    (version (git-version "0.23" "HEAD" %git-commit))
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
     (properties '((tunable? . #t)))
@@ -192,7 +192,6 @@ obtain base-level alignments.")
   (package
     (inherit wfmash-base-git)
     (name "wfmash-gcc-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
          (append gcc
@@ -203,7 +202,6 @@ obtain base-level alignments.")
   (package
     (inherit wfmash-gcc-git)
     (name "wfmash-gcc-debug-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
      `(;; #:tests? #f ;; skip tests, this is mostly to run a shell
        #:configure-flags
@@ -231,7 +229,6 @@ obtain base-level alignments.")
   (package
     (inherit wfmash-base-git)
     (name "wfmash-clang-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
          (append clang-toolchain-18
@@ -244,7 +241,6 @@ obtain base-level alignments.")
   (package
     (inherit wfmash-gcc-git)
     (name "wfmash-gcc-profile-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
      `(#:tests? #f ;; running tests as profiler
        #:configure-flags
@@ -313,7 +309,6 @@ These binaries can be copied to HPC."
   (package
     (inherit wfmash-base-git)
     (name "wfmash-gcc-static-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
      `(#:tests? #f  ;; no Rust tools
        #:configure-flags
