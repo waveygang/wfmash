@@ -29,17 +29,32 @@ private:
     const uint64_t update_interval = 100; 
 
     void update_progress_thread() {
+        uint64_t last_progress = 0;
+        
         while (running.load()) {
             // Update progress bar at regular intervals
             if (use_progress_bar && progress_bar) {
-                // Only acquire lock and update if value has changed
                 auto curr_progress = std::min(completed.load(), total.load());
-                static uint64_t last_progress = 0;
+                float progress_percent = static_cast<float>(curr_progress) / total.load() * 100.0f;
                 
-                if (curr_progress != last_progress) {
+                // Only update if there's a meaningful change in percentage
+                // or we're just starting or finishing
+                if (curr_progress != last_progress && 
+                    (last_progress == 0 || curr_progress == total.load() || 
+                     std::abs(static_cast<float>(curr_progress - last_progress)) / total.load() >= 0.01)) {
+                    
                     std::lock_guard<std::mutex> lock(mutex);
                     progress_bar->set_progress(curr_progress);
                     last_progress = curr_progress;
+                    
+                    // If we've reached 100%, mark as completed and stop the thread
+                    if (curr_progress >= total.load()) {
+                        if (!is_finished.load()) {
+                            progress_bar->mark_as_completed();
+                            is_finished.store(true);
+                        }
+                        break;  // Exit the update thread
+                    }
                 }
             }
             
@@ -126,20 +141,20 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
         
-        if (use_progress_bar) {
+        if (use_progress_bar && progress_bar) {
             // Final update with lock
             std::lock_guard<std::mutex> lock(mutex);
-            if (progress_bar) {
-                progress_bar->set_progress(total);
-                progress_bar->mark_as_completed();
-                
-                // No need for an additional completion message as indicators will show it
-            }
+            // Directly set to 100% complete to avoid partial updates
+            progress_bar->set_progress(total.load());
+            progress_bar->mark_as_completed();
         } else {
             // Only print completion message if we're not using the progress bar
             std::cerr << banner << " [completed in " 
                      << elapsed.count() << "s]" << std::endl;
         }
+        
+        // Ensure the update thread stops
+        running.store(false);
     }
 };
 
