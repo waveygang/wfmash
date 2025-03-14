@@ -22,7 +22,7 @@ private:
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
     std::mutex mutex;
-    std::unique_ptr<indicators::ProgressBar> progress_bar;
+    std::unique_ptr<indicators::BlockProgressBar> progress_bar;
     std::thread update_thread;
     
     // Update interval for the progress bar (milliseconds)
@@ -72,8 +72,10 @@ public:
         // Check if stderr is a TTY
         use_progress_bar = isatty(fileno(stderr));
         
-        // Always print the banner text before showing the progress bar
-        std::cerr << banner << std::endl;
+        // Only print the banner if we're not using a progress bar
+        if (!use_progress_bar) {
+            std::cerr << banner << std::endl;
+        }
         
         if (use_progress_bar) {
             // Hide cursor during progress display
@@ -89,13 +91,13 @@ public:
             // Create progress bar with no prefix (since we already printed the banner)
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                progress_bar = std::make_unique<indicators::ProgressBar>(
+                progress_bar = std::make_unique<indicators::BlockProgressBar>(
                     indicators::option::BarWidth{50},
                     indicators::option::Start{"["},
                     indicators::option::End{"]"},
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{module_prefix},
+                    indicators::option::PrefixText{module_prefix + " "},
                     indicators::option::MaxProgress{total},
                     indicators::option::Stream{std::cerr}
                 );
@@ -128,7 +130,7 @@ public:
         uint64_t new_val = previous + incr;
         
         // For large increments, force an immediate update
-        if (incr > total / 10 && use_progress_bar && progress_bar) {
+        if (incr > total / 20 && use_progress_bar && progress_bar) {
             std::lock_guard<std::mutex> lock(mutex);
             progress_bar->set_progress(std::min(new_val, total.load()));
         }
@@ -153,8 +155,11 @@ public:
         }
         
         // Always print completion message
-        std::cerr << banner << " [completed in " 
-                 << elapsed.count() << "s]" << std::endl;
+        // Only print completion message if we're not already showing a progress bar
+        if (!use_progress_bar || !progress_bar) {
+            std::cerr << banner << " [completed in " 
+                     << elapsed.count() << "s]" << std::endl;
+        }
         
         // Ensure the update thread stops
         running.store(false);
