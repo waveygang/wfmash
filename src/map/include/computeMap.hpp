@@ -628,7 +628,7 @@ namespace skch
                       // Use progress meter for sketching and index building
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
                           100, // Using 100 as a generic value for percentage-based progress
-                          "[wfmash::mashmap] sketching");
+                          "[wfmash::mashmap] indexing");
                   
                       // Build index in memory with progress meter
                       refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
@@ -922,7 +922,6 @@ namespace skch
               executor.run(final_flow).wait();
           } else if (!exit_after_indices) {
               // For non-ONETOONE modes, we've already written all results
-              std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
           }
           // Final flow execution is now handled inside the conditional block above
       }
