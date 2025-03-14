@@ -916,7 +916,6 @@ namespace skch
                   
                   std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
                             << " mappings after one-to-one filtering" << std::endl;
-                  std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
               });
               
               executor.run(final_flow).wait();
