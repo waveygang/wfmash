@@ -163,13 +163,13 @@
 
 (define %source-dir (dirname (current-filename)))
 
-(define %git-commit
-    (read-string (open-pipe "git show HEAD | head -1 | cut -d ' ' -f 2" OPEN_READ)))
+(define %version
+  (read-string (open-pipe "git describe --always --tags --long|tr -d $'\n'" OPEN_READ)))
 
 (define-public wfmash-base-git
   (package
     (name "wfmash-base-git")
-    (version (git-version "0.23" "HEAD" %git-commit))
+    (version %version)
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
     (properties '((tunable? . #t)))
