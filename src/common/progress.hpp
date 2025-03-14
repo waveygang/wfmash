@@ -54,15 +54,17 @@ public:
         
         start_time = std::chrono::high_resolution_clock::now();
         
+        // ALWAYS print the logging message to stderr ONCE at initialization
+        std::cerr << banner << std::endl;
+        
         // Check if stderr is a TTY
         use_progress_bar = isatty(fileno(stderr));
         
-        // Print the banner once without a newline if we're using a progress bar
         if (use_progress_bar) {
             // Hide cursor during progress display
             indicators::show_console_cursor(false);
             
-            // Create progress bar with the banner as prefix
+            // Create progress bar with empty prefix (banner already printed above)
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 progress_bar = std::make_unique<indicators::BlockProgressBar>(
@@ -72,7 +74,7 @@ public:
                     indicators::option::ForegroundColor{indicators::Color::green},
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{banner},
+                    indicators::option::PrefixText{""},  // Empty prefix since we already printed banner
                     indicators::option::FontStyles{
                         std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
                     },
