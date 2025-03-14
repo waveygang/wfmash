@@ -32,12 +32,15 @@ private:
         while (running.load()) {
             // Update progress bar at regular intervals
             if (use_progress_bar && progress_bar) {
-                std::lock_guard<std::mutex> lock(mutex);
+                // Only acquire lock and update if value has changed
                 auto curr_progress = std::min(completed.load(), total.load());
-                progress_bar->set_progress(curr_progress);
+                static uint64_t last_progress = 0;
                 
-                // Force flush
-                std::cerr.flush();
+                if (curr_progress != last_progress) {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    progress_bar->set_progress(curr_progress);
+                    last_progress = curr_progress;
+                }
             }
             
             // Sleep for update interval
@@ -51,17 +54,13 @@ public:
         
         start_time = std::chrono::high_resolution_clock::now();
         
-        // Always use the progress bar for debugging 
-        use_progress_bar = true; // Temporarily disabled TTY check: isatty(fileno(stderr));
+        // Check if stderr is a TTY
+        use_progress_bar = isatty(fileno(stderr));
         
-        // Print a message that we're debugging
-        std::cerr << "[DEBUG] Progress meter initialized with " << _total << " total work" << std::endl;
-        
-        // Print start message with timestamp
-        std::time_t start_time_t = std::chrono::system_clock::to_time_t(
-            std::chrono::system_clock::now());
-        
-        std::cerr << banner << std::endl;
+        // Just print the start message, no banner needed since it's in the progress bar
+        if (!use_progress_bar) {
+            std::cerr << banner << "..." << std::endl;
+        }
                  
         if (use_progress_bar) {
             // Hide cursor during progress display
@@ -82,11 +81,8 @@ public:
                         std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
                     },
                     indicators::option::MaxProgress{total},
-                    indicators::option::Stream{std::cerr} // Explicitly use stderr
+                    indicators::option::Stream{std::cerr}
                 );
-                
-                // Initial update to show the bar
-                progress_bar->set_progress(0);
             }
             
             // Start the update thread
@@ -136,7 +132,6 @@ public:
             // Final update with lock
             std::lock_guard<std::mutex> lock(mutex);
             if (progress_bar) {
-                progress_bar->set_option(indicators::option::PrefixText{banner + " [completed]"});
                 progress_bar->set_progress(total);
                 progress_bar->mark_as_completed();
             }
