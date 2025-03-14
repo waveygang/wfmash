@@ -57,16 +57,14 @@ public:
         // Check if stderr is a TTY
         use_progress_bar = isatty(fileno(stderr));
         
-        // Just print the start message, no banner needed since it's in the progress bar
-        if (!use_progress_bar) {
-            std::cerr << banner << "..." << std::endl;
-        }
-                 
+        // Always print the banner message once at the start
+        std::cerr << banner << std::endl;
+        
         if (use_progress_bar) {
             // Hide cursor during progress display
             indicators::show_console_cursor(false);
             
-            // Create progress bar 
+            // Create progress bar with no prefix (banner already printed)
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 progress_bar = std::make_unique<indicators::BlockProgressBar>(
@@ -76,7 +74,7 @@ public:
                     indicators::option::ForegroundColor{indicators::Color::green},
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{banner},
+                    indicators::option::PrefixText{""},
                     indicators::option::FontStyles{
                         std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
                     },
@@ -135,11 +133,11 @@ public:
                 progress_bar->set_progress(total);
                 progress_bar->mark_as_completed();
             }
-        } else {
-            // If not using progress bar, just print completion message
-            std::cerr << banner << " [completed in " 
-                      << elapsed.count() << "s]" << std::endl;
         }
+        
+        // Always print completion message
+        std::cerr << banner << " [completed in " 
+                  << elapsed.count() << "s]" << std::endl;
     }
 };
 
