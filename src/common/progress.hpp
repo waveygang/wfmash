@@ -22,7 +22,7 @@ private:
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
     std::mutex mutex;
-    std::unique_ptr<indicators::BlockProgressBar> progress_bar;
+    std::unique_ptr<indicators::ProgressBar> progress_bar;
     std::thread update_thread;
     
     // Update interval for the progress bar (milliseconds)
@@ -69,8 +69,11 @@ public:
         
         start_time = std::chrono::high_resolution_clock::now();
         
-        // Check if stderr is a TTY - don't print any initial banner
+        // Check if stderr is a TTY
         use_progress_bar = isatty(fileno(stderr));
+        
+        // Always print the banner text before showing the progress bar
+        std::cerr << banner << std::endl;
         
         if (use_progress_bar) {
             // Hide cursor during progress display
@@ -83,20 +86,16 @@ public:
                 module_prefix = banner.substr(0, space_pos);
             }
             
-            // Create progress bar with just the module prefix
+            // Create progress bar with no prefix (since we already printed the banner)
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                progress_bar = std::make_unique<indicators::BlockProgressBar>(
+                progress_bar = std::make_unique<indicators::ProgressBar>(
                     indicators::option::BarWidth{50},
                     indicators::option::Start{"["},
                     indicators::option::End{"]"},
-                    indicators::option::ForegroundColor{indicators::Color::green},
                     indicators::option::ShowElapsedTime{true},
                     indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{module_prefix},  // Use just the module name
-                    indicators::option::FontStyles{
-                        std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
-                    },
+                    indicators::option::PrefixText{module_prefix},
                     indicators::option::MaxProgress{total},
                     indicators::option::Stream{std::cerr}
                 );
@@ -151,11 +150,11 @@ public:
             // Directly set to 100% complete to avoid partial updates
             progress_bar->set_progress(total.load());
             progress_bar->mark_as_completed();
-        } else {
-            // Only print completion message if we're not using the progress bar
-            std::cerr << banner << " [completed in " 
-                     << elapsed.count() << "s]" << std::endl;
         }
+        
+        // Always print completion message
+        std::cerr << banner << " [completed in " 
+                 << elapsed.count() << "s]" << std::endl;
         
         // Ensure the update thread stops
         running.store(false);
