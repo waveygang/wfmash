@@ -2149,10 +2149,8 @@ private:
         get_value<details::ProgressBarOption::max_progress>();
 
     if (get_value<details::ProgressBarOption::show_percentage>()) {
-      os << " "
-         << (std::min)(static_cast<size_t>(static_cast<float>(progress_) /
-                                         max_progress * 100),
-                     size_t(100))
+      os << " " << std::fixed << std::setprecision(3)
+         << (std::min)(static_cast<double>(progress_) / max_progress * 100.0, 100.0)
          << "%";
     }
 
@@ -2461,7 +2459,8 @@ private:
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - start_time_point_);
 
     if (get_value<details::ProgressBarOption::show_percentage>()) {
-      os << " " << (std::min)(static_cast<size_t>(progress_ / max_progress * 100.0), size_t(100))
+      os << " " << std::fixed << std::setprecision(3)
+         << (std::min)(progress_ / max_progress * 100.0, 100.0)
          << "%";
     }
 
@@ -3203,7 +3202,9 @@ public:
       os << get_value<details::ProgressBarOption::spinner_states>()
               [index_ % get_value<details::ProgressBarOption::spinner_states>().size()];
     if (get_value<details::ProgressBarOption::show_percentage>()) {
-      os << " " << std::size_t(progress_ / double(max_progress) * 100) << "%";
+      os << " " << std::fixed << std::setprecision(3)
+         << (std::min)(progress_ / double(max_progress) * 100.0, 100.0)
+         << "%";
     }
 
     if (get_value<details::ProgressBarOption::show_elapsed_time>()) {
