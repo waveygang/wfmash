@@ -290,22 +290,17 @@ void do_biwfa_alignment(
                 }
             }
         }
-        
-        // Convert the updated CIGAR back to edit_cigar structure
-        wfa_string_to_edit_cigar(main_cigar, &aln.edit_cigar);
     }
     
     // Try swizzling the CIGAR at both ends
     std::string swizzled = try_swap_start_pattern(main_cigar, query, target, 0, 0);
     if (swizzled != main_cigar) {
         main_cigar = swizzled;
-        wfa_string_to_edit_cigar(main_cigar, &aln.edit_cigar);
     }
 
     swizzled = try_swap_end_pattern(main_cigar, query, target, 0, 0);
     if (swizzled != main_cigar) {
         main_cigar = swizzled;
-        wfa_string_to_edit_cigar(main_cigar, &aln.edit_cigar);
     }
     
     // Write alignment
