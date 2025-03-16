@@ -65,7 +65,6 @@ void do_biwfa_alignment(
     const int MAX_ERODE_LENGTH = 1000;  // Maximum erosion before giving up
     const bool is_first_chain = (chain_pos == 1);
     const bool is_last_chain = (chain_pos == chain_length);
-    bool needs_patching = is_first_chain || is_last_chain;
 
     // Create alignment record on stack
     alignment_t aln;
@@ -81,7 +80,7 @@ void do_biwfa_alignment(
     std::string main_cigar = wfa_edit_cigar_to_string(aln.edit_cigar);
     
     // Apply patching if needed
-    if (needs_patching) {
+    if (is_first_chain || is_last_chain) {
         // Helper function to parse a single CIGAR operation (e.g., "10M")
         auto parse_cigar_op = [](const std::string& cigar, size_t& pos) -> std::pair<int, char> {
             size_t start = pos;
@@ -162,8 +161,8 @@ void do_biwfa_alignment(
                 head_aligner.setHeuristicNone();
                 
                 // Extract sequences for head patching
-                int head_query_length = std::min(query_eroded, MAX_ERODE_LENGTH);
-                int head_target_length = std::min(target_eroded, MAX_ERODE_LENGTH);
+                int head_query_length = query_eroded;
+                int head_target_length = target_eroded;
                 
                 std::string head_query_str(query, head_query_length);
                 std::string head_target_str(target, head_target_length);
@@ -253,8 +252,8 @@ void do_biwfa_alignment(
                 tail_aligner.setHeuristicNone();
                 
                 // Extract sequences for tail patching
-                int tail_query_length = std::min(query_eroded, MAX_ERODE_LENGTH);
-                int tail_target_length = std::min(target_eroded, MAX_ERODE_LENGTH);
+                int tail_query_length = query_eroded;
+                int tail_target_length = target_eroded;
                 
                 // Get the starting positions for the tail patching
                 char* query_tail = query + query_length - tail_query_length;
