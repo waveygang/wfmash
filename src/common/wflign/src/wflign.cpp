@@ -63,8 +63,6 @@ void do_biwfa_alignment(
     const int MIN_PATCH_LENGTH = 128;       // Minimum length to expose for patching
     const int MAX_ERODE_LENGTH = 4096;      // Maximum erosion before stopping
     const int MIN_CONSECUTIVE_MATCHES = 11; // Minimum consecutive matches to stop erosion
-    const bool is_first_chain = (chain_pos == 1);
-    const bool is_last_chain = (chain_pos == chain_length);
 
     // Create alignment record on stack
     alignment_t aln;
