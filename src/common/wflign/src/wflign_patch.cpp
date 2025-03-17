@@ -10,11 +10,11 @@
 namespace wflign {
 
     std::tuple<std::string, uint64_t, uint64_t, uint64_t, uint64_t> trim_deletions(
-            const std::string& cigar,
-            uint64_t ref_start,
-            uint64_t ref_end,
-            uint64_t query_start,
-            uint64_t query_end) {
+        const std::string& cigar,
+        uint64_t ref_start,
+        uint64_t ref_end,
+        uint64_t query_start,
+        uint64_t query_end) {
         
         std::string trimmed_cigar;
         uint64_t new_ref_start = ref_start;
@@ -37,25 +37,70 @@ namespace wflign {
             }
         }
 
-        // Find leading deletions and matches
-        size_t leading_dels = 0;
-        while (leading_dels < cigar_ops.size() && cigar_ops[leading_dels].second == 'D') {
-            new_ref_start += cigar_ops[leading_dels].first;
-            leading_dels++;
+        // Process leading operations - keep insertions but remove deletions
+        size_t leading_idx = 0;
+        bool seen_non_id = false;
+        std::vector<std::pair<int, char>> leading_insertions;
+        
+        // First pass: collect leading insertions and skip deletions
+        while (leading_idx < cigar_ops.size()) {
+            char op = cigar_ops[leading_idx].second;
+            
+            if (op == 'I') {
+                // Save insertions to add later
+                leading_insertions.push_back(cigar_ops[leading_idx]);
+                leading_idx++;
+            } else if (op == 'D') {
+                // Skip deletions and adjust reference start
+                new_ref_start += cigar_ops[leading_idx].first;
+                leading_idx++;
+            } else {
+                // Stop at first non-I/D operation
+                seen_non_id = true;
+                break;
+            }
         }
-
-        // Find trailing deletions and matches
-        size_t trailing_dels = 0;
-        while (trailing_dels < cigar_ops.size() - leading_dels && 
-               cigar_ops[cigar_ops.size() - 1 - trailing_dels].second == 'D') {
-            new_ref_end -= cigar_ops[cigar_ops.size() - 1 - trailing_dels].first;
-            trailing_dels++;
+        
+        // Process trailing operations - keep insertions but remove deletions
+        size_t trailing_idx = cigar_ops.size() - 1;
+        std::vector<std::pair<int, char>> trailing_insertions;
+        
+        // First pass from the end: collect trailing insertions and skip deletions
+        // Only process if we have operations left after handling leading operations
+        if (seen_non_id && leading_idx <= trailing_idx) {
+            while (trailing_idx >= leading_idx) {
+                char op = cigar_ops[trailing_idx].second;
+                
+                if (op == 'I') {
+                    // Save insertions to add later
+                    trailing_insertions.insert(trailing_insertions.begin(), cigar_ops[trailing_idx]);
+                    if (trailing_idx == 0) break; // Prevent underflow
+                    trailing_idx--;
+                } else if (op == 'D') {
+                    // Skip deletions and adjust reference end
+                    new_ref_end -= cigar_ops[trailing_idx].first;
+                    if (trailing_idx == 0) break; // Prevent underflow
+                    trailing_idx--;
+                } else {
+                    // Stop at first non-I/D operation
+                    break;
+                }
+            }
         }
-
+        
         // Build new CIGAR string and count consumed bases
+        // First add leading insertions
+        for (const auto& op : leading_insertions) {
+            trimmed_cigar += std::to_string(op.first) + op.second;
+            // Update query position for insertions
+            new_query_end += op.first;
+        }
+        
+        // Add middle operations that weren't trimmed
         uint64_t ref_consumed = 0;
         uint64_t query_consumed = 0;
-        for (size_t j = leading_dels; j < cigar_ops.size() - trailing_dels; j++) {
+        
+        for (size_t j = leading_idx; j <= trailing_idx && seen_non_id; j++) {
             trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
             
             // Count bases consumed by this operation
@@ -75,6 +120,13 @@ namespace wflign {
                     break;
                 // S/H operations don't affect coordinates
             }
+        }
+        
+        // Add trailing insertions
+        for (const auto& op : trailing_insertions) {
+            trimmed_cigar += std::to_string(op.first) + op.second;
+            // Update query position for insertions
+            query_consumed += op.first;
         }
 
         // Adjust coordinates based on consumed bases
