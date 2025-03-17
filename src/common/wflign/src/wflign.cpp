@@ -50,18 +50,19 @@ void do_biwfa_alignment(
         penalties.gap_extension2,
         wfa::WFAligner::Alignment,
         wfa::WFAligner::MemoryUltralow);
-    
     wf_aligner.setHeuristicNone();
     
     // Perform the main end-to-end alignment first
     const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
     
-    if (status != 0) { // Alignment failed
-        return;
+    if (status != 0) {
+        return; // Alignment failed
     }
 
     // Set up constants for patching
-    const int MAX_ERODE_LENGTH = 1000;  // Maximum erosion before giving up
+    const int MIN_PATCH_LENGTH = 512;       // Minimum length to expose for patching
+    const int MAX_ERODE_LENGTH = 4096;      // Maximum erosion before stopping
+    const int MIN_CONSECUTIVE_MATCHES = 11; // Minimum consecutive matches to stop erosion
     const bool is_first_chain = (chain_pos == 1);
     const bool is_last_chain = (chain_pos == chain_length);
 
@@ -119,19 +120,30 @@ void do_biwfa_alignment(
 
         // Perform head patching if this is the first chain
         if (is_first_chain) {
-            int query_eroded = 0;
-            int target_eroded = 0;
+            u_int64_t query_eroded = 0;
+            u_int64_t target_eroded = 0;
             size_t cigar_pos = 0;
             size_t erode_end_pos = 0;
-            
-            // Continue eroding until we have at least MIN_PATCH_LENGTH for both sequences
-            // or until we've eroded MAX_ERODE_LENGTH for either sequence
-            while (cigar_pos < main_cigar.length() && 
-                   query_eroded < MAX_ERODE_LENGTH && target_eroded < MAX_ERODE_LENGTH) {
-                
+            bool found_consecutive_matches = false;
+
+            // Continue eroding until stopping conditions are met
+            while (cigar_pos < main_cigar.length()) {
                 auto [count, op] = parse_cigar_op(main_cigar, cigar_pos);
-                erode_end_pos = cigar_pos;
-                
+
+                if (op == '=' && count >= MIN_CONSECUTIVE_MATCHES) {
+                    found_consecutive_matches = true;
+                }
+
+                // If we've found MIN_CONSECUTIVE_MATCHES and satisfied MIN_PATCH_LENGTH, stop
+                if (found_consecutive_matches && 
+                    query_eroded >= MIN_PATCH_LENGTH && target_eroded >= MIN_PATCH_LENGTH) {
+                    break;
+                }
+                // Stop if we've reached MAX_ERODE_LENGTH
+                if (query_eroded >= MAX_ERODE_LENGTH || target_eroded >= MAX_ERODE_LENGTH) {
+                    break;
+                }
+
                 // Update counts based on operation
                 if (op == 'M' || op == 'X' || op == '=') {
                     query_eroded += count;
@@ -141,8 +153,9 @@ void do_biwfa_alignment(
                 } else if (op == 'D') {
                     target_eroded += count;
                 }
+                erode_end_pos = cigar_pos;
             }
-            
+
             // Create a dedicated aligner for head patching
             wfa::WFAlignerGapAffine2Pieces head_aligner(
                 0,  // match
@@ -153,7 +166,6 @@ void do_biwfa_alignment(
                 penalties.gap_extension2,
                 wfa::WFAligner::Alignment,
                 wfa::WFAligner::MemoryMed);
-            
             head_aligner.setHeuristicNone();
             
             // Extract sequences for head patching
@@ -171,11 +183,11 @@ void do_biwfa_alignment(
                 head_query_str,
                 head_query_length, 0     // patternBeginFree, patternEndFree
             );
-
+            
             if (head_status == 0) {
                 // Get the head CIGAR in long form
                 std::string head_cigar_long = head_aligner.getAlignment();
-                                    
+
                 // Convert to short form using our helper function
                 std::string head_cigar_short = compress_cigar(head_cigar_long);
 
@@ -193,36 +205,38 @@ void do_biwfa_alignment(
                 cigar_ops.push_back(parse_cigar_op(main_cigar, pos));
             }
             
-            int query_eroded = 0;
-            int target_eroded = 0;
+            u_int64_t query_eroded = 0;
+            u_int64_t target_eroded = 0;
             size_t erode_start_idx = cigar_ops.size();
-            
+            bool found_consecutive_matches = false;
+
             // Work backwards from the end of the CIGAR
             for (int i = cigar_ops.size() - 1; i >= 0; i--) {
                 auto [count, op] = cigar_ops[i];
-                
-                // Determine how much this operation would erode
-                int q_increment = 0;
-                int t_increment = 0;
-                
-                if (op == 'M' || op == 'X' || op == '=') {
-                    q_increment = count;
-                    t_increment = count;
-                } else if (op == 'I') {
-                    q_increment = count;
-                } else if (op == 'D') {
-                    t_increment = count;
+                                
+                if (op == '=' && count >= MIN_CONSECUTIVE_MATCHES) {
+                    found_consecutive_matches = true;
                 }
-                
-                // Check if we'd exceed the max erosion by including this operation
-                if (query_eroded + q_increment > MAX_ERODE_LENGTH || 
-                    target_eroded + t_increment > MAX_ERODE_LENGTH) {
+
+                // If we've found MIN_CONSECUTIVE_MATCHES and satisfied MIN_PATCH_LENGTH, stop
+                if (found_consecutive_matches && 
+                    query_eroded >= MIN_PATCH_LENGTH && target_eroded >= MIN_PATCH_LENGTH) {
                     break;
                 }
-                
-                // Add this operation to our erosion
-                query_eroded += q_increment;
-                target_eroded += t_increment;
+                // Stop if we've reached MAX_ERODE_LENGTH
+                if (query_eroded >= MAX_ERODE_LENGTH || target_eroded >= MAX_ERODE_LENGTH) {
+                    break;
+                }
+
+                // Update counts based on operation
+                if (op == 'M' || op == 'X' || op == '=') {
+                    query_eroded += count;
+                    target_eroded += count;
+                } else if (op == 'I') {
+                    query_eroded += count;
+                } else if (op == 'D') {
+                    target_eroded += count;
+                }
                 erode_start_idx = i;
             }
             
@@ -236,7 +250,6 @@ void do_biwfa_alignment(
                 penalties.gap_extension2,
                 wfa::WFAligner::Alignment,
                 wfa::WFAligner::MemoryMed);
-            
             tail_aligner.setHeuristicNone();
             
             // Extract sequences for tail patching
