@@ -2259,7 +2259,8 @@ query_start : query_end)
                 query_offset, query_length, query_is_rev,
                 target_name, target_total_length, target_offset, target_length,
                 min_identity, mashmap_estimated_identity,
-                no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift);
+                no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift,
+                0, 0, 0);
         }
         
         // Clean up patch alignments after writing
@@ -2404,7 +2405,11 @@ void write_alignment_sam(
     const bool& emit_md_tag,
     const char* query,
     const char* target,
-    const int64_t& target_pointer_shift) {
+    const int64_t& target_pointer_shift,
+    const int32_t& chain_id,
+    const int32_t& chain_length,
+    const int32_t& chain_pos
+) {
 
     if (cigar_str == "") { std::cerr << "[wflign_patch] unsupported codepath" << std::endl; exit(1); }
 
@@ -2487,7 +2492,8 @@ void write_alignment_sam(
             << "NM:i:" << (patch_mismatches + patch_inserted_bp + patch_deleted_bp) << "\t"
             << "gi:f:" << patch_gap_compressed_identity << "\t"
             << "bi:f:" << patch_block_identity << "\t"
-            << "md:f:" << mashmap_estimated_identity;
+            << "md:f:" << mashmap_estimated_identity
+            << (chain_length > 0 ? ("\t" + std::string("ch:Z:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos)) : "");
             //<< "\t" << "pt:Z:true" <<
             //<< "\t" << "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
 
@@ -2598,7 +2604,7 @@ bool write_alignment_paf(
                 << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:" << block_identity << "\t"
                 << "md:f:" << mashmap_estimated_identity << "\t"
-                << (chain_length > 0 ? (std::string("chain:i:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos) + "\t") : "")
+                << (chain_length > 0 ? (std::string("ch:Z:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos) + "\t") : "")
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
                 //<< "\t" << "ni:i:" << insertions

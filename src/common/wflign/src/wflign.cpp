@@ -330,7 +330,10 @@ void do_biwfa_alignment(
             emit_md_tag,
             query,
             target,
-            0); // No target pointer shift for biwfa
+            0,
+            chain_id,
+            chain_length,
+            chain_pos); // No target pointer shift for biwfa
     }
 }
 
