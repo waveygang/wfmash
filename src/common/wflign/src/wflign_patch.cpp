@@ -2565,7 +2565,7 @@ void write_alignment_sam(
         } else {
             std::stringstream seq;
             // The new patch_aln.j is "new_query_start - query_offset"
-            for (uint64_t p = new_query_start - query_offset; p < (new_query_start - query_offset) + patch_qAlignedLength; ++p) {
+            for (uint64_t p = (new_query_start - query_offset); p < (new_query_start - query_offset) + patch_qAlignedLength; ++p) {
                 seq << query[p];
             }
             if (patch_aln.is_rev) {
@@ -2643,6 +2643,10 @@ bool write_alignment_paf(
             refAlignedLength,
             qAlignedLength);
 
+        std::cerr << "cigar: " << cigar_str << std::endl;
+        std::cerr << "matches: " << matches << " mismatches: " << mismatches << " insertions: " << insertions << " inserted_bp: " << inserted_bp << " deletions: " << deletions << " deleted_bp: " << deleted_bp << std::endl;
+        std::cerr << "refAlignedLength: " << refAlignedLength << " qAlignedLength: " << qAlignedLength << std::endl;
+
         // Trim deletions and get new coordinates
         auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
             trim_indels(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
@@ -2660,6 +2664,10 @@ bool write_alignment_paf(
             refAlignedLength,
             qAlignedLength);
 
+        std::cerr << "cigar: " << trimmed_cigar << std::endl;
+        std::cerr << "matches: " << matches << " mismatches: " << mismatches << " insertions: " << insertions << " inserted_bp: " << inserted_bp << " deletions: " << deletions << " deleted_bp: " << deleted_bp << std::endl;
+        std::cerr << "refAlignedLength: " << refAlignedLength << " qAlignedLength: " << qAlignedLength << std::endl;
+
         char* cigar = strdup(trimmed_cigar.c_str());
         size_t alignmentRefPos = new_ref_start - target_offset;
         double gap_compressed_identity =
@@ -2674,7 +2682,7 @@ bool write_alignment_paf(
             // The new aln.j is "new_query_start - query_offset"
             if (query_is_rev) {
                 q_start = query_offset + (query_length - (new_query_start - query_offset) - qAlignedLength);
-                q_end = query_offset + (query_length - new_query_start - query_offset);
+                q_end = query_offset + (query_length - (new_query_start - query_offset));
             } else {
                 q_start = new_query_start; // query_offset + (new_query_start - query_offset);
                 q_end = new_query_start + qAlignedLength; // query_offset + (new_query_start - query_offset) + qAlignedLength;
