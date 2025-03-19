@@ -56,6 +56,11 @@ private:
                 }
             }
             
+            // If we're marked as finished, exit the loop
+            if (is_finished.load()) {
+                break;
+            }
+            
             // Sleep for update interval
             std::this_thread::sleep_for(std::chrono::milliseconds(update_interval));
         }
@@ -103,12 +108,12 @@ public:
     ~ProgressMeter() {
         if (!is_finished.load()) {
             finish();
-        }
-        
-        // Stop the thread
-        running.store(false);
-        if (update_thread.joinable()) {
-            update_thread.join();
+        } else {
+            // Make sure the thread is properly stopped and joined
+            running.store(false);
+            if (update_thread.joinable()) {
+                update_thread.join();
+            }
         }
         
         // Always show cursor when done
@@ -136,17 +141,28 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
         
-        // Set final value atomically - the update thread will handle display
+        // Set final value atomically
         completed.store(total.load(), std::memory_order_relaxed);
         
-        // For non-progress bar mode, print completion message
-        if (!use_progress_bar) {
+        // Force immediate update of the progress bar with the final value
+        if (use_progress_bar && progress_bar) {
+            progress_bar->set_progress(total.load());
+            progress_bar->mark_as_completed();
+            // Explicitly add a newline to ensure proper formatting
+            std::cerr << std::endl;
+        } else {
+            // For non-progress bar mode, print completion message
             std::cerr << banner << " [completed in " 
                      << elapsed.count() << "s]" << std::endl;
         }
         
         // Ensure the update thread stops
         running.store(false);
+        
+        // Wait for the update thread to fully terminate before continuing
+        if (update_thread.joinable()) {
+            update_thread.join();
+        }
     }
 };
 
