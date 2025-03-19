@@ -16,6 +16,95 @@ namespace wavefront {
 */
 #define MIN_WF_LENGTH            256
 
+std::string erode_short_matches_in_cigar(const std::string& cigar, int max_match_length = 3, bool is_head_cigar = true) {
+    if (cigar.length() < 6) return cigar; // Too short for indel-match-indel pattern
+    
+    // Parse CIGAR into operations
+    std::vector<std::pair<int, char>> ops;
+    ops.reserve(cigar.length() / 2); // Pre-allocate to avoid reallocations
+    
+    size_t pos = 0;
+    while (pos < cigar.length()) {
+        size_t start = pos;
+        while (pos < cigar.length() && std::isdigit(cigar[pos])) pos++;
+        if (pos < cigar.length()) {
+            int count = std::stoi(cigar.substr(start, pos - start));
+            char type = cigar[pos++];
+            ops.push_back({count, type});
+        }
+    }
+    
+    // Check if we have enough operations
+    if (ops.size() < 3) return cigar;
+    
+    // Process operations, marking some for removal
+    bool modified = false;
+    
+    // Define the range of operations to check based on whether this is head or tail CIGAR
+    size_t start_idx = 1;
+    size_t end_idx = ops.size() - 1;
+    
+    if (is_head_cigar) {
+        // Only check the first 3 operations for head CIGAR
+        end_idx = std::min(end_idx, (size_t)3);
+    } else {
+        // Only check the last 3 operations for tail CIGAR
+        start_idx = std::max(start_idx, ops.size() - 3);
+    }
+    
+    for (size_t i = start_idx; i < end_idx; i++) {
+        // Check for indel-match-indel pattern with short match
+        bool is_match = (ops[i].second == 'M' || ops[i].second == '=' || ops[i].second == 'X');
+        bool prev_is_indel = (ops[i-1].second == 'I' || ops[i-1].second == 'D');
+        bool next_is_indel = (ops[i+1].second == 'I' || ops[i+1].second == 'D');
+        
+        if (is_match && ops[i].first <= max_match_length && prev_is_indel && next_is_indel) {
+            // Only erode if:
+            // 1. The indels are of different types (I and D or D and I)
+            // 2. Both indels are longer than the match
+            if (((ops[i-1].second == 'I' && ops[i+1].second == 'D') || 
+                 (ops[i-1].second == 'D' && ops[i+1].second == 'I')) &&
+                (ops[i-1].first > ops[i].first && ops[i+1].first > ops[i].first)) {
+                // Increase both surrounding indels
+                ops[i-1].first += ops[i].first;
+                ops[i+1].first += ops[i].first;
+                
+                // Mark for removal by setting count to 0
+                ops[i].first = 0;
+                modified = true;
+            }
+        }
+    }
+    
+    // Fast path: if nothing changed, return original
+    if (!modified) return cigar;
+    
+    // Build new operations vector, excluding those with count 0 and merging consecutive same-type ops
+    std::vector<std::pair<int, char>> merged_ops;
+    merged_ops.reserve(ops.size());
+    
+    for (const auto& op : ops) {
+        if (op.first > 0) {
+            // If we have a previous operation of the same type, merge them
+            if (!merged_ops.empty() && merged_ops.back().second == op.second) {
+                merged_ops.back().first += op.first;
+            } else {
+                merged_ops.push_back(op);
+            }
+        }
+    }
+    
+    // Build result string from merged operations
+    std::string result;
+    result.reserve(cigar.length());
+    
+    for (const auto& op : merged_ops) {
+        result += std::to_string(op.first) + op.second;
+    }
+    
+    return result;
+}
+
 void do_biwfa_alignment(
     const std::string& query_name,
     char* const query,
@@ -151,6 +240,9 @@ void do_biwfa_alignment(
             }
             erode_end_pos = cigar_pos;
         }
+
+        //std::cerr << "Eroded HEAD " << query_eroded << " from query and " << target_eroded << " from target" << std::endl;
+
         // Create a dedicated aligner for head patching
         wfa::WFAlignerGapAffine2Pieces head_aligner(
             0,  // match
@@ -174,10 +266,20 @@ void do_biwfa_alignment(
         // Allow free gaps at the beginning of both sequences
         const int head_status = head_aligner.alignEndsFree(
             head_target_str,
-            head_target_length, 0,   // textBeginFree, textEndFree
+            target_eroded, 0,
             head_query_str,
-            head_query_length, 0     // patternBeginFree, patternEndFree
+            query_eroded, 0
         );
+
+        // // print sequences
+        // for (int i = 0; i < head_query_length; i++) {
+        //     std::cerr << head_query_str[i];
+        // }
+        // std::cerr << std::endl;
+        // for (int i = 0; i < head_target_length; i++) {
+        //     std::cerr << head_target_str[i];
+        // }
+        // std::cerr << std::endl;
 
         if (head_status == 0) {
             // Get the head CIGAR in long form
@@ -185,7 +287,11 @@ void do_biwfa_alignment(
 
             // Convert to short form using our helper function
             std::string head_cigar_short = compress_cigar(head_cigar_long);
-
+            //std::cerr << "       Head CIGAR: " << head_cigar_short << std::endl;
+            
+            head_cigar_short = erode_short_matches_in_cigar(head_cigar_short, 3);
+            //std::cerr << "Eroded head CIGAR: " << head_cigar_short << std::endl;
+            
             // Remove the eroded part from the beginning of main_cigar
             main_cigar = head_cigar_short + main_cigar.substr(erode_end_pos);
         }
@@ -235,6 +341,8 @@ void do_biwfa_alignment(
             erode_start_idx = i;
         }
         
+        //std::cerr << "Eroded TAIL " << query_eroded << " from query and " << target_eroded << " from target" << std::endl;
+
         // Create a dedicated aligner for tail patching
         wfa::WFAlignerGapAffine2Pieces tail_aligner(
             0,  // match
@@ -273,6 +381,10 @@ void do_biwfa_alignment(
             
             // Convert to short form using our helper function
             std::string tail_cigar_short = compress_cigar(tail_cigar_long);
+            //std::cerr << "       Tail CIGAR: " << tail_cigar_short << std::endl;
+            
+            tail_cigar_short = erode_short_matches_in_cigar(tail_cigar_short, 3, false);
+            //std::cerr << "Erored tail CIGAR: " << tail_cigar_short << std::endl;
             
             // Rebuild the CIGAR string up to the erode_start_idx
             std::string truncated_cigar;
