@@ -82,6 +82,7 @@
   #:use-module (gnu packages commencement)
   #:use-module (gnu packages compression)
   #:use-module (gnu packages cpp)
+  #:use-module (gnu packages crates-check) ; for cargo
   #:use-module (gnu packages crates-io)
   #:use-module (gnu packages crates-web)
   #:use-module (gnu packages curl)
@@ -138,8 +139,7 @@
                         ("rust-thiserror" ,rust-thiserror-1))
         ;; #:cargo-development-inputs ()))
         #:cargo-package-flags '("--no-metadata" "--no-verify" "--allow-dirty")
-        #:tests? #f
-        ))
+        #:tests? #f))
      (synopsis "pafcheck")
      (description
       "Tool for validating PAF (Pairwise Alignment Format) files against their corresponding FASTA sequences. It ensures that the alignments described in the PAF file match the actual sequences in the FASTA files.")
@@ -163,13 +163,13 @@
 
 (define %source-dir (dirname (current-filename)))
 
-(define %git-commit
-    (read-string (open-pipe "git show HEAD | head -1 | cut -d ' ' -f 2" OPEN_READ)))
+(define %version
+  (read-string (open-pipe "git describe --always --tags --long|tr -d $'\n'" OPEN_READ)))
 
 (define-public wfmash-base-git
   (package
     (name "wfmash-base-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
+    (version %version)
     (source (local-file %source-dir #:recursive? #t))
     (build-system cmake-build-system)
     (properties '((tunable? . #t)))
@@ -177,34 +177,30 @@
              bash bedtools util-linux samtools ; for testing
              coreutils bzip2 git gmp gsl htslib libdeflate gnu-make pkg-config xz zlib))
     (propagated-inputs (list
-                        pafcheck-shell-git))
-     (synopsis "wfmash")
-     (description
+                        pafcheck-github))
+    (synopsis "wfmash")
+    (description
       "wfmash is an aligner for pangenomes that combines efficient homology
 mapping with base-level alignment. It uses MashMap to find approximate
 mappings between sequences, then applies WFA (Wave Front Alignment) to
 obtain base-level alignments.")
-     (home-page "https://github.com/waveygang/wfmash")
-     (license license:expat)))
+    (home-page "https://github.com/waveygang/wfmash")
+    (license license:expat)))
 
 (define-public wfmash-gcc-git
   "Default build with gcc - as is used in distros"
   (package
     (inherit wfmash-base-git)
     (name "wfmash-gcc-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
-         (append gcc
-                 )))
-    ))
+         (append gcc)))))
 
 (define-public wfmash-gcc-debug-git
   "Build with debug options"
   (package
     (inherit wfmash-gcc-git)
     (name "wfmash-gcc-debug-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
      `(;; #:tests? #f ;; skip tests, this is mostly to run a shell
        #:configure-flags
@@ -216,37 +212,32 @@ obtain base-level alignments.")
      (modify-inputs (package-inputs wfmash-gcc-git)
                     (prepend bzip2)
                     (append gperftools)))
+    (propagated-inputs (list
+                        pafcheck-github))
     (arguments
      `(#:phases (modify-phases %standard-phases
                                (delete 'configure)
                                (delete 'build)
                                (delete 'package)
                                (delete 'check)
-                               (delete 'install)
-                               )
-     ))
-    ))
+                               (delete 'install))))))
 
 (define-public wfmash-clang-git
   "Clang+LLVM build"
   (package
     (inherit wfmash-base-git)
     (name "wfmash-clang-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (inputs
      (modify-inputs (package-inputs wfmash-base-git)
          (append clang-toolchain-18
                  lld
-                 libomp
-                 )))
-    ))
+                 libomp)))))
 
 (define-public wfmash-gcc-profile-git
   "Build wfmash optimally and automatically run profiler on all tests"
   (package
     (inherit wfmash-gcc-git)
     (name "wfmash-gcc-profile-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
      `(#:tests? #f ;; running tests as profiler
        #:configure-flags
@@ -267,8 +258,7 @@ obtain base-level alignments.")
      (modify-inputs (package-inputs wfmash-gcc-git)
                     (append gperftools
                             coreutils ;; for ls
-                 )))
-    ))
+                 )))))
 
 ;; ==== The following is for static binary builds using gcc - used mostly for deployment ===
 
@@ -316,9 +306,8 @@ These binaries can be copied to HPC."
   (package
     (inherit wfmash-base-git)
     (name "wfmash-gcc-static-git")
-    (version (git-version "0.21" "HEAD" %git-commit))
     (arguments
-     `(#:tests? #t
+     `(#:tests? #f  ;; no Rust tools
        #:configure-flags
        ,#~(list
            "-DBUILD_STATIC=ON"
@@ -327,13 +316,13 @@ These binaries can be copied to HPC."
            "-DCMAKE_INSTALL_RPATH=")))   ; force cmake static build and do not rewrite RPATH
     (inputs
      (modify-inputs (package-inputs wfmash-gcc-git)
+                    (delete pafcheck-github)
                     (prepend
                      `(,bzip2 "static")
                      `(,zlib "static")
                      `(,gsl "static")
                      `(,xz "static")
                      libdeflate-static
-                     htslib-static
-                     )))))
+                     htslib-static)))))
 
 wfmash-gcc-static-git ;; default optimized static deployment build

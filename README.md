@@ -254,9 +254,7 @@ And you can install into your profile from the source repo with:
 nix profile install .#wfmash
 ```
 
-### guix
-
-If you have `guix`:
+### Install with Guix in a local git repository
 
 ```shell
 guix build -f guix.scm
@@ -276,7 +274,7 @@ guix build -L . wfmash-gcc-static-git --without-tests=wfmash-gcc-static-git --tu
 
 To build for x86-64-v4 use `--tune=x86-64-v4`. A complete list can be found [here](https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html).
 
-Of course you may now get an 'Illegal instruction' when you try to run the program on the build system.
+See also the instructions in [guix.scm](./guix.scm).
 
 #### Docker and Singularity images with nix
 
@@ -298,7 +296,18 @@ Where `$ARGS` are your typical command line arguments to `wfmash`.
 
 ### Guix
 
+wfmash is part of Guix:
+
+```
+guix package -A wfmash
+wfmash  0.21.0  out     gnu/packages/bioinformatics.scm:24769:2
+```
+
+To compile a more recent version use the instructions in [guix.scm](./guix.scm).
+
 #### installing via the guix-genomics git repository
+
+*Note: this section is out of date.*
 
 First, clone the guix-genomics repository:
 
