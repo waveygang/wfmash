@@ -21,7 +21,6 @@ private:
     bool use_progress_bar;
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
-    std::mutex mutex;
     std::unique_ptr<indicators::BlockProgressBar> progress_bar;
     std::thread update_thread;
     
@@ -43,7 +42,6 @@ private:
                     (last_progress == 0 || curr_progress == total.load() || 
                      std::abs(static_cast<float>(curr_progress - last_progress)) / total.load() >= 0.01)) {
                     
-                    std::lock_guard<std::mutex> lock(mutex);
                     progress_bar->set_progress(curr_progress);
                     last_progress = curr_progress;
                     
@@ -85,20 +83,17 @@ public:
             // The banner should look like "[wfmash::mashmap] indexing"
             
             // Create progress bar including the full banner text
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                progress_bar = std::make_unique<indicators::BlockProgressBar>(
-                    indicators::option::BarWidth{50},
-                    indicators::option::Start{"["},
-                    indicators::option::End{"]"},
-                    indicators::option::ShowElapsedTime{true},
-                    indicators::option::ShowRemainingTime{true},
-                    indicators::option::PrefixText{banner + " "},
-                    // Use default color instead of blue for better visibility
-                    indicators::option::MaxProgress{total},
-                    indicators::option::Stream{std::cerr}
-                );
-            }
+            progress_bar = std::make_unique<indicators::BlockProgressBar>(
+                indicators::option::BarWidth{50},
+                indicators::option::Start{"["},
+                indicators::option::End{"]"},
+                indicators::option::ShowElapsedTime{true},
+                indicators::option::ShowRemainingTime{true},
+                indicators::option::PrefixText{banner + " "},
+                // Use default color instead of blue for better visibility
+                indicators::option::MaxProgress{total},
+                indicators::option::Stream{std::cerr}
+            );
             
             // Start the update thread
             update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
@@ -126,11 +121,9 @@ public:
         uint64_t previous = completed.fetch_add(incr, std::memory_order_relaxed);
         uint64_t new_val = previous + incr;
         
-        // For large increments, force an immediate update
-        if (incr > total / 20 && use_progress_bar && progress_bar) {
-            std::lock_guard<std::mutex> lock(mutex);
-            progress_bar->set_progress(std::min(new_val, total.load()));
-        }
+        // Note: We don't need to force immediate updates here. The update thread 
+        // will handle progress updates at regular intervals, which helps avoid
+        // contention between threads when many are calling increment().
     }
 
     void finish() {
@@ -143,17 +136,11 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
         
-        if (use_progress_bar && progress_bar) {
-            // Final update with lock
-            std::lock_guard<std::mutex> lock(mutex);
-            // Directly set to 100% complete to avoid partial updates
-            progress_bar->set_progress(total.load());
-            progress_bar->mark_as_completed();
-        }
+        // Set final value atomically - the update thread will handle display
+        completed.store(total.load(), std::memory_order_relaxed);
         
-        // Always print completion message
-        // Only print completion message if we're not already showing a progress bar
-        if (!use_progress_bar || !progress_bar) {
+        // For non-progress bar mode, print completion message
+        if (!use_progress_bar) {
             std::cerr << banner << " [completed in " 
                      << elapsed.count() << "s]" << std::endl;
         }
