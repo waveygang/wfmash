@@ -136,6 +136,92 @@ namespace wflign {
         return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end);
     }
 
+    std::tuple<std::string, uint64_t, uint64_t, uint64_t, uint64_t> trim_indels(
+        const std::string& cigar,
+        uint64_t ref_start,
+        uint64_t ref_end,
+        uint64_t query_start,
+        uint64_t query_end) {
+    
+        // Parse CIGAR string into operations
+        std::vector<std::pair<int, char>> cigar_ops;
+        size_t i = 0;
+        while (i < cigar.size()) {
+            int count = 0;
+            while (i < cigar.size() && std::isdigit(static_cast<unsigned char>(cigar[i]))) {
+                count = count * 10 + (cigar[i] - '0');
+                i++;
+            }
+            if (i < cigar.size()) {
+                cigar_ops.emplace_back(count, cigar[i]);
+                i++;
+            }
+        }
+
+        // Find first non-indel operation
+        size_t start_idx = 0;
+        uint64_t new_ref_start = ref_start;
+        uint64_t new_query_start = query_start;
+
+        while (start_idx < cigar_ops.size() && (cigar_ops[start_idx].second == 'I' || cigar_ops[start_idx].second == 'D')) {
+            if (cigar_ops[start_idx].second == 'I') {
+                new_query_start += cigar_ops[start_idx].first;
+            } else { // 'D'
+                new_ref_start += cigar_ops[start_idx].first;
+            }
+            start_idx++;
+        }
+
+        // Find last non-indel operation
+        size_t end_idx = cigar_ops.size() - 1;
+        uint64_t new_ref_end = ref_end;
+        uint64_t new_query_end = query_end;
+        
+        if (start_idx < cigar_ops.size()) { // Only proceed if we have non-indel operations
+            while (end_idx >= start_idx && (cigar_ops[end_idx].second == 'I' || cigar_ops[end_idx].second == 'D')) {
+                if (cigar_ops[end_idx].second == 'I') {
+                    new_query_end -= cigar_ops[end_idx].first;
+                } else { // 'D'
+                    new_ref_end -= cigar_ops[end_idx].first;
+                }
+                end_idx--;
+            }
+        }
+        
+        // Build trimmed CIGAR string
+        std::string trimmed_cigar;
+        uint64_t ref_consumed = 0;
+        uint64_t query_consumed = 0;
+        
+        // Only build if we have operations to keep
+        if (start_idx <= end_idx) {
+            for (size_t j = start_idx; j <= end_idx; j++) {
+                trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
+                
+                // Count bases consumed
+                switch (cigar_ops[j].second) {
+                    case 'M': case 'X': case '=':
+                        ref_consumed += cigar_ops[j].first;
+                        query_consumed += cigar_ops[j].first;
+                        break;
+                    case 'D': case 'N':
+                        ref_consumed += cigar_ops[j].first;
+                        break;
+                    case 'I':
+                        query_consumed += cigar_ops[j].first;
+                        break;
+                    // S/H operations don't affect coordinates
+                }
+            }
+        }
+    
+        // Recalculate the end coordinates based on consumed bases
+        new_ref_end = new_ref_start + ref_consumed;
+        new_query_end = new_query_start + query_consumed;
+    
+        return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end);
+    }
+
     // Process a compressed CIGAR string to get alignment metrics
     void process_compressed_cigar(
             const std::string& cigar_str,
@@ -2435,7 +2521,7 @@ void write_alignment_sam(
 
     // Trim deletions and get new coordinates
     auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
-        trim_deletions(cigar_str, target_offset + patch_aln.i, target_offset + patch_aln.i + patch_refAlignedLength,
+        trim_indels(cigar_str, target_offset + patch_aln.i, target_offset + patch_aln.i + patch_refAlignedLength,
                       query_offset + patch_aln.j, query_offset + patch_aln.j + patch_qAlignedLength);
 
     // Recompute metrics with trimmed CIGAR
@@ -2478,7 +2564,8 @@ void write_alignment_sam(
             out << "*";
         } else {
             std::stringstream seq;
-            for (uint64_t p = patch_aln.j; p < patch_aln.j + patch_aln.query_length; ++p) {
+            // The new patch_aln.j is "new_query_start - query_offset"
+            for (uint64_t p = new_query_start - query_offset; p < (new_query_start - query_offset) + patch_qAlignedLength; ++p) {
                 seq << query[p];
             }
             if (patch_aln.is_rev) {
@@ -2558,7 +2645,7 @@ bool write_alignment_paf(
 
         // Trim deletions and get new coordinates
         auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
-            trim_deletions(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
+            trim_indels(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
                          query_offset + aln.j, query_offset + aln.j + qAlignedLength);
 
         // Recompute metrics with trimmed CIGAR
@@ -2584,12 +2671,13 @@ bool write_alignment_paf(
 
         if (gap_compressed_identity >= min_identity) {
             uint64_t q_start, q_end;
+            // The new aln.j is "new_query_start - query_offset"
             if (query_is_rev) {
-                q_start = query_offset + (query_length - aln.j - qAlignedLength);
-                q_end = query_offset + (query_length - aln.j);
+                q_start = query_offset + (query_length - (new_query_start - query_offset) - qAlignedLength);
+                q_end = query_offset + (query_length - new_query_start - query_offset);
             } else {
-                q_start = query_offset + aln.j;
-                q_end = query_offset + aln.j + qAlignedLength;
+                q_start = new_query_start; // query_offset + (new_query_start - query_offset);
+                q_end = new_query_start + qAlignedLength; // query_offset + (new_query_start - query_offset) + qAlignedLength;
             }
 
             out << query_name << "\t" << query_total_length << "\t" << q_start
