@@ -212,13 +212,13 @@ struct seq_record_t {
                               ? std::stof(std::string(mm_id_vec.back())) 
                               : skch::fixed::percentage_identity;
 
-          // Parse chain info if present (expecting format "chain:i:id.pos.len" in tokens[14])
+          // Parse chain info if present (expecting format "ch:Z:id.pos.len" in tokens[14])
           int32_t chain_id = -1;
           int32_t chain_length = 1;
           int32_t chain_pos = 1;
           if (tokens.size() > 14) {
               const auto chain_vec = split_view(std::string_view(tokens[14]), ':');
-              if (chain_vec.size() == 3 && chain_vec[0] == "chain" && chain_vec[1] == "i") {
+              if (chain_vec.size() == 3 && chain_vec[0] == "ch" && chain_vec[1] == "Z") {
                   // Split the id.pos.len format
                   const auto chain_parts = split_view(std::string_view(chain_vec[2]), '.');
                   if (chain_parts.size() == 3) {

@@ -10,11 +10,11 @@
 namespace wflign {
 
     std::tuple<std::string, uint64_t, uint64_t, uint64_t, uint64_t> trim_deletions(
-            const std::string& cigar,
-            uint64_t ref_start,
-            uint64_t ref_end,
-            uint64_t query_start,
-            uint64_t query_end) {
+        const std::string& cigar,
+        uint64_t ref_start,
+        uint64_t ref_end,
+        uint64_t query_start,
+        uint64_t query_end) {
         
         std::string trimmed_cigar;
         uint64_t new_ref_start = ref_start;
@@ -37,25 +37,70 @@ namespace wflign {
             }
         }
 
-        // Find leading deletions and matches
-        size_t leading_dels = 0;
-        while (leading_dels < cigar_ops.size() && cigar_ops[leading_dels].second == 'D') {
-            new_ref_start += cigar_ops[leading_dels].first;
-            leading_dels++;
+        // Process leading operations - keep insertions but remove deletions
+        size_t leading_idx = 0;
+        bool seen_non_id = false;
+        std::vector<std::pair<int, char>> leading_insertions;
+        
+        // First pass: collect leading insertions and skip deletions
+        while (leading_idx < cigar_ops.size()) {
+            char op = cigar_ops[leading_idx].second;
+            
+            if (op == 'I') {
+                // Save insertions to add later
+                leading_insertions.push_back(cigar_ops[leading_idx]);
+                leading_idx++;
+            } else if (op == 'D') {
+                // Skip deletions and adjust reference start
+                new_ref_start += cigar_ops[leading_idx].first;
+                leading_idx++;
+            } else {
+                // Stop at first non-I/D operation
+                seen_non_id = true;
+                break;
+            }
         }
-
-        // Find trailing deletions and matches
-        size_t trailing_dels = 0;
-        while (trailing_dels < cigar_ops.size() - leading_dels && 
-               cigar_ops[cigar_ops.size() - 1 - trailing_dels].second == 'D') {
-            new_ref_end -= cigar_ops[cigar_ops.size() - 1 - trailing_dels].first;
-            trailing_dels++;
+        
+        // Process trailing operations - keep insertions but remove deletions
+        size_t trailing_idx = cigar_ops.size() - 1;
+        std::vector<std::pair<int, char>> trailing_insertions;
+        
+        // First pass from the end: collect trailing insertions and skip deletions
+        // Only process if we have operations left after handling leading operations
+        if (seen_non_id && leading_idx <= trailing_idx) {
+            while (trailing_idx >= leading_idx) {
+                char op = cigar_ops[trailing_idx].second;
+                
+                if (op == 'I') {
+                    // Save insertions to add later
+                    trailing_insertions.insert(trailing_insertions.begin(), cigar_ops[trailing_idx]);
+                    if (trailing_idx == 0) break; // Prevent underflow
+                    trailing_idx--;
+                } else if (op == 'D') {
+                    // Skip deletions and adjust reference end
+                    new_ref_end -= cigar_ops[trailing_idx].first;
+                    if (trailing_idx == 0) break; // Prevent underflow
+                    trailing_idx--;
+                } else {
+                    // Stop at first non-I/D operation
+                    break;
+                }
+            }
         }
-
+        
         // Build new CIGAR string and count consumed bases
+        // First add leading insertions
+        for (const auto& op : leading_insertions) {
+            trimmed_cigar += std::to_string(op.first) + op.second;
+            // Update query position for insertions
+            new_query_end += op.first;
+        }
+        
+        // Add middle operations that weren't trimmed
         uint64_t ref_consumed = 0;
         uint64_t query_consumed = 0;
-        for (size_t j = leading_dels; j < cigar_ops.size() - trailing_dels; j++) {
+        
+        for (size_t j = leading_idx; j <= trailing_idx && seen_non_id; j++) {
             trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
             
             // Count bases consumed by this operation
@@ -76,11 +121,104 @@ namespace wflign {
                 // S/H operations don't affect coordinates
             }
         }
+        
+        // Add trailing insertions
+        for (const auto& op : trailing_insertions) {
+            trimmed_cigar += std::to_string(op.first) + op.second;
+            // Update query position for insertions
+            query_consumed += op.first;
+        }
 
         // Adjust coordinates based on consumed bases
         new_ref_end = new_ref_start + ref_consumed;
         new_query_end = new_query_start + query_consumed;
 
+        return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end);
+    }
+
+    std::tuple<std::string, uint64_t, uint64_t, uint64_t, uint64_t> trim_indels(
+        const std::string& cigar,
+        uint64_t ref_start,
+        uint64_t ref_end,
+        uint64_t query_start,
+        uint64_t query_end) {
+    
+        // Parse CIGAR string into operations
+        std::vector<std::pair<int, char>> cigar_ops;
+        size_t i = 0;
+        while (i < cigar.size()) {
+            int count = 0;
+            while (i < cigar.size() && std::isdigit(static_cast<unsigned char>(cigar[i]))) {
+                count = count * 10 + (cigar[i] - '0');
+                i++;
+            }
+            if (i < cigar.size()) {
+                cigar_ops.emplace_back(count, cigar[i]);
+                i++;
+            }
+        }
+
+        // Find first non-indel operation
+        size_t start_idx = 0;
+        uint64_t new_ref_start = ref_start;
+        uint64_t new_query_start = query_start;
+
+        while (start_idx < cigar_ops.size() && (cigar_ops[start_idx].second == 'I' || cigar_ops[start_idx].second == 'D')) {
+            if (cigar_ops[start_idx].second == 'I') {
+                new_query_start += cigar_ops[start_idx].first;
+            } else { // 'D'
+                new_ref_start += cigar_ops[start_idx].first;
+            }
+            start_idx++;
+        }
+
+        // Find last non-indel operation
+        size_t end_idx = cigar_ops.size() - 1;
+        uint64_t new_ref_end = ref_end;
+        uint64_t new_query_end = query_end;
+        
+        if (start_idx < cigar_ops.size()) { // Only proceed if we have non-indel operations
+            while (end_idx >= start_idx && (cigar_ops[end_idx].second == 'I' || cigar_ops[end_idx].second == 'D')) {
+                if (cigar_ops[end_idx].second == 'I') {
+                    new_query_end -= cigar_ops[end_idx].first;
+                } else { // 'D'
+                    new_ref_end -= cigar_ops[end_idx].first;
+                }
+                end_idx--;
+            }
+        }
+        
+        // Build trimmed CIGAR string
+        std::string trimmed_cigar;
+        uint64_t ref_consumed = 0;
+        uint64_t query_consumed = 0;
+        
+        // Only build if we have operations to keep
+        if (start_idx <= end_idx) {
+            for (size_t j = start_idx; j <= end_idx; j++) {
+                trimmed_cigar += std::to_string(cigar_ops[j].first) + cigar_ops[j].second;
+                
+                // Count bases consumed
+                switch (cigar_ops[j].second) {
+                    case 'M': case 'X': case '=':
+                        ref_consumed += cigar_ops[j].first;
+                        query_consumed += cigar_ops[j].first;
+                        break;
+                    case 'D': case 'N':
+                        ref_consumed += cigar_ops[j].first;
+                        break;
+                    case 'I':
+                        query_consumed += cigar_ops[j].first;
+                        break;
+                    // S/H operations don't affect coordinates
+                }
+            }
+        }
+    
+        // Recalculate the end coordinates based on consumed bases
+        new_ref_end = new_ref_start + ref_consumed;
+        new_query_end = new_query_start + query_consumed;
+    
         return std::make_tuple(trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end);
     }
 
@@ -2207,7 +2345,8 @@ query_start : query_end)
                 query_offset, query_length, query_is_rev,
                 target_name, target_total_length, target_offset, target_length,
                 min_identity, mashmap_estimated_identity,
-                no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift);
+                no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift,
+                0, 0, 0);
         }
         
         // Clean up patch alignments after writing
@@ -2352,7 +2491,11 @@ void write_alignment_sam(
     const bool& emit_md_tag,
     const char* query,
     const char* target,
-    const int64_t& target_pointer_shift) {
+    const int64_t& target_pointer_shift,
+    const int32_t& chain_id,
+    const int32_t& chain_length,
+    const int32_t& chain_pos
+) {
 
     if (cigar_str == "") { std::cerr << "[wflign_patch] unsupported codepath" << std::endl; exit(1); }
 
@@ -2378,7 +2521,7 @@ void write_alignment_sam(
 
     // Trim deletions and get new coordinates
     auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
-        trim_deletions(cigar_str, target_offset + patch_aln.i, target_offset + patch_aln.i + patch_refAlignedLength,
+        trim_indels(cigar_str, target_offset + patch_aln.i, target_offset + patch_aln.i + patch_refAlignedLength,
                       query_offset + patch_aln.j, query_offset + patch_aln.j + patch_qAlignedLength);
 
     // Recompute metrics with trimmed CIGAR
@@ -2421,7 +2564,8 @@ void write_alignment_sam(
             out << "*";
         } else {
             std::stringstream seq;
-            for (uint64_t p = patch_aln.j; p < patch_aln.j + patch_aln.query_length; ++p) {
+            // The new patch_aln.j is "new_query_start - query_offset"
+            for (uint64_t p = (new_query_start - query_offset); p < (new_query_start - query_offset) + patch_qAlignedLength; ++p) {
                 seq << query[p];
             }
             if (patch_aln.is_rev) {
@@ -2435,7 +2579,8 @@ void write_alignment_sam(
             << "NM:i:" << (patch_mismatches + patch_inserted_bp + patch_deleted_bp) << "\t"
             << "gi:f:" << patch_gap_compressed_identity << "\t"
             << "bi:f:" << patch_block_identity << "\t"
-            << "md:f:" << mashmap_estimated_identity;
+            << "md:f:" << mashmap_estimated_identity
+            << (chain_length > 0 ? ("\t" + std::string("ch:Z:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos)) : "");
             //<< "\t" << "pt:Z:true" <<
             //<< "\t" << "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
 
@@ -2500,7 +2645,7 @@ bool write_alignment_paf(
 
         // Trim deletions and get new coordinates
         auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
-            trim_deletions(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
+            trim_indels(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
                          query_offset + aln.j, query_offset + aln.j + qAlignedLength);
 
         // Recompute metrics with trimmed CIGAR
@@ -2526,12 +2671,13 @@ bool write_alignment_paf(
 
         if (gap_compressed_identity >= min_identity) {
             uint64_t q_start, q_end;
+            // The new aln.j is "new_query_start - query_offset"
             if (query_is_rev) {
-                q_start = query_offset + (query_length - aln.j - qAlignedLength);
-                q_end = query_offset + (query_length - aln.j);
+                q_start = query_offset + (query_length - (new_query_start - query_offset) - qAlignedLength);
+                q_end = query_offset + (query_length - (new_query_start - query_offset));
             } else {
-                q_start = query_offset + aln.j;
-                q_end = query_offset + aln.j + qAlignedLength;
+                q_start = new_query_start; // query_offset + (new_query_start - query_offset);
+                q_end = new_query_start + qAlignedLength; // query_offset + (new_query_start - query_offset) + qAlignedLength;
             }
 
             out << query_name << "\t" << query_total_length << "\t" << q_start
@@ -2546,7 +2692,7 @@ bool write_alignment_paf(
                 << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:" << block_identity << "\t"
                 << "md:f:" << mashmap_estimated_identity << "\t"
-                << (chain_length > 0 ? (std::string("chain:i:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos) + "\t") : "")
+                << (chain_length > 0 ? (std::string("ch:Z:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos) + "\t") : "")
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
                 //<< "\t" << "ni:i:" << insertions

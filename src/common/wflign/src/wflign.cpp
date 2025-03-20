@@ -16,6 +16,95 @@ namespace wavefront {
 */
 #define MIN_WF_LENGTH            256
 
+std::string erode_short_matches_in_cigar(const std::string& cigar, int max_match_length = 3, bool is_head_cigar = true) {
+    if (cigar.length() < 6) return cigar; // Too short for indel-match-indel pattern
+    
+    // Parse CIGAR into operations
+    std::vector<std::pair<int, char>> ops;
+    ops.reserve(cigar.length() / 2); // Pre-allocate to avoid reallocations
+    
+    size_t pos = 0;
+    while (pos < cigar.length()) {
+        size_t start = pos;
+        while (pos < cigar.length() && std::isdigit(cigar[pos])) pos++;
+        if (pos < cigar.length()) {
+            int count = std::stoi(cigar.substr(start, pos - start));
+            char type = cigar[pos++];
+            ops.push_back({count, type});
+        }
+    }
+    
+    // Check if we have enough operations
+    if (ops.size() < 3) return cigar;
+    
+    // Process operations, marking some for removal
+    bool modified = false;
+    
+    // Define the range of operations to check based on whether this is head or tail CIGAR
+    size_t start_idx = 1;
+    size_t end_idx = ops.size() - 1;
+    
+    if (is_head_cigar) {
+        // Only check the first 3 operations for head CIGAR
+        end_idx = std::min(end_idx, (size_t)3);
+    } else {
+        // Only check the last 3 operations for tail CIGAR
+        start_idx = std::max(start_idx, ops.size() - 3);
+    }
+    
+    for (size_t i = start_idx; i < end_idx; i++) {
+        // Check for indel-match-indel pattern with short match
+        bool is_match = (ops[i].second == 'M' || ops[i].second == '=' || ops[i].second == 'X');
+        bool prev_is_indel = (ops[i-1].second == 'I' || ops[i-1].second == 'D');
+        bool next_is_indel = (ops[i+1].second == 'I' || ops[i+1].second == 'D');
+        
+        if (is_match && ops[i].first <= max_match_length && prev_is_indel && next_is_indel) {
+            // Only erode if:
+            // 1. The indels are of different types (I and D or D and I)
+            // 2. Both indels are longer than the match
+            if (((ops[i-1].second == 'I' && ops[i+1].second == 'D') || 
+                 (ops[i-1].second == 'D' && ops[i+1].second == 'I')) &&
+                (ops[i-1].first > ops[i].first && ops[i+1].first > ops[i].first)) {
+                // Increase both surrounding indels
+                ops[i-1].first += ops[i].first;
+                ops[i+1].first += ops[i].first;
+                
+                // Mark for removal by setting count to 0
+                ops[i].first = 0;
+                modified = true;
+            }
+        }
+    }
+    
+    // Fast path: if nothing changed, return original
+    if (!modified) return cigar;
+    
+    // Build new operations vector, excluding those with count 0 and merging consecutive same-type ops
+    std::vector<std::pair<int, char>> merged_ops;
+    merged_ops.reserve(ops.size());
+    
+    for (const auto& op : ops) {
+        if (op.first > 0) {
+            // If we have a previous operation of the same type, merge them
+            if (!merged_ops.empty() && merged_ops.back().second == op.second) {
+                merged_ops.back().first += op.first;
+            } else {
+                merged_ops.push_back(op);
+            }
+        }
+    }
+    
+    // Build result string from merged operations
+    std::string result;
+    result.reserve(cigar.length());
+    
+    for (const auto& op : merged_ops) {
+        result += std::to_string(op.first) + op.second;
+    }
+    
+    return result;
+}
+
 void do_biwfa_alignment(
     const std::string& query_name,
     char* const query,
@@ -40,7 +129,7 @@ void do_biwfa_alignment(
     const int32_t chain_length,
     const int32_t chain_pos) {
     
-    // Create WFA aligner with the provided penalties
+    // Create WFA aligner for the main alignment
     wfa::WFAlignerGapAffine2Pieces wf_aligner(
         0,  // match
         penalties.mismatch,
@@ -50,95 +139,306 @@ void do_biwfa_alignment(
         penalties.gap_extension2,
         wfa::WFAligner::Alignment,
         wfa::WFAligner::MemoryUltralow);
-    
     wf_aligner.setHeuristicNone();
     
-
-    // Perform the alignment
+    // Perform the main end-to-end alignment first
     const int status = wf_aligner.alignEnd2End(target, (int)target_length, query, (int)query_length);
     
-    if (status == 0) { // WF_STATUS_SUCCESSFUL
-        // Create alignment record on stack
-        alignment_t aln;
-        aln.ok = true;
-        aln.j = 0;
-        aln.i = 0;
-        aln.query_length = query_length;
-        aln.target_length = target_length;
-        aln.is_rev = false;
+    if (status != 0) {
+        return; // Alignment failed
+    }
+
+    // Set up constants for patching
+    const int MIN_PATCH_LENGTH = 128;       // Minimum length to expose for patching
+    const int MAX_ERODE_LENGTH = 4096;      // Maximum erosion before stopping
+    const int MIN_CONSECUTIVE_MATCHES = 11; // Minimum consecutive matches to stop erosion
+
+    // Create alignment record on stack
+    alignment_t aln;
+    aln.ok = true;
+    aln.j = 0;
+    aln.i = 0;
+    aln.query_length = query_length;
+    aln.target_length = target_length;
+    aln.is_rev = false;
+    
+    // Copy alignment CIGAR from the main alignment
+    wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
+    std::string main_cigar = wfa_edit_cigar_to_string(aln.edit_cigar);
+    
+    // Helper function to parse a single CIGAR operation (e.g., "10M")
+    auto parse_cigar_op = [](const std::string& cigar, size_t& pos) -> std::pair<int, char> {
+        size_t start = pos;
+        while (pos < cigar.length() && isdigit(cigar[pos])) pos++;
+        int count = std::stoi(cigar.substr(start, pos - start));
+        char op = cigar[pos++];
+        return {count, op};
+    };
+    
+    // Helper function to convert CIGAR string from long form to short form (run-length encoded)
+    auto compress_cigar = [](const std::string& long_cigar) -> std::string {
+        if (long_cigar.empty()) return "";
         
-        // Copy alignment CIGAR
-        wflign_edit_cigar_copy(wf_aligner, &aln.edit_cigar);
+        std::string short_cigar;
+        char prev_op = long_cigar[0];
+        int count = 1;
+        
+        for (size_t i = 1; i < long_cigar.length(); i++) {
+            char op = long_cigar[i];
+            if (op == prev_op) {
+                count++;
+            } else {
+                // Convert M to = for consistency with wfa_edit_cigar_to_string
+                char out_op = (prev_op == 'M') ? '=' : prev_op;
+                short_cigar += std::to_string(count) + out_op;
+                prev_op = op;
+                count = 1;
+            }
+        }
+        
+        // Add the last operation
+        char out_op = (prev_op == 'M') ? '=' : prev_op;
+        short_cigar += std::to_string(count) + out_op;
+        
+        return short_cigar;
+    };
 
-        // Convert WFA CIGAR to string format for potential swizzling
-        std::string cigar_str = wfa_edit_cigar_to_string(aln.edit_cigar);
-        // Try swizzling the CIGAR at both ends with debug enabled
+    // Perform head patching
+    {
+        u_int64_t query_eroded = 0;
+        u_int64_t target_eroded = 0;
+        size_t cigar_pos = 0;
+        size_t erode_end_pos = 0;
+        bool found_consecutive_matches = false;
 
-        std::string swizzled = try_swap_start_pattern(cigar_str, query, target, 0, 0);
-        if (swizzled != cigar_str) {
-            cigar_str = swizzled;
-        } else {
+        // Continue eroding until stopping conditions are met
+        while (cigar_pos < main_cigar.length()) {
+            auto [count, op] = parse_cigar_op(main_cigar, cigar_pos);
+
+            if (op == '=' && count >= MIN_CONSECUTIVE_MATCHES) {
+                found_consecutive_matches = true;
+            }
+
+            // If we've found MIN_CONSECUTIVE_MATCHES and satisfied MIN_PATCH_LENGTH, stop
+            if (found_consecutive_matches && 
+                query_eroded >= MIN_PATCH_LENGTH && target_eroded >= MIN_PATCH_LENGTH) {
+                break;
+            }
+            // Stop if we've reached MAX_ERODE_LENGTH
+            if (query_eroded >= MAX_ERODE_LENGTH || target_eroded >= MAX_ERODE_LENGTH) {
+                break;
+            }
+
+            // Update counts based on operation
+            if (op == 'M' || op == 'X' || op == '=') {
+                query_eroded += count;
+                target_eroded += count;
+            } else if (op == 'I') {
+                query_eroded += count;
+            } else if (op == 'D') {
+                target_eroded += count;
+            }
+            erode_end_pos = cigar_pos;
         }
 
-        swizzled = try_swap_end_pattern(cigar_str, query, target, 0, 0);
-        if (swizzled != cigar_str) {
-            cigar_str = swizzled;
-        } else {
-        }
+        if (query_eroded > 3 || target_eroded > 3) {
+            // Create a dedicated aligner for head patching
+            wfa::WFAlignerGapAffine2Pieces head_aligner(
+                0,  // match
+                penalties.mismatch,
+                penalties.gap_opening1,
+                penalties.gap_extension1,
+                penalties.gap_opening2,
+                penalties.gap_extension2,
+                wfa::WFAligner::Alignment,
+                wfa::WFAligner::MemoryMed);
+            head_aligner.setHeuristicNone();
+            
+            // Extract sequences for head patching
+            int head_query_length = query_eroded;
+            int head_target_length = target_eroded;
+            
+            std::string head_query_str(query, head_query_length);
+            std::string head_target_str(target, head_target_length);
+            
+            // Do semi-global alignment for head patching
+            // Allow free gaps at the beginning of both sequences
+            const int head_status = head_aligner.alignEndsFree(
+                head_target_str,
+                target_eroded, 0,
+                head_query_str,
+                query_eroded, 0
+            );
 
-        // If the CIGAR changed, update coordinates and alignment
-        //if (cigar_str != wfa_edit_cigar_to_string(aln.edit_cigar)) {
-            // Update coordinates based on swizzled CIGAR
-            //auto new_coords = alignment_end_coords(cigar_str, query_offset, target_offset);
+            if (head_status == 0) {
+                // Get the head CIGAR in long form
+                std::string head_cigar_long = head_aligner.getAlignment();
+
+                // Convert to short form using our helper function
+                std::string head_cigar_short = compress_cigar(head_cigar_long);
                 
-            // Convert back to WFA format
-            //wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
-        //}
-
-        //wfa_string_to_edit_cigar(cigar_str, &aln.edit_cigar);
-        // Write alignment
-        if (paf_format_else_sam) {
-            write_alignment_paf(
-                out,
-                aln,
-                cigar_str,
-                query_name,
-                query_total_length,
-                query_offset,
-                query_length,
-                query_is_rev,
-                target_name,
-                target_total_length,
-                target_offset,
-                target_length,
-                min_identity,
-                mashmap_estimated_identity,
-                chain_id,
-                chain_length,
-                chain_pos);
-        } else {
-            // Write SAM output directly
-            write_alignment_sam(
-                out,
-                aln,
-                cigar_str,
-                query_name,
-                query_total_length,
-                query_offset,
-                query_length,
-                query_is_rev,
-                target_name,
-                target_total_length,
-                target_offset,
-                target_length,
-                min_identity,
-                mashmap_estimated_identity,
-                no_seq_in_sam,
-                emit_md_tag,
-                query,
-                target,
-                0); // No target pointer shift for biwfa
+                head_cigar_short = erode_short_matches_in_cigar(head_cigar_short, 3);
+                
+                // Remove the eroded part from the beginning of main_cigar
+                main_cigar = head_cigar_short + main_cigar.substr(erode_end_pos);
+            }
         }
+    }
+    
+    // Perform tail patching
+    {
+        // For the tail, we need to parse the entire CIGAR first to know where to start
+        std::vector<std::pair<int, char>> cigar_ops;
+        size_t pos = 0;
+        while (pos < main_cigar.length()) {
+            cigar_ops.push_back(parse_cigar_op(main_cigar, pos));
+        }
+        
+        u_int64_t query_eroded = 0;
+        u_int64_t target_eroded = 0;
+        size_t erode_start_idx = cigar_ops.size();
+        bool found_consecutive_matches = false;
+
+        // Work backwards from the end of the CIGAR
+        for (int i = cigar_ops.size() - 1; i >= 0; i--) {
+            auto [count, op] = cigar_ops[i];
+                            
+            if (op == '=' && count >= MIN_CONSECUTIVE_MATCHES) {
+                found_consecutive_matches = true;
+            }
+
+            // If we've found MIN_CONSECUTIVE_MATCHES and satisfied MIN_PATCH_LENGTH, stop
+            if (found_consecutive_matches && 
+                query_eroded >= MIN_PATCH_LENGTH && target_eroded >= MIN_PATCH_LENGTH) {
+                break;
+            }
+            // Stop if we've reached MAX_ERODE_LENGTH
+            if (query_eroded >= MAX_ERODE_LENGTH || target_eroded >= MAX_ERODE_LENGTH) {
+                break;
+            }
+
+            // Update counts based on operation
+            if (op == 'M' || op == 'X' || op == '=') {
+                query_eroded += count;
+                target_eroded += count;
+            } else if (op == 'I') {
+                query_eroded += count;
+            } else if (op == 'D') {
+                target_eroded += count;
+            }
+            erode_start_idx = i;
+        }
+
+        if (query_eroded > 3 || target_eroded > 3) {
+            // Create a dedicated aligner for tail patching
+            wfa::WFAlignerGapAffine2Pieces tail_aligner(
+                0,  // match
+                penalties.mismatch,
+                penalties.gap_opening1,
+                penalties.gap_extension1,
+                penalties.gap_opening2,
+                penalties.gap_extension2,
+                wfa::WFAligner::Alignment,
+                wfa::WFAligner::MemoryMed);
+            tail_aligner.setHeuristicNone();
+            
+            // Extract sequences for tail patching
+            int tail_query_length = query_eroded;
+            int tail_target_length = target_eroded;
+            
+            // Get the starting positions for the tail patching
+            char* query_tail = query + query_length - tail_query_length;
+            char* target_tail = target + target_length - tail_target_length;
+            
+            std::string tail_query_str(query_tail, tail_query_length);
+            std::string tail_target_str(target_tail, tail_target_length);
+            
+            // Do semi-global alignment for tail patching
+            // Allow free gaps at the end of both sequences
+            const int tail_status = tail_aligner.alignEndsFree(
+                tail_target_str,
+                0, tail_target_length,  // textBeginFree, textEndFree
+                tail_query_str,
+                0, tail_query_length   // patternBeginFree, patternEndFree
+            );
+            
+            if (tail_status == 0) {
+                // Get the tail CIGAR in long form
+                std::string tail_cigar_long = tail_aligner.getAlignment();
+                
+                // Convert to short form using our helper function
+                std::string tail_cigar_short = compress_cigar(tail_cigar_long);
+                
+                tail_cigar_short = erode_short_matches_in_cigar(tail_cigar_short, 3, false);
+                
+                // Rebuild the CIGAR string up to the erode_start_idx
+                std::string truncated_cigar;
+                for (size_t i = 0; i < erode_start_idx; i++) {
+                    truncated_cigar += std::to_string(cigar_ops[i].first) + cigar_ops[i].second;
+                }
+                
+                // Combine the truncated main CIGAR with the tail CIGAR
+                main_cigar = truncated_cigar + tail_cigar_short;
+            }
+        }
+    }
+
+    // Try swizzling the CIGAR at both ends
+    std::string swizzled = try_swap_start_pattern(main_cigar, query, target, 0, 0);
+    if (swizzled != main_cigar) {
+        main_cigar = swizzled;
+    }
+
+    swizzled = try_swap_end_pattern(main_cigar, query, target, 0, 0);
+    if (swizzled != main_cigar) {
+        main_cigar = swizzled;
+    }
+    
+    // Write alignment
+    if (paf_format_else_sam) {
+        write_alignment_paf(
+            out,
+            aln,
+            main_cigar,
+            query_name,
+            query_total_length,
+            query_offset,
+            query_length,
+            query_is_rev,
+            target_name,
+            target_total_length,
+            target_offset,
+            target_length,
+            min_identity,
+            mashmap_estimated_identity,
+            chain_id,
+            chain_length,
+            chain_pos);
+    } else {
+        // Write SAM output
+        write_alignment_sam(
+            out,
+            aln,
+            main_cigar,
+            query_name,
+            query_total_length,
+            query_offset,
+            query_length,
+            query_is_rev,
+            target_name,
+            target_total_length,
+            target_offset,
+            target_length,
+            min_identity,
+            mashmap_estimated_identity,
+            no_seq_in_sam,
+            emit_md_tag,
+            query,
+            target,
+            0,
+            chain_id,
+            chain_length,
+            chain_pos); // No target pointer shift for biwfa
     }
 }
 
