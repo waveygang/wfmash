@@ -8,6 +8,7 @@
 #include <memory>
 #include <thread>
 #include <unistd.h>
+#include <iomanip>
 #include "indicators.hpp"
 
 namespace progress_meter {
@@ -24,18 +25,21 @@ private:
     std::unique_ptr<indicators::BlockProgressBar> progress_bar;
     std::thread update_thread;
     
-    // Update interval for the progress bar (milliseconds)
-    const uint64_t update_interval = 100; 
+    // Update intervals (milliseconds)
+    const uint64_t update_interval = 100;  // For progress bar (TTY)
+    const uint64_t file_update_interval = 60000;  // 60 seconds for file output
+    std::chrono::time_point<std::chrono::high_resolution_clock> last_file_update;
 
     void update_progress_thread() {
         uint64_t last_progress = 0;
         
         while (running.load()) {
+            auto curr_time = std::chrono::high_resolution_clock::now();
+            auto curr_progress = std::min(completed.load(), total.load());
+            float progress_percent = static_cast<float>(curr_progress) / total.load() * 100.0f;
+            
             // Update progress bar at regular intervals
             if (use_progress_bar && progress_bar) {
-                auto curr_progress = std::min(completed.load(), total.load());
-                float progress_percent = static_cast<float>(curr_progress) / total.load() * 100.0f;
-                
                 // Only update if there's a meaningful change in percentage
                 // or we're just starting or finishing
                 if (curr_progress != last_progress && 
@@ -52,6 +56,32 @@ private:
                             is_finished.store(true);
                         }
                         break;  // Exit the update thread
+                    }
+                }
+            } else {
+                // For file output, print periodic updates or on completion
+                auto elapsed_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    curr_time - last_file_update).count();
+                
+                // Update if: 1) 60 seconds have passed, 2) this is the first update, or 3) we're at 100%
+                if ((elapsed_since_update >= file_update_interval || last_progress == 0 || 
+                     curr_progress >= total.load()) && curr_progress != last_progress) {
+                    
+                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                        curr_time - start_time).count();
+                    
+                    std::cerr << banner << " [" 
+                              << std::fixed << std::setprecision(1) << progress_percent << "% complete, " 
+                              << curr_progress << "/" << total.load() 
+                              << " units, " << elapsed << "s elapsed]" << std::endl;
+                    
+                    last_progress = curr_progress;
+                    last_file_update = curr_time;
+                    
+                    // If we've reached 100%, mark as completed and exit
+                    if (curr_progress >= total.load()) {
+                        is_finished.store(true);
+                        break;
                     }
                 }
             }
@@ -71,6 +101,7 @@ public:
         : banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
         
         start_time = std::chrono::high_resolution_clock::now();
+        last_file_update = start_time;
         
         // Check if stderr is a TTY
         use_progress_bar = isatty(fileno(stderr));
