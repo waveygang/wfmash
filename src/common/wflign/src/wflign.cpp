@@ -368,10 +368,8 @@ void do_biwfa_alignment(
                 
                 // Convert to short form using our helper function
                 std::string tail_cigar_short = compress_cigar(tail_cigar_long);
-                //std::cerr << "       Tail CIGAR: " << tail_cigar_short << std::endl;
                 
                 tail_cigar_short = erode_short_matches_in_cigar(tail_cigar_short, 3, false);
-                //std::cerr << "Erored tail CIGAR: " << tail_cigar_short << std::endl;
                 
                 // Rebuild the CIGAR string up to the erode_start_idx
                 std::string truncated_cigar;

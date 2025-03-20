@@ -2643,10 +2643,6 @@ bool write_alignment_paf(
             refAlignedLength,
             qAlignedLength);
 
-        std::cerr << "cigar: " << cigar_str << std::endl;
-        std::cerr << "matches: " << matches << " mismatches: " << mismatches << " insertions: " << insertions << " inserted_bp: " << inserted_bp << " deletions: " << deletions << " deleted_bp: " << deleted_bp << std::endl;
-        std::cerr << "refAlignedLength: " << refAlignedLength << " qAlignedLength: " << qAlignedLength << std::endl;
-
         // Trim deletions and get new coordinates
         auto [trimmed_cigar, new_ref_start, new_ref_end, new_query_start, new_query_end] = 
             trim_indels(cigar_str, target_offset + aln.i, target_offset + aln.i + refAlignedLength,
@@ -2663,10 +2659,6 @@ bool write_alignment_paf(
             deleted_bp,
             refAlignedLength,
             qAlignedLength);
-
-        std::cerr << "cigar: " << trimmed_cigar << std::endl;
-        std::cerr << "matches: " << matches << " mismatches: " << mismatches << " insertions: " << insertions << " inserted_bp: " << inserted_bp << " deletions: " << deletions << " deleted_bp: " << deleted_bp << std::endl;
-        std::cerr << "refAlignedLength: " << refAlignedLength << " qAlignedLength: " << qAlignedLength << std::endl;
 
         char* cigar = strdup(trimmed_cigar.c_str());
         size_t alignmentRefPos = new_ref_start - target_offset;
