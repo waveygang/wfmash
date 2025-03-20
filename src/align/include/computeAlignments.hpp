@@ -378,13 +378,14 @@ void computeAlignmentsTaskflow() {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
     
-    // Finish progress meter
-    progress.finish();
-    
+    // Print summary before finishing progress meter
     std::cerr << "[wfmash::align] "
               << "total aligned records = " << total_alignments_processed.load()
               << ", total aligned bp = " << processed_alignment_length.load()
               << ", completed in " << duration.count() << " seconds" << std::endl;
+    
+    // Finish progress meter after printing summary
+    progress.finish();
 }
 
 // Process a single mapping record (extracted to avoid lambda issues with for_each)
