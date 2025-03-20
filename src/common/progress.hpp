@@ -156,6 +156,7 @@ public:
         
         // Ensure the update thread stops
         running.store(false);
+        is_finished.store(true);
         
         // Wait for the update thread to fully terminate before continuing
         if (update_thread.joinable()) {
