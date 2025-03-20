@@ -150,11 +150,9 @@ public:
             progress_bar->mark_as_completed();
             // Explicitly add a newline to ensure proper formatting
             std::cerr << std::endl;
-        } else {
-            // For non-progress bar mode, print completion message
-            std::cerr << banner << " [completed in " 
-                     << elapsed.count() << "s]" << std::endl;
         }
+        // Note: We no longer print a completion message for non-progress bar mode
+        // since the caller will typically print statistics that include timing info
         
         // Ensure the update thread stops
         running.store(false);

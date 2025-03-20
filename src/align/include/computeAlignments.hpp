@@ -384,7 +384,7 @@ void computeAlignmentsTaskflow() {
     std::cerr << "[wfmash::align] "
               << "total aligned records = " << total_alignments_processed.load()
               << ", total aligned bp = " << processed_alignment_length.load()
-              << ", time taken = " << duration.count() << " seconds" << std::endl;
+              << ", completed in " << duration.count() << " seconds" << std::endl;
 }
 
 // Process a single mapping record (extracted to avoid lambda issues with for_each)
