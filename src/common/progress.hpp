@@ -148,16 +148,11 @@ public:
         if (use_progress_bar && progress_bar) {
             progress_bar->set_progress(total.load());
             progress_bar->mark_as_completed();
-            // Explicitly add a newline to ensure proper formatting
-            std::cerr << std::endl;
         }
-        // Note: We no longer print a completion message for non-progress bar mode
-        // since the caller will typically print statistics that include timing info
-        
+
         // Ensure the update thread stops
         running.store(false);
-        is_finished.store(true);
-        
+
         // Wait for the update thread to fully terminate before continuing
         if (update_thread.joinable()) {
             update_thread.join();
