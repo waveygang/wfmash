@@ -162,6 +162,9 @@ public:
         if (update_thread.joinable()) {
             update_thread.join();
         }
+        
+        // Flush stderr to ensure all output is properly displayed
+        std::cerr.flush();
     }
 };
 
