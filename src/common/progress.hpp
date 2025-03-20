@@ -106,9 +106,10 @@ public:
         // Check if stderr is a TTY
         use_progress_bar = isatty(fileno(stderr));
         
-        // Only print the banner if we're not using a progress bar
+        // For file output, print initial banner with 0% progress
         if (!use_progress_bar) {
-            std::cerr << banner << std::endl;
+            std::cerr << banner << " [0.0% complete, 0/" << total.load() 
+                      << " units, 0s elapsed]" << std::endl;
         }
         
         if (use_progress_bar) {
@@ -157,9 +158,28 @@ public:
         uint64_t previous = completed.fetch_add(incr, std::memory_order_relaxed);
         uint64_t new_val = previous + incr;
         
-        // Note: We don't need to force immediate updates here. The update thread 
-        // will handle progress updates at regular intervals, which helps avoid
-        // contention between threads when many are calling increment().
+        // For file output with quick tasks, we might need to force an update
+        // if this is a significant increment (more than 5% of total)
+        if (!use_progress_bar && (incr > total.load() / 20)) {
+            // Take mutex to avoid concurrent output with update thread
+            static std::mutex increment_mutex;
+            std::lock_guard<std::mutex> lock(increment_mutex);
+            
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time);
+            auto elapsed_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - last_file_update).count();
+                
+            // Only update if at least 2 seconds have passed since last update to prevent spamming
+            if (elapsed_since_update > 2000) {
+                float progress_percent = static_cast<float>(new_val) / total.load() * 100.0f;
+                std::cerr << banner << " [" 
+                          << std::fixed << std::setprecision(1) << progress_percent << "% complete, " 
+                          << new_val << "/" << total.load() 
+                          << " units, " << elapsed.count() << "s elapsed]" << std::endl;
+                last_file_update = now;
+            }
+        }
     }
 
     void finish() {
@@ -179,6 +199,11 @@ public:
         if (use_progress_bar && progress_bar) {
             progress_bar->set_progress(total.load());
             progress_bar->mark_as_completed();
+        } else {
+            // For file output, always print 100% completion message
+            std::cerr << banner << " [100.0% complete, " << total.load() << "/" << total.load() 
+                      << " units, " << elapsed.count() << "s elapsed]" << std::endl;
+            std::cerr << banner << " completed." << std::endl;
         }
 
         // Ensure the update thread stops
