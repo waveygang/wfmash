@@ -54,8 +54,8 @@ private:
                     // If we've reached 100%, mark as completed and stop the thread
                     if (curr_progress >= total.load()) {
                         if (!is_finished.load()) {
+                            // Just mark as completed, don't explicitly print here
                             (*progress_bars)[main_bar_index].mark_as_completed();
-                            progress_bars->print_progress();
                             is_finished.store(true);
                         }
                         break;  // Exit the update thread
@@ -156,6 +156,11 @@ public:
             }
         }
         
+        // Clean up progress bars
+        if (progress_bars) {
+            progress_bars.reset();
+        }
+        
         // Always show cursor when done
         if (use_progress_bar) {
             indicators::show_console_cursor(true);
@@ -207,6 +212,7 @@ public:
         if (use_progress_bar && progress_bars) {
             (*progress_bars)[main_bar_index].set_progress(total.load());
             (*progress_bars)[main_bar_index].mark_as_completed();
+            // Single call to print_progress is sufficient
             progress_bars->print_progress();
         } else {
             // For file output, always print 100% completion message
@@ -267,7 +273,12 @@ public:
         uint64_t current = bar.current();
         uint64_t new_val = current + incr;
         bar.set_progress(new_val);
-        progress_bars->print_progress();
+        // Only print if it's a significant update to reduce contention
+        static std::mutex increment_mutex;
+        {
+            std::lock_guard<std::mutex> lock(increment_mutex);
+            progress_bars->print_progress();
+        }
     }
 };
 
