@@ -22,7 +22,7 @@ private:
     bool use_progress_bar;
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
-    std::unique_ptr<indicators::DynamicProgress<indicators::BlockProgressBar>> progress_bars;
+    std::unique_ptr<indicators::DynamicProgress<indicators::ProgressBar>> progress_bars;
     std::atomic<size_t> default_bar_id;
     std::atomic<bool> has_default_bar;
     std::thread update_thread;
@@ -271,7 +271,7 @@ public:
         }
         
         // Create a new progress bar
-        auto new_bar = std::make_shared<indicators::BlockProgressBar>(
+        auto new_bar = std::make_shared<indicators::ProgressBar>(
             indicators::option::BarWidth{50},
             indicators::option::Start{"["},
             indicators::option::End{"]"},
