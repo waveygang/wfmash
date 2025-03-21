@@ -149,7 +149,6 @@ public:
                 indicators::option::ShowRemainingTime{true},
                 indicators::option::PrefixText{banner + " "},
                 indicators::option::MaxProgress{total.load()},
-                indicators::option::HideBarWhenComplete{false},
                 indicators::option::FontStyles{std::vector<indicators::FontStyle>{}},
                 indicators::option::ForegroundColor{indicators::Color::unspecified}, 
                 indicators::option::Stream{std::cerr}
@@ -284,7 +283,6 @@ public:
             indicators::option::ShowRemainingTime{true},
             indicators::option::PrefixText{bar_banner + " "},
             indicators::option::MaxProgress{bar_total},
-            indicators::option::HideBarWhenComplete{false},
             indicators::option::FontStyles{std::vector<indicators::FontStyle>{}},
             indicators::option::ForegroundColor{indicators::Color::unspecified},
             indicators::option::Stream{std::cerr}
