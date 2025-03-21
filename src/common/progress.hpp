@@ -53,6 +53,7 @@ private:
                         size_t bar_id = default_bar_id.load();
                         (*progress_bars)[bar_id].set_progress(curr_progress);
                         progress_bars->print_progress();
+                        std::cerr.flush();
                         last_progress = curr_progress;
                         
                         // If we've reached 100%, mark as completed and stop the thread
@@ -61,6 +62,7 @@ private:
                                 // Mark as completed
                                 (*progress_bars)[bar_id].mark_as_completed();
                                 progress_bars->print_progress();
+                                std::cerr.flush();
                                 is_finished.store(true);
                             }
                             break;  // Exit the update thread
@@ -135,6 +137,9 @@ public:
             // Set options after creation
             progress_bars->set_option(indicators::option::HideBarWhenComplete{false});
             
+            // Force the cursor to be shown only after we're done
+            indicators::show_console_cursor(false);
+            
             // Automatically create a default progress bar
             auto default_bar = std::make_shared<indicators::BlockProgressBar>(
                 indicators::option::BarWidth{50},
@@ -144,6 +149,9 @@ public:
                 indicators::option::ShowRemainingTime{true},
                 indicators::option::PrefixText{banner + " "},
                 indicators::option::MaxProgress{total.load()},
+                indicators::option::HideBarWhenComplete{false},
+                indicators::option::FontStyles{std::vector<indicators::FontStyle>{}},
+                indicators::option::ForegroundColor{indicators::Color::unspecified}, 
                 indicators::option::Stream{std::cerr}
             );
             
@@ -276,6 +284,9 @@ public:
             indicators::option::ShowRemainingTime{true},
             indicators::option::PrefixText{bar_banner + " "},
             indicators::option::MaxProgress{bar_total},
+            indicators::option::HideBarWhenComplete{false},
+            indicators::option::FontStyles{std::vector<indicators::FontStyle>{}},
+            indicators::option::ForegroundColor{indicators::Color::unspecified},
             indicators::option::Stream{std::cerr}
         );
         
@@ -307,13 +318,11 @@ public:
             uint64_t current = bar.current();
             uint64_t new_val = current + incr;
             
-            // Set new progress and explicitly print without immediate refresh
+            // Set new progress 
             bar.set_progress(new_val);
-            // Only print progress occasionally to reduce terminal corruption
-            static std::atomic<int> update_counter(0);
-            if (update_counter.fetch_add(1, std::memory_order_relaxed) % 5 == 0) {
-                progress_bars->print_progress();
-            }
+            // Print progress after every update for better display
+            progress_bars->print_progress();
+            std::cerr.flush();
         } catch (const std::exception& e) {
             // Bar might have been removed
         }
