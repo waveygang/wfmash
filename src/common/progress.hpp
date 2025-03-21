@@ -26,7 +26,6 @@ private:
     std::atomic<size_t> default_bar_id;
     std::atomic<bool> has_default_bar;
     std::thread update_thread;
-    std::mutex bars_mutex;
     
     // Update intervals (milliseconds)
     const uint64_t update_interval = 100;  // For progress bar (TTY)
@@ -258,7 +257,6 @@ public:
             indicators::option::Stream{std::cerr}
         );
         
-        std::lock_guard<std::mutex> lock(bars_mutex);
         // Add to DynamicProgress and return index
         size_t bar_index = progress_bars->push_back(*new_bar);
         
@@ -282,7 +280,6 @@ public:
         }
         
         try {
-            std::lock_guard<std::mutex> lock(bars_mutex);
             // Get current value and update
             auto& bar = (*progress_bars)[bar_index];
             uint64_t current = bar.current();
@@ -304,7 +301,6 @@ public:
         }
         
         try {
-            std::lock_guard<std::mutex> lock(bars_mutex);
             // Check if the bar exists
             (*progress_bars)[bar_index]; // This will throw if bar doesn't exist
             
