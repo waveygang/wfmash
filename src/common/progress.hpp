@@ -273,12 +273,8 @@ public:
         uint64_t current = bar.current();
         uint64_t new_val = current + incr;
         bar.set_progress(new_val);
-        // Only print if it's a significant update to reduce contention
-        static std::mutex increment_mutex;
-        {
-            std::lock_guard<std::mutex> lock(increment_mutex);
-            progress_bars->print_progress();
-        }
+        // Simply call print_progress without any mutex
+        progress_bars->print_progress();
     }
 };
 
