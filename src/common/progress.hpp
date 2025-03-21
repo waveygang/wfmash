@@ -47,14 +47,15 @@ private:
                     (last_progress == 0 || curr_progress == total.load() || 
                      std::abs(static_cast<float>(curr_progress - last_progress)) / total.load() >= 0.01)) {
                     
+                    // Update progress bar without explicit print_progress
+                    // DynamicProgress will handle printing internally
                     (*progress_bars)[main_bar_index].set_progress(curr_progress);
-                    progress_bars->print_progress();
                     last_progress = curr_progress;
                     
                     // If we've reached 100%, mark as completed and stop the thread
                     if (curr_progress >= total.load()) {
                         if (!is_finished.load()) {
-                            // Just mark as completed, don't explicitly print here
+                            // Mark as completed
                             (*progress_bars)[main_bar_index].mark_as_completed();
                             is_finished.store(true);
                         }
@@ -125,8 +126,8 @@ public:
             // Set options after creation
             progress_bars->set_option(indicators::option::HideBarWhenComplete{false});
             
-            // Create the main progress bar and add it to the container
-            auto bar = indicators::BlockProgressBar(
+            // Create the main progress bar
+            auto main_bar = std::make_shared<indicators::BlockProgressBar>(
                 indicators::option::BarWidth{50},
                 indicators::option::Start{"["},
                 indicators::option::End{"]"},
@@ -137,8 +138,9 @@ public:
                 indicators::option::Stream{std::cerr}
             );
             
-            // Add the bar to the container and store its index
-            main_bar_index = progress_bars->push_back(bar);
+            // Create the DynamicProgress with the main bar
+            progress_bars = std::make_unique<indicators::DynamicProgress<indicators::BlockProgressBar>>(*main_bar);
+            main_bar_index = 0; // First bar is always index 0
             
             // Start the update thread
             update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
@@ -210,10 +212,9 @@ public:
         
         // Force immediate update of the progress bar with the final value
         if (use_progress_bar && progress_bars) {
+            // Set final progress and mark as completed
             (*progress_bars)[main_bar_index].set_progress(total.load());
             (*progress_bars)[main_bar_index].mark_as_completed();
-            // Single call to print_progress is sufficient
-            progress_bars->print_progress();
         } else {
             // For file output, always print 100% completion message
             std::cerr << banner << " [100.0% complete, " << total.load() << "/" << total.load() 
@@ -243,7 +244,8 @@ public:
             return 0; // Return dummy index if not using progress bars
         }
         
-        auto bar = indicators::BlockProgressBar(
+        // Create a new progress bar
+        auto new_bar = std::make_shared<indicators::BlockProgressBar>(
             indicators::option::BarWidth{50},
             indicators::option::Start{"["},
             indicators::option::End{"]"},
@@ -254,9 +256,8 @@ public:
             indicators::option::Stream{std::cerr}
         );
         
-        size_t bar_index = progress_bars->push_back(bar);
-        progress_bars->print_progress();
-        return bar_index;
+        // Add to DynamicProgress and return index
+        return progress_bars->push_back(*new_bar);
     }
     
     /**
@@ -269,12 +270,13 @@ public:
             return;
         }
         
+        // Get current value and update
         auto& bar = (*progress_bars)[bar_index];
         uint64_t current = bar.current();
         uint64_t new_val = current + incr;
+        
+        // Set new progress - DynamicProgress will handle printing
         bar.set_progress(new_val);
-        // Simply call print_progress without any mutex
-        progress_bars->print_progress();
     }
 };
 
