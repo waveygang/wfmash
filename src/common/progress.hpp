@@ -131,10 +131,31 @@ public:
             indicators::show_console_cursor(false);
             
             // Create the dynamic progress bars container
-            progress_bars = std::make_unique<indicators::DynamicProgress<indicators::BlockProgressBar>>();
+            progress_bars = std::make_unique<indicators::DynamicProgress<indicators::ProgressBar>>();
             
             // Set options after creation
             progress_bars->set_option(indicators::option::HideBarWhenComplete{false});
+            
+            // Automatically create a default progress bar
+            auto default_bar = std::make_shared<indicators::ProgressBar>(
+                indicators::option::BarWidth{50},
+                indicators::option::Start{"["},
+                indicators::option::End{"]"},
+                indicators::option::ShowElapsedTime{true},
+                indicators::option::ShowRemainingTime{true},
+                indicators::option::PrefixText{banner + " "},
+                indicators::option::MaxProgress{total.load()},
+                indicators::option::ForegroundColor{indicators::Color::white},
+                indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
+                indicators::option::Stream{std::cerr}
+            );
+            
+            // Add the default bar
+            default_bar_id.store(progress_bars->push_back(*default_bar));
+            has_default_bar.store(true);
+            
+            // Print initial state
+            progress_bars->print_progress();
             
             // Start the update thread
             update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
