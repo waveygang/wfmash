@@ -48,11 +48,12 @@ private:
                     (last_progress == 0 || curr_progress == total.load() || 
                      std::abs(static_cast<float>(curr_progress - last_progress)) / total.load() >= 0.01)) {
                     
-                    // Update progress bar without explicit print_progress
-                    // DynamicProgress will handle printing internally
+                    // Update progress bar and explicitly call print_progress
                     try {
                         size_t bar_id = default_bar_id.load();
                         (*progress_bars)[bar_id].set_progress(curr_progress);
+                        // Explicitly print progress - key step!
+                        progress_bars->print_progress();
                         last_progress = curr_progress;
                         
                         // If we've reached 100%, mark as completed and stop the thread
@@ -60,6 +61,7 @@ private:
                             if (!is_finished.load()) {
                                 // Mark as completed
                                 (*progress_bars)[bar_id].mark_as_completed();
+                                progress_bars->print_progress(); // Print final state
                                 is_finished.store(true);
                             }
                             break;  // Exit the update thread
@@ -211,7 +213,9 @@ public:
             try {
                 // Set final progress and mark as completed for the default bar
                 (*progress_bars)[default_bar_id.load()].set_progress(total.load());
+                progress_bars->print_progress();
                 (*progress_bars)[default_bar_id.load()].mark_as_completed();
+                progress_bars->print_progress();
             } catch (const std::exception& e) {
                 // Bar might have been removed
             }
@@ -285,8 +289,9 @@ public:
             uint64_t current = bar.current();
             uint64_t new_val = current + incr;
             
-            // Set new progress - DynamicProgress will handle printing
+            // Set new progress and explicitly print
             bar.set_progress(new_val);
+            progress_bars->print_progress();
         } catch (const std::exception& e) {
             // Bar might have been removed
         }
