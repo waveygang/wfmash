@@ -22,7 +22,7 @@ private:
     bool use_progress_bar;
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
-    std::unique_ptr<indicators::DynamicProgress<indicators::ProgressBar>> progress_bars;
+    std::unique_ptr<indicators::DynamicProgress<indicators::BlockProgressBar>> progress_bars;
     std::atomic<size_t> default_bar_id;
     std::atomic<bool> has_default_bar;
     std::thread update_thread;
@@ -52,7 +52,6 @@ private:
                     try {
                         size_t bar_id = default_bar_id.load();
                         (*progress_bars)[bar_id].set_progress(curr_progress);
-                        // Explicitly print progress - key step!
                         progress_bars->print_progress();
                         last_progress = curr_progress;
                         
@@ -61,7 +60,7 @@ private:
                             if (!is_finished.load()) {
                                 // Mark as completed
                                 (*progress_bars)[bar_id].mark_as_completed();
-                                progress_bars->print_progress(); // Print final state
+                                progress_bars->print_progress();
                                 is_finished.store(true);
                             }
                             break;  // Exit the update thread
@@ -131,13 +130,13 @@ public:
             indicators::show_console_cursor(false);
             
             // Create the dynamic progress bars container
-            progress_bars = std::make_unique<indicators::DynamicProgress<indicators::ProgressBar>>();
+            progress_bars = std::make_unique<indicators::DynamicProgress<indicators::BlockProgressBar>>();
             
             // Set options after creation
             progress_bars->set_option(indicators::option::HideBarWhenComplete{false});
             
             // Automatically create a default progress bar
-            auto default_bar = std::make_shared<indicators::ProgressBar>(
+            auto default_bar = std::make_shared<indicators::BlockProgressBar>(
                 indicators::option::BarWidth{50},
                 indicators::option::Start{"["},
                 indicators::option::End{"]"},
@@ -145,8 +144,6 @@ public:
                 indicators::option::ShowRemainingTime{true},
                 indicators::option::PrefixText{banner + " "},
                 indicators::option::MaxProgress{total.load()},
-                indicators::option::ForegroundColor{indicators::Color::white},
-                indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
                 indicators::option::Stream{std::cerr}
             );
             
@@ -310,9 +307,13 @@ public:
             uint64_t current = bar.current();
             uint64_t new_val = current + incr;
             
-            // Set new progress and explicitly print
+            // Set new progress and explicitly print without immediate refresh
             bar.set_progress(new_val);
-            progress_bars->print_progress();
+            // Only print progress occasionally to reduce terminal corruption
+            static std::atomic<int> update_counter(0);
+            if (update_counter.fetch_add(1, std::memory_order_relaxed) % 5 == 0) {
+                progress_bars->print_progress();
+            }
         } catch (const std::exception& e) {
             // Bar might have been removed
         }
