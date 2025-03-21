@@ -268,7 +268,7 @@ public:
         }
         
         // Create a new progress bar
-        auto new_bar = std::make_shared<indicators::ProgressBar>(
+        auto new_bar = std::make_shared<indicators::BlockProgressBar>(
             indicators::option::BarWidth{50},
             indicators::option::Start{"["},
             indicators::option::End{"]"},
