@@ -23,8 +23,10 @@ private:
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
     std::unique_ptr<indicators::DynamicProgress<indicators::BlockProgressBar>> progress_bars;
-    size_t main_bar_index;
+    std::atomic<size_t> default_bar_id;
+    std::atomic<bool> has_default_bar;
     std::thread update_thread;
+    std::mutex bars_mutex;
     
     // Update intervals (milliseconds)
     const uint64_t update_interval = 100;  // For progress bar (TTY)
@@ -40,7 +42,7 @@ private:
             float progress_percent = static_cast<float>(curr_progress) / total.load() * 100.0f;
             
             // Update progress bar at regular intervals
-            if (use_progress_bar && progress_bars) {
+            if (use_progress_bar && progress_bars && has_default_bar.load()) {
                 // Only update if there's a meaningful change in percentage
                 // or we're just starting or finishing
                 if (curr_progress != last_progress && 
@@ -49,17 +51,23 @@ private:
                     
                     // Update progress bar without explicit print_progress
                     // DynamicProgress will handle printing internally
-                    (*progress_bars)[main_bar_index].set_progress(curr_progress);
-                    last_progress = curr_progress;
-                    
-                    // If we've reached 100%, mark as completed and stop the thread
-                    if (curr_progress >= total.load()) {
-                        if (!is_finished.load()) {
-                            // Mark as completed
-                            (*progress_bars)[main_bar_index].mark_as_completed();
-                            is_finished.store(true);
+                    try {
+                        size_t bar_id = default_bar_id.load();
+                        (*progress_bars)[bar_id].set_progress(curr_progress);
+                        last_progress = curr_progress;
+                        
+                        // If we've reached 100%, mark as completed and stop the thread
+                        if (curr_progress >= total.load()) {
+                            if (!is_finished.load()) {
+                                // Mark as completed
+                                (*progress_bars)[bar_id].mark_as_completed();
+                                is_finished.store(true);
+                            }
+                            break;  // Exit the update thread
                         }
-                        break;  // Exit the update thread
+                    } catch (const std::exception& e) {
+                        // Bar might have been removed or not created yet
+                        // Just continue without updating
                     }
                 }
             } else {
@@ -102,7 +110,8 @@ private:
 
 public:
     ProgressMeter(uint64_t _total, const std::string& _banner)
-        : banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
+        : banner(_banner), total(_total), completed(0), is_finished(false), running(true), 
+          default_bar_id(0), has_default_bar(false) {
         
         start_time = std::chrono::high_resolution_clock::now();
         last_file_update = start_time;
@@ -125,22 +134,6 @@ public:
             
             // Set options after creation
             progress_bars->set_option(indicators::option::HideBarWhenComplete{false});
-            
-            // Create the main progress bar
-            auto main_bar = std::make_shared<indicators::BlockProgressBar>(
-                indicators::option::BarWidth{50},
-                indicators::option::Start{"["},
-                indicators::option::End{"]"},
-                indicators::option::ShowElapsedTime{true},
-                indicators::option::ShowRemainingTime{true},
-                indicators::option::PrefixText{banner + " "},
-                indicators::option::MaxProgress{total},
-                indicators::option::Stream{std::cerr}
-            );
-            
-            // Create the DynamicProgress with the main bar
-            progress_bars = std::make_unique<indicators::DynamicProgress<indicators::BlockProgressBar>>(*main_bar);
-            main_bar_index = 0; // First bar is always index 0
             
             // Start the update thread
             update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
@@ -169,6 +162,10 @@ public:
         }
     }
 
+    /**
+     * Increment the default progress bar by the given amount.
+     * If there is no default bar yet, this only updates the internal counter.
+     */
     void increment(const uint64_t& incr) {
         uint64_t previous = completed.fetch_add(incr, std::memory_order_relaxed);
         uint64_t new_val = previous + incr;
@@ -211,10 +208,14 @@ public:
         completed.store(total.load(), std::memory_order_relaxed);
         
         // Force immediate update of the progress bar with the final value
-        if (use_progress_bar && progress_bars) {
-            // Set final progress and mark as completed
-            (*progress_bars)[main_bar_index].set_progress(total.load());
-            (*progress_bars)[main_bar_index].mark_as_completed();
+        if (use_progress_bar && progress_bars && has_default_bar.load()) {
+            try {
+                // Set final progress and mark as completed for the default bar
+                (*progress_bars)[default_bar_id.load()].set_progress(total.load());
+                (*progress_bars)[default_bar_id.load()].mark_as_completed();
+            } catch (const std::exception& e) {
+                // Bar might have been removed
+            }
         } else {
             // For file output, always print 100% completion message
             std::cerr << banner << " [100.0% complete, " << total.load() << "/" << total.load() 
@@ -237,9 +238,10 @@ public:
      * Add a new progress bar to the dynamic progress display.
      * @param total Total units for the new progress bar
      * @param banner Text banner for the new bar
+     * @param set_as_default Whether to set this as the default bar for increment()
      * @return Index of the new bar
      */
-    size_t add_progress_bar(uint64_t bar_total, const std::string& bar_banner) {
+    size_t add_progress_bar(uint64_t bar_total, const std::string& bar_banner, bool set_as_default = false) {
         if (!use_progress_bar || !progress_bars) {
             return 0; // Return dummy index if not using progress bars
         }
@@ -256,8 +258,17 @@ public:
             indicators::option::Stream{std::cerr}
         );
         
+        std::lock_guard<std::mutex> lock(bars_mutex);
         // Add to DynamicProgress and return index
-        return progress_bars->push_back(*new_bar);
+        size_t bar_index = progress_bars->push_back(*new_bar);
+        
+        // Set as default if requested or if this is the first bar
+        if (set_as_default || !has_default_bar.load()) {
+            default_bar_id.store(bar_index);
+            has_default_bar.store(true);
+        }
+        
+        return bar_index;
     }
     
     /**
@@ -270,13 +281,39 @@ public:
             return;
         }
         
-        // Get current value and update
-        auto& bar = (*progress_bars)[bar_index];
-        uint64_t current = bar.current();
-        uint64_t new_val = current + incr;
+        try {
+            std::lock_guard<std::mutex> lock(bars_mutex);
+            // Get current value and update
+            auto& bar = (*progress_bars)[bar_index];
+            uint64_t current = bar.current();
+            uint64_t new_val = current + incr;
+            
+            // Set new progress - DynamicProgress will handle printing
+            bar.set_progress(new_val);
+        } catch (const std::exception& e) {
+            // Bar might have been removed
+        }
+    }
+    /**
+     * Set a specific bar as the default bar for the increment() method
+     * @param bar_index Index of the bar to set as default
+     */
+    void set_default_bar(size_t bar_index) {
+        if (!use_progress_bar || !progress_bars) {
+            return;
+        }
         
-        // Set new progress - DynamicProgress will handle printing
-        bar.set_progress(new_val);
+        try {
+            std::lock_guard<std::mutex> lock(bars_mutex);
+            // Check if the bar exists
+            (*progress_bars)[bar_index]; // This will throw if bar doesn't exist
+            
+            // Set as default
+            default_bar_id.store(bar_index);
+            has_default_bar.store(true);
+        } catch (const std::exception& e) {
+            // Bar doesn't exist, do nothing
+        }
     }
 };
 
