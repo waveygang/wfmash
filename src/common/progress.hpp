@@ -119,9 +119,10 @@ public:
             // Hide cursor during progress display
             indicators::show_console_cursor(false);
             
-            // Create the dynamic progress bars container
+            // Create the dynamic progress bars container with settings
+            auto hide_bar_setting = indicators::option::HideBarWhenComplete{false};
             progress_bars = std::make_unique<indicators::DynamicProgress<indicators::BlockProgressBar>>(
-                indicators::option::HideBarWhenComplete{false}
+                hide_bar_setting
             );
             
             // Create the main progress bar and add it to the container
