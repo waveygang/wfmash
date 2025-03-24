@@ -249,7 +249,8 @@ obtain base-level alignments.")
          ,#~(modify-phases %standard-phases
             (add-after 'install 'run-profiler-on-all2all
                        (lambda* (#:key outputs #:allow-other-keys)
-                         (invoke "ctest" "--verbose" "-R" "all2all") ; only run all2all test
+                         (invoke "ctest" "--verbose" "-R" "wfmash-time-LPA")
+                         (invoke "ctest" "--verbose" "-R" "wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF")
                          (invoke "ls" "-l" "bin/wfmash")
                          (invoke "ls" "-l")
                          (invoke "pprof" "--text" "bin/wfmash" "wfmash.prof")
