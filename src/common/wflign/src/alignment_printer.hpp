@@ -37,7 +37,10 @@ void write_alignment_sam(
     const bool& emit_md_tag,
     const char* query,
     const char* target,
-    const int64_t& target_pointer_shift);
+    const int64_t& target_pointer_shift,
+    const int32_t& chain_id,
+    const int32_t& chain_length,
+    const int32_t& chain_pos);
 
 bool write_alignment_paf(
     std::ostream& out,
