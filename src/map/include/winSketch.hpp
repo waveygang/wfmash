@@ -141,20 +141,22 @@ namespace skch
       Sketch(skch::Parameters p,
              SequenceIdManager& idMgr,
              const std::vector<std::string>& targets = {},
-             std::ifstream* indexStream = nullptr)
+             std::ifstream* indexStream = nullptr,
+             std::shared_ptr<progress_meter::ProgressMeter> progress = nullptr)
         : param(std::move(p)),
           idManager(idMgr)
       {
         if (indexStream) {
           readIndex(*indexStream, targets);
         } else {
-          initialize(targets);
+          initialize(targets, progress);
         }
       }
 
     public:
-      void initialize(const std::vector<std::string>& targets = {}) {
-        this->build(true, targets);
+      void initialize(const std::vector<std::string>& targets = {}, 
+                     std::shared_ptr<progress_meter::ProgressMeter> progress = nullptr) {
+        this->build(true, targets, progress);
         this->hgNumerator = param.hgNumerator;
         isInitialized = true;
       }
@@ -170,7 +172,8 @@ namespace skch
        * @param     compute_seeds   Whether to compute seeds or just collect metadata
        * @param     target_ids      Set of target sequence IDs to sketch over
        */
-      void build(bool compute_seeds, const std::vector<std::string>& target_names = {})
+      void build(bool compute_seeds, const std::vector<std::string>& target_names = {}, 
+                std::shared_ptr<progress_meter::ProgressMeter> external_progress = nullptr)
       {
         std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
@@ -182,15 +185,20 @@ namespace skch
               total_seq_length += idManager.getSequenceLength(seqId);
           }
 
-          // First progress meter for sketch computation
-          progress_meter::ProgressMeter sketch_progress(
-              total_seq_length,
-              "[wfmash::mashmap] computing sketch");
+          // First progress meter for sketch computation - use external if provided
+          std::shared_ptr<progress_meter::ProgressMeter> sketch_progress;
+          if (external_progress) {
+              sketch_progress = external_progress;
+          } else {
+              sketch_progress = std::make_shared<progress_meter::ProgressMeter>(
+                  total_seq_length,
+                  "[wfmash::mashmap] sketching");
+          }
 
           // Create the thread pool 
           ThreadPool<InputSeqContainer, MI_Type> threadPool(
-              [this, &sketch_progress](InputSeqContainer* e) { 
-                  return buildHelper(e, &sketch_progress); 
+              [this, sketch_progress](InputSeqContainer* e) { 
+                  return buildHelper(e, sketch_progress.get()); 
               }, 
               param.threads);
 
@@ -229,8 +237,10 @@ namespace skch
               threadOutputs.push_back(output);
           }
 
-          // Make sure to finish first progress meter before starting the next
-          sketch_progress.finish();
+          // Make sure to finish first progress meter if we created it
+          if (!external_progress) {
+              sketch_progress->finish();
+          }
 
           // Calculate total windows for index building progress
           uint64_t total_windows = 0;
@@ -239,9 +249,15 @@ namespace skch
           }
 
           // Second progress meter for index building
-          progress_meter::ProgressMeter index_progress(
-              total_windows,
-              "[wfmash::mashmap] building index");
+          std::shared_ptr<progress_meter::ProgressMeter> index_progress;
+          if (external_progress) {
+              // Reuse the external progress meter if provided
+              index_progress = external_progress;
+          } else {
+              index_progress = std::make_shared<progress_meter::ProgressMeter>(
+                  total_windows,
+                  "[wfmash::mashmap] index build");
+          }
 
           // Parallel k-mer frequency counting
           std::vector<HF_Map_t> thread_kmer_freqs(param.threads);
@@ -327,7 +343,7 @@ namespace skch
                           }
 
                           thread_minmer_indexes[t].push_back(mi);
-                          index_progress.increment(1);
+                          index_progress->increment(1);
                       }
                       delete threadOutputs[i];
                   }
@@ -368,8 +384,10 @@ namespace skch
                                std::make_move_iterator(thread_index.end()));
           }
           
-          // Finish second progress meter
-          index_progress.finish();
+          // Finish second progress meter if we created it
+          if (!external_progress) {
+              index_progress->finish();
+          }
 
           uint64_t freq_cutoff;
           if (param.max_kmer_freq <= 1.0) {
@@ -410,7 +428,7 @@ namespace skch
        * @param[in]   input   input read details
        * @return              output object containing the mappings
        */
-      MI_Type* buildHelper(InputSeqContainer *input, progress_meter::ProgressMeter* progress)
+      MI_Type* buildHelper(InputSeqContainer *input, progress_meter::ProgressMeter* progress = nullptr)
       {
         MI_Type* thread_output = new MI_Type();
 

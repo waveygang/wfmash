@@ -565,11 +565,7 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping to " + 
-                  std::to_string(target_subset.size()) + " target" + 
-                  (target_subset.size() > 1 ? "s" : "") + " (" + 
-                  std::to_string(subset_idx + 1) + "/" + 
-                  std::to_string(target_subsets.size()) + ")"
+                  "[wfmash::mashmap] mapping"
                   );
 
               // Build or load index task
@@ -629,8 +625,13 @@ namespace skch
                       // Get the number of sequences from the sketch
                       size_t seq_count = refSketch->getSequenceCount();
                   } else {
-                      // Build index in memory
-                      refSketch = new skch::Sketch(param, *idManager, target_subset);
+                      // Use progress meter for sketching and index building
+                      auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
+                          100, // Using 100 as a generic value for percentage-based progress
+                          "[wfmash::mashmap] indexing");
+                  
+                      // Build index in memory with progress meter
+                      refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
@@ -915,13 +916,11 @@ namespace skch
                   
                   std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
                             << " mappings after one-to-one filtering" << std::endl;
-                  std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
               });
               
               executor.run(final_flow).wait();
           } else if (!exit_after_indices) {
               // For non-ONETOONE modes, we've already written all results
-              std::cerr << "[wfmash::mashmap] Mapping complete" << std::endl;
           }
           // Final flow execution is now handled inside the conditional block above
       }
