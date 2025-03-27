@@ -61,6 +61,7 @@ struct Parameters {
     bool emit_md_tag;                             //Output the MD tag
     bool sam_format;                              //Emit the output in SAM format (PAF default)
     bool no_seq_in_sam;                           //Do not fill the SEQ field in SAM format
+    bool disable_chain_patching;                  //Disable alignment patching at chain boundaries
     bool multithread_fasta_input;                 //Multithreaded fasta input
     uint64_t target_padding;                      //Additional padding around target sequence
 
