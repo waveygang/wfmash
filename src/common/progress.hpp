@@ -103,8 +103,8 @@ public:
         start_time = std::chrono::high_resolution_clock::now();
         last_file_update = start_time;
         
-        // Check if stderr is a TTY
-        use_progress_bar = isatty(fileno(stderr));
+        // Check if stderr is a TTY *AND* stdout is not redirected to a file
+        use_progress_bar = isatty(fileno(stderr)) && isatty(fileno(stdout));
         
         // For file output, print initial banner with 0% progress
         if (!use_progress_bar) {
