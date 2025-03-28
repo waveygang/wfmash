@@ -51,6 +51,7 @@ namespace wflign {
             const bool emit_md_tag,
             const bool paf_format_else_sam,
             const bool no_seq_in_sam,
+            const bool disable_chain_patching,
             const float min_identity,
             const uint64_t wflign_max_len_minor,
             const float mashmap_estimated_identity,
@@ -117,6 +118,7 @@ namespace wflign {
             bool emit_md_tag;
             bool paf_format_else_sam;
             bool no_seq_in_sam;
+            bool disable_chain_patching;
             bool force_biwfa_alignment;
             // Setup
             WFlign(

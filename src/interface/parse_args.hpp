@@ -129,6 +129,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [100]", {'E', "target-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,3,24,1]", {'g', "wfa-params"});
+    args::Flag disable_chain_patching(alignment_opts, "", "disable alignment patching at chain boundaries", {"disable-chain-patching"});
 
     args::Group output_opts(options_group, "Output Format:");
     args::Flag sam_format(output_opts, "", "output in SAM format (PAF by default)", {'a', "sam"});
@@ -310,6 +311,7 @@ void parse_args(int argc,
     align_parameters.emit_md_tag = args::get(emit_md_tag);
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = args::get(no_seq_in_sam);
+    align_parameters.disable_chain_patching = args::get(disable_chain_patching);
     args::Flag force_wflign(alignment_opts, "", "force WFlign alignment", {"force-wflign"});
     align_parameters.force_wflign = args::get(force_wflign);
     map_parameters.split = !args::get(no_split);
