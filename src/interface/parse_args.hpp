@@ -127,6 +127,7 @@ void parse_args(int argc,
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [100]", {'E', "target-padding"});
+    args::ValueFlag<std::string> query_padding(alignment_opts, "INT", "padding around query sequence [0]", {'U', "query-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,3,24,1]", {'g', "wfa-params"});
     args::Flag disable_chain_patching(alignment_opts, "", "disable alignment patching at chain boundaries", {"disable-chain-patching"});
@@ -534,6 +535,17 @@ void parse_args(int argc,
         align_parameters.target_padding = p;
     } else {
         align_parameters.target_padding = 100;
+    }
+    
+    if (query_padding) {
+        const int64_t p = handy_parameter(args::get(query_padding));
+        if (p < 0) {
+            std::cerr << "[wfmash] ERROR: query padding must be >= 0" << std::endl;
+            exit(1);
+        }
+        align_parameters.query_padding = p;
+    } else {
+        align_parameters.query_padding = 0;
     }
 
     if (thread_count) {
