@@ -294,9 +294,9 @@ void parse_args(int argc,
         align_parameters.wfa_patching_gap_opening_score2 = params[3];
         align_parameters.wfa_patching_gap_extension_score2 = params[4];
     } else {
-        align_parameters.wfa_patching_mismatch_score = 6;
-        align_parameters.wfa_patching_gap_opening_score1 = 6;
-        align_parameters.wfa_patching_gap_extension_score1 = 3;
+        align_parameters.wfa_patching_mismatch_score = 5;
+        align_parameters.wfa_patching_gap_opening_score1 = 8;
+        align_parameters.wfa_patching_gap_extension_score1 = 2;
         align_parameters.wfa_patching_gap_opening_score2 = 24;
         align_parameters.wfa_patching_gap_extension_score2 = 1;
     }
