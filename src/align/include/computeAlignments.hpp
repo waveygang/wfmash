@@ -197,7 +197,7 @@ struct seq_record_t {
        * @param[in]   mappingRecordLine
        * @param[out]  currentRecord
        */
-      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding) {
+      inline static void parseMashmapRow(const std::string &mappingRecordLine, MappingBoundaryRow &currentRecord, const uint64_t target_padding, const uint64_t query_padding = 0) {
           auto tokens = tokenize_view(mappingRecordLine);
           
           // Check if the number of tokens is at least 13
@@ -241,11 +241,14 @@ struct seq_record_t {
               currentRecord.chain_length = chain_length;
               currentRecord.chain_pos = chain_pos;
               
-              // Apply target padding while ensuring we don't go below 0 or above reference length
+              // Parse position values
               uint64_t rStartPos = std::stoi(std::string(tokens[7]));
               uint64_t rEndPos = std::stoi(std::string(tokens[8]));
+              uint64_t qStartPos = currentRecord.qStartPos;
+              uint64_t qEndPos = currentRecord.qEndPos;
+              const uint64_t query_len = std::stoull(std::string(tokens[1]));  // Query sequence length
               
-              // Always apply target padding
+              // Apply target padding while ensuring we don't go below 0 or above reference length
               if (target_padding > 0) {
                   if (rStartPos >= target_padding) {
                       rStartPos -= target_padding;
@@ -257,6 +260,24 @@ struct seq_record_t {
                   } else {
                       rEndPos = ref_len;
                   }
+              }
+              
+              // Apply query padding while ensuring we don't go below 0 or above query length
+              if (query_padding > 0) {
+                  if (qStartPos >= query_padding) {
+                      qStartPos -= query_padding;
+                  } else {
+                      qStartPos = 0;
+                  }
+                  if (qEndPos + query_padding <= query_len) {
+                      qEndPos += query_padding;
+                  } else {
+                      qEndPos = query_len;
+                  }
+                  
+                  // Update the query positions
+                  currentRecord.qStartPos = qStartPos;
+                  currentRecord.qEndPos = qEndPos;
               }
 
               // Validate coordinates against reference length
@@ -403,7 +424,7 @@ void processMappingRecord(
     try {
         // Parse the mapping record
         MappingBoundaryRow currentRecord;
-        parseMashmapRow(record, currentRecord, param.target_padding);
+        parseMashmapRow(record, currentRecord, param.target_padding, param.query_padding);
         
         // Create sequence record
         std::unique_ptr<seq_record_t> seq_rec(

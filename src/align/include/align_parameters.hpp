@@ -64,6 +64,7 @@ struct Parameters {
     bool disable_chain_patching;                  //Disable alignment patching at chain boundaries
     bool multithread_fasta_input;                 //Multithreaded fasta input
     uint64_t target_padding;                      //Additional padding around target sequence
+    uint64_t query_padding;                       //Additional padding around query sequence
 
 #ifdef WFA_PNG_TSV_TIMING
     // plotting
