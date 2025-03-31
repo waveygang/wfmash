@@ -2580,6 +2580,7 @@ void write_alignment_sam(
             << "gi:f:" << patch_gap_compressed_identity << "\t"
             << "bi:f:" << patch_block_identity << "\t"
             << "md:f:" << mashmap_estimated_identity
+            << (chain_length > 0 ? ("\t" + std::string("ci:i:") + std::to_string(chain_id)) : "")
             << (chain_length > 0 ? ("\t" + std::string("ch:Z:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos)) : "");
             //<< "\t" << "pt:Z:true" <<
             //<< "\t" << "iv:Z:" << (patch_aln.is_rev ? "true" : "false");
@@ -2692,6 +2693,7 @@ bool write_alignment_paf(
                 << "gi:f:" << gap_compressed_identity << "\t"
                 << "bi:f:" << block_identity << "\t"
                 << "md:f:" << mashmap_estimated_identity << "\t"
+                // << (chain_length > 0 ? ("\t" + std::string("ci:i:") + std::to_string(chain_id)) : "")
                 << (chain_length > 0 ? (std::string("ch:Z:") + std::to_string(chain_id) + "." + std::to_string(chain_length) + "." + std::to_string(chain_pos) + "\t") : "")
                 //<< "\t" << "ma:i:" << matches
                 //<< "\t" << "mm:i:" << mismatches
