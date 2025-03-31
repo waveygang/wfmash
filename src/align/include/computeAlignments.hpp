@@ -248,38 +248,43 @@ struct seq_record_t {
               uint64_t qEndPos = currentRecord.qEndPos;
               const uint64_t query_len = std::stoull(std::string(tokens[1]));  // Query sequence length
               
-              // Apply target/query padding only to the first and last chain positions
-              if (chain_pos == 1 || chain_pos == chain_length) {
-                // Apply target padding while ensuring we don't go below 0 or above reference length
-                if (target_padding > 0) {
-                    if (rStartPos >= target_padding) {
-                        rStartPos -= target_padding;
-                    } else {
-                        rStartPos = 0;
-                    }
-                    if (rEndPos + target_padding <= ref_len) {
-                        rEndPos += target_padding;
-                    } else {
-                        rEndPos = ref_len;
-                    }
+
+              // Apply target padding while ensuring we don't go below 0 or above reference length
+              if (target_padding > 0) {
+                // Always applied to reduce target holes
+                if (rStartPos >= target_padding) {
+                    rStartPos -= target_padding;
+                } else {
+                    rStartPos = 0;
                 }
-                
-                // Apply query padding while ensuring we don't go below 0 or above query length
-                if (query_padding > 0) {
-                    if (qStartPos >= query_padding) {
-                        qStartPos -= query_padding;
-                    } else {
-                        qStartPos = 0;
-                    }
-                    if (qEndPos + query_padding <= query_len) {
-                        qEndPos += query_padding;
-                    } else {
-                        qEndPos = query_len;
-                    }
+                if (rEndPos + target_padding <= ref_len) {
+                    rEndPos += target_padding;
+                } else {
+                    rEndPos = ref_len;
+                }
+              }
+
+              // Apply query padding while ensuring we don't go below 0 or above query length
+              if (query_padding > 0) {
+                // Apply query padding only at the ends (left first piece and right last piece)
+                // Do not pad the query in the middle to avoid overlaps between consecutive pieces of the same chain
+                if (chain_pos == 1) {
+                  if (qStartPos >= query_padding) {
+                      qStartPos -= query_padding;
+                  } else {
+                      qStartPos = 0;
+                  }
+                }
+                if (chain_pos == chain_length) {
+                  if (qEndPos + query_padding <= query_len) {
+                      qEndPos += query_padding;
+                  } else {
+                      qEndPos = query_len;
+                  }
                     
-                    // Update the query positions
-                    currentRecord.qStartPos = qStartPos;
-                    currentRecord.qEndPos = qEndPos;
+                  // Update the query positions
+                  currentRecord.qStartPos = qStartPos;
+                  currentRecord.qEndPos = qEndPos;
                 }
               }
 
