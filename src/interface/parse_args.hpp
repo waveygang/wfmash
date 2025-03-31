@@ -129,7 +129,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [500]", {'E', "target-padding"});
     args::ValueFlag<std::string> query_padding(alignment_opts, "INT", "padding around query sequence [500]", {'U', "query-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
-        "scoring: mismatch, gap1(o,e), gap2(o,e) [6,6,3,24,1]", {'g', "wfa-params"});
+        "scoring: mismatch, gap1(o,e), gap2(o,e) [5,8,2,24,1]", {'g', "wfa-params"});
     args::Flag disable_chain_patching(alignment_opts, "", "disable alignment patching at chain boundaries", {"disable-chain-patching"});
 
     args::Group output_opts(options_group, "Output Format:");
