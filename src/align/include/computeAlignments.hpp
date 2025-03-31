@@ -248,36 +248,39 @@ struct seq_record_t {
               uint64_t qEndPos = currentRecord.qEndPos;
               const uint64_t query_len = std::stoull(std::string(tokens[1]));  // Query sequence length
               
-              // Apply target padding while ensuring we don't go below 0 or above reference length
-              if (target_padding > 0) {
-                  if (rStartPos >= target_padding) {
-                      rStartPos -= target_padding;
-                  } else {
-                      rStartPos = 0;
-                  }
-                  if (rEndPos + target_padding <= ref_len) {
-                      rEndPos += target_padding;
-                  } else {
-                      rEndPos = ref_len;
-                  }
-              }
-              
-              // Apply query padding while ensuring we don't go below 0 or above query length
-              if (query_padding > 0) {
-                  if (qStartPos >= query_padding) {
-                      qStartPos -= query_padding;
-                  } else {
-                      qStartPos = 0;
-                  }
-                  if (qEndPos + query_padding <= query_len) {
-                      qEndPos += query_padding;
-                  } else {
-                      qEndPos = query_len;
-                  }
-                  
-                  // Update the query positions
-                  currentRecord.qStartPos = qStartPos;
-                  currentRecord.qEndPos = qEndPos;
+              // Apply target/query padding only to the first and last chain positions
+              if (chain_length == 1 || (chain_pos == 1 || chain_pos == chain_length)) {
+                // Apply target padding while ensuring we don't go below 0 or above reference length
+                if (target_padding > 0) {
+                    if (rStartPos >= target_padding) {
+                        rStartPos -= target_padding;
+                    } else {
+                        rStartPos = 0;
+                    }
+                    if (rEndPos + target_padding <= ref_len) {
+                        rEndPos += target_padding;
+                    } else {
+                        rEndPos = ref_len;
+                    }
+                }
+                
+                // Apply query padding while ensuring we don't go below 0 or above query length
+                if (query_padding > 0) {
+                    if (qStartPos >= query_padding) {
+                        qStartPos -= query_padding;
+                    } else {
+                        qStartPos = 0;
+                    }
+                    if (qEndPos + query_padding <= query_len) {
+                        qEndPos += query_padding;
+                    } else {
+                        qEndPos = query_len;
+                    }
+                    
+                    // Update the query positions
+                    currentRecord.qStartPos = qStartPos;
+                    currentRecord.qEndPos = qEndPos;
+                }
               }
 
               // Validate coordinates against reference length
