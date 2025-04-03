@@ -182,6 +182,9 @@ void parse_args(int argc,
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
 
+    map_parameters.use_progress_bar = args::get(progress_bar);
+    align_parameters.use_progress_bar = args::get(progress_bar);
+
     if (disable_grouping) {
         map_parameters.prefix_delim = '\0';
         map_parameters.skip_prefix = false;

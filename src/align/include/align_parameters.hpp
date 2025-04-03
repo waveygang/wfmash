@@ -66,6 +66,8 @@ struct Parameters {
     uint64_t target_padding;                      //Additional padding around target sequence
     uint64_t query_padding;                       //Additional padding around query sequence
 
+    bool use_progress_bar = false;
+
 #ifdef WFA_PNG_TSV_TIMING
     // plotting
     std::string tsvOutputPrefix;                  //tsv files with wavefront information for each alignment
