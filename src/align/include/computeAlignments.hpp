@@ -368,7 +368,10 @@ void computeAlignmentsTaskflow() {
               << total_target_length << " target bp)" << std::endl;
     
     // Progress meter
-    progress_meter::ProgressMeter progress(total_query_length, "[wfmash::align] aligning");
+    progress_meter::ProgressMeter progress(
+        total_query_length, 
+        "[wfmash::align] aligning", 
+        param.use_progress_bar);
     
     // Create taskflow executor with thread count
     tf::Executor executor(param.threads);
