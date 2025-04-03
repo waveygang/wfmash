@@ -97,14 +97,14 @@ private:
     }
 
 public:
-    ProgressMeter(uint64_t _total, const std::string& _banner)
+    ProgressMeter(uint64_t _total, const std::string& _banner, const bool& _use_progress_bar)
         : banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
         
         start_time = std::chrono::high_resolution_clock::now();
         last_file_update = start_time;
         
         // Check if stderr is a TTY
-        use_progress_bar = isatty(fileno(stderr));
+        use_progress_bar = _use_progress_bar && isatty(fileno(stderr));
         
         // For file output, print initial banner with 0% progress
         if (!use_progress_bar) {

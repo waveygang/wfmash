@@ -192,7 +192,8 @@ namespace skch
           } else {
               sketch_progress = std::make_shared<progress_meter::ProgressMeter>(
                   total_seq_length,
-                  "[wfmash::mashmap] sketching");
+                  "[wfmash::mashmap] sketching",
+                  param.use_progress_bar);
           }
 
           // Create the thread pool 
@@ -256,7 +257,8 @@ namespace skch
           } else {
               index_progress = std::make_shared<progress_meter::ProgressMeter>(
                   total_windows,
-                  "[wfmash::mashmap] index build");
+                  "[wfmash::mashmap] index build",
+                  param.use_progress_bar);
           }
 
           // Parallel k-mer frequency counting

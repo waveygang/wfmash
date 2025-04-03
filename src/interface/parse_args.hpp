@@ -26,6 +26,7 @@ namespace yeet {
 struct Parameters {
     bool approx_mapping = false;
     bool remapping = false;
+    bool use_progress_bar = false;
     //bool align_input_paf = false;
 };
 
@@ -143,6 +144,7 @@ void parse_args(int argc,
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
     args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "base directory for temporary files [pwd]", {'B', "tmp-base"});
     args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
+    args::Flag progress_bar(system_opts, "", "show progress bars [EXPERIMENTAL, STILL BUGGY]", {"progress-bar"});
 
 #ifdef WFA_PNG_TSV_TIMING
     args::Group debugging_opts(parser, "[ Debugging Options ]");
@@ -179,6 +181,9 @@ void parse_args(int argc,
     map_parameters.skip_self = !args::get(enable_self_mappings);
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
+
+    map_parameters.use_progress_bar = args::get(progress_bar);
+    align_parameters.use_progress_bar = args::get(progress_bar);
 
     if (disable_grouping) {
         map_parameters.prefix_delim = '\0';
@@ -783,7 +788,9 @@ void parse_args(int argc,
     std::cerr << "[wfmash] Output: " << map_parameters.outFileName << std::endl;
 
     temp_file::set_keep_temp(args::get(keep_temp_files));
-
+    
+    // Set progress bar flag
+    yeet_parameters.use_progress_bar = args::get(progress_bar);
 }
 
 }

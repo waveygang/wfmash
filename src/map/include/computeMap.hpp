@@ -565,7 +565,8 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping"
+                  "[wfmash::mashmap] mapping",
+                  param.use_progress_bar
                   );
 
               // Build or load index task
@@ -628,7 +629,8 @@ namespace skch
                       // Use progress meter for sketching and index building
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
                           100, // Using 100 as a generic value for percentage-based progress
-                          "[wfmash::mashmap] indexing");
+                          "[wfmash::mashmap] indexing",
+                          param.use_progress_bar);
                   
                       // Build index in memory with progress meter
                       refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
@@ -888,7 +890,9 @@ namespace skch
                   
                   // Use a progress meter for the filtering step
                   auto filterProgress = std::make_shared<progress_meter::ProgressMeter>(
-                      targetMappings.size(), "[wfmash::mashmap] One-to-one reference filtering");
+                      targetMappings.size(), 
+                      "[wfmash::mashmap] One-to-one reference filtering",
+                      param.use_progress_bar);
                   
                   // Filter mappings by reference
                   std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;

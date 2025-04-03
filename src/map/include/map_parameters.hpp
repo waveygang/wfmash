@@ -91,6 +91,8 @@ struct Parameters
     int64_t index_by_size = std::numeric_limits<int64_t>::max();  // Target total size of sequences for each index subset
     int minimum_hits = -1;  // Minimum number of hits required for L1 filtering (-1 means auto)
     double max_kmer_freq = 0.0002;  // Maximum allowed k-mer frequency fraction (0-1) or count (>1)
+
+    bool use_progress_bar = false;
 };
 
 
