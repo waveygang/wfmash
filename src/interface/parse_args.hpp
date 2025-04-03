@@ -144,7 +144,7 @@ void parse_args(int argc,
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
     args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "base directory for temporary files [pwd]", {'B', "tmp-base"});
     args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
-    args::Flag progress_bar(system_opts, "", "show progress bars for long operations", {"progress-bar"});
+    args::Flag progress_bar(system_opts, "", "show progress bars [EXPERIMENTAL, STILL BUGGY]", {"progress-bar"});
 
 #ifdef WFA_PNG_TSV_TIMING
     args::Group debugging_opts(parser, "[ Debugging Options ]");
