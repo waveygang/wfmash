@@ -595,7 +595,7 @@ namespace skch
         outStream.write(reinterpret_cast<const char*>(&total_batches), sizeof(total_batches));
         
         // Store batch size parameter
-        uint64_t batch_size = param.index_by_size;
+        int64_t batch_size = param.index_by_size;
         outStream.write(reinterpret_cast<const char*>(&batch_size), sizeof(batch_size));
   
         uint64_t num_sequences = target_subset.size();
@@ -720,7 +720,7 @@ namespace skch
         }
         
         // Skip batch size
-        uint64_t batch_size;
+        int64_t batch_size;
         inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
         
         // Skip sequence names
@@ -850,7 +850,7 @@ namespace skch
         }
         
         // Read batch size
-        uint64_t batch_size = 0;
+        int64_t batch_size = 0;
         inStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
         if (!inStream) {
             std::cerr << "Error: Failed to read batch size from index" << std::endl;

@@ -694,9 +694,9 @@ void parse_args(int argc,
             std::cerr << "[wfmash] ERROR, skch::parseandSave, index-by size must be a positive integer." << std::endl;
             exit(1);
         }
-        map_parameters.index_by_size = static_cast<size_t>(index_size);
+        map_parameters.index_by_size = static_cast<int64_t>(index_size);
     } else {
-        map_parameters.index_by_size = std::numeric_limits<size_t>::max(); // Default to indexing all sequences
+        map_parameters.index_by_size = std::numeric_limits<int64_t>::max(); // Default to indexing all sequences
     }
 
     if (approx_mapping) {
