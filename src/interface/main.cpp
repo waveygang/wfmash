@@ -14,21 +14,17 @@
 #include <functional>
 #include <cstdio>
 
-#include "map/include/map_parameters.hpp"
-#include "map/include/base_types.hpp"
-#include "map/include/winSketch.hpp"
 #include "map/include/computeMap.hpp"
 #include "map/include/parseCmdArgs.hpp"
 
+#include "map/include/winSketch.hpp"
+
 #include "interface/parse_args.hpp"
-
-#include "align/include/align_parameters.hpp"
-#include "align/include/computeAlignments.hpp"
 #include "align/include/parseCmdArgs.hpp"
+#include "align/include/computeAlignments.hpp"
 
 
-
-//External includes
+// External includes
 #include "common/args.hxx"
 #include "common/ALeS.hpp"
 

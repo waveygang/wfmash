@@ -26,50 +26,7 @@ namespace yeet {
 struct Parameters {
     bool approx_mapping = false;
     bool remapping = false;
-    bool use_progress_bar = false;
-    //bool align_input_paf = false;
 };
-
-int64_t handy_parameter(const std::string& value) {
-    auto is_a_number = [](const std::string& s) {
-        return !s.empty() && s.find_first_not_of("0123456789.") == std::string::npos && std::count(s.begin(), s.end(), '.') < 2;
-    };
-
-    std::string tmp = value;
-    uint8_t exp = 0;
-    
-    if (!tmp.empty()) {
-        char suffix = std::toupper(tmp.back());
-        if (suffix == 'K') {
-            exp = 3;
-            tmp.pop_back();
-        } else if (suffix == 'M') {
-            exp = 6;
-            tmp.pop_back();
-        } else if (suffix == 'G') {
-            exp = 9;
-            tmp.pop_back();
-        }
-    }
-
-    if (!is_a_number(tmp)) {
-        return -1;
-    }
-
-    try {
-        double val = std::stod(tmp);
-        if (val < 0) {
-            return -1;
-        }
-        double result = val * std::pow(10.0, exp);
-        if (result > static_cast<double>(std::numeric_limits<int64_t>::max())) {
-            return -1;
-        }
-        return static_cast<int64_t>(result);
-    } catch (const std::exception&) {
-        return -1;
-    }
-}
 
 void parse_args(int argc,
                 char** argv,
@@ -403,9 +360,9 @@ void parse_args(int argc,
             map_parameters.scaffold_max_deviation = 0;
         } else {
             // Parse in order: gap, length, deviation
-            map_parameters.scaffold_gap = handy_parameter(values[0]);         // gap
-            map_parameters.scaffold_min_length = handy_parameter(values[1]);  // len  
-            map_parameters.scaffold_max_deviation = handy_parameter(values[2]);// dev
+            map_parameters.scaffold_gap = wfmash::handy_parameter(values[0]);         // gap
+            map_parameters.scaffold_min_length = wfmash::handy_parameter(values[1]);  // len  
+            map_parameters.scaffold_max_deviation = wfmash::handy_parameter(values[2]);// dev
             
             // Validate the values
             if (map_parameters.scaffold_gap < 0 || 
@@ -424,7 +381,7 @@ void parse_args(int argc,
 
     if (max_mapping_length) {
         const int64_t l = args::get(max_mapping_length) == "inf" ? std::numeric_limits<int64_t>::max()
-            : handy_parameter(args::get(max_mapping_length));
+            : wfmash::handy_parameter(args::get(max_mapping_length));
         if (l <= 0) {
             std::cerr << "[wfmash] ERROR: max mapping length must be greater than 0." << std::endl;
             exit(1);
@@ -532,7 +489,7 @@ void parse_args(int argc,
     align_parameters.wflign_max_patching_score = 0; // will trigger estimation based on gap penalties and sequence length
 
     if (target_padding) {
-        const int64_t p = handy_parameter(args::get(target_padding));
+        const int64_t p = wfmash::handy_parameter(args::get(target_padding));
         if (p < 0) {
             std::cerr << "[wfmash] ERROR: target padding must be >= 0" << std::endl;
             exit(1);
@@ -544,7 +501,7 @@ void parse_args(int argc,
     }
     
     if (query_padding) {
-        const int64_t p = handy_parameter(args::get(query_padding));
+        const int64_t p = wfmash::handy_parameter(args::get(query_padding));
         if (p < 0) {
             std::cerr << "[wfmash] ERROR: query padding must be >= 0" << std::endl;
             exit(1);
@@ -689,7 +646,7 @@ void parse_args(int argc,
     }
 
     if (index_by) {
-        const int64_t index_size = handy_parameter(args::get(index_by));
+        const int64_t index_size = wfmash::handy_parameter(args::get(index_by));
         if (index_size < 0) {
             std::cerr << "[wfmash] ERROR, skch::parseandSave, index-by size must be a positive integer." << std::endl;
             exit(1);
@@ -788,9 +745,6 @@ void parse_args(int argc,
     std::cerr << "[wfmash] Output: " << map_parameters.outFileName << std::endl;
 
     temp_file::set_keep_temp(args::get(keep_temp_files));
-    
-    // Set progress bar flag
-    yeet_parameters.use_progress_bar = args::get(progress_bar);
 }
 
 }
