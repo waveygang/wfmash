@@ -17,7 +17,7 @@ std::string temp_dir;
 bool keep_temp = false;
 
 std::string get_dir() {
-    std::lock_guard<recursive_mutex> lock(monitor);
+    std::lock_guard<std::recursive_mutex> lock(monitor);
 
     // Get the default temp dir from environment variables.
     if (temp_dir.empty()) {
@@ -65,7 +65,7 @@ struct Handler {
 
 std::string create(const std::string& base,
                    const std::string& suffix) {
-    std::lock_guard<recursive_mutex> lock(monitor);
+    std::lock_guard<std::recursive_mutex> lock(monitor);
 
     /*
     if (handler.parent_directory.empty()) {
@@ -92,8 +92,8 @@ std::string create(const std::string& base,
         // we don't leave it open; we are assumed to open it again externally
         close(fd);
     } else {
-        cerr << "[wfmash]: couldn't create temp file on base "
-             << base << " : " << tmpname << endl;
+        std::cerr << "[wfmash]: couldn't create temp file on base "
+             << base << " : " << tmpname << std::endl;
         exit(1);
     }
     handler.filenames.insert(tmpname);
@@ -106,14 +106,14 @@ std::string create() {
 }
 
 void remove(const std::string& filename) {
-    std::lock_guard<recursive_mutex> lock(monitor);
+    std::lock_guard<std::recursive_mutex> lock(monitor);
     
     std::remove(filename.c_str());
     handler.filenames.erase(filename);
 }
 
 void set_dir(const std::string& new_temp_dir) {
-    std::lock_guard<recursive_mutex> lock(monitor);
+    std::lock_guard<std::recursive_mutex> lock(monitor);
     
     temp_dir = new_temp_dir;
 }
