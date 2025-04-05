@@ -449,7 +449,7 @@ namespace skch
         std::vector<std::string> current_subset;
 
         // If index_by_size is invalid, set a reasonable default
-        uint64_t batch_size = param.index_by_size;
+        int64_t batch_size = param.index_by_size;
         if (batch_size <= 0) {
             batch_size = 5000000;  // Default to 5MB if not specified
             if (!param.indexFilename.empty() && !param.create_index_only) {
@@ -509,7 +509,7 @@ namespace skch
               indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
               
               // Read batch size
-              uint64_t batch_size = 0;
+              int64_t batch_size = 0;
               indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
               if (batch_size > 0) {
                   param.index_by_size = batch_size;
@@ -607,7 +607,7 @@ namespace skch
                                     << " subsets" << std::endl;
                           
                           // Read batch size if available
-                          uint64_t batch_size = 0;
+                          int64_t batch_size = 0;
                           indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
                           if (batch_size > 0) {
                               param.index_by_size = batch_size;
