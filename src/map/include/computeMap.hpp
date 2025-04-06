@@ -2817,7 +2817,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             fragment_start = std::next(fragment_end);
         }
 
-        // Note: processChainWithSplits is assumed to be a separate function
         processChainWithSplits(it, it_end);
 
         // Move to next chain
