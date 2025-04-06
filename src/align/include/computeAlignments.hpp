@@ -429,7 +429,7 @@ void processMappingRecord(
     const align::Parameters& param,
     std::atomic<uint64_t>& total_alignments_processed,
     std::atomic<uint64_t>& processed_alignment_length,
-    std::shared_ptr<progress_meter::ProgressMeter> progress,
+    std::shared_ptr<progress_meter::ProgressMeter>& progress,
     std::mutex& output_mutex,
     std::ofstream& outstream) {
     
