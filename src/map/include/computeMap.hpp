@@ -2646,202 +2646,193 @@ namespace skch
           sparsifyMappings(readMappings);
       }
 
-      /**
-       * @brief                       Merge fragment mappings by convolution of a 2D range over the alignment matrix
-       * @param[in/out] readMappings  Mappings computed by Mashmap (L2 stage) for a read
-       * @param[in]     max_dist      Distance to look in target and query
-       */
-      template <typename VecIn>
-      VecIn mergeMappingsInRange(VecIn &readMappings,
-                                 int max_dist,
-                                 progress_meter::ProgressMeter& progress) {
-          if (!param.split || readMappings.size() < 2) return readMappings;
+/**
+ * @brief Merge mappings within a specified range using optimized grouping and binary search.
+ * @param readMappings Vector of MappingResult objects to be merged.
+ * @param max_dist Maximum distance for merging in query and reference space.
+ * @param progress Progress meter for tracking progress.
+ * @return Vector of maximally merged mappings.
+ */
+template <typename VecIn>
+VecIn mergeMappingsInRange(VecIn &readMappings,
+                           int max_dist,
+                           progress_meter::ProgressMeter& progress) {
+    // Early return if splitting is disabled or insufficient mappings
+    if (!param.split || readMappings.size() < 2) return readMappings;
 
-          //Sort the mappings by query position, then reference sequence id, then reference position
-          std::sort(
-              readMappings.begin(), readMappings.end(),
-              [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
-                      < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
-              });
+    // Step 1: Sort by refSeqId, strand, queryStartPos, and refStartPos
+    std::sort(readMappings.begin(), readMappings.end(),
+        [](const MappingResult &a, const MappingResult &b) {
+            return std::tie(a.refSeqId, a.strand, a.queryStartPos, a.refStartPos)
+                 < std::tie(b.refSeqId, b.strand, b.queryStartPos, b.refStartPos);
+        });
 
-          //First assign a unique id to each split mapping in the sorted order
-          for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              it->splitMappingId = std::distance(readMappings.begin(), it);
-              it->discard = 0;
-              it->chainPairScore = std::numeric_limits<double>::max();
-              it->chainPairId = std::numeric_limits<int64_t>::min();
-          }
+    // Assign unique splitMappingId and initialize fields
+    for (auto it = readMappings.begin(); it != readMappings.end(); ++it) {
+        it->splitMappingId = std::distance(readMappings.begin(), it);
+        it->discard = 0;
+        it->chainPairScore = std::numeric_limits<double>::max();
+        it->chainPairId = std::numeric_limits<int64_t>::min();
+    }
 
-          // set up our union find data structure to track merges
-          std::vector<dsets::DisjointSets::Aint> ufv(readMappings.size());
-          // this initializes everything
-          auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
+    // Set up union-find data structure for efficient merging
+    std::vector<dsets::DisjointSets::Aint> ufv(readMappings.size());
+    // This initializes everything
+    auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
 
-          //Start the procedure to identify the chains
-          for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              double best_score = std::numeric_limits<double>::max();
-              auto best_it2 = readMappings.end();
-              // we we merge only with the best-scored previous mapping in query space
-              if (it->chainPairScore != std::numeric_limits<double>::max()) {
-                  disjoint_sets.unite(it->splitMappingId, it->chainPairId);
-              }
-              for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
-                  // If this mapping is for a different reference sequence, ignore
-                  if (it2->refSeqId != it->refSeqId) {
-                      continue;
-                  }
-                  //If this mapping is for exactly the same segment, ignore
-                  if (it2->queryStartPos == it->queryStartPos) {
-                      continue;
-                  }
-                  //If this mapping is too far from current mapping being evaluated in the query, stop finding a merge
-                  if (it2->queryStartPos > it->queryEndPos + max_dist) {
-                      break;
-                  }
-                  //If the next mapping is within range, we can potentially merge
-                  if (it2->strand == it->strand) {
-                      // Always calculate query distance the same way, as query always moves forward
-                      int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+    // Step 2: Process each group (same refSeqId and strand)
+    auto group_begin = readMappings.begin();
+    while (group_begin != readMappings.end()) {
+        auto group_end = std::find_if_not(group_begin, readMappings.end(),
+            [refSeqId = group_begin->refSeqId, strand = group_begin->strand](const MappingResult &m) {
+                return m.refSeqId == refSeqId && m.strand == strand;
+            });
 
-                      // Reference distance calculation depends on strand
-                      int64_t ref_dist;
-                      if (it->strand == strnd::FWD) {
-                          ref_dist = it2->refStartPos - it->refEndPos;
-                      } else {
-                          // For reverse complement, we need to invert the order
-                          ref_dist = it->refStartPos - it2->refEndPos;
-                      }
+        // Process mappings within the group
+        for (auto it = group_begin; it != group_end; ++it) {
+            if (it->chainPairScore != std::numeric_limits<double>::max()) {
+                disjoint_sets.unite(it->splitMappingId, it->chainPairId);
+            }
+            double best_score = std::numeric_limits<double>::max();
+            auto best_it2 = group_end;
 
-                      // Check if the distance is within acceptable range
-                      if (query_dist <= max_dist
-                          && ref_dist >= -param.segLength/5
-                          && ref_dist <= max_dist) {
-                          double dist = std::sqrt(std::pow(query_dist, 2) + std::pow(ref_dist, 2));
-                          if (dist < max_dist && best_score > dist && it2->chainPairScore > dist) {
-                              best_it2 = it2;
-                              best_score = dist;
-                          }
-                      }
-                  }
-              }
-              if (best_it2 != readMappings.end()) {
-                  best_it2->chainPairScore = best_score;
-                  best_it2->chainPairId = it->splitMappingId;
-              }
-              // Remove progress increment from post-processing
-          }
+            // Step 3: Use binary search to find range within max_dist
+            auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
+                [](offset_t val, const MappingResult &m) {
+                    return val < m.queryStartPos;
+                });
 
-          // Assign the merged mapping ids
-          for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              it->splitMappingId = disjoint_sets.find(it->splitMappingId);
-          }
+            // Check mappings within the range
+            for (auto it2 = it + 1; it2 != end_it2; ++it2) {
+                if (it2->queryStartPos == it->queryStartPos) continue;
+                int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+                int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                   it2->refStartPos - it->refEndPos : 
+                                   it->refStartPos - it2->refEndPos;
+                // Check if the distance is within acceptable range
+                if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                    double dist_sq = static_cast<double>(query_dist) * query_dist + 
+                                     static_cast<double>(ref_dist) * ref_dist;
+                    double max_dist_sq = static_cast<double>(max_dist) * max_dist;
+                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2->chainPairScore) {
+                        best_it2 = it2;
+                        best_score = dist_sq;
+                    }
+                }
+            }
+            if (best_it2 != group_end) {
+                best_it2->chainPairScore = best_score;
+                best_it2->chainPairId = it->splitMappingId;
+            }
+        }
+        group_begin = group_end;
+    }
 
-          //Sort the mappings by post-merge split mapping id, then by query position, then by target position
-          std::sort(
-              readMappings.begin(),
-              readMappings.end(),
-              [](const MappingResult &a, const MappingResult &b) {
-                  return std::tie(a.splitMappingId, a.queryStartPos, a.refSeqId, a.refStartPos, a.strand)
-                      < std::tie(b.splitMappingId, b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
-              });
+    // Assign merged mapping IDs using union-find
+    for (auto &mapping : readMappings) {
+        mapping.splitMappingId = disjoint_sets.find(mapping.splitMappingId);
+    }
 
-          // Create maximallyMergedMappings with length restrictions
-          MappingResultsVector_t maximallyMergedMappings;
-          for(auto it = readMappings.begin(); it != readMappings.end();) {
-              // Find the end of the current chain
-              auto it_end = std::find_if(it, readMappings.end(), [&](const MappingResult &e){return e.splitMappingId != it->splitMappingId;} );
-              
-              // Process the chain into fragments that respect max_mapping_length
-              auto fragment_start = it;
-              while (fragment_start != it_end) {
-                  MappingResult mergedMapping = *fragment_start;
-                  auto fragment_end = fragment_start;
-                  auto next = std::next(fragment_end);
-                  
-                  // Always try to merge enough mappings to satisfy minimum block length
-                  offset_t current_length = fragment_start->queryEndPos - fragment_start->queryStartPos;
-                  
-                  while (next != it_end) {
-                      offset_t potential_length = next->queryEndPos - fragment_start->queryStartPos;
+    // Sort by merged splitMappingId, queryStartPos, and refStartPos
+    std::sort(readMappings.begin(), readMappings.end(),
+        [](const MappingResult &a, const MappingResult &b) {
+            return std::tie(a.splitMappingId, a.queryStartPos, a.refStartPos)
+                 < std::tie(b.splitMappingId, b.queryStartPos, b.refStartPos);
+        });
 
-                      if (potential_length > param.max_mapping_length) {
-                          break;
-                      }
-                      fragment_end = next;
-                      current_length = potential_length;
-                      next = std::next(next);
-                  }
+    // Step 4: Create maximally merged mappings
+    MappingResultsVector_t maximallyMergedMappings;
+    for (auto it = readMappings.begin(); it != readMappings.end();) {
+        // Find the end of the current chain
+        auto it_end = std::find_if(it, readMappings.end(), 
+            [splitId = it->splitMappingId](const MappingResult &e) {
+                return e.splitMappingId != splitId;
+            });
 
-                  // Create merged mapping for this fragment
-                  mergedMapping.queryStartPos = fragment_start->queryStartPos;
-                  mergedMapping.queryEndPos = fragment_end->queryEndPos;
-                  
-                  // Handle reference coordinates based on strand
-                  if (mergedMapping.strand == strnd::FWD) {
-                      // Forward strand - use first mapping's start and last mapping's end
-                      mergedMapping.refStartPos = fragment_start->refStartPos;
-                      mergedMapping.refEndPos = fragment_end->refEndPos;
-                  } else {
-                      // Reverse strand - use last mapping's start (highest coordinate) and first mapping's end (lowest coordinate)
-                      mergedMapping.refStartPos = fragment_end->refStartPos;
-                      mergedMapping.refEndPos = fragment_start->refEndPos;
-                  }
-                  mergedMapping.blockLength = std::max(
-                      mergedMapping.refEndPos - mergedMapping.refStartPos,
-                      mergedMapping.queryEndPos - mergedMapping.queryStartPos
-                  );
-                  
-                  // Calculate averages for the fragment
-                  double totalNucIdentity = 0.0;
-                  double totalKmerComplexity = 0.0;
-                  int totalConservedSketches = 0;
-                  int totalSketchSize = 0;
-                  int fragment_size = 0;
-                  
-                  for (auto subIt = fragment_start; subIt != std::next(fragment_end); ++subIt) {
-                      totalNucIdentity += subIt->nucIdentity;
-                      totalKmerComplexity += subIt->kmerComplexity;
-                      totalConservedSketches += subIt->conservedSketches;
-                      totalSketchSize += subIt->sketchSize;
-                      fragment_size++;
-                  }
-    
-                  mergedMapping.n_merged = fragment_size;
-                  mergedMapping.nucIdentity = totalNucIdentity / fragment_size;
-                  mergedMapping.kmerComplexity = totalKmerComplexity / fragment_size;
-                  mergedMapping.conservedSketches = totalConservedSketches;
-                  mergedMapping.sketchSize = totalSketchSize;
-                  mergedMapping.blockNucIdentity = mergedMapping.nucIdentity;
-                  mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
-                  mergedMapping.discard = 0;
-                  mergedMapping.overlapped = false;
-                  mergedMapping.chainPairScore = std::numeric_limits<double>::max();
-                  mergedMapping.chainPairId = std::numeric_limits<int64_t>::min();
-                  
-                  maximallyMergedMappings.push_back(mergedMapping);
-                  
-                  // Move to next fragment
-                  fragment_start = std::next(fragment_end);
-              }
-              
-              // Process the chain into chunks defined by max_mapping_length
-              processChainWithSplits(it, it_end);
+        // Process chain into fragments respecting max_mapping_length
+        auto fragment_start = it;
+        while (fragment_start != it_end) {
+            MappingResult mergedMapping = *fragment_start;
+            auto fragment_end = fragment_start;
+            auto next = std::next(fragment_end);
+           
+            // Always try to merge enough mappings to satisfy minimum block length
+            offset_t current_length = fragment_start->queryEndPos - fragment_start->queryStartPos;
+            
+            while (next != it_end) {
+                offset_t potential_length = next->queryEndPos - fragment_start->queryStartPos;
+                if (potential_length > param.max_mapping_length) break;
+                fragment_end = next;
+                current_length = potential_length;
+                next = std::next(next);
+            }
 
-              // Move the iterator to the end of the processed chain
-              it = it_end;
-          }
+            // Set merged mapping properties
+            mergedMapping.queryStartPos = fragment_start->queryStartPos;
+            mergedMapping.queryEndPos = fragment_end->queryEndPos;
 
-          // After processing all chains, remove discarded mappings
-          readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), 
-                             [](const MappingResult& e) { return e.discard == 1; }),
-              readMappings.end()
-          );
+            // Handle reference coordinates based on strand
+            if (mergedMapping.strand == strnd::FWD) {
+                // Forward strand - use first mapping's start and last mapping's end
+                mergedMapping.refStartPos = fragment_start->refStartPos;
+                mergedMapping.refEndPos = fragment_end->refEndPos;
+            } else {
+                // Reverse strand - use last mapping's start (highest coordinate) and first mapping's end (lowest coordinate)
+                mergedMapping.refStartPos = fragment_end->refStartPos;
+                mergedMapping.refEndPos = fragment_start->refEndPos;
+            }
+            mergedMapping.blockLength = std::max(
+                mergedMapping.refEndPos - mergedMapping.refStartPos,
+                mergedMapping.queryEndPos - mergedMapping.queryStartPos
+            );
 
-          return maximallyMergedMappings;
-      }
+            // Calculate averages for merged fragment
+            double totalNucIdentity = 0.0;
+            double totalKmerComplexity = 0.0;
+            int totalConservedSketches = 0;
+            int totalSketchSize = 0;
+            int fragment_size = 0;
+            for (auto subIt = fragment_start; subIt != std::next(fragment_end); ++subIt) {
+                totalNucIdentity += subIt->nucIdentity;
+                totalKmerComplexity += subIt->kmerComplexity;
+                totalConservedSketches += subIt->conservedSketches;
+                totalSketchSize += subIt->sketchSize;
+                fragment_size++;
+            }
+            mergedMapping.n_merged = fragment_size;
+            mergedMapping.nucIdentity = totalNucIdentity / fragment_size;
+            mergedMapping.kmerComplexity = totalKmerComplexity / fragment_size;
+            mergedMapping.conservedSketches = totalConservedSketches;
+            mergedMapping.sketchSize = totalSketchSize;
+            mergedMapping.blockNucIdentity = mergedMapping.nucIdentity;
+            mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
+            mergedMapping.discard = 0;
+            mergedMapping.overlapped = false;
+            mergedMapping.chainPairScore = std::numeric_limits<double>::max();
+            mergedMapping.chainPairId = std::numeric_limits<int64_t>::min();
 
+            maximallyMergedMappings.push_back(mergedMapping);
+
+            // Move to next fragment
+            fragment_start = std::next(fragment_end);
+        }
+
+        // Note: processChainWithSplits is assumed to be a separate function
+        processChainWithSplits(it, it_end);
+
+        // Move to next chain
+        it = it_end;
+    }
+
+    // Step 5: Remove discarded mappings from readMappings
+    readMappings.erase(
+        std::remove_if(readMappings.begin(), readMappings.end(), 
+                       [](const MappingResult& e) { return e.discard == 1; }),
+        readMappings.end()
+    );
+
+    return maximallyMergedMappings;
+}
       /**
        * @brief Process a chain of mappings, potentially splitting it into smaller fragments
        * @param begin Iterator to the start of the chain
