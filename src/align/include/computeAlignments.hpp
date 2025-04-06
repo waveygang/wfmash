@@ -368,10 +368,11 @@ void computeAlignmentsTaskflow() {
               << total_target_length << " target bp)" << std::endl;
     
     // Progress meter
-    progress_meter::ProgressMeter progress(
-        total_query_length, 
+    auto progress = std::make_shared<progress_meter::ProgressMeter>(
+        total_query_length,
         "[wfmash::align] aligning", 
-        param.use_progress_bar);
+        param.use_progress_bar
+        );
     
     // Create taskflow executor with thread count
     tf::Executor executor(param.threads);
@@ -411,7 +412,7 @@ void computeAlignmentsTaskflow() {
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
     
     // First finish progress meter to ensure its thread stops updating
-    progress.finish();
+    progress->finish();
     
     // Print summary after progress meter is fully stopped
     std::cerr << "[wfmash::align] "
@@ -428,7 +429,7 @@ void processMappingRecord(
     const align::Parameters& param,
     std::atomic<uint64_t>& total_alignments_processed,
     std::atomic<uint64_t>& processed_alignment_length,
-    progress_meter::ProgressMeter& progress,
+    std::shared_ptr<progress_meter::ProgressMeter> progress,
     std::mutex& output_mutex,
     std::ofstream& outstream) {
     
@@ -495,7 +496,7 @@ void processMappingRecord(
         total_alignments_processed.fetch_add(1, std::memory_order_relaxed);
         
         // Update progress
-        progress.increment(alignment_length);
+        progress->increment(alignment_length);
         
         // Write to output with minimal critical section
         if (!formatted_output.empty()) {
