@@ -2737,32 +2737,42 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     return val < (is_forward ? mapping.refStartPos : mapping.refEndPos);
                 });
             
-            // Iterate through candidates that are in range in both query and target space
+            // Collect mappings that are in range in both query and target space
+            std::vector<MappingResult*> intersection_candidates;
+            intersection_candidates.reserve(std::distance(lower_it, upper_it));
+            
             for (auto idx_it = lower_it; idx_it != upper_it; ++idx_it) {
                 auto it2 = group_begin + *idx_it;
-                // Skip self or mappings that are before current position in query space
+                // Skip self or mappings outside query bounds
                 if (it2 <= it || it2 >= end_it2) continue;
                 // Skip if query positions are identical (can't form a chain)
                 if (it2->queryStartPos == it->queryStartPos) continue;
                 
-                int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+                intersection_candidates.push_back(&(*it2));
+            }
+            
+            // Process only mappings in the intersection of query and target bounds
+            for (auto& mapping_ptr : intersection_candidates) {
+                auto& it2 = *mapping_ptr;
+                
+                int64_t query_dist = it2.queryStartPos - it->queryEndPos;
                 int64_t ref_dist = is_forward ? 
-                                  it2->refStartPos - it->refEndPos : 
-                                  it->refStartPos - it2->refEndPos;
+                                  it2.refStartPos - it->refEndPos : 
+                                  it->refStartPos - it2.refEndPos;
                                   
                 // Check if the distance is within acceptable range
                 if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                     double dist_sq = static_cast<double>(query_dist) * query_dist + 
                                     static_cast<double>(ref_dist) * ref_dist;
                     double max_dist_sq = static_cast<double>(max_dist) * max_dist;
-                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2->chainPairScore) {
-                        best_it2 = it2;
+                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2.chainPairScore) {
+                        best_it2 = &it2;
                         best_score = dist_sq;
                     }
                 }
             }
             
-            if (best_it2 != group_end) {
+            if (best_it2 != group_end && best_it2 != nullptr) {
                 best_it2->chainPairScore = best_score;
                 best_it2->chainPairId = it->splitMappingId;
             }
