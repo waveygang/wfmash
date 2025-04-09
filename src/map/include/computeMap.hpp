@@ -2821,7 +2821,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 // Precompute all bin offsets that could contain valid mappings
                 std::vector<std::pair<offset_t, offset_t>> offsets;
                 for (offset_t dx = 0; dx <= max_bin_dist; ++dx) {
-                    // Calculate max possible y-offset based on remaining distance in euclidean space
+                    // Use Manhattan distance to ensure we cover all needed bins
                     // Only consider bins to the right of current position (or directly above/below)
                     if (dx == 0) {
                         // Special case: vertical line - only consider positive dy to avoid duplicates
@@ -2829,10 +2829,13 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                             offsets.emplace_back(0, dy);
                         }
                     } else {
-                        // For all other dx > 0, calculate the maximum dy range
-                        offset_t max_dy = std::ceil(std::sqrt(max_bin_dist * max_bin_dist - dx * dx));
-                        for (offset_t dy = -max_dy; dy <= max_dy; ++dy) {
-                            offsets.emplace_back(dx, dy);
+                        // For all dx > 0, use full Manhattan distance range
+                        // This ensures we don't miss any bins that the binary search would find
+                        for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
+                            // Only include bins within Manhattan distance max_bin_dist
+                            if (std::abs(dx) + std::abs(dy) <= max_bin_dist) {
+                                offsets.emplace_back(dx, dy);
+                            }
                         }
                     }
                 }
