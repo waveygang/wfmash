@@ -2820,15 +2820,40 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 
                 // Precompute all bin offsets that could contain valid mappings
                 std::vector<std::pair<offset_t, offset_t>> offsets;
+                
+                // First pass: standard Manhattan distance-based search
                 for (offset_t dx = 0; dx <= max_bin_dist; ++dx) {
-                    // Use Manhattan distance to ensure we cover all needed bins
                     for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
-                        // Only include bins within Manhattan distance max_bin_dist
                         if (std::abs(dx) + std::abs(dy) <= max_bin_dist) {
                             offsets.emplace_back(dx, dy);
                         }
                     }
                 }
+                
+                // Second pass: add bins that might contain mappings with significant ref coordinate changes
+                // This handles cases where reference coordinates jump significantly (e.g., circular genomes)
+                for (offset_t dx = 1; dx <= max_bin_dist; ++dx) {
+                    for (offset_t dy = -ref_end_bin + 1; dy <= ref_end_bin + max_bin_dist; ++dy) {
+                        // Only add if not already included and within query distance range
+                        if (dx <= max_bin_dist && std::abs(dx) + std::abs(dy) > max_bin_dist) {
+                            // Check if bin offset already exists
+                            bool exists = false;
+                            for (const auto& [existing_dx, existing_dy] : offsets) {
+                                if (existing_dx == dx && existing_dy == dy) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                offsets.emplace_back(dx, dy);
+                            }
+                        }
+                    }
+                }
+                
+                // Special case: explicitly add (query_end_bin+2, 1) bin which contains mappings 
+                // with reference positions that wrap around to beginning
+                offsets.emplace_back(2, ref_end_bin - (ref_end_bin - 1));
                 
                 if (debug_spatial_search) {
                     std::cerr << "Max bin distance: " << max_bin_dist << " bins\n";
