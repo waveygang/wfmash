@@ -3043,7 +3043,10 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                         debug_spatial_search = true;
                         
                         // Detailed debug output
-                        std::cerr << "\nMISMATCH DETECTED:\n";
+                        std::cerr << "\n=== MISMATCH DETECTED ===\n";
+                        
+                        // Summary of the mismatch
+                        std::cerr << "SUMMARY:\n";
                         std::cerr << "Spatial index found: " << (best_idx == std::numeric_limits<size_t>::max() ? "none" : 
                                   "idx=" + std::to_string(best_idx) + 
                                   ", score=" + std::to_string(best_score)) << "\n";
@@ -3051,37 +3054,126 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                   "idx=" + std::to_string(binary_best_idx) + 
                                   ", score=" + std::to_string(binary_best_score)) << "\n";
                         
+                        // Current mapping being processed
+                        std::cerr << "\nCURRENT MAPPING:\n";
+                        std::cerr << "  ID: " << current_idx << "\n";
+                        std::cerr << "  Position: q=[" << it->queryStartPos << "," << it->queryEndPos 
+                                  << "], r=[" << it->refStartPos << "," << it->refEndPos << "]\n";
+                        std::cerr << "  RefSeqId: " << it->refSeqId << ", Strand: " << (it->strand == strnd::FWD ? "+" : "-") << "\n";
+                        std::cerr << "  Focal bin: query_bin=" << query_end_bin << ", ref_bin=" << ref_end_bin << "\n";
+                        
+                        // Details about spatial index result
                         if (best_idx != std::numeric_limits<size_t>::max()) {
-                            std::cerr << "Spatial mapping: q=[" << readMappings[best_idx].queryStartPos << "," 
+                            std::cerr << "\nSPATIAL INDEX MAPPING:\n";
+                            std::cerr << "  ID: " << best_idx << "\n";
+                            std::cerr << "  Position: q=[" << readMappings[best_idx].queryStartPos << "," 
                                       << readMappings[best_idx].queryEndPos << "], r=["
                                       << readMappings[best_idx].refStartPos << "," 
                                       << readMappings[best_idx].refEndPos << "]\n";
                             
                             offset_t query_bin = (readMappings[best_idx].queryStartPos + bin_size - 1) / bin_size;
                             offset_t ref_bin = (readMappings[best_idx].refStartPos + bin_size - 1) / bin_size;
-                            std::cerr << "  Index bin: (" << query_bin << "," << ref_bin << ")\n";
+                            std::cerr << "  Bin: (" << query_bin << "," << ref_bin << ")\n";
+                            
+                            // Calculate distances from current mapping
+                            int64_t query_dist = readMappings[best_idx].queryStartPos - it->queryEndPos;
+                            int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                              readMappings[best_idx].refStartPos - it->refEndPos : 
+                                              it->refStartPos - readMappings[best_idx].refEndPos;
+                            
+                            std::cerr << "  Distances: query_dist=" << query_dist << ", ref_dist=" << ref_dist << "\n";
+                            std::cerr << "  Manhattan bin distance: " << (std::abs(query_bin - query_end_bin) + std::abs(ref_bin - ref_end_bin)) << "\n";
+                        } else {
+                            std::cerr << "\nSPATIAL INDEX MAPPING: none\n";
                         }
                         
+                        // Details about binary search result
                         if (binary_best_idx != std::numeric_limits<size_t>::max()) {
-                            std::cerr << "Binary mapping: q=[" << readMappings[binary_best_idx].queryStartPos << "," 
+                            std::cerr << "\nBINARY SEARCH MAPPING:\n";
+                            std::cerr << "  ID: " << binary_best_idx << "\n";
+                            std::cerr << "  Position: q=[" << readMappings[binary_best_idx].queryStartPos << "," 
                                       << readMappings[binary_best_idx].queryEndPos << "], r=["
                                       << readMappings[binary_best_idx].refStartPos << "," 
                                       << readMappings[binary_best_idx].refEndPos << "]\n";
                             
                             offset_t query_bin = (readMappings[binary_best_idx].queryStartPos + bin_size - 1) / bin_size;
                             offset_t ref_bin = (readMappings[binary_best_idx].refStartPos + bin_size - 1) / bin_size;
-                            std::cerr << "  Index bin: (" << query_bin << "," << ref_bin << ")\n";
+                            std::cerr << "  Bin: (" << query_bin << "," << ref_bin << ")\n";
+                            
+                            // Calculate distances from current mapping
+                            int64_t query_dist = readMappings[binary_best_idx].queryStartPos - it->queryEndPos;
+                            int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                              readMappings[binary_best_idx].refStartPos - it->refEndPos : 
+                                              it->refStartPos - readMappings[binary_best_idx].refEndPos;
+                            
+                            std::cerr << "  Distances: query_dist=" << query_dist << ", ref_dist=" << ref_dist << "\n";
+                            std::cerr << "  Manhattan bin distance: " << (std::abs(query_bin - query_end_bin) + std::abs(ref_bin - ref_end_bin)) << "\n";
+                        } else {
+                            std::cerr << "\nBINARY SEARCH MAPPING: none\n";
                         }
                         
-                        std::cerr << "Current mapping: q=[" << it->queryStartPos << "," 
-                                  << it->queryEndPos << "], r=["
-                                  << it->refStartPos << "," 
-                                  << it->refEndPos << "]\n";
-                        std::cerr << "Search bins: ";
+                        // Search space information
+                        std::cerr << "\nSEARCH PARAMETERS:\n";
+                        std::cerr << "  Max distance: " << max_dist << "bp\n";
+                        std::cerr << "  Bin size: " << bin_size << "bp\n";
+                        std::cerr << "  Max bin distance: " << max_bin_dist << " bins\n";
+                        
+                        // Visualize bins in a compact grid format
+                        std::cerr << "\nSEARCH BINS (marked with X if containing the binary result):\n";
+                        
+                        // Calculate grid boundaries
+                        offset_t min_q_bin = query_end_bin;
+                        offset_t max_q_bin = query_end_bin;
+                        offset_t min_r_bin = ref_end_bin;
+                        offset_t max_r_bin = ref_end_bin;
+                        
                         for (const auto &[dx, dy] : offsets) {
-                            std::cerr << "(" << (query_end_bin + dx) << "," << (ref_end_bin + dy) << ") ";
+                            min_q_bin = std::min(min_q_bin, query_end_bin + dx);
+                            max_q_bin = std::max(max_q_bin, query_end_bin + dx);
+                            min_r_bin = std::min(min_r_bin, ref_end_bin + dy);
+                            max_r_bin = std::max(max_r_bin, ref_end_bin + dy);
+                        }
+                        
+                        // Calculate binary result's bin
+                        offset_t binary_q_bin = binary_best_idx != std::numeric_limits<size_t>::max() ?
+                                               (readMappings[binary_best_idx].queryStartPos + bin_size - 1) / bin_size : -1;
+                        offset_t binary_r_bin = binary_best_idx != std::numeric_limits<size_t>::max() ?
+                                               (readMappings[binary_best_idx].refStartPos + bin_size - 1) / bin_size : -1;
+                        
+                        // Draw column headers
+                        std::cerr << "   ";
+                        for (offset_t r = min_r_bin; r <= max_r_bin; r++) {
+                            std::cerr << std::setw(3) << r;
                         }
                         std::cerr << "\n";
+                        
+                        // Draw grid
+                        for (offset_t q = min_q_bin; q <= max_q_bin; q++) {
+                            std::cerr << std::setw(3) << q << ":";
+                            for (offset_t r = min_r_bin; r <= max_r_bin; r++) {
+                                bool is_in_offset = false;
+                                for (const auto &[dx, dy] : offsets) {
+                                    if (query_end_bin + dx == q && ref_end_bin + dy == r) {
+                                        is_in_offset = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (q == query_end_bin && r == ref_end_bin) {
+                                    std::cerr << " C "; // Current bin
+                                } else if (q == binary_q_bin && r == binary_r_bin) {
+                                    std::cerr << " B "; // Binary result bin
+                                } else if (is_in_offset) {
+                                    std::cerr << " · "; // Searched bin
+                                } else {
+                                    std::cerr << "   "; // Not searched
+                                }
+                            }
+                            std::cerr << "\n";
+                        }
+                        
+                        std::cerr << "Legend: C = Current mapping bin, B = Binary search result bin, · = Searched bin\n";
+                        std::cerr << "=========================\n";
                         
                         // Exit immediately to avoid flooding output with errors
                         exit(1);
