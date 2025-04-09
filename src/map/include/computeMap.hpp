@@ -2795,12 +2795,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                       (it->refEndPos + bin_size - 1) / bin_size : 
                                       (it->refStartPos + bin_size - 1) / bin_size;
                 
-                // Ensure bin includes the boundaries by ceiling division
-                offset_t query_end_bin = (it->queryEndPos + bin_size - 1) / bin_size;
-                offset_t ref_end_bin = (it->strand == strnd::FWD) ? 
-                                      (it->refEndPos + bin_size - 1) / bin_size : 
-                                      (it->refStartPos + bin_size - 1) / bin_size;
-                
                 // Define maximum bin distance to search (ceiling division)
                 offset_t max_bin_dist = (max_dist + bin_size - 1) / bin_size;
                 
