@@ -2712,7 +2712,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
     
     // Control flags for testing and verification
     bool use_spatial_index = true;  // Set to false to use only binary search
-    bool verify_results = false;    // Set to false in production after validation
+    bool verify_results = true;    // Set to false in production after validation
     
     // Step 2: Process each group (same refSeqId and strand)
     auto group_begin = readMappings.begin();
@@ -2856,9 +2856,12 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 
                 // Verify results match if we're in verification mode
                 if (verify_results) {
+                    std::cerr << "verifying" << std::endl;
                     if (best_idx != binary_best_idx || 
                         (best_idx != std::numeric_limits<size_t>::max() && 
                          std::abs(best_score - binary_best_score) > 1e-6)) {
+                        std::cerr << "ERROR: mismatch" << std::endl;
+                        exit(1);
                         // Use binary search results for safety during verification
                         best_idx = binary_best_idx;
                         best_score = binary_best_score;
