@@ -2680,6 +2680,40 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
     // This initializes everything
     auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
 
+    // Define the bin size for spatial indexing (use segment length)
+    const int bin_size = param.segLength;
+    
+    // Define a key for 2D spatial index 
+    struct SpatialKey {
+        seqno_t refSeqId;
+        strand_t strand;
+        int query_bin;
+        int ref_bin;
+        
+        bool operator==(const SpatialKey &other) const {
+            return refSeqId == other.refSeqId && 
+                   strand == other.strand && 
+                   query_bin == other.query_bin && 
+                   ref_bin == other.ref_bin;
+        }
+    };
+    
+    // Define a hash function for SpatialKey
+    struct SpatialKeyHash {
+        std::size_t operator()(const SpatialKey &k) const {
+            std::size_t h = 17;
+            h = h * 31 + std::hash<seqno_t>()(k.refSeqId);
+            h = h * 31 + std::hash<int>()(static_cast<int>(k.strand));
+            h = h * 31 + std::hash<int>()(k.query_bin);
+            h = h * 31 + std::hash<int>()(k.ref_bin);
+            return h;
+        }
+    };
+    
+    // Control flags for testing and verification
+    bool use_spatial_index = true;  // Set to false to use only binary search
+    bool verify_results = false;    // Set to false in production after validation
+    
     // Step 2: Process each group (same refSeqId and strand)
     auto group_begin = readMappings.begin();
     while (group_begin != readMappings.end()) {
@@ -2688,41 +2722,158 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 return m.refSeqId == refSeqId && m.strand == strand;
             });
 
+        // Create the 2D spatial index for this group only
+        using SpatialIndex = std::unordered_map<SpatialKey, std::vector<size_t>, SpatialKeyHash>;
+        std::unique_ptr<SpatialIndex> spatial_index;
+        
+        if (use_spatial_index) {
+            spatial_index = std::make_unique<SpatialIndex>();
+            
+            // Populate the spatial index for this group
+            for (auto it = group_begin; it != group_end; ++it) {
+                size_t idx = std::distance(readMappings.begin(), it);
+                SpatialKey key = {
+                    it->refSeqId,
+                    it->strand,
+                    it->queryStartPos / bin_size,
+                    it->refStartPos / bin_size
+                };
+                (*spatial_index)[key].push_back(idx);
+            }
+        }
+
         // Process mappings within the group
         for (auto it = group_begin; it != group_end; ++it) {
             if (it->chainPairScore != std::numeric_limits<double>::max()) {
                 disjoint_sets.unite(it->splitMappingId, it->chainPairId);
             }
+            
+            size_t best_idx = std::numeric_limits<size_t>::max();
             double best_score = std::numeric_limits<double>::max();
-            auto best_it2 = group_end;
+            size_t current_idx = std::distance(readMappings.begin(), it);
 
-            // Step 3: Use binary search to find range within max_dist
-            auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
-                [](offset_t val, const MappingResult &m) {
-                    return val < m.queryStartPos;
-                });
+            // Original binary search approach for verification or if spatial index is disabled
+            size_t binary_best_idx = std::numeric_limits<size_t>::max();
+            double binary_best_score = std::numeric_limits<double>::max();
+            
+            if (!use_spatial_index || verify_results) {
+                // Step 3a: Use binary search to find range within max_dist (original approach)
+                auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
+                    [](offset_t val, const MappingResult &m) {
+                        return val < m.queryStartPos;
+                    });
 
-            // Check mappings within the range
-            for (auto it2 = it + 1; it2 != end_it2; ++it2) {
-                if (it2->queryStartPos == it->queryStartPos) continue;
-                int64_t query_dist = it2->queryStartPos - it->queryEndPos;
-                int64_t ref_dist = (it->strand == strnd::FWD) ? 
-                                   it2->refStartPos - it->refEndPos : 
-                                   it->refStartPos - it2->refEndPos;
-                // Check if the distance is within acceptable range
-                if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
-                    double dist_sq = static_cast<double>(query_dist) * query_dist + 
-                                     static_cast<double>(ref_dist) * ref_dist;
-                    double max_dist_sq = static_cast<double>(max_dist) * max_dist;
-                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2->chainPairScore) {
-                        best_it2 = it2;
-                        best_score = dist_sq;
+                // Check mappings within the range using original method
+                for (auto it2 = it + 1; it2 != end_it2; ++it2) {
+                    if (it2->queryStartPos == it->queryStartPos) continue;
+                    int64_t query_dist = it2->queryStartPos - it->queryEndPos;
+                    int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                    it2->refStartPos - it->refEndPos : 
+                                    it->refStartPos - it2->refEndPos;
+                    // Check if the distance is within acceptable range
+                    if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                        double dist_sq = static_cast<double>(query_dist) * query_dist + 
+                                        static_cast<double>(ref_dist) * ref_dist;
+                        double max_dist_sq = static_cast<double>(max_dist) * max_dist;
+                        if (dist_sq < max_dist_sq && dist_sq < binary_best_score && dist_sq < it2->chainPairScore) {
+                            binary_best_idx = std::distance(readMappings.begin(), it2);
+                            binary_best_score = dist_sq;
+                        }
                     }
                 }
             }
-            if (best_it2 != group_end) {
-                best_it2->chainPairScore = best_score;
-                best_it2->chainPairId = it->splitMappingId;
+            
+            // Step 3b: Use 2D spatial index for searching (new approach)
+            if (use_spatial_index) {
+                int query_end_bin = it->queryEndPos / bin_size;
+                int ref_end_bin = (it->strand == strnd::FWD) ? 
+                                  it->refEndPos / bin_size : 
+                                  it->refStartPos / bin_size;
+                
+                // Define maximum bin distance to search
+                int max_bin_dist = (max_dist / bin_size) + 1;
+                
+                // Precompute the bin offsets in order of increasing distance
+                std::vector<std::pair<int, int>> offsets;
+                for (int dx = 0; dx <= max_bin_dist; ++dx) {
+                    for (int dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
+                        int manhattan_dist = std::abs(dx) + std::abs(dy);
+                        if (manhattan_dist <= 2 * max_bin_dist) { // Diamond shape limit
+                            offsets.emplace_back(dx, dy);
+                        }
+                    }
+                }
+                
+                // Sort offsets by Manhattan distance for wave expansion
+                std::sort(offsets.begin(), offsets.end(), 
+                    [](const auto &a, const auto &b) {
+                        return std::abs(a.first) + std::abs(a.second) < 
+                               std::abs(b.first) + std::abs(b.second);
+                    });
+                
+                // Check bins in order of increasing Manhattan distance (wave expansion)
+                for (const auto &[dx, dy] : offsets) {
+                    SpatialKey search_key = {
+                        it->refSeqId,
+                        it->strand,
+                        query_end_bin + dx,
+                        ref_end_bin + dy
+                    };
+                    
+                    auto it_bin = spatial_index->find(search_key);
+                    if (it_bin != spatial_index->end()) {
+                        // Check each mapping in this bin
+                        for (auto idx : it_bin->second) {
+                            // Skip self or mappings we've already processed
+                            if (idx <= current_idx || readMappings[idx].queryStartPos == it->queryStartPos) continue;
+                            
+                            auto &mapping = readMappings[idx];
+                            int64_t query_dist = mapping.queryStartPos - it->queryEndPos;
+                            int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                              mapping.refStartPos - it->refEndPos : 
+                                              it->refStartPos - mapping.refEndPos;
+                            
+                            // Check if the distance is within acceptable range
+                            if (query_dist <= max_dist && query_dist > 0 && 
+                                ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                                double dist_sq = static_cast<double>(query_dist) * query_dist + 
+                                                 static_cast<double>(ref_dist) * ref_dist;
+                                double max_dist_sq = static_cast<double>(max_dist) * max_dist;
+                                if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < mapping.chainPairScore) {
+                                    best_idx = idx;
+                                    best_score = dist_sq;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Early termination if we found a match and we're beyond immediate neighbors
+                    if (best_idx != std::numeric_limits<size_t>::max() && 
+                        (std::abs(dx) + std::abs(dy)) > 1) {
+                        break;
+                    }
+                }
+                
+                // Verify results match if we're in verification mode
+                if (verify_results) {
+                    if (best_idx != binary_best_idx || 
+                        (best_idx != std::numeric_limits<size_t>::max() && 
+                         std::abs(best_score - binary_best_score) > 1e-6)) {
+                        // Use binary search results for safety during verification
+                        best_idx = binary_best_idx;
+                        best_score = binary_best_score;
+                    }
+                }
+            } else {
+                // Use binary search results if spatial index is disabled
+                best_idx = binary_best_idx;
+                best_score = binary_best_score;
+            }
+            
+            // Update chain pairs
+            if (best_idx != std::numeric_limits<size_t>::max()) {
+                readMappings[best_idx].chainPairScore = best_score;
+                readMappings[best_idx].chainPairId = it->splitMappingId;
             }
         }
         group_begin = group_end;
