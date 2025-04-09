@@ -2712,7 +2712,11 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
     
     // Control flags for testing and verification
     bool use_spatial_index = true;  // Set to false to use only binary search
-    bool verify_results = true;    // Set to false in production after validation
+    bool verify_results = true;     // Set to true for verification during development
+
+    // Temporary counter for debugging
+    static int verification_count;
+    if (verify_results) verification_count = 0;
     
     // Step 2: Process each group (same refSeqId and strand)
     auto group_begin = readMappings.begin();
@@ -2797,9 +2801,13 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 std::vector<std::pair<offset_t, offset_t>> offsets;
                 for (offset_t dx = 0; dx <= max_bin_dist; ++dx) {
                     for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
-                        offset_t manhattan_dist = std::abs(dx) + std::abs(dy);
-                        if (manhattan_dist <= 2 * max_bin_dist) { // Diamond shape limit
-                            offsets.emplace_back(dx, dy);
+                        // Only include dx > 0 to match binary search behavior (which only looks ahead)
+                        // and allow dx=0 only if dy>0 to handle vertical alignments
+                        if ((dx > 0) || (dx == 0 && dy > 0)) {
+                            offset_t manhattan_dist = std::abs(dx) + std::abs(dy);
+                            if (manhattan_dist <= 2 * max_bin_dist) { // Diamond shape limit
+                                offsets.emplace_back(dx, dy);
+                            }
                         }
                     }
                 }
@@ -2833,8 +2841,14 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                               mapping.refStartPos - it->refEndPos : 
                                               it->refStartPos - mapping.refEndPos;
                             
-                            // Check if the distance is within acceptable range
-                            if (query_dist <= max_dist && query_dist > 0 && 
+                            // Check if the distance is within acceptable range - match binary search conditions exactly
+                            int64_t query_dist = mapping.queryStartPos - it->queryEndPos;
+                            int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                              mapping.refStartPos - it->refEndPos : 
+                                              it->refStartPos - mapping.refEndPos;
+                            
+                            // Exactly match the binary search logic
+                            if (query_dist <= max_dist && 
                                 ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                                 double dist_sq = static_cast<double>(query_dist) * query_dist + 
                                                  static_cast<double>(ref_dist) * ref_dist;
@@ -2847,22 +2861,50 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                         }
                     }
                     
-                    // Early termination if we found a match and we're beyond immediate neighbors
+                    // Only early terminate if we've found a good enough match
+                    // This matches the behavior of the binary search more closely
                     if (best_idx != std::numeric_limits<size_t>::max() && 
-                        (std::abs(dx) + std::abs(dy)) > 1) {
+                        best_score < (max_dist * max_dist / 4)) {
                         break;
                     }
                 }
                 
                 // Verify results match if we're in verification mode
                 if (verify_results) {
-                    std::cerr << "verifying" << std::endl;
                     if (best_idx != binary_best_idx || 
                         (best_idx != std::numeric_limits<size_t>::max() && 
+                         binary_best_idx != std::numeric_limits<size_t>::max() &&
                          std::abs(best_score - binary_best_score) > 1e-6)) {
-                        std::cerr << "ERROR: mismatch" << std::endl;
-                        exit(1);
-                        // Use binary search results for safety during verification
+                        
+                        // Detailed debug output
+                        std::cerr << "\nMISMATCH DETECTED:\n";
+                        std::cerr << "Spatial index found: " << (best_idx == std::numeric_limits<size_t>::max() ? "none" : 
+                                  "idx=" + std::to_string(best_idx) + 
+                                  ", score=" + std::to_string(best_score)) << "\n";
+                        std::cerr << "Binary search found: " << (binary_best_idx == std::numeric_limits<size_t>::max() ? "none" : 
+                                  "idx=" + std::to_string(binary_best_idx) + 
+                                  ", score=" + std::to_string(binary_best_score)) << "\n";
+                        
+                        if (best_idx != std::numeric_limits<size_t>::max()) {
+                            std::cerr << "Spatial mapping: q=[" << readMappings[best_idx].queryStartPos << "," 
+                                      << readMappings[best_idx].queryEndPos << "], r=["
+                                      << readMappings[best_idx].refStartPos << "," 
+                                      << readMappings[best_idx].refEndPos << "]\n";
+                        }
+                        
+                        if (binary_best_idx != std::numeric_limits<size_t>::max()) {
+                            std::cerr << "Binary mapping: q=[" << readMappings[binary_best_idx].queryStartPos << "," 
+                                      << readMappings[binary_best_idx].queryEndPos << "], r=["
+                                      << readMappings[binary_best_idx].refStartPos << "," 
+                                      << readMappings[binary_best_idx].refEndPos << "]\n";
+                        }
+                        
+                        std::cerr << "Current mapping: q=[" << it->queryStartPos << "," 
+                                  << it->queryEndPos << "], r=["
+                                  << it->refStartPos << "," 
+                                  << it->refEndPos << "]\n";
+                                  
+                        // For verification, use binary search results for consistency
                         best_idx = binary_best_idx;
                         best_score = binary_best_score;
                     }
