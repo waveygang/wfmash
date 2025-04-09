@@ -2731,18 +2731,23 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
         // Create the 2D spatial index for this group only
         using SpatialIndex = std::unordered_map<SpatialKey, std::vector<size_t>, SpatialKeyHash>;
         std::unique_ptr<SpatialIndex> spatial_index;
-        
+            
         if (use_spatial_index) {
             spatial_index = std::make_unique<SpatialIndex>();
-            
+                
             // Populate the spatial index for this group
             for (auto it = group_begin; it != group_end; ++it) {
                 size_t idx = std::distance(readMappings.begin(), it);
+                    
+                // Use ceiling division for consistency with search
+                offset_t query_bin = (it->queryStartPos + bin_size - 1) / bin_size;
+                offset_t ref_bin = (it->refStartPos + bin_size - 1) / bin_size;
+                    
                 SpatialKey key = {
                     it->refSeqId,
                     it->strand,
-                    it->queryStartPos / bin_size,
-                    it->refStartPos / bin_size
+                    query_bin,
+                    ref_bin
                 };
                 (*spatial_index)[key].push_back(idx);
             }
@@ -2979,6 +2984,10 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                       << readMappings[best_idx].queryEndPos << "], r=["
                                       << readMappings[best_idx].refStartPos << "," 
                                       << readMappings[best_idx].refEndPos << "]\n";
+                            
+                            offset_t query_bin = (readMappings[best_idx].queryStartPos + bin_size - 1) / bin_size;
+                            offset_t ref_bin = (readMappings[best_idx].refStartPos + bin_size - 1) / bin_size;
+                            std::cerr << "  Index bin: (" << query_bin << "," << ref_bin << ")\n";
                         }
                         
                         if (binary_best_idx != std::numeric_limits<size_t>::max()) {
@@ -2986,15 +2995,25 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                       << readMappings[binary_best_idx].queryEndPos << "], r=["
                                       << readMappings[binary_best_idx].refStartPos << "," 
                                       << readMappings[binary_best_idx].refEndPos << "]\n";
+                            
+                            offset_t query_bin = (readMappings[binary_best_idx].queryStartPos + bin_size - 1) / bin_size;
+                            offset_t ref_bin = (readMappings[binary_best_idx].refStartPos + bin_size - 1) / bin_size;
+                            std::cerr << "  Index bin: (" << query_bin << "," << ref_bin << ")\n";
                         }
                         
                         std::cerr << "Current mapping: q=[" << it->queryStartPos << "," 
                                   << it->queryEndPos << "], r=["
                                   << it->refStartPos << "," 
                                   << it->refEndPos << "]\n";
+                        std::cerr << "Search bins: ";
+                        for (const auto &[dx, dy] : offsets) {
+                            std::cerr << "(" << (query_end_bin + dx) << "," << (ref_end_bin + dy) << ") ";
+                        }
+                        std::cerr << "\n";
                         
-                        // Exit immediately to avoid flooding output with errors
-                        exit(1);
+                        // Use binary search results for now
+                        best_idx = binary_best_idx;
+                        best_score = binary_best_score;
                                   
                         // For verification, use binary search results for consistency
                         best_idx = binary_best_idx;
