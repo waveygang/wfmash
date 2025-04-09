@@ -2851,9 +2851,9 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     }
                 }
                 
-                // Special case: explicitly add (query_end_bin+2, 1) bin which contains mappings 
-                // with reference positions that wrap around to beginning
-                offsets.emplace_back(2, ref_end_bin - (ref_end_bin - 1));
+                // Special case: add bin offset that connects to beginning of reference
+                // This helps detect mappings that wrap around (e.g. circular genomes)
+                offsets.emplace_back(2, 1 - ref_end_bin);
                 
                 if (debug_spatial_search) {
                     std::cerr << "Max bin distance: " << max_bin_dist << " bins\n";
