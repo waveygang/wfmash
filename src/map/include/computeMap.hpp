@@ -2688,6 +2688,21 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 return m.refSeqId == refSeqId && m.strand == strand;
             });
 
+        // Create index by target position for this group
+        std::vector<size_t> target_index;
+        target_index.reserve(std::distance(group_begin, group_end));
+        
+        // Populate index with original indices
+        for (auto it = group_begin; it != group_end; ++it) {
+            target_index.push_back(std::distance(group_begin, it));
+        }
+        
+        // Sort the index by reference start position
+        std::sort(target_index.begin(), target_index.end(), 
+            [&group_begin](size_t i1, size_t i2) {
+                return (group_begin + i1)->refStartPos < (group_begin + i2)->refStartPos;
+            });
+
         // Process mappings within the group
         for (auto it = group_begin; it != group_end; ++it) {
             if (it->chainPairScore != std::numeric_limits<double>::max()) {
@@ -2696,23 +2711,49 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             double best_score = std::numeric_limits<double>::max();
             auto best_it2 = group_end;
 
-            // Step 3: Use binary search to find range within max_dist
+            // Step 3: Use binary search to find range within max_dist in query space
             auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
                 [](offset_t val, const MappingResult &m) {
                     return val < m.queryStartPos;
                 });
-
-            // Check mappings within the range
-            for (auto it2 = it + 1; it2 != end_it2; ++it2) {
+            
+            // Find matching range in target space using the index
+            bool is_forward = it->strand == strnd::FWD;
+            offset_t target_pos = is_forward ? it->refEndPos : it->refStartPos;
+            offset_t target_min = (target_pos > max_dist) ? target_pos - max_dist/5 : 0;
+            offset_t target_max = target_pos + max_dist;
+            
+            // Binary search for lower bound in target space
+            auto lower_it = std::lower_bound(target_index.begin(), target_index.end(),
+                target_min, [&group_begin, is_forward](size_t idx, offset_t val) {
+                    auto& mapping = *(group_begin + idx);
+                    return is_forward ? mapping.refStartPos < val : mapping.refEndPos < val;
+                });
+            
+            // Binary search for upper bound in target space
+            auto upper_it = std::upper_bound(lower_it, target_index.end(),
+                target_max, [&group_begin, is_forward](offset_t val, size_t idx) {
+                    auto& mapping = *(group_begin + idx);
+                    return val < (is_forward ? mapping.refStartPos : mapping.refEndPos);
+                });
+            
+            // Iterate through candidates that are in range in both query and target space
+            for (auto idx_it = lower_it; idx_it != upper_it; ++idx_it) {
+                auto it2 = group_begin + *idx_it;
+                // Skip self or mappings that are before current position in query space
+                if (it2 <= it || it2 >= end_it2) continue;
+                // Skip if query positions are identical (can't form a chain)
                 if (it2->queryStartPos == it->queryStartPos) continue;
+                
                 int64_t query_dist = it2->queryStartPos - it->queryEndPos;
-                int64_t ref_dist = (it->strand == strnd::FWD) ? 
-                                   it2->refStartPos - it->refEndPos : 
-                                   it->refStartPos - it2->refEndPos;
+                int64_t ref_dist = is_forward ? 
+                                  it2->refStartPos - it->refEndPos : 
+                                  it->refStartPos - it2->refEndPos;
+                                  
                 // Check if the distance is within acceptable range
                 if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                     double dist_sq = static_cast<double>(query_dist) * query_dist + 
-                                     static_cast<double>(ref_dist) * ref_dist;
+                                    static_cast<double>(ref_dist) * ref_dist;
                     double max_dist_sq = static_cast<double>(max_dist) * max_dist;
                     if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2->chainPairScore) {
                         best_it2 = it2;
@@ -2720,6 +2761,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     }
                 }
             }
+            
             if (best_it2 != group_end) {
                 best_it2->chainPairScore = best_score;
                 best_it2->chainPairId = it->splitMappingId;
