@@ -2772,7 +2772,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 }
             }
             
-            if (best_it2 != group_end && best_it2 != nullptr) {
+            if (best_it2 != group_end) {
                 best_it2->chainPairScore = best_score;
                 best_it2->chainPairId = it->splitMappingId;
             }
