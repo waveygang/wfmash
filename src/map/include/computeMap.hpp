@@ -2789,10 +2789,11 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             
             // Step 3b: Use 2D spatial index for searching (new approach)
             if (use_spatial_index) {
-                offset_t query_end_bin = it->queryEndPos / bin_size;
+                // Ensure bins include the boundaries by ceiling division
+                offset_t query_end_bin = (it->queryEndPos + bin_size - 1) / bin_size;
                 offset_t ref_end_bin = (it->strand == strnd::FWD) ? 
-                                  it->refEndPos / bin_size : 
-                                  it->refStartPos / bin_size;
+                                      (it->refEndPos + bin_size - 1) / bin_size : 
+                                      (it->refStartPos + bin_size - 1) / bin_size;
                 
                 // Ensure bin includes the boundaries by ceiling division
                 offset_t query_end_bin = (it->queryEndPos + bin_size - 1) / bin_size;
