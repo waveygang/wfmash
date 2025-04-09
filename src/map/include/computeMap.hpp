@@ -2822,20 +2822,10 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 std::vector<std::pair<offset_t, offset_t>> offsets;
                 for (offset_t dx = 0; dx <= max_bin_dist; ++dx) {
                     // Use Manhattan distance to ensure we cover all needed bins
-                    // Only consider bins to the right of current position (or directly above/below)
-                    if (dx == 0) {
-                        // Special case: vertical line - only consider positive dy to avoid duplicates
-                        for (offset_t dy = 1; dy <= max_bin_dist; ++dy) {
-                            offsets.emplace_back(0, dy);
-                        }
-                    } else {
-                        // For all dx > 0, use full Manhattan distance range
-                        // This ensures we don't miss any bins that the binary search would find
-                        for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
-                            // Only include bins within Manhattan distance max_bin_dist
-                            if (std::abs(dx) + std::abs(dy) <= max_bin_dist) {
-                                offsets.emplace_back(dx, dy);
-                            }
+                    for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
+                        // Only include bins within Manhattan distance max_bin_dist
+                        if (std::abs(dx) + std::abs(dy) <= max_bin_dist) {
+                            offsets.emplace_back(dx, dy);
                         }
                     }
                 }
