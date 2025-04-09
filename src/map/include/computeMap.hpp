@@ -2658,7 +2658,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                            int max_dist,
                            progress_meter::ProgressMeter& progress) {
     // Enable debug output for spatial search
-    bool debug_spatial_search = false;
+    bool debug_spatial_search = true;
     // Early return if splitting is disabled or insufficient mappings
     if (!param.split || readMappings.size() < 2) return readMappings;
 
