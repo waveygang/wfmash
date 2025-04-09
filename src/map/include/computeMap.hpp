@@ -3011,9 +3011,8 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                         }
                         std::cerr << "\n";
                         
-                        // Use binary search results for now
-                        best_idx = binary_best_idx;
-                        best_score = binary_best_score;
+                        // Exit immediately to avoid flooding output with errors
+                        exit(1);
                                   
                         // For verification, use binary search results for consistency
                         best_idx = binary_best_idx;
