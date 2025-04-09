@@ -2657,6 +2657,8 @@ template <typename VecIn>
 VecIn mergeMappingsInRange(VecIn &readMappings,
                            int max_dist,
                            progress_meter::ProgressMeter& progress) {
+    // Enable debug output for spatial search
+    bool debug_spatial_search = false;
     // Early return if splitting is disabled or insufficient mappings
     if (!param.split || readMappings.size() < 2) return readMappings;
 
@@ -2795,6 +2797,15 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                       (it->refEndPos + bin_size - 1) / bin_size : 
                                       (it->refStartPos + bin_size - 1) / bin_size;
                 
+                if (debug_spatial_search) {
+                    std::cerr << "\n=== SPATIAL SEARCH DETAILS ===\n";
+                    std::cerr << "Focal mapping: query=[" << it->queryStartPos << "," << it->queryEndPos 
+                              << "], ref=[" << it->refStartPos << "," << it->refEndPos 
+                              << "], seqId=" << it->refSeqId << ", strand=" << (it->strand == strnd::FWD ? "+" : "-") << "\n";
+                    std::cerr << "Focal bin: query_bin=" << query_end_bin << ", ref_bin=" << ref_end_bin << "\n";
+                    std::cerr << "Max distance: " << max_dist << "bp, bin_size: " << bin_size << "\n";
+                }
+                
                 // Define maximum bin distance to search (ceiling division)
                 offset_t max_bin_dist = (max_dist + bin_size - 1) / bin_size;
                 
@@ -2820,6 +2831,18 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     }
                 }
                 
+                if (debug_spatial_search) {
+                    std::cerr << "Max bin distance: " << max_bin_dist << " bins\n";
+                    std::cerr << "Total bins to search: " << offsets.size() << "\n";
+                    std::cerr << "\nBin offsets (sorted by Manhattan distance):\n";
+                    for (size_t i = 0; i < std::min(size_t(20), offsets.size()); ++i) {
+                        std::cerr << "  (" << offsets[i].first << "," << offsets[i].second << ")";
+                        if (i % 5 == 4) std::cerr << "\n";
+                    }
+                    if (offsets.size() > 20) std::cerr << "  ... and " << (offsets.size() - 20) << " more\n";
+                    else std::cerr << "\n";
+                }
+                
                 // Sort offsets by Manhattan distance for wave expansion
                 std::sort(offsets.begin(), offsets.end(), 
                     [](const auto &a, const auto &b) {
@@ -2827,8 +2850,14 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                std::abs(b.first) + std::abs(b.second);
                     });
                 
+                int bins_searched = 0;
+                int bins_with_mappings = 0;
+                int total_mappings_found = 0;
+                int valid_mappings_found = 0;
+                
                 // Check all bins in order of increasing Manhattan distance
                 for (const auto &[dx, dy] : offsets) {
+                    bins_searched++;
                     SpatialKey search_key = {
                         it->refSeqId,
                         it->strand,
@@ -2838,10 +2867,29 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     
                     auto it_bin = spatial_index->find(search_key);
                     if (it_bin != spatial_index->end()) {
+                        bins_with_mappings++;
+                        int bin_mappings = 0;
+                        int bin_valid_mappings = 0;
+                        
+                        if (debug_spatial_search) {
+                            std::cerr << "\nSearching bin: (" << (query_end_bin + dx) << "," << (ref_end_bin + dy) 
+                                      << ") - Found " << it_bin->second.size() << " mappings\n";
+                        }
+                        
                         // Check each mapping in this bin
                         for (auto idx : it_bin->second) {
+                            bin_mappings++;
+                            total_mappings_found++;
+                            
                             // Skip self or mappings we've already processed
-                            if (idx <= current_idx || readMappings[idx].queryStartPos == it->queryStartPos) continue;
+                            if (idx <= current_idx || readMappings[idx].queryStartPos == it->queryStartPos) {
+                                if (debug_spatial_search) {
+                                    std::cerr << "  Mapping " << idx << " skipped: ";
+                                    if (idx <= current_idx) std::cerr << "already processed\n";
+                                    else std::cerr << "same query position\n";
+                                }
+                                continue;
+                            }
                             
                             auto &mapping = readMappings[idx];
                             int64_t query_dist = mapping.queryStartPos - it->queryEndPos;
@@ -2849,20 +2897,65 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                               mapping.refStartPos - it->refEndPos : 
                                               it->refStartPos - mapping.refEndPos;
                             
+                            if (debug_spatial_search) {
+                                std::cerr << "  Mapping " << idx << ": query=[" << mapping.queryStartPos << "," << mapping.queryEndPos 
+                                          << "], ref=[" << mapping.refStartPos << "," << mapping.refEndPos 
+                                          << "], query_dist=" << query_dist << ", ref_dist=" << ref_dist << "\n";
+                            }
+                            
                             // Exactly match the binary search logic
                             if (query_dist <= max_dist && 
                                 ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                                 double dist_sq = static_cast<double>(query_dist) * query_dist + 
                                                  static_cast<double>(ref_dist) * ref_dist;
+                                
+                                bin_valid_mappings++;
+                                valid_mappings_found++;
+                                
+                                if (debug_spatial_search) {
+                                    std::cerr << "    Valid mapping: dist_sq=" << dist_sq 
+                                              << ", best_score=" << best_score 
+                                              << ", chainPairScore=" << mapping.chainPairScore << "\n";
+                                }
+                                
                                 if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < mapping.chainPairScore) {
+                                    if (debug_spatial_search) {
+                                        std::cerr << "    ✓ New best match! idx=" << idx << ", dist_sq=" << dist_sq << "\n";
+                                    }
                                     best_idx = idx;
                                     best_score = dist_sq;
                                 }
+                            } else {
+                                if (debug_spatial_search) {
+                                    std::cerr << "    Invalid mapping: ";
+                                    if (query_dist > max_dist) std::cerr << "query_dist too large";
+                                    else if (ref_dist < -param.segLength/5) std::cerr << "ref_dist too negative";
+                                    else if (ref_dist > max_dist) std::cerr << "ref_dist too large";
+                                    std::cerr << "\n";
+                                }
                             }
                         }
+                        
+                        if (debug_spatial_search && bin_mappings > 0) {
+                            std::cerr << "  Summary: " << bin_valid_mappings << "/" << bin_mappings 
+                                      << " valid mappings in this bin\n";
+                        }
+                    } else if (debug_spatial_search) {
+                        std::cerr << "\nSearching bin: (" << (query_end_bin + dx) << "," << (ref_end_bin + dy) 
+                                  << ") - Empty\n";
                     }
-                    
-                    // No early termination - we need to check all bins within max_dist
+                }
+                
+                if (debug_spatial_search) {
+                    std::cerr << "\n=== SEARCH SUMMARY ===\n";
+                    std::cerr << "Bins searched: " << bins_searched << "\n";
+                    std::cerr << "Bins with mappings: " << bins_with_mappings << "\n";
+                    std::cerr << "Total mappings found: " << total_mappings_found << "\n";
+                    std::cerr << "Valid mappings found: " << valid_mappings_found << "\n";
+                    std::cerr << "Best match: " << (best_idx == std::numeric_limits<size_t>::max() ? "none" : 
+                                                   "idx=" + std::to_string(best_idx) + 
+                                                   ", score=" + std::to_string(best_score)) << "\n";
+                    std::cerr << "===============================\n";
                 }
                 
                 // Verify results match if we're in verification mode
