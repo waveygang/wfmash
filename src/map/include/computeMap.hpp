@@ -2794,20 +2794,33 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                   it->refEndPos / bin_size : 
                                   it->refStartPos / bin_size;
                 
-                // Define maximum bin distance to search
-                offset_t max_bin_dist = (max_dist / bin_size) + 1;
+                // Ensure bin includes the boundaries by ceiling division
+                offset_t query_end_bin = (it->queryEndPos + bin_size - 1) / bin_size;
+                offset_t ref_end_bin = (it->strand == strnd::FWD) ? 
+                                      (it->refEndPos + bin_size - 1) / bin_size : 
+                                      (it->refStartPos + bin_size - 1) / bin_size;
                 
-                // Precompute the bin offsets in order of increasing distance
+                // Define maximum bin distance to search (ceiling division)
+                offset_t max_bin_dist = (max_dist + bin_size - 1) / bin_size;
+                
+                // Calculate distance using Euclidean distance for accurate search boundary
+                double max_dist_sq = static_cast<double>(max_dist) * max_dist;
+                
+                // Precompute all bin offsets that could contain valid mappings
                 std::vector<std::pair<offset_t, offset_t>> offsets;
                 for (offset_t dx = 0; dx <= max_bin_dist; ++dx) {
-                    for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
-                        // Only include dx > 0 to match binary search behavior (which only looks ahead)
-                        // and allow dx=0 only if dy>0 to handle vertical alignments
-                        if ((dx > 0) || (dx == 0 && dy > 0)) {
-                            offset_t manhattan_dist = std::abs(dx) + std::abs(dy);
-                            if (manhattan_dist <= 2 * max_bin_dist) { // Diamond shape limit
-                                offsets.emplace_back(dx, dy);
-                            }
+                    // Calculate max possible y-offset based on remaining distance in euclidean space
+                    // Only consider bins to the right of current position (or directly above/below)
+                    if (dx == 0) {
+                        // Special case: vertical line - only consider positive dy to avoid duplicates
+                        for (offset_t dy = 1; dy <= max_bin_dist; ++dy) {
+                            offsets.emplace_back(0, dy);
+                        }
+                    } else {
+                        // For all other dx > 0, calculate the maximum dy range
+                        offset_t max_dy = std::ceil(std::sqrt(max_bin_dist * max_bin_dist - dx * dx));
+                        for (offset_t dy = -max_dy; dy <= max_dy; ++dy) {
+                            offsets.emplace_back(dx, dy);
                         }
                     }
                 }
@@ -2819,7 +2832,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                std::abs(b.first) + std::abs(b.second);
                     });
                 
-                // Check bins in order of increasing Manhattan distance (wave expansion)
+                // Check all bins in order of increasing Manhattan distance
                 for (const auto &[dx, dy] : offsets) {
                     SpatialKey search_key = {
                         it->refSeqId,
@@ -2846,7 +2859,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                 ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                                 double dist_sq = static_cast<double>(query_dist) * query_dist + 
                                                  static_cast<double>(ref_dist) * ref_dist;
-                                double max_dist_sq = static_cast<double>(max_dist) * max_dist;
                                 if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < mapping.chainPairScore) {
                                     best_idx = idx;
                                     best_score = dist_sq;
@@ -2855,12 +2867,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                         }
                     }
                     
-                    // Only early terminate if we've found a good enough match
-                    // This matches the behavior of the binary search more closely
-                    if (best_idx != std::numeric_limits<size_t>::max() && 
-                        best_score < (max_dist * max_dist / 4)) {
-                        break;
-                    }
+                    // No early termination - we need to check all bins within max_dist
                 }
                 
                 // Verify results match if we're in verification mode
