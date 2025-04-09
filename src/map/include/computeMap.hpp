@@ -2737,20 +2737,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     return val < (is_forward ? mapping.refStartPos : mapping.refEndPos);
                 });
             
-            // Collect mappings that are in range in both query and target space
-            std::vector<MappingResult*> intersection_candidates;
-            intersection_candidates.reserve(std::distance(lower_it, upper_it));
-            
-            for (auto idx_it = lower_it; idx_it != upper_it; ++idx_it) {
-                auto it2 = group_begin + *idx_it;
-                // Skip self or mappings outside query bounds
-                if (it2 <= it || it2 >= end_it2) continue;
-                // Skip if query positions are identical (can't form a chain)
-                if (it2->queryStartPos == it->queryStartPos) continue;
-                
-                intersection_candidates.push_back(&(*it2));
-            }
-            
             // Store both pointers and their positions in the collection
             std::vector<std::pair<MappingResult*, size_t>> intersection_candidates;
             intersection_candidates.reserve(std::distance(lower_it, upper_it));
@@ -2762,11 +2748,13 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 // Skip if query positions are identical (can't form a chain)
                 if (it2->queryStartPos == it->queryStartPos) continue;
                 
-                intersection_candidates.push_back({&(*it2), *idx_it});
+                intersection_candidates.push_back(std::make_pair(&(*it2), *idx_it));
             }
             
             // Process only mappings in the intersection of query and target bounds
-            for (auto& [mapping_ptr, idx] : intersection_candidates) {
+            for (auto& candidate_pair : intersection_candidates) {
+                auto mapping_ptr = candidate_pair.first;
+                auto idx = candidate_pair.second;
                 auto& it2 = *mapping_ptr;
                 
                 int64_t query_dist = it2.queryStartPos - it->queryEndPos;
