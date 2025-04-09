@@ -2897,6 +2897,9 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                   << it->queryEndPos << "], r=["
                                   << it->refStartPos << "," 
                                   << it->refEndPos << "]\n";
+                        
+                        // Exit immediately to avoid flooding output with errors
+                        exit(1);
                                   
                         // For verification, use binary search results for consistency
                         best_idx = binary_best_idx;
