@@ -2658,8 +2658,8 @@ template <typename VecIn>
 VecIn mergeMappingsInRange(VecIn &readMappings,
                            int max_dist,
                            progress_meter::ProgressMeter& progress) {
-    // Enable debug output for spatial search
-    bool debug_spatial_search = true;
+    // Only enable debug output when there's a mismatch
+    bool debug_spatial_search = false;
     // Early return if splitting is disabled or insufficient mappings
     if (!param.split || readMappings.size() < 2) return readMappings;
 
@@ -3038,6 +3038,9 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                         (best_idx != std::numeric_limits<size_t>::max() && 
                          binary_best_idx != std::numeric_limits<size_t>::max() &&
                          std::abs(best_score - binary_best_score) > 1e-6)) {
+                        
+                        // When a mismatch is detected, enable debug output and reprocess the current mapping
+                        debug_spatial_search = true;
                         
                         // Detailed debug output
                         std::cerr << "\nMISMATCH DETECTED:\n";
