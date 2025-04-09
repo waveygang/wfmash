@@ -2687,8 +2687,8 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
     struct SpatialKey {
         seqno_t refSeqId;
         strand_t strand;
-        int query_bin;
-        int ref_bin;
+        offset_t query_bin;
+        offset_t ref_bin;
         
         bool operator==(const SpatialKey &other) const {
             return refSeqId == other.refSeqId && 
@@ -2785,19 +2785,19 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             
             // Step 3b: Use 2D spatial index for searching (new approach)
             if (use_spatial_index) {
-                int query_end_bin = it->queryEndPos / bin_size;
-                int ref_end_bin = (it->strand == strnd::FWD) ? 
+                offset_t query_end_bin = it->queryEndPos / bin_size;
+                offset_t ref_end_bin = (it->strand == strnd::FWD) ? 
                                   it->refEndPos / bin_size : 
                                   it->refStartPos / bin_size;
                 
                 // Define maximum bin distance to search
-                int max_bin_dist = (max_dist / bin_size) + 1;
+                offset_t max_bin_dist = (max_dist / bin_size) + 1;
                 
                 // Precompute the bin offsets in order of increasing distance
-                std::vector<std::pair<int, int>> offsets;
-                for (int dx = 0; dx <= max_bin_dist; ++dx) {
-                    for (int dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
-                        int manhattan_dist = std::abs(dx) + std::abs(dy);
+                std::vector<std::pair<offset_t, offset_t>> offsets;
+                for (offset_t dx = 0; dx <= max_bin_dist; ++dx) {
+                    for (offset_t dy = -max_bin_dist; dy <= max_bin_dist; ++dy) {
+                        offset_t manhattan_dist = std::abs(dx) + std::abs(dy);
                         if (manhattan_dist <= 2 * max_bin_dist) { // Diamond shape limit
                             offsets.emplace_back(dx, dy);
                         }
