@@ -2812,8 +2812,10 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     std::cerr << "Max distance: " << max_dist << "bp, bin_size: " << bin_size << "\n";
                 }
                 
-                // Define maximum bin distance to search (ceiling division)
-                offset_t max_bin_dist = (max_dist + bin_size - 1) / bin_size;
+                // Define maximum bin distance to search
+                // We need to use ceil(max_dist/bin_size) + 1 to ensure we capture all possible mappings
+                // The +1 is critical to handle cases where mappings are just at the edge of the search radius
+                offset_t max_bin_dist = (max_dist + bin_size - 1) / bin_size + 1;
                 
                 // Calculate distance using Euclidean distance for accurate search boundary
                 double max_dist_sq = static_cast<double>(max_dist) * max_dist;
@@ -2858,6 +2860,25 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 if (debug_spatial_search) {
                     std::cerr << "Max bin distance: " << max_bin_dist << " bins\n";
                     std::cerr << "Total bins to search: " << offsets.size() << "\n";
+                    
+                    // Check if binary result's bin would be in our search space
+                    if (binary_best_idx != std::numeric_limits<size_t>::max()) {
+                        offset_t binary_q_bin = (readMappings[binary_best_idx].queryStartPos + bin_size - 1) / bin_size;
+                        offset_t binary_r_bin = (readMappings[binary_best_idx].refStartPos + bin_size - 1) / bin_size;
+                        bool binary_bin_found = false;
+                        
+                        for (const auto& [dx, dy] : offsets) {
+                            if (query_end_bin + dx == binary_q_bin && ref_end_bin + dy == binary_r_bin) {
+                                binary_bin_found = true;
+                                break;
+                            }
+                        }
+                        
+                        std::cerr << "Binary result bin: (" << binary_q_bin << "," << binary_r_bin 
+                                  << ") - " << (binary_bin_found ? "INCLUDED" : "NOT INCLUDED") 
+                                  << " in search space\n";
+                    }
+                    
                     std::cerr << "\nBin offsets (sorted by Manhattan distance):\n";
                     for (size_t i = 0; i < std::min(size_t(20), offsets.size()); ++i) {
                         std::cerr << "  (" << offsets[i].first << "," << offsets[i].second << ")";
