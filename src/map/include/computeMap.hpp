@@ -2751,8 +2751,22 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 intersection_candidates.push_back(&(*it2));
             }
             
+            // Store both pointers and their positions in the collection
+            std::vector<std::pair<MappingResult*, size_t>> intersection_candidates;
+            intersection_candidates.reserve(std::distance(lower_it, upper_it));
+            
+            for (auto idx_it = lower_it; idx_it != upper_it; ++idx_it) {
+                auto it2 = group_begin + *idx_it;
+                // Skip self or mappings outside query bounds
+                if (it2 <= it || it2 >= end_it2) continue;
+                // Skip if query positions are identical (can't form a chain)
+                if (it2->queryStartPos == it->queryStartPos) continue;
+                
+                intersection_candidates.push_back({&(*it2), *idx_it});
+            }
+            
             // Process only mappings in the intersection of query and target bounds
-            for (auto& mapping_ptr : intersection_candidates) {
+            for (auto& [mapping_ptr, idx] : intersection_candidates) {
                 auto& it2 = *mapping_ptr;
                 
                 int64_t query_dist = it2.queryStartPos - it->queryEndPos;
@@ -2766,7 +2780,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                     static_cast<double>(ref_dist) * ref_dist;
                     double max_dist_sq = static_cast<double>(max_dist) * max_dist;
                     if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2.chainPairScore) {
-                        best_it2 = group_begin + *idx_it; // Use the actual iterator, not a pointer
+                        best_it2 = group_begin + idx; // Use the actual iterator, not a pointer
                         best_score = dist_sq;
                     }
                 }
