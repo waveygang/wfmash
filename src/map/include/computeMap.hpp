@@ -17,6 +17,7 @@
 #include <cassert>
 #include <numeric>
 #include <iostream>
+#include <iomanip>    // For std::setprecision
 #include <filesystem>
 namespace fs = std::filesystem;
 #include <queue>
@@ -2919,8 +2920,8 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                 
                                 if (debug_spatial_search) {
                                     std::cerr << "    Valid mapping: dist_sq=" << dist_sq 
-                                              << ", best_score=" << best_score 
-                                              << ", chainPairScore=" << mapping.chainPairScore << "\n";
+                                              << ", best_score=" << std::scientific << std::setprecision(6) << best_score 
+                                              << ", chainPairScore=" << mapping.chainPairScore << std::fixed << "\n";
                                 }
                                 
                                 if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < mapping.chainPairScore) {
