@@ -2841,12 +2841,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                               mapping.refStartPos - it->refEndPos : 
                                               it->refStartPos - mapping.refEndPos;
                             
-                            // Check if the distance is within acceptable range - match binary search conditions exactly
-                            int64_t query_dist = mapping.queryStartPos - it->queryEndPos;
-                            int64_t ref_dist = (it->strand == strnd::FWD) ? 
-                                              mapping.refStartPos - it->refEndPos : 
-                                              it->refStartPos - mapping.refEndPos;
-                            
                             // Exactly match the binary search logic
                             if (query_dist <= max_dist && 
                                 ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
