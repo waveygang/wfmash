@@ -2878,95 +2878,145 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 int bins_with_mappings = 0;
                 int total_mappings_found = 0;
                 int valid_mappings_found = 0;
+                bool found_valid_mapping = false;
+                int current_wave_dist = -1;
+                int next_wave_dist = -1;
                 
-                // Check all bins in order of increasing Manhattan distance
-                for (const auto &[dx, dy] : offsets) {
-                    bins_searched++;
-                    SpatialKey search_key = {
-                        it->refSeqId,
-                        it->strand,
-                        query_end_bin + dx,
-                        ref_end_bin + dy
-                    };
+                // Group offset indices by their Manhattan distance (wave)
+                std::vector<std::vector<size_t>> wave_indices;
+                int prev_dist = -1;
+                for (size_t i = 0; i < offsets.size(); i++) {
+                    int dist = std::abs(offsets[i].first) + std::abs(offsets[i].second);
+                    if (dist != prev_dist) {
+                        wave_indices.push_back({i});
+                        prev_dist = dist;
+                    } else {
+                        wave_indices.back().push_back(i);
+                    }
+                }
+                
+                // Process each wave (bins with same Manhattan distance)
+                for (size_t wave = 0; wave < wave_indices.size(); wave++) {
+                    // Get the current wave's Manhattan distance
+                    int wave_dist = std::abs(offsets[wave_indices[wave][0]].first) + 
+                                    std::abs(offsets[wave_indices[wave][0]].second);
                     
-                    auto it_bin = spatial_index->find(search_key);
-                    if (it_bin != spatial_index->end()) {
-                        bins_with_mappings++;
-                        int bin_mappings = 0;
-                        int bin_valid_mappings = 0;
+                    if (debug_spatial_search) {
+                        std::cerr << "\n=== Processing Wave " << wave << " (Manhattan dist = " 
+                                  << wave_dist << ") ===\n";
+                    }
+                    
+                    // Process all bins in this wave
+                    for (auto offset_idx : wave_indices[wave]) {
+                        const auto& [dx, dy] = offsets[offset_idx];
+                        bins_searched++;
                         
-                        if (debug_spatial_search) {
-                            std::cerr << "\nSearching bin: (" << (query_end_bin + dx) << "," << (ref_end_bin + dy) 
-                                      << ") - Found " << it_bin->second.size() << " mappings\n";
-                        }
+                        SpatialKey search_key = {
+                            it->refSeqId,
+                            it->strand,
+                            query_end_bin + dx,
+                            ref_end_bin + dy
+                        };
                         
-                        // Check each mapping in this bin
-                        for (auto idx : it_bin->second) {
-                            bin_mappings++;
-                            total_mappings_found++;
-                            
-                            // Skip self or mappings we've already processed
-                            if (idx <= current_idx || readMappings[idx].queryStartPos == it->queryStartPos) {
-                                if (debug_spatial_search) {
-                                    std::cerr << "  Mapping " << idx << " skipped: ";
-                                    if (idx <= current_idx) std::cerr << "already processed\n";
-                                    else std::cerr << "same query position\n";
-                                }
-                                continue;
-                            }
-                            
-                            auto &mapping = readMappings[idx];
-                            int64_t query_dist = mapping.queryStartPos - it->queryEndPos;
-                            int64_t ref_dist = (it->strand == strnd::FWD) ? 
-                                              mapping.refStartPos - it->refEndPos : 
-                                              it->refStartPos - mapping.refEndPos;
+                        auto it_bin = spatial_index->find(search_key);
+                        if (it_bin != spatial_index->end()) {
+                            bins_with_mappings++;
+                            int bin_mappings = 0;
+                            int bin_valid_mappings = 0;
                             
                             if (debug_spatial_search) {
-                                std::cerr << "  Mapping " << idx << ": query=[" << mapping.queryStartPos << "," << mapping.queryEndPos 
-                                          << "], ref=[" << mapping.refStartPos << "," << mapping.refEndPos 
-                                          << "], query_dist=" << query_dist << ", ref_dist=" << ref_dist << "\n";
+                                std::cerr << "\nSearching bin: (" << (query_end_bin + dx) << "," << (ref_end_bin + dy) 
+                                          << ") - Found " << it_bin->second.size() << " mappings\n";
                             }
                             
-                            // Exactly match the binary search logic
-                            if (query_dist <= max_dist && 
-                                ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
-                                double dist_sq = static_cast<double>(query_dist) * query_dist + 
-                                                 static_cast<double>(ref_dist) * ref_dist;
+                            // Check each mapping in this bin
+                            for (auto idx : it_bin->second) {
+                                bin_mappings++;
+                                total_mappings_found++;
                                 
-                                bin_valid_mappings++;
-                                valid_mappings_found++;
-                                
-                                if (debug_spatial_search) {
-                                    std::cerr << "    Valid mapping: dist_sq=" << dist_sq 
-                                              << ", best_score=" << std::scientific << std::setprecision(6) << best_score 
-                                              << ", chainPairScore=" << mapping.chainPairScore << std::fixed << "\n";
-                                }
-                                
-                                if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < mapping.chainPairScore) {
+                                // Skip self or mappings we've already processed
+                                if (idx <= current_idx || readMappings[idx].queryStartPos == it->queryStartPos) {
                                     if (debug_spatial_search) {
-                                        std::cerr << "    ✓ New best match! idx=" << idx << ", dist_sq=" << dist_sq << "\n";
+                                        std::cerr << "  Mapping " << idx << " skipped: ";
+                                        if (idx <= current_idx) std::cerr << "already processed\n";
+                                        else std::cerr << "same query position\n";
                                     }
-                                    best_idx = idx;
-                                    best_score = dist_sq;
+                                    continue;
                                 }
-                            } else {
+                                
+                                auto &mapping = readMappings[idx];
+                                int64_t query_dist = mapping.queryStartPos - it->queryEndPos;
+                                int64_t ref_dist = (it->strand == strnd::FWD) ? 
+                                                  mapping.refStartPos - it->refEndPos : 
+                                                  it->refStartPos - mapping.refEndPos;
+                                
                                 if (debug_spatial_search) {
-                                    std::cerr << "    Invalid mapping: ";
-                                    if (query_dist > max_dist) std::cerr << "query_dist too large";
-                                    else if (ref_dist < -param.segLength/5) std::cerr << "ref_dist too negative";
-                                    else if (ref_dist > max_dist) std::cerr << "ref_dist too large";
-                                    std::cerr << "\n";
+                                    std::cerr << "  Mapping " << idx << ": query=[" << mapping.queryStartPos << "," << mapping.queryEndPos 
+                                              << "], ref=[" << mapping.refStartPos << "," << mapping.refEndPos 
+                                              << "], query_dist=" << query_dist << ", ref_dist=" << ref_dist << "\n";
+                                }
+                                
+                                // Exactly match the binary search logic
+                                if (query_dist <= max_dist && 
+                                    ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
+                                    double dist_sq = static_cast<double>(query_dist) * query_dist + 
+                                                     static_cast<double>(ref_dist) * ref_dist;
+                                    
+                                    bin_valid_mappings++;
+                                    valid_mappings_found++;
+                                    found_valid_mapping = true;
+                                    
+                                    if (debug_spatial_search) {
+                                        std::cerr << "    Valid mapping: dist_sq=" << dist_sq 
+                                                  << ", best_score=" << std::scientific << std::setprecision(6) << best_score 
+                                                  << ", chainPairScore=" << mapping.chainPairScore << std::fixed << "\n";
+                                    }
+                                    
+                                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < mapping.chainPairScore) {
+                                        if (debug_spatial_search) {
+                                            std::cerr << "    ✓ New best match! idx=" << idx << ", dist_sq=" << dist_sq << "\n";
+                                        }
+                                        best_idx = idx;
+                                        best_score = dist_sq;
+                                    }
+                                } else {
+                                    if (debug_spatial_search) {
+                                        std::cerr << "    Invalid mapping: ";
+                                        if (query_dist > max_dist) std::cerr << "query_dist too large";
+                                        else if (ref_dist < -param.segLength/5) std::cerr << "ref_dist too negative";
+                                        else if (ref_dist > max_dist) std::cerr << "ref_dist too large";
+                                        std::cerr << "\n";
+                                    }
                                 }
                             }
+                            
+                            if (debug_spatial_search && bin_mappings > 0) {
+                                std::cerr << "  Summary: " << bin_valid_mappings << "/" << bin_mappings 
+                                          << " valid mappings in this bin\n";
+                            }
+                        } else if (debug_spatial_search) {
+                            std::cerr << "\nSearching bin: (" << (query_end_bin + dx) << "," << (ref_end_bin + dy) 
+                                      << ") - Empty\n";
                         }
-                        
-                        if (debug_spatial_search && bin_mappings > 0) {
-                            std::cerr << "  Summary: " << bin_valid_mappings << "/" << bin_mappings 
-                                      << " valid mappings in this bin\n";
+                    }
+                    
+                    // If we found a valid mapping in the first wave, note its distance
+                    if (found_valid_mapping && current_wave_dist == -1) {
+                        current_wave_dist = wave_dist;
+                        // Next wave distance will be the next Manhattan distance
+                        if (wave + 1 < wave_indices.size()) {
+                            next_wave_dist = std::abs(offsets[wave_indices[wave+1][0]].first) + 
+                                             std::abs(offsets[wave_indices[wave+1][0]].second);
                         }
-                    } else if (debug_spatial_search) {
-                        std::cerr << "\nSearching bin: (" << (query_end_bin + dx) << "," << (ref_end_bin + dy) 
-                                  << ") - Empty\n";
+                    }
+                    
+                    // Short-circuit after completing the wave after the one where we found a mapping
+                    if (found_valid_mapping && wave_dist > next_wave_dist && next_wave_dist > 0) {
+                        if (debug_spatial_search) {
+                            std::cerr << "\n=== Short-circuiting search after wave " << wave 
+                                      << " (found mapping in wave with dist=" << current_wave_dist << ") ===\n";
+                        }
+                        break;
                     }
                 }
                 
