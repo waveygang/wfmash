@@ -2766,7 +2766,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                                     static_cast<double>(ref_dist) * ref_dist;
                     double max_dist_sq = static_cast<double>(max_dist) * max_dist;
                     if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2.chainPairScore) {
-                        best_it2 = &it2;
+                        best_it2 = group_begin + *idx_it; // Use the actual iterator, not a pointer
                         best_score = dist_sq;
                     }
                 }
