@@ -26,7 +26,7 @@ private:
     
     // Update intervals (milliseconds)
     const uint64_t update_interval = 100;  // For progress bar (TTY)
-    const uint64_t file_update_interval = 60000;  // 60 seconds for file output
+    const uint64_t file_update_interval = 2000;  // 2 seconds for file output
     std::chrono::time_point<std::chrono::high_resolution_clock> last_file_update;
 
     void update_progress_thread() {
