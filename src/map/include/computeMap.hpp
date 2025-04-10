@@ -23,6 +23,7 @@ namespace fs = std::filesystem;
 #include <algorithm>
 #include <unordered_set>
 #include <mutex>
+#include <thread>
 #include <sstream>
 #include "taskflow/taskflow.hpp"
 
@@ -522,6 +523,21 @@ namespace skch
           // Create the index subsets
           auto target_subsets = createTargetSubsets(targetSequenceNames);
 
+          // Calculate average subset size and log
+          uint64_t total_target_subset_size = 0;
+          for (const auto& subset : target_subsets) {
+              for (const auto& seqName : subset) {
+                  seqno_t seqId = idManager->getSequenceId(seqName);
+                  total_target_subset_size += idManager->getSequenceLength(seqId);
+              }
+          }
+          double avg_subset_size = target_subsets.size() ? 
+              (double)total_target_subset_size / target_subsets.size() : 0;
+
+          std::cerr << "[wfmash::mashmap] Processing " << target_subsets.size() 
+                    << " target subsets (≈" << std::fixed << std::setprecision(0) << avg_subset_size 
+                    << "bp/subset)" << std::endl;
+
           // Flag for whether we're done after creating indices
           bool exit_after_indices = param.create_index_only;
 
@@ -530,13 +546,16 @@ namespace skch
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
               
+              std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
+                        << "/" << target_subsets.size() << " (mapping)" << std::endl;
+              
               // Use a single index filename for all subsets
               std::string indexFilename = param.indexFilename.string();
               
               // Handle index creation
               if (param.create_index_only) {
-                  std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
-                            << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
+                  std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
+                            << "/" << target_subsets.size() << " (indexing): " << indexFilename << std::endl;
     
                   // Build the index directly
                   refSketch = new skch::Sketch(param, *idManager, target_subset);
@@ -570,7 +589,7 @@ namespace skch
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
+              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size(), &target_subsets]() {
                   if (!param.indexFilename.empty()) {
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
@@ -734,6 +753,19 @@ namespace skch
                                           output
                                       );
 
+                                      // Print initial progress message for the first fragment
+                                      // and reset the timer when actual work begins
+                                      static std::once_flag first_fragment;
+                                      std::call_once(first_fragment, [&output]() {
+                                          // Reset the progress meter's start time to now
+                                          output->progress.print_progress_explicitly();
+                                          
+                                          // Also reset for progress bar mode
+                                          if (output->progress.use_progress_bar && output->progress.progress_bar) {
+                                              output->progress.start_time = std::chrono::high_resolution_clock::now();
+                                          }
+                                      });
+                                      
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
@@ -2688,6 +2720,21 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 return m.refSeqId == refSeqId && m.strand == strand;
             });
 
+        // Create index by target position for this group
+        std::vector<size_t> target_index;
+        target_index.reserve(std::distance(group_begin, group_end));
+        
+        // Populate index with original indices
+        for (auto it = group_begin; it != group_end; ++it) {
+            target_index.push_back(std::distance(group_begin, it));
+        }
+        
+        // Sort the index by reference start position
+        std::sort(target_index.begin(), target_index.end(), 
+            [&group_begin](size_t i1, size_t i2) {
+                return (group_begin + i1)->refStartPos < (group_begin + i2)->refStartPos;
+            });
+
         // Process mappings within the group
         for (auto it = group_begin; it != group_end; ++it) {
             if (it->chainPairScore != std::numeric_limits<double>::max()) {
@@ -2696,30 +2743,112 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             double best_score = std::numeric_limits<double>::max();
             auto best_it2 = group_end;
 
-            // Step 3: Use binary search to find range within max_dist
+            // Quick check: if the next mapping is very close in both query and target space,
+            // we can avoid the binary search entirely
+            auto next_it = it + 1;
+            if (next_it != group_end) {
+                bool is_forward = it->strand == strnd::FWD;
+                int64_t query_dist = next_it->queryStartPos - it->queryEndPos;
+                int64_t ref_dist = is_forward ? 
+                                  next_it->refStartPos - it->refEndPos : 
+                                  it->refStartPos - next_it->refEndPos;
+                
+                // If distances are small and within acceptable range, use this mapping directly
+                if (query_dist > 0 && query_dist <= max_dist/10 && 
+                    ref_dist >= -param.segLength/5 && ref_dist <= max_dist/10) {
+                    double dist_sq = static_cast<double>(query_dist) * query_dist + 
+                                    static_cast<double>(ref_dist) * ref_dist;
+                    double threshold_sq = static_cast<double>(max_dist/10) * static_cast<double>(max_dist/10) * 2;
+                    
+                    if (dist_sq < threshold_sq && dist_sq < next_it->chainPairScore) {
+                        next_it->chainPairScore = dist_sq;
+                        next_it->chainPairId = it->splitMappingId;
+                        continue; // Skip binary search and candidate processing
+                    }
+                }
+            }
+
+            // Step 3: Use binary search to find range within max_dist in query space
             auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
                 [](offset_t val, const MappingResult &m) {
                     return val < m.queryStartPos;
                 });
-
-            // Check mappings within the range
-            for (auto it2 = it + 1; it2 != end_it2; ++it2) {
+            
+            // Find matching range in target space using the index
+            bool is_forward = it->strand == strnd::FWD;
+            offset_t target_pos = is_forward ? it->refEndPos : it->refStartPos;
+            
+            // Use consistent range for both target and query spaces
+            // Note: For reverse strand, we still need a minimum bound to avoid negative positions
+            offset_t target_min = (target_pos > max_dist) ? target_pos - max_dist : 0;
+            offset_t target_max = target_pos + max_dist;
+            
+            // Binary search for lower bound in target space - use consistent position references
+            // For both strands, we want to find the first mapping that overlaps our target window
+            auto lower_it = std::lower_bound(target_index.begin(), target_index.end(),
+                target_min, [&group_begin, is_forward](size_t idx, offset_t val) {
+                    auto& mapping = *(group_begin + idx);
+                    // For forward strand, compare start position
+                    // For reverse strand, compare end position (which is smaller in reference coordinates)
+                    return is_forward ? mapping.refStartPos < val : mapping.refEndPos < val;
+                });
+            
+            // Binary search for upper bound in target space
+            auto upper_it = std::upper_bound(lower_it, target_index.end(),
+                target_max, [&group_begin, is_forward](offset_t val, size_t idx) {
+                    auto& mapping = *(group_begin + idx);
+                    // For forward strand, compare start position
+                    // For reverse strand, compare end position (which is smaller in reference coordinates)
+                    return val < (is_forward ? mapping.refStartPos : mapping.refEndPos);
+                });
+            
+            // Store both pointers and their positions in the collection
+            std::vector<std::pair<MappingResult*, size_t>> intersection_candidates;
+            intersection_candidates.reserve(std::distance(lower_it, upper_it));
+            
+            for (auto idx_it = lower_it; idx_it != upper_it; ++idx_it) {
+                auto it2 = group_begin + *idx_it;
+                // Skip self or mappings outside query bounds
+                if (it2 <= it || it2 >= end_it2) continue;
+                // Skip if query positions are identical (can't form a chain)
                 if (it2->queryStartPos == it->queryStartPos) continue;
-                int64_t query_dist = it2->queryStartPos - it->queryEndPos;
-                int64_t ref_dist = (it->strand == strnd::FWD) ? 
-                                   it2->refStartPos - it->refEndPos : 
-                                   it->refStartPos - it2->refEndPos;
+                
+                intersection_candidates.push_back(std::make_pair(&(*it2), *idx_it));
+            }
+            
+            int64_t best_ref_dist = std::numeric_limits<int64_t>::max();
+            
+            // Process only mappings in the intersection of query and target bounds
+            for (auto& candidate_pair : intersection_candidates) {
+                auto mapping_ptr = candidate_pair.first;
+                auto idx = candidate_pair.second;
+                auto& it2 = *mapping_ptr;
+                
+                int64_t query_dist = it2.queryStartPos - it->queryEndPos;
+                int64_t ref_dist = is_forward ? 
+                                  it2.refStartPos - it->refEndPos : 
+                                  it->refStartPos - it2.refEndPos;
+                
+                // Early stopping optimization:
+                // If we already found a good mapping and the query distance to this mapping
+                // is larger than the target distance of our best mapping, we can't find better
+                if (best_it2 != group_end && query_dist > best_ref_dist) {
+                    break;
+                }
+                                  
                 // Check if the distance is within acceptable range
                 if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                     double dist_sq = static_cast<double>(query_dist) * query_dist + 
-                                     static_cast<double>(ref_dist) * ref_dist;
+                                    static_cast<double>(ref_dist) * ref_dist;
                     double max_dist_sq = static_cast<double>(max_dist) * max_dist;
-                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2->chainPairScore) {
-                        best_it2 = it2;
+                    if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2.chainPairScore) {
+                        best_it2 = group_begin + idx; // Use the actual iterator, not a pointer
                         best_score = dist_sq;
+                        best_ref_dist = std::abs(ref_dist);
                     }
                 }
             }
+            
             if (best_it2 != group_end) {
                 best_it2->chainPairScore = best_score;
                 best_it2->chainPairId = it->splitMappingId;
