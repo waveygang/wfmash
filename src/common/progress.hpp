@@ -130,10 +130,10 @@ public:
                 indicators::option::MaxProgress{total},
                 indicators::option::Stream{std::cerr}
             );
-            
-            // Start the update thread
-            update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
         }
+        
+        // Always start the update thread, for both progress bar and file output modes
+        update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
     }
 
     ~ProgressMeter() {
