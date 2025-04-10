@@ -754,9 +754,16 @@ namespace skch
                                       );
 
                                       // Print initial progress message for the first fragment
+                                      // and reset the timer when actual work begins
                                       static std::once_flag first_fragment;
                                       std::call_once(first_fragment, [&output]() {
+                                          // Reset the progress meter's start time to now
                                           output->progress.print_progress_explicitly();
+                                          
+                                          // Also reset for progress bar mode
+                                          if (output->progress.use_progress_bar && output->progress.progress_bar) {
+                                              output->progress.start_time = std::chrono::high_resolution_clock::now();
+                                          }
                                       });
                                       
                                       std::vector<IntervalPoint> intervalPoints;

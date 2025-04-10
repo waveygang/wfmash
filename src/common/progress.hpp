@@ -18,11 +18,8 @@ private:
     std::string banner;
     std::atomic<uint64_t> total;
     std::atomic<uint64_t> completed;
-    std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
-    bool use_progress_bar;
     std::atomic<bool> is_finished;
     std::atomic<bool> running;
-    std::unique_ptr<indicators::BlockProgressBar> progress_bar;
     std::thread update_thread;
     // Tracking if we've already printed an initial message
     std::atomic<bool> initial_message_printed{false};
@@ -106,9 +103,15 @@ private:
     }
 
 public:
+    // Make these accessible for fine-grained timing control
+    std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
+    bool use_progress_bar;
+    std::unique_ptr<indicators::BlockProgressBar> progress_bar;
+    
     ProgressMeter(uint64_t _total, const std::string& _banner, const bool& _use_progress_bar)
         : banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
         
+        // Initialize start time but it will be reset when actual work begins
         start_time = std::chrono::high_resolution_clock::now();
         last_file_update = start_time;
         
@@ -190,8 +193,9 @@ public:
     // Method to explicitly print initial progress message
     void print_progress_explicitly() {
         if (!use_progress_bar && !initial_message_printed.exchange(true)) {
+            // Reset the start time when work actually begins
             auto now = std::chrono::high_resolution_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time);
+            start_time = now;
             
             std::cerr << banner << " [0.0% complete, 0/" << total.load() 
                       << " units, 0s elapsed]" << std::endl;
