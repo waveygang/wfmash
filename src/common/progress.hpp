@@ -26,7 +26,7 @@ private:
     
     // Update intervals (milliseconds)
     const uint64_t update_interval = 100;  // For progress bar (TTY)
-    const uint64_t file_update_interval = 2000;  // 2 seconds for file output
+    const uint64_t file_update_interval = 10000;  // 10 seconds for file output
     std::chrono::time_point<std::chrono::high_resolution_clock> last_file_update;
 
     void update_progress_thread() {
@@ -178,8 +178,8 @@ public:
             auto elapsed_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(
                 now - last_file_update).count();
                 
-            // Only update if at least 2 seconds have passed since last update to prevent spamming
-            if (elapsed_since_update > 2000) {
+            // Only update if at least 10 seconds have passed since last update to prevent spamming
+            if (elapsed_since_update > 10000) {
                 float progress_percent = static_cast<float>(new_val) / total.load() * 100.0f;
                 std::cerr << banner << " [" 
                           << std::fixed << std::setprecision(1) << progress_percent << "% complete, " 
