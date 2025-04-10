@@ -2766,8 +2766,8 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 target_max, [&group_begin, is_forward](offset_t val, size_t idx) {
                     auto& mapping = *(group_begin + idx);
                     // For forward strand, compare start position
-                    // For reverse strand, compare start position (which is larger in reference coordinates)
-                    return val < (is_forward ? mapping.refStartPos : mapping.refStartPos);
+                    // For reverse strand, compare end position (which is smaller in reference coordinates)
+                    return val < (is_forward ? mapping.refStartPos : mapping.refEndPos);
                 });
             
             // Store both pointers and their positions in the collection
