@@ -24,6 +24,8 @@ private:
     std::atomic<bool> running;
     std::unique_ptr<indicators::BlockProgressBar> progress_bar;
     std::thread update_thread;
+    // Tracking if we've already printed an initial message
+    std::atomic<bool> initial_message_printed{false};
     
     // Update intervals (milliseconds)
     const uint64_t update_interval = 100;  // For progress bar (TTY)
@@ -66,8 +68,12 @@ private:
                 auto elapsed_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(
                     curr_time - last_file_update).count();
             
-                // Always update every 10 seconds regardless of progress
-                if (elapsed_since_update >= file_update_interval || last_progress == 0 || 
+                // Only update if:
+                // 1. It's been 10 seconds AND there's been a change in progress, OR
+                // 2. We've just started (last_progress == 0 && curr_progress > 0), OR
+                // 3. We've reached 100%
+                if ((elapsed_since_update >= file_update_interval && curr_progress > last_progress) || 
+                    (last_progress == 0 && curr_progress > 0) || 
                     curr_progress >= total.load()) {
                     
                     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
@@ -181,9 +187,13 @@ public:
         }
     }
 
+    // Tracking if we've already printed an initial message
+    std::atomic<bool> initial_message_printed{false};
+    
     // Method to explicitly print initial progress message
     void print_progress_explicitly() {
-        if (!use_progress_bar) {
+        if (!use_progress_bar && !initial_message_printed.exchange(true)) {
+        if (!use_progress_bar && !initial_message_printed.exchange(true)) {
             auto now = std::chrono::high_resolution_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time);
             
