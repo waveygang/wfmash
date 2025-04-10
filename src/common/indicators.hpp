@@ -1271,11 +1271,11 @@ static inline void erase_line() {
 #else
 
 static inline void show_console_cursor(bool const show) {
-  std::fputs(show ? "\033[?25h" : "\033[?25l", stdout);
+  std::fprintf(stderr, show ? "\033[?25h" : "\033[?25l");
 }
 
 static inline void erase_line() {
-  std::fputs("\r\033[K", stdout);
+  std::fprintf(stderr, "\r\033[K");
 }
 
 #endif
