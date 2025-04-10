@@ -589,7 +589,7 @@ namespace skch
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
+              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size(), &target_subsets]() {
                   if (!param.indexFilename.empty()) {
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
