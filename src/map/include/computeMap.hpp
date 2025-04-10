@@ -2711,6 +2711,31 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             double best_score = std::numeric_limits<double>::max();
             auto best_it2 = group_end;
 
+            // Quick check: if the next mapping is very close in both query and target space,
+            // we can avoid the binary search entirely
+            auto next_it = it + 1;
+            if (next_it != group_end) {
+                bool is_forward = it->strand == strnd::FWD;
+                int64_t query_dist = next_it->queryStartPos - it->queryEndPos;
+                int64_t ref_dist = is_forward ? 
+                                  next_it->refStartPos - it->refEndPos : 
+                                  it->refStartPos - next_it->refEndPos;
+                
+                // If distances are small and within acceptable range, use this mapping directly
+                if (query_dist > 0 && query_dist <= max_dist/10 && 
+                    ref_dist >= -param.segLength/5 && ref_dist <= max_dist/10) {
+                    double dist_sq = static_cast<double>(query_dist) * query_dist + 
+                                    static_cast<double>(ref_dist) * ref_dist;
+                    double threshold_sq = static_cast<double>(max_dist/10) * static_cast<double>(max_dist/10) * 2;
+                    
+                    if (dist_sq < threshold_sq && dist_sq < next_it->chainPairScore) {
+                        next_it->chainPairScore = dist_sq;
+                        next_it->chainPairId = it->splitMappingId;
+                        continue; // Skip binary search and candidate processing
+                    }
+                }
+            }
+
             // Step 3: Use binary search to find range within max_dist in query space
             auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
                 [](offset_t val, const MappingResult &m) {
