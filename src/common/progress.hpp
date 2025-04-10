@@ -115,7 +115,7 @@ public:
         start_time = std::chrono::high_resolution_clock::now();
         last_file_update = start_time;
         
-        // Check if stderr is a TTY
+        // Only show progress bars when stderr is connected to a terminal
         use_progress_bar = _use_progress_bar && isatty(fileno(stderr));
         
         // No longer print initial banner here - will be printed explicitly when mapping starts
