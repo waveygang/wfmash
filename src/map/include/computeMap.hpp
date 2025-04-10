@@ -2776,12 +2776,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 intersection_candidates.push_back(std::make_pair(&(*it2), *idx_it));
             }
             
-            // Sort candidates by query position to enable early stopping
-            std::sort(intersection_candidates.begin(), intersection_candidates.end(),
-                [group_begin](const auto& a, const auto& b) {
-                    return (a.first->queryStartPos < b.first->queryStartPos);
-                });
-            
             int64_t best_ref_dist = std::numeric_limits<int64_t>::max();
             
             // Process only mappings in the intersection of query and target bounds
