@@ -32,6 +32,9 @@ private:
 
     void update_progress_thread() {
         uint64_t last_progress = 0;
+        // Force initial heartbeat message after 1 second
+        last_file_update = std::chrono::high_resolution_clock::now() - 
+                          std::chrono::milliseconds(file_update_interval - 1000);
         
         while (running.load()) {
             auto curr_time = std::chrono::high_resolution_clock::now();
@@ -62,9 +65,8 @@ private:
                 // For file output, print periodic updates or on completion
                 auto elapsed_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(
                     curr_time - last_file_update).count();
-                
-                // Update if: 1) 10 seconds have passed, 2) this is the first update, or 3) we're at 100%
-                // Always update every 10 seconds even if progress hasn't changed
+            
+                // Always update every 10 seconds regardless of progress
                 if (elapsed_since_update >= file_update_interval || last_progress == 0 || 
                     curr_progress >= total.load()) {
                     
@@ -92,8 +94,8 @@ private:
                 break;
             }
             
-            // Sleep for a shorter interval to ensure we check for time-based updates frequently
-            std::this_thread::sleep_for(std::chrono::milliseconds(std::min(update_interval, static_cast<uint64_t>(500))));
+            // Sleep for a very short interval to ensure we check for time-based updates very frequently
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 
@@ -198,6 +200,11 @@ public:
         bool expected = false;
         if (!is_finished.compare_exchange_strong(expected, true)) {
             return; // Already finished
+        }
+        
+        // Print a message that we're finishing
+        if (!use_progress_bar) {
+            std::cerr << banner << " finishing..." << std::endl;
         }
         
         auto end_time = std::chrono::high_resolution_clock::now();
