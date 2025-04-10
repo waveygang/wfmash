@@ -196,13 +196,11 @@ public:
         // Reset the start time when work actually begins
         auto now = std::chrono::high_resolution_clock::now();
         start_time = now;
+        last_file_update = now;
         
         if (!use_progress_bar && !initial_message_printed.exchange(true)) {
             std::cerr << banner << " [0.0% complete, 0/" << total.load() 
                       << " units, 0s elapsed]" << std::endl;
-            
-            // Update last_file_update to avoid immediate duplicate message
-            last_file_update = now;
         } else if (use_progress_bar && progress_bar) {
             // Also reset timer for progress bar mode
             progress_bar->set_option(indicators::option::ShowElapsedTime{true});

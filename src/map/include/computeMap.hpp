@@ -567,6 +567,9 @@ namespace skch
                   // Clean up
                   delete refSketch;
                   refSketch = nullptr;
+                      
+                  // Show completed message for index building
+                  std::cerr << "[wfmash::mashmap] index construction completed" << std::endl;
     
                   // Continue to next subset without mapping
                   continue;
@@ -651,13 +654,18 @@ namespace skch
                           "[wfmash::mashmap] indexing",
                           param.use_progress_bar);
                   
+                      // First stage: sketching sequences
+                      if (!sketch_index_progress->is_finished.load()) {
+                          sketch_index_progress->reset_timer();
+                      }
+                      
                       // Build index in memory with progress meter
                       refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
                       
-                      // Update the progress title for the building phase
-                      if (sketch_index_progress && !sketch_index_progress->is_finished.load()) {
-                          sketch_index_progress->update_banner("[wfmash::mashmap] building index");
-                      }
+                      // Second stage: building index data structures
+                      // Instead of just updating the banner, print a clear message that indexing is done
+                      // and we're now building the index data structures
+                      std::cerr << "[wfmash::mashmap] building index data structures..." << std::endl;
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
