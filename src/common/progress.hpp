@@ -16,9 +16,9 @@ namespace progress_meter {
 class ProgressMeter {
 private:
     std::string banner;
+    std::mutex banner_mutex;
     std::atomic<uint64_t> total;
     std::atomic<uint64_t> completed;
-    std::atomic<bool> is_finished;
     std::atomic<bool> running;
     std::thread update_thread;
     // Tracking if we've already printed an initial message
@@ -107,6 +107,7 @@ public:
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
     bool use_progress_bar;
     std::unique_ptr<indicators::BlockProgressBar> progress_bar;
+    std::atomic<bool> is_finished;
     
     ProgressMeter(uint64_t _total, const std::string& _banner, const bool& _use_progress_bar)
         : banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
@@ -211,6 +212,31 @@ public:
     // Maintained for backward compatibility
     void print_progress_explicitly() {
         reset_timer();
+    }
+    
+    // Update the banner text
+    void update_banner(const std::string& new_banner) {
+        std::lock_guard<std::mutex> lock(banner_mutex);
+        banner = new_banner;
+        
+        // Update progress bar prefix if using progress bar
+        if (use_progress_bar && progress_bar) {
+            progress_bar->set_option(indicators::option::PrefixText{banner + " "});
+        } else {
+            // For file output, print a message with the new banner
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+            auto curr_progress = std::min(completed.load(), total.load());
+            float progress_percent = static_cast<float>(curr_progress) / total.load() * 100.0f;
+            
+            std::cerr << banner << " [" 
+                      << std::fixed << std::setprecision(1) << progress_percent << "% complete, " 
+                      << curr_progress << "/" << total.load() 
+                      << " units, " << elapsed << "s elapsed]" << std::endl;
+            
+            // Update last_file_update to prevent immediate duplicate message
+            last_file_update = now;
+        }
     }
 
     void finish() {

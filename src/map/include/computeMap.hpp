@@ -645,7 +645,7 @@ namespace skch
                       // Get the number of sequences from the sketch
                       size_t seq_count = refSketch->getSequenceCount();
                   } else {
-                      // Use progress meter for sketching and index building
+                      // Use progress meter for sketching phase
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
                           100, // Using 100 as a generic value for percentage-based progress
                           "[wfmash::mashmap] indexing",
@@ -653,6 +653,11 @@ namespace skch
                   
                       // Build index in memory with progress meter
                       refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
+                      
+                      // Update the progress title for the building phase
+                      if (sketch_index_progress && !sketch_index_progress->is_finished.load()) {
+                          sketch_index_progress->update_banner("[wfmash::mashmap] building index");
+                      }
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
