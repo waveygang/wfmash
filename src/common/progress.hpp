@@ -106,13 +106,7 @@ public:
         // Check if stderr is a TTY
         use_progress_bar = _use_progress_bar && isatty(fileno(stderr));
         
-        // For file output, print initial banner with 0% progress
-        if (!use_progress_bar) {
-            std::cerr << banner << " [0.0% complete, 0/" << total.load() 
-                      << " units, 0s elapsed]" << std::endl;
-            // Force update of last_file_update to avoid immediate duplicate message
-            last_file_update = std::chrono::high_resolution_clock::now();
-        }
+        // No longer print initial banner here - will be printed explicitly when mapping starts
         
         if (use_progress_bar) {
             // Hide cursor during progress display
@@ -181,6 +175,20 @@ public:
                           << " units, " << elapsed.count() << "s elapsed]" << std::endl;
                 last_file_update = now;
             }
+        }
+    }
+
+    // Method to explicitly print initial progress message
+    void print_progress_explicitly() {
+        if (!use_progress_bar) {
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time);
+            
+            std::cerr << banner << " [0.0% complete, 0/" << total.load() 
+                      << " units, 0s elapsed]" << std::endl;
+            
+            // Update last_file_update to avoid immediate duplicate message
+            last_file_update = now;
         }
     }
 
