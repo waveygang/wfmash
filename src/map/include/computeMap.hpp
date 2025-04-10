@@ -522,6 +522,21 @@ namespace skch
           // Create the index subsets
           auto target_subsets = createTargetSubsets(targetSequenceNames);
 
+          // Calculate average subset size and log
+          uint64_t total_target_subset_size = 0;
+          for (const auto& subset : target_subsets) {
+              for (const auto& seqName : subset) {
+                  seqno_t seqId = idManager->getSequenceId(seqName);
+                  total_target_subset_size += idManager->getSequenceLength(seqId);
+              }
+          }
+          double avg_subset_size = target_subsets.size() ? 
+              (double)total_target_subset_size / target_subsets.size() : 0;
+
+          std::cerr << "[wfmash::mashmap] Processing " << target_subsets.size() 
+                    << " target subsets (≈" << std::fixed << std::setprecision(0) << avg_subset_size 
+                    << "bp/subset)" << std::endl;
+
           // Flag for whether we're done after creating indices
           bool exit_after_indices = param.create_index_only;
 
@@ -530,12 +545,15 @@ namespace skch
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
               
+              std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
+                        << "/" << target_subsets.size() << std::endl;
+              
               // Use a single index filename for all subsets
               std::string indexFilename = param.indexFilename.string();
               
               // Handle index creation
               if (param.create_index_only) {
-                  std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
+                  std::cerr << "[wfmash::mashmap] Creating index for subset " << (subset_idx + 1) 
                             << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
     
                   // Build the index directly
@@ -565,7 +583,8 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping",
+                  "[wfmash::mashmap] mapping subset " + std::to_string(subset_idx + 1) + 
+                  "/" + std::to_string(target_subsets.size()),
                   param.use_progress_bar
                   );
 
@@ -629,7 +648,8 @@ namespace skch
                       // Use progress meter for sketching and index building
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
                           100, // Using 100 as a generic value for percentage-based progress
-                          "[wfmash::mashmap] indexing",
+                          "[wfmash::mashmap] indexing subset " + std::to_string(subset_idx + 1) + 
+                          "/" + std::to_string(target_subsets.size()),
                           param.use_progress_bar);
                   
                       // Build index in memory with progress meter
