@@ -63,9 +63,10 @@ private:
                 auto elapsed_since_update = std::chrono::duration_cast<std::chrono::milliseconds>(
                     curr_time - last_file_update).count();
                 
-                // Update if: 1) 60 seconds have passed, 2) this is the first update, or 3) we're at 100%
-                if ((elapsed_since_update >= file_update_interval || last_progress == 0 || 
-                     curr_progress >= total.load()) && curr_progress != last_progress) {
+                // Update if: 1) 10 seconds have passed, 2) this is the first update, or 3) we're at 100%
+                // Always update every 10 seconds even if progress hasn't changed
+                if (elapsed_since_update >= file_update_interval || last_progress == 0 || 
+                    curr_progress >= total.load()) {
                     
                     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
                         curr_time - start_time).count();
@@ -91,8 +92,8 @@ private:
                 break;
             }
             
-            // Sleep for update interval
-            std::this_thread::sleep_for(std::chrono::milliseconds(update_interval));
+            // Sleep for a shorter interval to ensure we check for time-based updates frequently
+            std::this_thread::sleep_for(std::chrono::milliseconds(std::min(update_interval, static_cast<uint64_t>(500))));
         }
     }
 
