@@ -23,6 +23,7 @@ namespace fs = std::filesystem;
 #include <algorithm>
 #include <unordered_set>
 #include <mutex>
+#include <thread>
 #include <sstream>
 #include "taskflow/taskflow.hpp"
 
@@ -752,6 +753,12 @@ namespace skch
                                           output
                                       );
 
+                                      // Print initial progress message for the first fragment
+                                      static std::once_flag first_fragment;
+                                      std::call_once(first_fragment, [&output]() {
+                                          output->progress.print_progress_explicitly();
+                                      });
+                                      
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
