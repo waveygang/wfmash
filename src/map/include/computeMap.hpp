@@ -546,15 +546,15 @@ namespace skch
               if(target_subset.empty()) continue;
               
               std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
-                        << "/" << target_subsets.size() << std::endl;
+                        << "/" << target_subsets.size() << " (mapping)" << std::endl;
               
               // Use a single index filename for all subsets
               std::string indexFilename = param.indexFilename.string();
               
               // Handle index creation
               if (param.create_index_only) {
-                  std::cerr << "[wfmash::mashmap] Creating index for subset " << (subset_idx + 1) 
-                            << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
+                  std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
+                            << "/" << target_subsets.size() << " (indexing): " << indexFilename << std::endl;
     
                   // Build the index directly
                   refSketch = new skch::Sketch(param, *idManager, target_subset);
@@ -583,8 +583,7 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping subset " + std::to_string(subset_idx + 1) + 
-                  "/" + std::to_string(target_subsets.size()),
+                  "[wfmash::mashmap] mapping",
                   param.use_progress_bar
                   );
 
@@ -648,8 +647,7 @@ namespace skch
                       // Use progress meter for sketching and index building
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
                           100, // Using 100 as a generic value for percentage-based progress
-                          "[wfmash::mashmap] indexing subset " + std::to_string(subset_idx + 1) + 
-                          "/" + std::to_string(target_subsets.size()),
+                          "[wfmash::mashmap] indexing",
                           param.use_progress_bar);
                   
                       // Build index in memory with progress meter
