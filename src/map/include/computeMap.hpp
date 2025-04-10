@@ -2745,13 +2745,19 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             // Find matching range in target space using the index
             bool is_forward = it->strand == strnd::FWD;
             offset_t target_pos = is_forward ? it->refEndPos : it->refStartPos;
-            offset_t target_min = (target_pos > max_dist) ? target_pos - max_dist/5 : 0;
+            
+            // Use consistent range for both target and query spaces
+            // Note: For reverse strand, we still need a minimum bound to avoid negative positions
+            offset_t target_min = (target_pos > max_dist) ? target_pos - max_dist : 0;
             offset_t target_max = target_pos + max_dist;
             
-            // Binary search for lower bound in target space
+            // Binary search for lower bound in target space - use consistent position references
+            // For both strands, we want to find the first mapping that overlaps our target window
             auto lower_it = std::lower_bound(target_index.begin(), target_index.end(),
                 target_min, [&group_begin, is_forward](size_t idx, offset_t val) {
                     auto& mapping = *(group_begin + idx);
+                    // For forward strand, compare start position
+                    // For reverse strand, compare end position (which is smaller in reference coordinates)
                     return is_forward ? mapping.refStartPos < val : mapping.refEndPos < val;
                 });
             
@@ -2759,7 +2765,9 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
             auto upper_it = std::upper_bound(lower_it, target_index.end(),
                 target_max, [&group_begin, is_forward](offset_t val, size_t idx) {
                     auto& mapping = *(group_begin + idx);
-                    return val < (is_forward ? mapping.refStartPos : mapping.refEndPos);
+                    // For forward strand, compare start position
+                    // For reverse strand, compare start position (which is larger in reference coordinates)
+                    return val < (is_forward ? mapping.refStartPos : mapping.refStartPos);
                 });
             
             // Store both pointers and their positions in the collection
