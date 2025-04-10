@@ -187,12 +187,8 @@ public:
         }
     }
 
-    // Tracking if we've already printed an initial message
-    std::atomic<bool> initial_message_printed{false};
-    
     // Method to explicitly print initial progress message
     void print_progress_explicitly() {
-        if (!use_progress_bar && !initial_message_printed.exchange(true)) {
         if (!use_progress_bar && !initial_message_printed.exchange(true)) {
             auto now = std::chrono::high_resolution_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time);
