@@ -2776,6 +2776,14 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 intersection_candidates.push_back(std::make_pair(&(*it2), *idx_it));
             }
             
+            // Sort candidates by query position to enable early stopping
+            std::sort(intersection_candidates.begin(), intersection_candidates.end(),
+                [group_begin](const auto& a, const auto& b) {
+                    return (a.first->queryStartPos < b.first->queryStartPos);
+                });
+            
+            int64_t best_ref_dist = std::numeric_limits<int64_t>::max();
+            
             // Process only mappings in the intersection of query and target bounds
             for (auto& candidate_pair : intersection_candidates) {
                 auto mapping_ptr = candidate_pair.first;
@@ -2786,6 +2794,13 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                 int64_t ref_dist = is_forward ? 
                                   it2.refStartPos - it->refEndPos : 
                                   it->refStartPos - it2.refEndPos;
+                
+                // Early stopping optimization:
+                // If we already found a good mapping and the query distance to this mapping
+                // is larger than the target distance of our best mapping, we can't find better
+                if (best_it2 != group_end && query_dist > best_ref_dist) {
+                    break;
+                }
                                   
                 // Check if the distance is within acceptable range
                 if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
@@ -2795,6 +2810,7 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2.chainPairScore) {
                         best_it2 = group_begin + idx; // Use the actual iterator, not a pointer
                         best_score = dist_sq;
+                        best_ref_dist = std::abs(ref_dist);
                     }
                 }
             }
