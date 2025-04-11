@@ -85,6 +85,7 @@ struct Parameters
     int64_t scaffold_max_deviation;                  // max diagonal deviation from scaffold chains
     int64_t scaffold_gap;                           // gap threshold for scaffold chaining
     int64_t scaffold_min_length = 50000;            // minimum scaffold block length
+    int64_t merge_fragment_chunksize = 1000000;     // Process this many bp of fragments per merge chunk
     
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //

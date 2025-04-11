@@ -2742,6 +2742,21 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
                     return val < m.queryStartPos;
                 });
 
+            // Limit how far we look ahead based on chunk size
+            int64_t accumulated_size = 0;
+            auto chunk_end_it2 = end_it2;
+            
+            for (auto size_it = it + 1; size_it != end_it2; ++size_it) {
+                accumulated_size += (size_it->queryEndPos - size_it->queryStartPos);
+                if (accumulated_size > param.merge_fragment_chunksize) {
+                    chunk_end_it2 = size_it;
+                    break;
+                }
+            }
+            
+            // Use the smaller of the distance-based end and the chunk-size end
+            end_it2 = std::min(end_it2, chunk_end_it2);
+
             // Check mappings within the range
             for (auto it2 = it + 1; it2 != end_it2; ++it2) {
                 if (it2->queryStartPos == it->queryStartPos) continue;
