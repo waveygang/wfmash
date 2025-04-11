@@ -81,6 +81,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
     args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
     args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter minimizers occurring > FLOAT of total [0.0002]", {'F', "filter-freq"});
+    args::ValueFlag<std::string> merge_chunksize(mapping_opts, "INT", "batch size for merging mappings in bp [1m]", {'C', "merge-chunksize"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
@@ -625,6 +626,17 @@ void parse_args(int argc,
         map_parameters.max_kmer_freq = 0.0002; // default filter fraction
     }
 
+    if (merge_chunksize) {
+        const int64_t size = wfmash::handy_parameter(args::get(merge_chunksize));
+        if (size <= 0) {
+            std::cerr << "[wfmash] ERROR: merge chunk size must be greater than 0." << std::endl;
+            exit(1);
+        }
+        map_parameters.merge_fragment_chunksize = size;
+    } else {
+        map_parameters.merge_fragment_chunksize = 1000000; // Default to 1M bp
+    }
+
     //if (window_minimizers) {
         //map_parameters.world_minimizers = false;
     //} else {
@@ -735,6 +747,7 @@ void parse_args(int argc,
               << ", S=" << map_parameters.scaffold_gap << "," 
               << map_parameters.scaffold_min_length << "," 
               << map_parameters.scaffold_max_deviation
+              << ", C=" << map_parameters.merge_fragment_chunksize 
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
               << ", t=" << map_parameters.threads
