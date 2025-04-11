@@ -23,6 +23,7 @@ namespace fs = std::filesystem;
 #include <algorithm>
 #include <unordered_set>
 #include <mutex>
+#include <thread>
 #include <sstream>
 #include "taskflow/taskflow.hpp"
 
@@ -522,6 +523,21 @@ namespace skch
           // Create the index subsets
           auto target_subsets = createTargetSubsets(targetSequenceNames);
 
+          // Calculate average subset size and log
+          uint64_t total_target_subset_size = 0;
+          for (const auto& subset : target_subsets) {
+              for (const auto& seqName : subset) {
+                  seqno_t seqId = idManager->getSequenceId(seqName);
+                  total_target_subset_size += idManager->getSequenceLength(seqId);
+              }
+          }
+          double avg_subset_size = target_subsets.size() ? 
+              (double)total_target_subset_size / target_subsets.size() : 0;
+
+          std::cerr << "[wfmash::mashmap] Processing " << target_subsets.size() 
+                    << " target subsets (≈" << std::fixed << std::setprecision(0) << avg_subset_size 
+                    << "bp/subset)" << std::endl;
+
           // Flag for whether we're done after creating indices
           bool exit_after_indices = param.create_index_only;
 
@@ -530,13 +546,16 @@ namespace skch
               const auto& target_subset = target_subsets[subset_idx];
               if(target_subset.empty()) continue;
               
+              std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
+                        << "/" << target_subsets.size() << " (mapping)" << std::endl;
+              
               // Use a single index filename for all subsets
               std::string indexFilename = param.indexFilename.string();
               
               // Handle index creation
               if (param.create_index_only) {
-                  std::cerr << "[wfmash::mashmap] Creating index " << (subset_idx + 1) 
-                            << "/" << target_subsets.size() << ": " << indexFilename << std::endl;
+                  std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
+                            << "/" << target_subsets.size() << " (indexing): " << indexFilename << std::endl;
     
                   // Build the index directly
                   refSketch = new skch::Sketch(param, *idManager, target_subset);
@@ -548,6 +567,9 @@ namespace skch
                   // Clean up
                   delete refSketch;
                   refSketch = nullptr;
+                      
+                  // Show completed message for index building
+                  std::cerr << "[wfmash::mashmap] index construction completed" << std::endl;
     
                   // Continue to next subset without mapping
                   continue;
@@ -570,7 +592,7 @@ namespace skch
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
+              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size(), &target_subsets]() {
                   if (!param.indexFilename.empty()) {
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
@@ -626,14 +648,24 @@ namespace skch
                       // Get the number of sequences from the sketch
                       size_t seq_count = refSketch->getSequenceCount();
                   } else {
-                      // Use progress meter for sketching and index building
+                      // Use progress meter for sketching phase
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
                           100, // Using 100 as a generic value for percentage-based progress
                           "[wfmash::mashmap] indexing",
                           param.use_progress_bar);
                   
+                      // First stage: sketching sequences
+                      if (!sketch_index_progress->is_finished.load()) {
+                          sketch_index_progress->reset_timer();
+                      }
+                      
                       // Build index in memory with progress meter
                       refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
+                      
+                      // Second stage: building index data structures
+                      // Instead of just updating the banner, print a clear message that indexing is done
+                      // and we're now building the index data structures
+                      std::cerr << "[wfmash::mashmap] building index data structures..." << std::endl;
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
@@ -734,6 +766,14 @@ namespace skch
                                           output
                                       );
 
+                                      // Print initial progress message for the first fragment
+                                      // and reset the timer when actual work begins
+                                      static std::once_flag first_fragment;
+                                      std::call_once(first_fragment, [&output]() {
+                                          // Reset the progress meter's start time to now
+                                          output->progress.reset_timer();
+                                      });
+                                      
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;

@@ -101,7 +101,7 @@ void parse_args(int argc,
     args::ValueFlag<int> thread_count(system_opts, "INT", "number of threads [1]", {'t', "threads"});
     args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "base directory for temporary files [pwd]", {'B', "tmp-base"});
     args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
-    args::Flag progress_bar(system_opts, "", "show progress bars [EXPERIMENTAL, STILL BUGGY]", {"progress-bars"});
+    args::Flag quiet(system_opts, "", "disable progress output", {"quiet"});
 
 #ifdef WFA_PNG_TSV_TIMING
     args::Group debugging_opts(parser, "[ Debugging Options ]");
@@ -139,8 +139,8 @@ void parse_args(int argc,
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
 
-    map_parameters.use_progress_bar = args::get(progress_bar);
-    align_parameters.use_progress_bar = args::get(progress_bar);
+    map_parameters.use_progress_bar = !args::get(quiet);
+    align_parameters.use_progress_bar = !args::get(quiet);
 
     if (disable_grouping) {
         map_parameters.prefix_delim = '\0';
