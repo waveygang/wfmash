@@ -990,9 +990,14 @@ namespace skch
                                    e.refStartPos < param.segLength || // Beginning of reference
                                    e.refEndPos > this->idManager->getSequenceLength(e.refSeqId) - param.segLength; // End of reference
                                
-                                   // Standard criteria for non-boundary mappings
-                                return !is_boundary_mapping && (e.blockLength < param.block_length || 
-                                          e.n_merged < min_count);
+                                if (is_boundary_mapping) {
+                                    // More lenient criteria for boundary mappings
+                                    return e.blockLength < param.segLength;
+                                } else {
+                                    // Standard criteria for non-boundary mappings
+                                    return e.blockLength < param.block_length || 
+                                           e.n_merged < min_count;
+                                }
                            }),
               readMappings.end());
       }
