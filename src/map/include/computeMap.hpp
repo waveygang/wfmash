@@ -992,7 +992,8 @@ namespace skch
                                
                                 if (is_boundary_mapping) {
                                     // More lenient criteria for boundary mappings
-                                    return e.blockLength < param.segLength;
+                                    return e.blockLength < param.block_length / 2 || 
+                                           e.n_merged < min_count / 2;
                                 } else {
                                     // Standard criteria for non-boundary mappings
                                     return e.blockLength < param.block_length || 
