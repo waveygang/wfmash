@@ -84,8 +84,8 @@ void parse_args(int argc,
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
-    args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [500]", {'E', "target-padding"});
-    args::ValueFlag<std::string> query_padding(alignment_opts, "INT", "padding around query sequence [500]", {'U', "query-padding"});
+    args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "padding around target sequence [segment-length]", {'E', "target-padding"});
+    args::ValueFlag<std::string> query_padding(alignment_opts, "INT", "padding around query sequence [segment-length]", {'U', "query-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "vals", 
         "scoring: mismatch, gap1(o,e), gap2(o,e) [5,8,2,24,1]", {'g', "wfa-params"});
     args::Flag disable_chain_patching(alignment_opts, "", "disable alignment patching at chain boundaries", {"disable-chain-patching"});
@@ -497,7 +497,7 @@ void parse_args(int argc,
         align_parameters.target_padding = p;
     } else {
         // Default to half segment length, capped at 5000
-        align_parameters.target_padding = std::min(map_parameters.segLength / 2, (int64_t)5000);
+        align_parameters.target_padding = std::min(map_parameters.segLength, (int64_t)5000);
     }
     
     if (query_padding) {
@@ -509,7 +509,7 @@ void parse_args(int argc,
         align_parameters.query_padding = p;
     } else {
         // Default to half segment length, capped at 5000
-        align_parameters.query_padding = std::min(map_parameters.segLength / 2, (int64_t)5000);
+        align_parameters.query_padding = std::min(map_parameters.segLength, (int64_t)5000);
     }
 
     if (thread_count) {
