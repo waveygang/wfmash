@@ -981,11 +981,25 @@ namespace skch
       {
           readMappings.erase(
               std::remove_if(readMappings.begin(),
-                             readMappings.end(),
-                             [&](MappingResult &e){
-                                 return e.blockLength < param.block_length //e.queryLen > e.blockLength
-                                     || e.n_merged < min_count;
-                             }),
+                           readMappings.end(),
+                           [&](MappingResult &e){
+                               // Check if mapping is at the beginning or end of the sequence
+                               bool is_boundary_mapping = 
+                                   e.queryStartPos < param.segLength || // Beginning of query
+                                   e.queryEndPos > e.queryLen - param.segLength || // End of query
+                                   e.refStartPos < param.segLength || // Beginning of reference
+                                   e.refEndPos > this->idManager->getSequenceLength(e.refSeqId) - param.segLength; // End of reference
+                               
+                                if (is_boundary_mapping) {
+                                    // More lenient criteria for boundary mappings
+                                    return e.blockLength < param.block_length / 2 || 
+                                           e.n_merged < min_count / 2;
+                                } else {
+                                    // Standard criteria for non-boundary mappings
+                                    return e.blockLength < param.block_length || 
+                                           e.n_merged < min_count;
+                                }
+                           }),
               readMappings.end());
       }
 
