@@ -69,7 +69,6 @@
   #:use-module (guix download)
   #:use-module (guix git-download)
   #:use-module (guix gexp)
-  #:use-module (guix git-download)
   #:use-module (guix packages)
   #:use-module (guix utils)
   #:use-module (gnu packages algebra)
@@ -313,7 +312,7 @@ These binaries can be copied to HPC."
        ,#~(list
            "-DBUILD_STATIC=ON"
            ;; "-DBUILD_OPTIMIZED=ON"    ;; we don't use the standard cmake optimizations
-           "-DCMAKE_BUILD_TYPE=Generic" ;; to optimize use --tune=march-type (e.g. --tune=native)
+           "-DCMAKE_BUILD_TYPE=Generic" ;; to optimize use guix --tune=march-type (e.g. --tune=native)
            "-DCMAKE_INSTALL_RPATH=")))   ; force cmake static build and do not rewrite RPATH
     (inputs
      (modify-inputs (package-inputs wfmash-gcc-git)
