@@ -7,7 +7,8 @@
 ;;   guix build -L . wfmash-gcc-static-git --without-tests=wfmash-gcc-static-git # gcc static build (default)
 ;;   guix build -L . wfmash-clang-git        # clang build
 ;;
-;; Note that for abov build commands testing should be disabled with --without-tests=target.
+;; Note that the build happens in a fresh isolated container, even though it uses the current git repo.
+;; Note that for abov build commands testing may be disabled with guix option --without-tests=target.
 ;;
 ;; To get a development container using a recent guix (see `guix pull`)
 ;;
@@ -246,7 +247,7 @@ obtain base-level alignments.")
              "-DPROFILER=ON")
        #:phases
          ,#~(modify-phases %standard-phases
-            (add-after 'install 'run-profiler-on-all2all
+            (add-after 'install 'run-profiler
                        (lambda* (#:key outputs #:allow-other-keys)
                          (invoke "ctest" "--verbose" "-R" "wfmash-time-LPA")
                          (invoke "ctest" "--verbose" "-R" "wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF")
