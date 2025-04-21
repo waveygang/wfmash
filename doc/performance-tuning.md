@@ -53,6 +53,21 @@ sys     0m0.596s
 
 Nice!
 
+On a GENOA AMD EPYC 9274F 24-Core Processor the generic version runs at
+
+```
+real    0m4.473s
+user    0m31.940s
+sys     0m1.044s
+```
+
+and the znver2 on that machine (for model 17)
+
+```
+real    0m3.350s
+user    0m23.337s
+sys     0m1.627s
+```
 
 # Profiling
 
