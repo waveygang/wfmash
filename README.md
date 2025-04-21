@@ -144,7 +144,7 @@ sudo apt install build-essential cmake zlib1g-dev libgsl-dev libhts-dev liblzma-
 Clone the `wfmash` repository:
 
 ```sh
-git clone https://github.com/waveygang/wfmash.git
+git clone --recursive https://github.com/waveygang/wfmash.git
 cd wfmash
 ```
 

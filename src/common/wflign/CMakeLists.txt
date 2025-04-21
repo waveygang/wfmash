@@ -47,7 +47,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #
 # WFA2-lib Build
 # use CMakelists to build rather than Makefile
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/deps/WFA2-lib)
 
 #
 # WFlign library
@@ -71,7 +70,9 @@ set(wflign_INCLUDE
     deps/lodepng
     deps/PicoSHA2
     deps/robin-hood-hashing
-    deps/WFA2-lib)
+    ../../../deps/WFA2-lib
+    ../../../deps/WFA2-lib/bindings/cpp
+)
 
 add_library(wflign_static STATIC ${wflign_SOURCE})
 add_library(wflign SHARED ${wflign_SOURCE})

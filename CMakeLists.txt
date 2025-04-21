@@ -132,6 +132,14 @@ add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
 include(ExternalProject)
 
+add_subdirectory(deps/WFA2-lib)
+set_target_properties(align_benchmark PROPERTIES EXCLUDE_FROM_ALL 1)
+if (BUILD_STATIC)
+  set_target_properties(wfa2cpp PROPERTIES EXCLUDE_FROM_ALL 1)
+else()
+  set_target_properties(wfa2cpp_static PROPERTIES EXCLUDE_FROM_ALL 1)
+endif()
+
 if (BUILD_DEPS)
   ExternalProject_Add(htslib
     URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
@@ -201,13 +209,12 @@ else()
   )
 endif()
 
-
-
 target_include_directories(wfmash PRIVATE
   src
   src/common
   src/common/wflign/deps
-  src/common/wflign/deps/WFA2-lib
+  deps/WFA2-lib
+  deps/WFA2-lib/bindings/cpp
 )
 
 target_link_libraries(wfmash

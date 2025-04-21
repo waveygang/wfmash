@@ -26,9 +26,9 @@ Now alto trying with native (on my Ryzen)
 
 ```
 guix build -L . wfmash-gcc-git --without-tests=wfmash-gcc-git --tune=native
-real    0m7.819s
-user    0m57.126s
-sys     0m1.192s
+real    0m7.604s
+user    0m58.019s
+sys     0m0.900s
 ```
 
 The default builds for the static version:
