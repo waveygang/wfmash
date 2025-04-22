@@ -4,7 +4,7 @@
 #include <cctype>
 #include <utility>
 #include <vector>
-#include "../deps/WFA2-lib/bindings/cpp/WFAligner.hpp"
+#include "WFAligner.hpp"
 #include "wflign_alignment.hpp"
 
 namespace wflign {
@@ -21,7 +21,7 @@ std::string try_swap_start_pattern(
     int64_t query_start,
     int64_t target_start);
 
-// Try to swap end pattern: "DlenD N=" => "N= DlenD"  
+// Try to swap end pattern: "DlenD N=" => "N= DlenD"
 std::string try_swap_end_pattern(
     const std::string &cigar,
     const std::string &target_seq,
@@ -44,7 +44,7 @@ static bool sequences_match(
 static bool extract_first_two_ops(
     const std::string &cigar,
     int &count1, char &op1,
-    int &count2, char &op2, 
+    int &count2, char &op2,
     size_t &second_op_start,
     size_t &second_op_end);
 static bool extract_last_two_ops(
