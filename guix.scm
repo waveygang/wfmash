@@ -234,7 +234,8 @@ obtain base-level alignments.")
                  libomp)))))
 
 (define-public wfmash-gcc-profile-git
-  "Build wfmash optimally and automatically run profiler on all tests"
+  "Build wfmash optimally and automatically run profiler on all tests. Run with
+   guix build -L . wfmash-gcc-profile-git"
   (package
     (inherit wfmash-gcc-git)
     (name "wfmash-gcc-profile-git")
@@ -242,14 +243,16 @@ obtain base-level alignments.")
      `(#:tests? #f ;; running tests as profiler
        #:configure-flags
          ,#~(list
-             "-DCMAKE_BUILD_TYPE=Generic"
+             "-DCMAKE_BUILD_TYPE=Debug" ;; use Debug for resolution
              ;; "-DBUILD_OPTIMIZED=ON" -- use --tune switch
+             "-DDISABLE_LTO=ON"
+             "-DASAN=OFF"
              "-DPROFILER=ON")
        #:phases
          ,#~(modify-phases %standard-phases
             (add-after 'install 'run-profiler
                        (lambda* (#:key outputs #:allow-other-keys)
-                         (invoke "ctest" "--verbose" "-R" "wfmash-time-LPA")
+                         ;; (invoke "ctest" "--verbose" "-R" "wfmash-time-LPA")
                          (invoke "ctest" "--verbose" "-R" "wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF")
                          (invoke "ls" "-l" "bin/wfmash")
                          (invoke "ls" "-l")
