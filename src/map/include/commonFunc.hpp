@@ -25,7 +25,7 @@
 #include "common/prettyprint.hpp"
 #include "common/ankerl/unordered_dense.hpp"
 
-//#include "assert.hpp"
+#include "assert.h"
 
 namespace skch {
     /**
@@ -43,11 +43,45 @@ namespace skch {
             int64_t rank;
         };
 
+        /*
+New implementation of reverse complement
+
+    Start 1: wfmash-time-LPA
+1/6 Test #1: wfmash-time-LPA .......................................   Passed    8.10 sec
+    Start 2: wfmash-subset-LPA-to-SAM
+2/6 Test #2: wfmash-subset-LPA-to-SAM ..............................   Passed    1.44 sec
+    Start 3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
+3/6 Test #3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF ...   Passed   27.42 sec
+
+First round removing comparisons is a 25% speedup for yeast
+
+Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
+    Start 1: wfmash-time-LPA
+1/6 Test #1: wfmash-time-LPA .......................................   Passed    8.03 sec
+    Start 2: wfmash-subset-LPA-to-SAM
+2/6 Test #2: wfmash-subset-LPA-to-SAM ..............................   Passed    1.36 sec
+    Start 3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
+3/6 Test #3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF ...   Passed   21.98 sec
+
+        */
+
         /**
          * @brief   reverse complement of kmer (borrowed from mash)
          * @note    assumes dest is pre-allocated
+         *
          */
         inline void reverseComplement(const char *src, char *dest, int length) {
+            constexpr unsigned char complement[] = "                                                                 TBGDEFCHIJKLMNOPQRSAUVWXYZ      tbgdefchijklmnopqrsauvwxyz";
+            assert(complement[65]=='T');
+            assert(complement[66]=='B');
+            const int length1 = length-1;
+            for (int i = 0; i < length; i++) {
+                dest[length1-i] = complement[src[i]];
+            }
+            // returns dest. Note dest is not zero terminated.
+        }
+
+        inline void reverseComplementOld(const char *src, char *dest, int length) {
             for (int i = 0; i < length; i++) {
                 char base = src[i];
 
@@ -172,19 +206,19 @@ namespace skch {
 
         /**
          * @brief       Compute the minimum s kmers for a string.
-         * @param[out]  minmerIndex     container storing sketched Kmers 
+         * @param[out]  minmerIndex     container storing sketched Kmers
          * @param[in]   seq                 pointer to input sequence
          * @param[in]   len                 length of input sequence
          * @param[in]   kmerSize
-         * @param[in]   s                   sketch size. 
+         * @param[in]   s                   sketch size.
          * @param[in]   seqCounter          current sequence number, used while saving the position of minimizer
          */
         template <typename T>
           inline void sketchSequence(
-              std::vector<T> &minmerIndex, 
-              char* seq, 
+              std::vector<T> &minmerIndex,
+              char* seq,
               offset_t len,
-              int kmerSize, 
+              int kmerSize,
               int alphabetSize,
               int sketchSize,
               seqno_t seqCounter)
@@ -202,7 +236,7 @@ namespace skch {
           ankerl::unordered_dense::map<hash_t, MinmerInfo> sketched_vals;
           std::vector<hash_t> sketched_heap;
           sketched_heap.reserve(sketchSize+1);
-            
+
           // Get distance until last "N"
           int ambig_kmer_count = 0;
           for (int i = kmerSize - 1; i >= 0; i--)
@@ -211,8 +245,8 @@ namespace skch {
             {
                 ambig_kmer_count = i+1;
                 break;
-            }    
-          } 
+            }
+          }
 
           for(offset_t i = 0; i < len - kmerSize + 1; i++)
           {
@@ -222,7 +256,7 @@ namespace skch {
               ambig_kmer_count = kmerSize;
             }
             //Hash kmers
-            hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
+            hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
             hash_t hashBwd;
 
             if(alphabetSize == 4)
@@ -241,11 +275,11 @@ namespace skch {
 
               if (sketched_heap.size() < sketchSize || currentKmer <= sketched_heap.front())
               {
-                if (sketched_heap.empty() || sketched_vals.find(currentKmer) == sketched_vals.end()) 
+                if (sketched_heap.empty() || sketched_vals.find(currentKmer) == sketched_vals.end())
                 {
 
                   // Add current hash to heap
-                  if (sketched_vals.size() < sketchSize || currentKmer < sketched_heap.front())  
+                  if (sketched_vals.size() < sketchSize || currentKmer < sketched_heap.front())
                   {
                       sketched_vals[currentKmer] = MinmerInfo{currentKmer, i, i, seqCounter, currentStrand};
                       sketched_heap.push_back(currentKmer);
@@ -253,14 +287,14 @@ namespace skch {
                   }
 
                   // Remove one if too large
-                  if (sketched_vals.size() > sketchSize) 
+                  if (sketched_vals.size() > sketchSize)
                   {
                       sketched_vals.erase(sketched_heap[0]);
                       std::pop_heap(sketched_heap.begin(), sketched_heap.end());
                       sketched_heap.pop_back();
                   }
-                } 
-                else 
+                }
+                else
                 {
                   // TODO these sketched values might never be useful, might save memory by deleting
                   // extend the length of the window
@@ -286,7 +320,7 @@ namespace skch {
           }
           return;
         }
-        
+
 
         /**
          * @brief       Compute winnowed minmers from a given sequence and add to the index
@@ -295,13 +329,13 @@ namespace skch {
          * @param[in]   len             length of input sequence
          * @param[in]   kmerSize
          * @param[in]   windowSize
-         * @param[in]   sketchSize      sketch size. 
+         * @param[in]   sketchSize      sketch size.
          * @param[in]   seqCounter      current sequence number, used while saving the position of minimizer
          */
         template <typename T>
-          inline void addMinmers(std::vector<T> &minmerIndex, 
+          inline void addMinmers(std::vector<T> &minmerIndex,
               char* seq, offset_t len,
-              int kmerSize, 
+              int kmerSize,
               int windowSize,
               int alphabetSize,
               int sketchSize,
@@ -317,7 +351,7 @@ namespace skch {
             using MinmerKmerPair_t = std::pair<MinmerInfo, std::deque<KmerInfo>>;
 
             // Sort by hash, then by position
-            constexpr auto KIHeap_cmp = [](KmerInfo& a, KmerInfo& b) 
+            constexpr auto KIHeap_cmp = [](KmerInfo& a, KmerInfo& b)
               {return std::tie(a.hash, a.pos) > std::tie(b.hash, b.pos);};
             using windowMap_t = std::map<hash_t, MinmerKmerPair_t>;
             windowMap_t sortedWindow;
@@ -330,10 +364,11 @@ namespace skch {
 
             //if(alphabetSize == 4) //not protein
               //CommonFunc::reverseComplement(seq, seqRev.get(), len);
-            
+
             // Get distance until last "N"
             int ambig_kmer_count = 0;
 
+            // usleep(5*1000); // milisecond test
 
             for(offset_t i = 0; i < len - kmerSize + 1; i++)
             {
@@ -347,7 +382,7 @@ namespace skch {
               {
                 heapWindow.erase(
                     std::remove_if(
-                      heapWindow.begin(), 
+                      heapWindow.begin(),
                       heapWindow.end(),
                       [currentWindowId](KmerInfo& ki) { return ki.pos < currentWindowId; }
                     ),
@@ -356,12 +391,12 @@ namespace skch {
               }
 
               //Hash kmers
-              hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
+              hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
               hash_t hashBwd;
 
-              if(alphabetSize == 4) 
+              if(alphabetSize == 4)
               {
-                CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
+                  CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
                 hashBwd = CommonFunc::getHash(seqRev.get(), kmerSize);
               }
               else  //proteins
@@ -369,29 +404,29 @@ namespace skch {
 
               //Take minimum value of kmer and its reverse complement
               hash_t currentKmer = std::min(hashFwd, hashBwd);
-              
+
 
               //Check the strand of this minimizer hash value
               auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
 
               //If front minimum is not in the current window, remove it
-              if (!Q.empty() && std::get<2>(Q.front()) <  currentWindowId) 
+              if (!Q.empty() && std::get<2>(Q.front()) <  currentWindowId)
               {
                 const auto [leaving_hash, leaving_strand, _] = Q.front();
 
-                if (sortedWindow.size() > 0 && leaving_hash <= std::prev(sortedWindow.end())->first) 
+                if (sortedWindow.size() > 0 && leaving_hash <= std::prev(sortedWindow.end())->first)
                 {
 
                   auto& leaving_pair = sortedWindow.find(leaving_hash)->second;
 
                   // Check if this is the only occurence of this hash in the window
-                  if (leaving_pair.second.size() == 1) 
+                  if (leaving_pair.second.size() == 1)
                   {
                     leaving_pair.first.wpos_end = currentWindowId;
                     minmerIndex.push_back(leaving_pair.first);
                     sortedWindow.erase(leaving_hash);
-                  } 
-                  else 
+                  }
+                  else
                   {
                     // Not removing hash, but need to adjust the strand
                     if (leaving_pair.first.strand - leaving_strand == 0
@@ -419,7 +454,7 @@ namespace skch {
               if(hashBwd != hashFwd && ambig_kmer_count == 0)
               {
                 // Add current hash to window
-                Q.push_back(std::make_tuple(currentKmer, currentStrand, i)); 
+                Q.push_back(std::make_tuple(currentKmer, currentStrand, i));
 
                 // Check if current kmer is already in the map
                 auto kmer_it = sortedWindow.find(currentKmer);
@@ -439,7 +474,7 @@ namespace skch {
                   current_pair.first.strand += currentStrand;
                 }
                 // Going in the heap
-                else 
+                else
                 {
                   heapWindow.emplace_back(KmerInfo {currentKmer, seqCounter, i, currentStrand});
                   std::push_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
@@ -457,7 +492,7 @@ namespace skch {
                 while (!heapWindow.empty() && heapWindow.front().pos < currentWindowId)
                 {
                   std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
-                  heapWindow.pop_back(); 
+                  heapWindow.pop_back();
                 }
 
                 //TODO leq?
@@ -471,7 +506,7 @@ namespace skch {
                   minmerIndex.push_back(largest.first);
 
                   // Add kmers back to heap
-                  for (KmerInfo& kmer : largest.second) 
+                  for (KmerInfo& kmer : largest.second)
                   {
                     if (kmer.pos > currentWindowId) {
                         heapWindow.push_back(kmer);
@@ -483,12 +518,12 @@ namespace skch {
                   sortedWindow.erase(largest.first.hash);
                 }
 
-                while (!heapWindow.empty() && sortedWindow.size() < sketchSize) 
+                while (!heapWindow.empty() && sortedWindow.size() < sketchSize)
                 {
                   if (heapWindow.front().pos < currentWindowId)
                   {
                     std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
-                    heapWindow.pop_back(); 
+                    heapWindow.pop_back();
                   }
                   // Add kmers of same value
                   const KmerInfo newKmer = heapWindow.front();
@@ -498,7 +533,7 @@ namespace skch {
                     sortedWindow[newKmer.hash].second.push_back(heapWindow.front());
                     sortedWindow[newKmer.hash].first.strand += heapWindow.front().strand;
                     std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
-                    heapWindow.pop_back(); 
+                    heapWindow.pop_back();
                   }
                 }
               }
@@ -507,9 +542,9 @@ namespace skch {
             // Add remaining open minmer windows
             uint64_t rank = 1;
             auto iter = sortedWindow.begin();
-            while (iter != sortedWindow.end() && rank <= sketchSize) 
+            while (iter != sortedWindow.end() && rank <= sketchSize)
             {
-              if (iter->second.first.wpos != -1) 
+              if (iter->second.first.wpos != -1)
               {
                 iter->second.first.wpos_end = len - kmerSize + 1;
                 minmerIndex.push_back(iter->second.first);
@@ -521,8 +556,8 @@ namespace skch {
             //// TODO Not sure why these are occuring but they are a bug
             minmerIndex.erase(
                 std::remove_if(
-                  minmerIndex.begin(), 
-                  minmerIndex.end(), 
+                  minmerIndex.begin(),
+                  minmerIndex.end(),
                   [](auto& mi) { return mi.wpos < 0 || mi.wpos_end < 0 || mi.wpos == mi.wpos_end; }),
                 minmerIndex.end());
 
@@ -535,20 +570,20 @@ namespace skch {
                 for (int chunk = 0; chunk < std::ceil(float(mi.wpos_end - mi.wpos) / float(windowSize)); chunk++) {
                   chunkedMIs.push_back(
                     MinmerInfo{
-                      mi.hash, 
-                      mi.wpos + chunk*windowSize, 
+                      mi.hash,
+                      mi.wpos + chunk*windowSize,
                       std::min(mi.wpos + chunk*windowSize + windowSize, mi.wpos_end),
-                      mi.seqId, 
+                      mi.seqId,
                       mi.strand
-                    } 
+                    }
                   );
                 }
               }
             });
             minmerIndex.erase(
                 std::remove_if(
-                  minmerIndex.begin(), 
-                  minmerIndex.end(), 
+                  minmerIndex.begin(),
+                  minmerIndex.end(),
                   [windowSize](auto& mi) { return mi.wpos_end - mi.wpos > windowSize; }),
                 minmerIndex.end());
             minmerIndex.insert(minmerIndex.end(), chunkedMIs.begin(), chunkedMIs.end());
@@ -558,11 +593,11 @@ namespace skch {
 
             //// No duplicate windows
             //// TODO These should not be occurring. They happen rarely, so just deleting them for now
-            //// but need to fix eventually 
+            //// but need to fix eventually
             minmerIndex.erase(
                 std::unique(
-                  minmerIndex.begin(), 
-                  minmerIndex.end(), 
+                  minmerIndex.begin(),
+                  minmerIndex.end(),
                   [](auto& l, auto& r) { return (l.wpos == r.wpos) && (l.hash == r.hash); }),
                 minmerIndex.end());
 
@@ -620,14 +655,14 @@ namespace skch {
         uint64_t estimateUniqueKmers(uint64_t sequenceLength, int kmerSize) {
             // Calculate the theoretical maximum number of k-mers
             uint64_t maxKmers = sequenceLength - kmerSize + 1;
-            
+
             // Calculate the probability of a k-mer being unique
             // This uses the "Birthday Problem" approach
             double probabilityUnique = std::exp(-static_cast<double>(maxKmers) / std::pow(4, kmerSize));
-            
+
             // Estimate the number of unique k-mers
             uint64_t estimatedUnique = maxKmers * (1 - probabilityUnique);
-            
+
             return estimatedUnique;
         }
     }

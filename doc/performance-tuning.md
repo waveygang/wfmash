@@ -192,7 +192,7 @@ Total: 52257 samples
 
 which is not that different from all2all.
 
-# Automatically running the profiler
+## Automatically running the profiler
 
 If you use Guix you can simply run the profiler for all2all from a checked out git repo with the command:
 
@@ -229,7 +229,7 @@ Above profiling was done for the all2all test. We switched to running
 (invoke "ctest" "--verbose" "-R" "wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF")
 ```
 
-Now running with native `-DNDEBUG -O3 -funroll-all-loops -fopenmp -g -flto=auto -fno-fat-lto-objects -fPIE`
+Now running with native and the 'Generic' build, i.e., `-DNDEBUG -O3 -funroll-all-loops -fopenmp -g -flto=auto -fno-fat-lto-objects -fPIE`
 
 ```
 guix build -L . wfmash-gcc-profile-git --tune=native
@@ -244,7 +244,149 @@ phase `run-profiler' succeeded after 40.6 seconds
 
 The non-native version ran in 42 seconds, not much of a difference there.
 
+Above output differs when running with much slower 'Debug' statements:
+
+```
+Total: 28620 samples
+    1193   4.2%   4.2%     1193   4.2% __gnu_cxx::__normal_iterator::__normal_iterator
+    1162   4.1%   8.2%     1162   4.1% skch::CommonFunc::reverseComplement
+     911   3.2%  11.4%      911   3.2% MurmurHash3_x64_128
+     730   2.6%  14.0%     1136   4.0% __gnu_cxx::__normal_iterator::operator+@4f1e6c
+     629   2.2%  16.2%      629   2.2% __gnu_cxx::__normal_iterator::operator*@4dcb72
+     596   2.1%  18.2%     1370   4.8% std::__get_helper@49ced1
+```
+
+Funny thing is that here is no wavefront in the full list, even though it builds with
+
+```
+-g -fno-inline  -g -fPIC   -Wfatal-errors -MD -MT
+```
+
+Removing no-inline makes it less noisy
+
+```
+    1154   4.2%   4.2%     1154   4.2% skch::CommonFunc::reverseComplement
+     881   3.2%   7.4%      881   3.2% MurmurHash3_x64_128
+     651   2.4%   9.7%     1456   5.3% std::__get_helper@4a25f1
+     637   2.3%  12.0%      962   3.5% __gnu_cxx::__normal_iterator::operator+@4f70aa
+     597   2.2%  14.2%      597   2.2% __gnu_cxx::__normal_iterator::operator*@4e1f98
+     579   2.1%  16.3%     2035   7.4% std::get@486b3b
+```
+
+Obviously reverseComplement and MurmurHash3 are slow, but it is puzzling we see no wavefront in the list.
+Most of the time in the test goes to [wfmash::align]. `skch`, btw, is the jaccard mapper, part of MashMap.
+The Jaccard Similarity Index is a measure of the similarity between two sets of data. For an [example](https://www.statology.org/jaccard-similarity/).
+From the MashMap paper: one class of algorithms for fast, approximate mapping relies on ideas originally developed for ﬁnding
+similarities between web documents. Broder (1997) proved that an unbiased estimate of the Jaccard
+similarity coefﬁcient between two sets can be computed efﬁciently using a subset of hashed elements called
+a sketch. Schleimer et al. (2003) proposed the winnowing algorithm, which picks a minimum hashed item
+(also known as a minimizer; Roberts et al., 2004) from each consecutive window of text as a means to more
+quickly estimate local similarity between web documents. These ideas have been used to develop new
+mapping and assembly algorithms for long reads, such as the MinHash Alignment Process (Berlin et al.,
+2015), minimap (Li, 2016), and BALAUR (Popic and Batzoglou, 2016).
+
+Just running LPA:
+
+```
+1: [wfmash::mashmap] Processing 1 target subsets (≈2317910bp/subset)
+1: [wfmash::mashmap] Processing subset 1/1 (mapping)
+1: [wfmash::mashmap] indexing [0.0% complete, 0/100 units, 0s elapsed]
+1: [wfmash::mashmap] indexing [100.0% complete, 100/100 units, 0s elapsed]
+1: [wfmash::mashmap] Processed 8 sequences (0 skipped, 2317910 total bp), 20552 unique hashes, 258475 windows
+1: [wfmash::mashmap] Filtered 179727/438202 k-mers occurring > 87 times (target: 0.02%)
+1: [wfmash::mashmap] reference index computed in 1.3s
+1: [wfmash::mashmap] building index data structures...
+1: [wfmash::mashmap] mapping [0.0% complete, 0/2317910 units, 0s elapsed]
+1: [wfmash::mashmap] mapping [2.1% complete, 49000/2317910 units, 0s elapsed]
+1: [wfmash::mashmap] mapping [100.0% complete, 2317910/2317910 units, 1s elapsed]
+1: [wfmash::mashmap] Mapped query in 3.0s, results saved to: /tmp/guix-build-wfmash-gcc-profile-git-v0.22.0-184-g8f6a1d64.drv-0/source/wfmash-GWRMuL
+1: [wfmash::align] Reference = [data/LPA.subset.fa.gz]
+1: [wfmash::align] Query = [data/LPA.subset.fa.gz]
+1: [wfmash::align] Mapping file = /tmp/guix-build-wfmash-gcc-profile-git-v0.22.0-184-g8f6a1d64.drv-0/source/wfmash-GWRMuL
+1: [wfmash::align] Alignment identity cutoff = 0.00%
+1: [wfmash::align] Alignment output file = /dev/stdout
+1: [wfmash::align] Alignment scoring: [mismatch, gap1(o,e), gap2(o,e)[] = [5, 8, 2, 24, 1]
+1: [wfmash::align] Successfully loaded thread-safe FASTA indices
+1: [wfmash::align] time spent loading the reference index: 0.00 sec
+1: [wfmash::align] Found 861 mapping records for alignment (13012371 query bp, 14815481 target bp)
+1: [wfmash::align] aligning [0.7% complete, 85000/13012371 units, 0s elapsed]
+1: [wfmash::align] aligning [18.8% complete, 2446256/13012371 units, 10s elapsed]
+1: [wfmash::align] aligning [47.7% complete, 6201280/13012371 units, 20s elapsed]
+1: [wfmash::align] aligning [65.2% complete, 8486876/13012371 units, 30s elapsed]
+1: [wfmash::align] aligning [86.7% complete, 11276414/13012371 units, 40s elapsed]
+1: [wfmash::align] aligning [100.0% complete, 13012371/13012371 units, 47s elapsed]
+1: [wfmash::align] total aligned records = 861, total aligned bp = 14294162, completed in 53 seconds
+1: [wfmash::align] time spent computing the alignment: 53.1 sec
+```
+
+and we get wavefront output alright
+
+```
+    6639  45.6%  45.6%     6639  45.6% wavefront_compute_affine2p_idm
+    2949  20.3%  65.9%     2949  20.3% wavefront_extend_matches_packed_end2end_max
+    2491  17.1%  83.0%     2491  17.1% wavefront_bialign_breakpoint_indel2indel
+     408   2.8%  85.8%      408   2.8% wavefront_compute_affine2p_idm_piggyback
+     364   2.5%  88.3%      364   2.5% wavefront_bialign_breakpoint_m2m
+     189   1.3%  89.6%      189   1.3% wavefront_compute_trim_ends
+     135   0.9%  90.5%      135   0.9% wavefront_extend_matches_packed_end2end
+```
+
+Running yeast we get:
+
+```
+3: [wfmash::mashmap] indexing [0.0% complete, 0/100 units, 0s elapsed]
+3: [wfmash::mashmap] indexing [100.0% complete, 100/100 units, 0s elapsed]
+3: [wfmash::mashmap] Processed 136 sequences (0 skipped, 96255507 total bp), 670229 unique hashes, 7449528 windows
+3: [wfmash::mashmap] Filtered 7245/7456773 k-mers occurring > 1491 times (target: 0.02%)
+3: [wfmash::mashmap] reference index computed in 117.4s
+3: [wfmash::mashmap] building index data structures...
+3: [wfmash::mashmap] mapping [0.0% complete, 0/96255507 units, 0s elapsed]
+3: [wfmash::mashmap] mapping [0.0% complete, 22000/96255507 units, 0s elapsed]
+3: [wfmash::mashmap] mapping [5.6% complete, 5394000/96255507 units, 10s elapsed]
+3: [wfmash::mashmap] mapping [11.3% complete, 10876000/96255507 units, 20s elapsed]
+3: [wfmash::mashmap] mapping [17.9% complete, 17193000/96255507 units, 30s elapsed]
+3: [wfmash::mashmap] mapping [23.7% complete, 22805000/96255507 units, 40s elapsed]
+(...)
+3: [wfmash::mashmap] mapping [100.0% complete, 96255507/96255507 units, 158s elapsed]
+3: [wfmash::mashmap] Mapped query in 278.9s, results saved to: /dev/stdout
+```
+
+```
+    1140   4.1%   4.1%     1140   4.1% skch::CommonFunc::reverseComplement
+     835   3.0%   7.1%      835   3.0% MurmurHash3_x64_128
+     705   2.5%   9.6%     1465   5.2% std::__get_helper@4a260b
+     684   2.4%  12.0%     1102   3.9% __gnu_cxx::__normal_iterator::operator+@4f70c4
+     606   2.2%  14.2%      606   2.2% __gnu_cxx::__normal_iterator::__normal_iterator@4e1e2c
+     600   2.1%  16.3%     4203  15.0% std::__tuple_compare::__less@486b6f
+(...)
+     213   0.8%  47.6%    11305  40.4% skch::CommonFunc::addMinmers
+```
+
+I toyed a bit with skch::CommonFunc::reverseComplement and it turned out that, when taking out the comparisons, the speed for yeast tests on 4 threads was improved.
+
+```
+old: 3/6 Test #3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF ...   Passed   27.42 sec
+new: 3/6 Test #3: wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF ...   Passed   22.01 sec
+```
+
+And the function is no longer a bottleneck with Yeast:
+
+```
+     833   3.1%   3.1%      833   3.1% MurmurHash3_x64_128
+     678   2.5%   5.6%     1451   5.3% std::__get_helper@4a26df
+     656   2.4%   8.0%      980   3.6% __gnu_cxx::__normal_iterator::operator+@4f7198
+     606   2.2%  10.2%      606   2.2% __gnu_cxx::__normal_iterator::operator*@4e2086
+     537   2.0%  12.2%     1988   7.3% std::get@486c29
+```
+
+The profiler turns out to be correct.
+
 For more information on installing and running Guix see the header of [guix.scm](../guix.scm). Guix is distribution agnostic and runs on, for example, Debian. That is what we do.
+
+## Tuning addMinmers
+
+Above profiling suggests that addMinmers is taking a chunk of time. We need to validate if the profiler has got it right.
+First I am going to slow down mapSingleQueryFrag and see if that comes on top. Next we probably need to de-inline functions in addMinMers. Also I should check the build is correct for the other libs, so performance gets tracked there too.
 
 # Conclusion
 
@@ -256,7 +398,7 @@ For future work:
 
 1. DONE: We ought to run a profiler to validate all the effort is going into wfa's kernels.
 1. DONE: We could look at clang+LLVM performance because their optimizations are a bit different from gcc. But I don't expect much difference.
-1. The AMD Genoa's we have in Octopus have AVX512. WFA is not yet optimized for that target! There could be some gains.
+1. DONE: The AMD Genoa's we have in Octopus have AVX512. WFA is not yet optimized for that target! There could be some gains.
 1. Probably is worth trying the GPU version too - at least for the supercomputers.
 1. As we are pumping data has anyone looked at mmap support?
 
