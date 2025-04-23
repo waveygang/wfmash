@@ -69,20 +69,18 @@ endif()
 
 message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
-if (${CMAKE_BUILD_TYPE} MATCHES Release)
+if (${CMAKE_BUILD_TYPE} MATCHES Release) # always builds optimized version
+  SET(CMAKE_CXX_FLAGS_RELEASE  "") # disable default flags
   # This is the default build for the developers. Note that Debian
   # packagers should use RelWithDebInfo and the Guix version should
   # use Generic builds below - fine tune through --tune etc. For
   # debugging you may want to use the Debug version.
-  if (BUILD_OPTIMIZED)
-    # set(EXTRA_FLAGS "-Ofast -march=native -pipe -msse4.2 -funroll-all-loops") #  -fprofile-generate=../pgo")
-    # set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -funroll-all-loops")
-    set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops")
-    # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-generate=${CMAKE_BINARY_DIR}/../pgo")
-    # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-use=${CMAKE_BINARY_DIR}/../pgo")
-  else()
-    set(EXTRA_FLAGS "-Ofast -march=native")
-  endif()
+  # set(EXTRA_FLAGS "-Ofast -march=x86-64-v3 -funroll-all-loops") --- use the --tune option in guix.scm instead
+  set(EXTRA_FLAGS "-Ofast -march=native -funroll-all-loops")
+  # ---- The following are for hand profiling only
+  # set(EXTRA_FLAGS "-Ofast -march=native -pipe -msse4.2 -funroll-all-loops") #  -fprofile-generate=../pgo")
+  # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-generate=${CMAKE_BINARY_DIR}/../pgo")
+  # set(EXTRA_FLAGS "-O3 -march=native -funroll-all-loops -fprofile-use=${CMAKE_BINARY_DIR}/../pgo")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG ${EXTRA_FLAGS}")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG ${EXTRA_FLAGS}")
 endif ()
@@ -114,7 +112,7 @@ if(PROFILER)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 endif()
 
-if(GPROF) # for the GNU profiler
+if(GPROF) # for the GNU profiler -- don't use this one
   set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -g -pg")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pg")
 endif(GPROF)
