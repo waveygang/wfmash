@@ -19,12 +19,10 @@
 #include <iostream>
 #include <filesystem>
 namespace fs = std::filesystem;
-#include <queue>
-#include <algorithm>
+
 #include <unordered_set>
 #include <mutex>
 #include <thread>
-#include <sstream>
 #include "taskflow/taskflow.hpp"
 
 // Include the reentrant FASTA/BGZF index implementation
@@ -61,9 +59,9 @@ namespace skch
       std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
       std::mutex mutex;
       progress_meter::ProgressMeter& progress;
-      QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
+      QueryMappingOutput(std::string name, const std::vector<MappingResult>& r,
                         const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
-          : queryName(name), results(r), mergedResults(mr), progress(p) {}
+          : queryName(std::move(name)), results(r), mergedResults(mr), progress(p) {}
   };
 
   struct FragmentData {
@@ -78,12 +76,11 @@ namespace skch
       std::shared_ptr<std::atomic<int>> processedCounter;
 
       // Add constructor for convenience
-      FragmentData(const char* s, int l, int fl, seqno_t sid, 
-                   const std::string& sn, int rg, int idx,
+      FragmentData(const char* s, int l, int fl, seqno_t sid, std::string sn, int rg, int idx,
                    std::shared_ptr<QueryMappingOutput> out,
                    std::shared_ptr<std::atomic<int>> counter = nullptr)
-          : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
-            refGroup(rg), fragmentIndex(idx), output(out), processedCounter(counter) {}
+          : seq(s), len(l), fullLen(fl), seqId(sid), seqName(std::move(sn)),
+            refGroup(rg), fragmentIndex(idx), output(std::move(out)), processedCounter(std::move(counter)) {}
   };
 
   // Manages fragment lifetime and processing
@@ -95,7 +92,7 @@ namespace skch
   public:
       void add_fragment(std::shared_ptr<FragmentData> fragment) {
           std::lock_guard<std::mutex> lock(fragments_mutex);
-          fragments.push_back(fragment);
+          fragments.push_back(std::move(fragment));
       }
 
       void clear() {
@@ -755,7 +752,7 @@ namespace skch
                                   query_sf.emplace([&, i]() {
                                       // Thread-local storage for results
                                       std::vector<MappingResult> all_fragment_results;
-                                      auto fragment = std::make_shared<FragmentData>(
+                                      FragmentData fragment = FragmentData(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
                                           static_cast<int>(input->len),
@@ -778,7 +775,7 @@ namespace skch
                                       std::vector<L1_candidateLocus_t> l1Mappings;
                                       MappingResultsVector_t l2Mappings;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
+                                      processFragment(fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                       
                                       // Safely merge results into output
                                       if (!all_fragment_results.empty()) {
@@ -1278,7 +1275,7 @@ namespace skch
 #ifdef DEBUG
           int orig_len = Q.minmerTableQuery.size();
 #endif
-          const double max_hash_01 = (long double)(Q.minmerTableQuery.back().hash) / std::numeric_limits<hash_t>::max();
+          const double max_hash_01 = (double)(Q.minmerTableQuery.back().hash) / std::numeric_limits<hash_t>::max();
           Q.kmerComplexity = (double(Q.minmerTableQuery.size()) / max_hash_01) / ((Q.len - param.kmerSize + 1)*2);
 
           // Removed frequent kmer filtering
@@ -1704,7 +1701,6 @@ namespace skch
         void doL2Mapping(Q_Info &Q, L1_Iter l1_begin, L1_Iter l1_end, VecOut &l2Mappings)
         {
           ///2. Walk the read over the candidate regions and compute the jaccard similarity with minimum s sketches
-          std::vector<L2_mapLocus_t> l2_vec;
           double bestJaccardNumerator = 0;
           auto loc_iterator = l1_begin;
           while (loc_iterator != l1_end)
@@ -1727,8 +1723,8 @@ namespace skch
               }
             }
 
-            l2_vec.clear();
-            /*std::cerr << "[DEBUG] L2 mapping for " << Q.seqName 
+              std::vector<L2_mapLocus_t> l2_vec;
+            /*std::cerr << "[DEBUG] L2 mapping for " << Q.seqName
                       << " candidateLocus=[" << candidateLocus.rangeStartPos 
                       << "," << candidateLocus.rangeEndPos 
                       << "] intersectionSize=" << candidateLocus.intersectionSize << "\n";*/
