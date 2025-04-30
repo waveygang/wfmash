@@ -172,9 +172,13 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
          * @brief   hashing kmer string (borrowed from mash)
          */
         inline hash_t getHash(const char *seq, int length) {
+            char data[16];
+
+            MurmurHash3_x64_128(seq, length, seed, data);
+
             hash_t hash;
 
-            MurmurHash3_x64_128(seq, length, seed, &hash);
+            hash = *((hash_t *) data);
 
             return hash;
         }
