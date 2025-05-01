@@ -1321,12 +1321,22 @@ namespace skch
 
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
-            //Check if hash value exists in the reference lookup index
-            const auto seedFind = refSketch->minmerPosLookupIndex.find(it->hash);
-
-            if(seedFind != refSketch->minmerPosLookupIndex.end())
+            //Check if hash value exists in the reference lookup index using binary search
+            hash_t currentHash = it->hash;
+            
+            // Binary search for hash in the sorted vector
+            auto range = std::equal_range(
+                refSketch->sortedIndexPoints.begin(),
+                refSketch->sortedIndexPoints.end(),
+                currentHash,
+                [](const IntervalPoint& point, hash_t hash) {
+                    return point.hash < hash;
+                });
+            
+            // If hash found (range not empty)
+            if(range.first != range.second)
             {
-              pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
+              pq.emplace_back(boundPtr<IP_const_iterator> {range.first, range.second});
             }
           }
           std::make_heap(pq.begin(), pq.end(), heap_cmp);
