@@ -68,11 +68,15 @@ namespace skch
 
     // Sort interval points. 
     // For a pair of points at the same seqId/pos, the end point should be first
+    // IMPORTANT: This operator compares by coordinates, not by hash!
     bool operator <(const IntervalPoint& x) const {
       return std::tie(seqId, pos, side) 
         < std::tie(x.seqId, x.pos, x.side);
     }
   };
+
+  // Type alias for the sorted vector of interval points
+  using SortedIndexPoints = std::vector<IntervalPoint>;
 
   template <class It>
   struct boundPtr {
