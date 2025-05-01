@@ -1329,8 +1329,13 @@ namespace skch
                 refSketch->sortedIndexPoints.begin(),
                 refSketch->sortedIndexPoints.end(),
                 currentHash,
-                [](const IntervalPoint& point, hash_t hash) {
-                    return point.hash < hash;
+                [](const auto& a, const auto& b) {
+                    // Handle both IntervalPoint vs hash_t and hash_t vs IntervalPoint comparisons
+                    if constexpr (std::is_same_v<std::decay_t<decltype(a)>, IntervalPoint>) {
+                        return a.hash < b;
+                    } else {
+                        return a < b;
+                    }
                 });
             
             // If hash found (range not empty)

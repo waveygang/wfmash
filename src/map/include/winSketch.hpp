@@ -413,7 +413,7 @@ namespace skch
               freq_cutoff = (uint64_t)param.max_kmer_freq;
           }
           std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
-                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
+                    << (kmer_freqs.size()) << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
                     << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
                     << " k-mers occurring > " << freq_cutoff << " times"
                     << " (target: " << (param.max_kmer_freq <= 1.0 ? 
@@ -479,6 +479,8 @@ namespace skch
 
           // This function is kept for compatibility but should not be used
           // when parallel index building is enabled
+          SortedIndexPoints localPoints;
+          
           for (MinmerInfo& mi : *contigMinmerIndex) {
               // Skip high-frequency k-mers
               auto freq_it = kmer_freqs.find(mi.hash);
@@ -486,13 +488,13 @@ namespace skch
                   continue;
               }
 
-              if (minmerPosLookupIndex[mi.hash].size() == 0 
-                      || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                      || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
-                  minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-                  minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+              if (localPoints.empty() || 
+                  localPoints.back().hash != mi.hash || 
+                  localPoints.back().pos != mi.wpos) {
+                  localPoints.push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                  localPoints.push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
               } else {
-                  minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+                  localPoints.back().pos = mi.wpos_end;
               }
           }
 
@@ -774,20 +776,10 @@ namespace skch
         inStream.read(reinterpret_cast<char*>(&size), sizeof(size));
         inStream.seekg(size * sizeof(MinmerInfo), std::ios::cur);
         
-        // Skip position lookup index
-        typename MI_Map_t::size_type numKeys = 0;
-        inStream.read(reinterpret_cast<char*>(&numKeys), sizeof(numKeys));
-        
-        for (auto idx = 0; idx < numKeys; idx++) {
-            // Skip key
-            MinmerMapKeyType key;
-            inStream.read(reinterpret_cast<char*>(&key), sizeof(key));
-            
-            // Skip value vector size and data
-            typename MinmerMapValueType::size_type valueSize = 0;
-            inStream.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
-            inStream.seekg(valueSize * sizeof(MinmerMapValueType::value_type), std::ios::cur);
-        }
+        // Skip interval points vector
+        typename SortedIndexPoints::size_type ipSize = 0;
+        inStream.read(reinterpret_cast<char*>(&ipSize), sizeof(ipSize));
+        inStream.seekg(ipSize * sizeof(IntervalPoint), std::ios::cur);
         
         return true;
       }
