@@ -1334,7 +1334,7 @@ namespace skch
                     if constexpr (std::is_same_v<std::decay_t<decltype(a)>, IntervalPoint>) {
                         return a.hash < b;
                     } else {
-                        return a < b;
+                        return a < b.hash;
                     }
                 });
             
