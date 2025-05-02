@@ -78,7 +78,7 @@ namespace skch
 
       using MI_Type = std::vector< MinmerInfo >;
       using MIIter_t = MI_Type::const_iterator;
-      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
+      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t, IdentityHash>;
 
       public:
         uint64_t total_seq_length = 0;
@@ -285,10 +285,11 @@ namespace skch
 
           // Merge frequency maps
           HF_Map_t kmer_freqs;
-          for (const auto& thread_freq : thread_kmer_freqs) {
+          for (auto& thread_freq : thread_kmer_freqs) {
               for (const auto& [hash, freq] : thread_freq) {
                   kmer_freqs[hash] += freq;
               }
+              thread_freq.clear();
           }
 
           // Parallel index building
@@ -383,12 +384,15 @@ namespace skch
                                       std::make_move_iterator(thread_points.begin()),
                                       std::make_move_iterator(thread_points.end()));
           }
+          thread_interval_points.clear();
+          minmerIndex.reserve(total_minmers);
 
           // Merge minmer indexes
           for (auto& thread_index : thread_minmer_indexes) {
               minmerIndex.insert(minmerIndex.end(), 
                                std::make_move_iterator(thread_index.begin()),
                                std::make_move_iterator(thread_index.end()));
+              thread_index.clear();
           }
           
           // Sort the combined interval points vector by hash
@@ -879,7 +883,7 @@ namespace skch
             
             std::string seqName(name_length, '\0');
             inStream.read(&seqName[0], name_length);
-            sequenceNames.push_back(seqName);
+            sequenceNames.emplace_back(std::move(seqName));
         }
         
         // Read and restore sequence ID mappings from index
