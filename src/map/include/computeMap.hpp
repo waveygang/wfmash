@@ -1277,9 +1277,46 @@ namespace skch
           // Removed frequent kmer filtering
 
           Q.sketchSize = Q.minmerTableQuery.size();
+          // Store original size for percentage calculations
+          size_t originalSketchSize = Q.sketchSize;
 #ifdef DEBUG
           std::cerr << "INFO, wfmash::mashmap, read id " << Q.seqId << ", minmer count = " << Q.minmerTableQuery.size() << ", bad minmers = " << orig_len - Q.sketchSize << "\n";
 #endif
+
+          // Filter high-frequency query minmers if threshold is set
+          if (param.max_kmer_freq > 0) {
+              // Calculate frequencies within this query's sketch
+              ankerl::unordered_dense::map<hash_t, uint64_t, IdentityHash> query_kmer_freqs;
+              query_kmer_freqs.reserve(Q.sketchSize);
+              for (const auto& mi : Q.minmerTableQuery) {
+                  query_kmer_freqs[mi.hash]++;
+              }
+
+              // Use the same filtering logic as for the reference
+              uint64_t filtered_count = 0;
+              Q.minmerTableQuery.erase(
+                  std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(),
+                                 [&](const MinmerInfo& mi) {
+                                     uint64_t freq = query_kmer_freqs[mi.hash];
+                                     uint64_t count_threshold = param.max_kmer_freq <= 1.0 ? 
+                                         std::max(10UL, (uint64_t)(originalSketchSize * param.max_kmer_freq)) : 
+                                         (uint64_t)param.max_kmer_freq;
+                                     bool filter_out = freq > count_threshold && freq > 10; // Always keep if freq <= 10
+                                     if (filter_out) filtered_count++;
+                                     return filter_out;
+                                 }),
+                  Q.minmerTableQuery.end());
+
+              Q.sketchSize = Q.minmerTableQuery.size();
+
+#ifdef DEBUG
+              if (filtered_count > 0) {
+                std::cerr << "INFO, wfmash::mashmap, query id " << Q.seqId << ", filtered "
+                          << filtered_count << " high-frequency query minmers ("
+                          << Q.sketchSize << " remaining)." << std::endl;
+              }
+#endif
+          }
         } 
 
 
