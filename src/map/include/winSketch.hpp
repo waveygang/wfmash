@@ -315,6 +315,7 @@ namespace skch
 
                           // Same frequency filtering logic as used for reference targets
                           uint64_t freq = freq_it->second;
+                          uint64_t min_occ = 10; // Minimum occurrence threshold
                           uint64_t count_threshold;
                           
                           if (param.max_kmer_freq <= 1.0) { // Fractional threshold
