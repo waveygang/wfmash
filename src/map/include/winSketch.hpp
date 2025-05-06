@@ -313,19 +313,14 @@ namespace skch
                               continue;  // Should never happen
                           }
 
+                          // Same frequency filtering logic as used for reference targets
                           uint64_t freq = freq_it->second;
-                          uint64_t min_occ = 10;
-                          uint64_t max_occ = std::numeric_limits<uint64_t>::max();
                           uint64_t count_threshold;
                           
-                          if (param.max_kmer_freq <= 1.0) {
-                              count_threshold = std::min(max_occ, 
-                                                       std::max(min_occ, 
-                                                              (uint64_t)(total_windows * param.max_kmer_freq)));
+                          if (param.max_kmer_freq <= 1.0) { // Fractional threshold
+                              count_threshold = std::max(10UL, (uint64_t)(total_windows * param.max_kmer_freq));
                           } else {
-                              count_threshold = std::min(max_occ,
-                                                       std::max(min_occ,
-                                                              (uint64_t)param.max_kmer_freq));
+                              count_threshold = (uint64_t)param.max_kmer_freq;
                           }
 
                           if (freq > count_threshold && freq > min_occ) {
