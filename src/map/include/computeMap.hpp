@@ -750,13 +750,12 @@ namespace skch
                               int refGroup = idManager->getRefGroup(seqId);
                               int noOverlapFragmentCount = input->len / param.segLength;
 
-                              // Collection of fragment results to be merged at the end
-                              std::vector<MappingResultsVector_t> fragment_results;
-                              std::mutex fragment_results_mutex; // Only for adding to the collection vector
+                              // Each task gets its own index in this vector - no mutex needed!
+                              std::vector<MappingResultsVector_t> fragment_results(noOverlapFragmentCount + 1);
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  query_sf.emplace([&, i, &fragment_results, &fragment_results_mutex, 
+                                  query_sf.emplace([&, i, &fragment_results, 
                                                     &sequence, seqId, queryName, refGroup, input_len = input->len]() {
                                       // Thread-local storage for results - completely independent
                                       MappingResultsVector_t thread_local_mappings_owner;
@@ -793,25 +792,20 @@ namespace skch
                                                      l2Mappings_owner, l2Mappings_view, 
                                                      Q, thread_local_mappings_view);
                                       
-                                      // Add results to the collection (no contention on output->owned_raw_mappings)
+                                      // Add results to the thread's designated slot - NO LOCKING NEEDED!
                                       if (!thread_local_mappings_view.empty()) {
-                                          // Copy mappings from thread-local view to a new owner vector
-                                          MappingResultsVector_t fragment_owned_mappings;
-                                          fragment_owned_mappings.reserve(thread_local_mappings_view.size());
+                                          // Copy mappings from thread-local view to its pre-allocated vector
+                                          fragment_results[i].reserve(thread_local_mappings_view.size());
                                           for (auto* mapping_ptr : thread_local_mappings_view) {
-                                              fragment_owned_mappings.push_back(*mapping_ptr);
+                                              fragment_results[i].push_back(*mapping_ptr);
                                           }
-                                          
-                                          // Add to the collection with minimal lock contention
-                                          std::lock_guard<std::mutex> lock(fragment_results_mutex);
-                                          fragment_results.push_back(std::move(fragment_owned_mappings));
                                       }
                                   });
                               }
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&, &fragment_results, &fragment_results_mutex, 
+                                  query_sf.emplace([&, &fragment_results,
                                                     &sequence, seqId, queryName, refGroup, 
                                                     input_len = input->len, noOverlapFragmentCount]() {
                                       // Thread-local storage for results - completely independent
@@ -841,18 +835,13 @@ namespace skch
                                                      l2Mappings_owner, l2Mappings_view, 
                                                      Q, thread_local_mappings_view);
                                       
-                                      // Add results to the collection (no contention on output->owned_raw_mappings)
+                                      // Add results to its designated slot - NO LOCKING NEEDED!
                                       if (!thread_local_mappings_view.empty()) {
-                                          // Copy mappings from thread-local view to a new owner vector
-                                          MappingResultsVector_t fragment_owned_mappings;
-                                          fragment_owned_mappings.reserve(thread_local_mappings_view.size());
+                                          // Copy mappings from thread-local view to its pre-allocated vector
+                                          fragment_results[noOverlapFragmentCount].reserve(thread_local_mappings_view.size());
                                           for (auto* mapping_ptr : thread_local_mappings_view) {
-                                              fragment_owned_mappings.push_back(*mapping_ptr);
+                                              fragment_results[noOverlapFragmentCount].push_back(*mapping_ptr);
                                           }
-                                          
-                                          // Add to the collection with minimal lock contention
-                                          std::lock_guard<std::mutex> lock(fragment_results_mutex);
-                                          fragment_results.push_back(std::move(fragment_owned_mappings));
                                       }
                                   });
                               }
@@ -870,7 +859,7 @@ namespace skch
                               // Reserve space for all mappings to avoid reallocations
                               output->owned_raw_mappings.reserve(output->owned_raw_mappings.size() + total_mapping_count);
                               
-                              // Combine all fragment results
+                              // Combine all fragment results - No locking because subflow.join() ensures all fragments are done
                               for (auto& frag_results : fragment_results) {
                                   output->owned_raw_mappings.insert(
                                       output->owned_raw_mappings.end(),
