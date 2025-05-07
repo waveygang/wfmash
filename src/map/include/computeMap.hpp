@@ -57,13 +57,17 @@ namespace skch
 {
   struct QueryMappingOutput {
       std::string queryName;
-      std::vector<MappingResult> results;        // Non-merged mappings
-      std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
+      // These vectors own the actual MappingResult objects
+      MappingResultsVector_t owned_raw_mappings;      // Non-merged mappings ownership
+      MappingResultsVector_t owned_merged_mappings;   // Maximally merged mappings ownership
+      // Views into the owned vectors for efficient operations
+      MappingResultsView_t raw_mappings_view;
+      MappingResultsView_t merged_mappings_view;
       std::mutex mutex;
       progress_meter::ProgressMeter& progress;
-      QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
-                        const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
-          : queryName(name), results(r), mergedResults(mr), progress(p) {}
+      
+      QueryMappingOutput(const std::string& name, progress_meter::ProgressMeter& p)
+          : queryName(name), progress(p) {}
   };
 
   struct FragmentData {
@@ -189,14 +193,16 @@ namespace skch
     void processFragment(const FragmentData& fragment, 
                          std::vector<IntervalPoint>& intervalPoints,
                          std::vector<L1_candidateLocus_t>& l1Mappings,
-                         MappingResultsVector_t& l2Mappings,
+                         MappingResultsVector_t& l2Mappings_owner,
+                         MappingResultsView_t& l2Mappings_view,
                          QueryMetaData<MinVec_Type>& Q,
-                         std::vector<MappingResult>& thread_local_results) {
+                         MappingResultsView_t& thread_local_results_view) {
         
         intervalPoints.clear();
         l1Mappings.clear();
-        l2Mappings.clear();
-        thread_local_results.clear(); // Ensure we start with an empty results vector
+        l2Mappings_owner.clear();
+        l2Mappings_view.clear();
+        thread_local_results_view.clear(); // Ensure we start with an empty results vector
 
         Q.seq = const_cast<char*>(fragment.seq);
         Q.len = fragment.len;
@@ -205,18 +211,19 @@ namespace skch
         Q.seqName = fragment.seqName;
         Q.refGroup = fragment.refGroup;
 
-        mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+        mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings_owner, l2Mappings_view);
 
-        std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-            e.queryLen = fragment.fullLen;
-            e.queryStartPos = fragment.fragmentIndex * param.segLength;
-            e.queryEndPos = e.queryStartPos + fragment.len;
-        });
+        // Update mapping coordinates for all L2 mappings
+        for (auto* mapping_ptr : l2Mappings_view) {
+            mapping_ptr->queryLen = fragment.fullLen;
+            mapping_ptr->queryStartPos = fragment.fragmentIndex * param.segLength;
+            mapping_ptr->queryEndPos = mapping_ptr->queryStartPos + fragment.len;
+        }
 
-        if (!l2Mappings.empty()) {
-            thread_local_results.insert(thread_local_results.end(), 
-                                       l2Mappings.begin(), 
-                                       l2Mappings.end());
+        if (!l2Mappings_view.empty()) {
+            thread_local_results_view.insert(thread_local_results_view.end(), 
+                                            l2Mappings_view.begin(), 
+                                            l2Mappings_view.end());
         }
         
         if (fragment.output) {
@@ -737,20 +744,22 @@ namespace skch
                               auto input = std::make_shared<InputSeqProgContainer>(
                                   sequence, queryName, seqId, *progress);
                               auto output = std::make_shared<QueryMappingOutput>(
-                                  queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
+                                  queryName, *progress);
                 
                               // Process fragments in parallel using subflows
                               int refGroup = idManager->getRefGroup(seqId);
                               int noOverlapFragmentCount = input->len / param.segLength;
 
-                              // Create a mutex to protect access to output->results
+                              // Create a mutex to protect access to output->owned_raw_mappings
                               std::mutex results_mutex;
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
                                   query_sf.emplace([&, i]() {
                                       // Thread-local storage for results
-                                      std::vector<MappingResult> all_fragment_results;
+                                      MappingResultsVector_t thread_local_mappings_owner;
+                                      MappingResultsView_t thread_local_mappings_view;
+                                      
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
@@ -772,18 +781,25 @@ namespace skch
                                       
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
-                                      MappingResultsVector_t l2Mappings;
+                                      MappingResultsVector_t l2Mappings_owner;
+                                      MappingResultsView_t l2Mappings_view;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
+                                      
+                                      processFragment(*fragment, intervalPoints, l1Mappings, 
+                                                     l2Mappings_owner, l2Mappings_view, 
+                                                     Q, thread_local_mappings_view);
                                       
                                       // Safely merge results into output
-                                      if (!all_fragment_results.empty()) {
+                                      if (!thread_local_mappings_view.empty()) {
                                           std::lock_guard<std::mutex> lock(results_mutex);
-                                          output->results.insert(
-                                              output->results.end(),
-                                              all_fragment_results.begin(),
-                                              all_fragment_results.end()
-                                          );
+                                          
+                                          // Copy mappings from thread-local owner to shared owner
+                                          for (auto* mapping_ptr : thread_local_mappings_view) {
+                                              addToOwner(output->owned_raw_mappings, *mapping_ptr);
+                                          }
+                                          
+                                          // Update the view in the output
+                                          output->raw_mappings_view = createViewFromMappings(output->owned_raw_mappings);
                                       }
                                   });
                               }
@@ -792,7 +808,9 @@ namespace skch
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
                                   query_sf.emplace([&]() {
                                       // Thread-local storage for results
-                                      std::vector<MappingResult> all_fragment_results;
+                                      MappingResultsVector_t thread_local_mappings_owner;
+                                      MappingResultsView_t thread_local_mappings_view;
+                                      
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + input->len - param.segLength,
                                           static_cast<int>(param.segLength),
@@ -806,18 +824,25 @@ namespace skch
 
                                       std::vector<IntervalPoint> intervalPoints;
                                       std::vector<L1_candidateLocus_t> l1Mappings;
-                                      MappingResultsVector_t l2Mappings;
+                                      MappingResultsVector_t l2Mappings_owner;
+                                      MappingResultsView_t l2Mappings_view;
                                       QueryMetaData<MinVec_Type> Q;
-                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
+                                      
+                                      processFragment(*fragment, intervalPoints, l1Mappings, 
+                                                     l2Mappings_owner, l2Mappings_view, 
+                                                     Q, thread_local_mappings_view);
                                       
                                       // Safely merge results into output
-                                      if (!all_fragment_results.empty()) {
+                                      if (!thread_local_mappings_view.empty()) {
                                           std::lock_guard<std::mutex> lock(results_mutex);
-                                          output->results.insert(
-                                              output->results.end(),
-                                              all_fragment_results.begin(),
-                                              all_fragment_results.end()
-                                          );
+                                          
+                                          // Copy mappings from thread-local owner to shared owner
+                                          for (auto* mapping_ptr : thread_local_mappings_view) {
+                                              addToOwner(output->owned_raw_mappings, *mapping_ptr);
+                                          }
+                                          
+                                          // Update the view in the output
+                                          output->raw_mappings_view = createViewFromMappings(output->owned_raw_mappings);
                                       }
                                   });
                               }
@@ -825,14 +850,21 @@ namespace skch
                               // Join ensures all fragments complete before finalization
                               query_sf.join();
 
-                              // After all fragments are processed, set the output results
-                              mappingBoundarySanityCheck(input.get(), output->results);
+                              // After all fragments are processed, perform final processing
+                              mappingBoundarySanityCheck(input.get(), output->owned_raw_mappings);
                               auto [nonMergedMappings, mergedMappings] = 
-                                  filterSubsetMappings(output->results, output->progress);
+                                  filterSubsetMappings(output->owned_raw_mappings, output->progress);
+
+                              // Store the merged mappings
+                              output->owned_merged_mappings = std::move(mergedMappings);
+                              
+                              // Update views
+                              output->raw_mappings_view = createViewFromMappings(output->owned_raw_mappings);
+                              output->merged_mappings_view = createViewFromMappings(output->owned_merged_mappings);
 
                               // Select the appropriate mappings
-                              auto& mappings = param.mergeMappings && param.split ?
-                                    mergedMappings : nonMergedMappings;
+                              MappingResultsVector_t& mappings_to_use = param.mergeMappings && param.split ?
+                                    output->owned_merged_mappings : output->owned_raw_mappings;
 
                               // Handle based on filter mode
                               if (param.filterMode == filter::ONETOONE) {
@@ -840,13 +872,13 @@ namespace skch
                                   std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
                                   (*subsetMappings)[seqId].insert(
                                       (*subsetMappings)[seqId].end(),
-                                      std::make_move_iterator(mappings.begin()),
-                                      std::make_move_iterator(mappings.end())
+                                      std::make_move_iterator(mappings_to_use.begin()),
+                                      std::make_move_iterator(mappings_to_use.end())
                                   );
                               } else {
                                   // For non-ONETOONE modes, write mappings immediately
                                   std::lock_guard<std::mutex> lock(*outstream_mutex);
-                                  reportReadMappings(mappings, queryName, *outstream);
+                                  reportReadMappings(mappings_to_use, queryName, *outstream);
                               }
                           }).name("query_" + queryName);
                   }
@@ -1185,8 +1217,9 @@ namespace skch
        * @param[in]   outstrm     outstream stream where mappings will be reported
        * @param[out]  l2Mappings  Mapping results in the L2 stage
        */
-      template<typename Q_Info, typename IPVec, typename L1Vec, typename VecOut>
-        void mapSingleQueryFrag(Q_Info &Q, IPVec& intervalPoints, L1Vec& l1Mappings, VecOut &l2Mappings)
+      template<typename Q_Info, typename IPVec, typename L1Vec, typename OwnerVec, typename ViewOut>
+        void mapSingleQueryFrag(Q_Info &Q, IPVec& intervalPoints, L1Vec& l1Mappings, 
+                               OwnerVec &l2Mappings_owner, ViewOut &l2Mappings_view)
         {
 #ifdef ENABLE_TIME_PROFILE_L1_L2
           auto t0 = skch::Time::now();
@@ -1223,25 +1256,25 @@ namespace skch
             {
               std::make_heap(l1_begin, l1_end, L1_locus_intersection_cmp);
             }
-            doL2Mapping(Q, l1_begin, l1_end, l2Mappings);
+            doL2Mapping(Q, l1_begin, l1_end, l2Mappings_owner, l2Mappings_view);
 
             // Set beginning of next range
             l1_begin = l1_end;
           }
 
-          // Sort output mappings
-          std::sort(l2Mappings.begin(), l2Mappings.end(), [](const auto& a, const auto& b) 
-              { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
+          // Sort output mappings using pointers (by reference coordinates)
+          std::sort(l2Mappings_view.begin(), l2Mappings_view.end(), [](const auto* a, const auto* b) 
+              { return std::tie(a->refSeqId, a->refStartPos) < std::tie(b->refSeqId, b->refStartPos); });
 
           // Add chain information
           // All mappings in this batch form a chain
           int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
-          int32_t chain_length = l2Mappings.size();
+          int32_t chain_length = l2Mappings_view.size();
           int32_t chain_pos = 1;
-          for (auto& mapping : l2Mappings) {
-              mapping.chain_id = chain_id;
-              mapping.chain_length = chain_length;
-              mapping.chain_pos = chain_pos++;
+          for (auto* mapping_ptr : l2Mappings_view) {
+              mapping_ptr->chain_id = chain_id;
+              mapping_ptr->chain_length = chain_length;
+              mapping_ptr->chain_pos = chain_pos++;
           }
 
 #ifdef ENABLE_TIME_PROFILE_L1_L2
@@ -1745,8 +1778,9 @@ namespace skch
        * @param[in]   l1Mappings                candidate regions for query sequence found at L1
        * @param[out]  l2Mappings                Mapping results in the L2 stage
        */
-      template <typename Q_Info, typename L1_Iter, typename VecOut>
-        void doL2Mapping(Q_Info &Q, L1_Iter l1_begin, L1_Iter l1_end, VecOut &l2Mappings)
+      template <typename Q_Info, typename L1_Iter, typename OwnerVec, typename ViewOut>
+        void doL2Mapping(Q_Info &Q, L1_Iter l1_begin, L1_Iter l1_end, 
+                        OwnerVec &l2Mappings_owner, ViewOut &l2Mappings_view)
         {
           ///2. Walk the read over the candidate regions and compute the jaccard similarity with minimum s sketches
           std::vector<L2_mapLocus_t> l2_vec;
@@ -1819,9 +1853,10 @@ namespace skch
                   res.kmerComplexity = Q.kmerComplexity;
 
                   res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
-
                 } 
-                l2Mappings.push_back(res);
+                
+                // Add the mapping to owner vector and get a pointer to it for the view
+                addToOwnerAndView(l2Mappings_owner, l2Mappings_view, res);
               }
             }
 
@@ -1837,7 +1872,7 @@ namespace skch
           }
           //std::cerr << "For an segment with " << l1Mappings.size()
             //<< " L1 mappings "
-            //<< " there were " << l2Mappings.size() << " L2 mappings\n";
+            //<< " there were " << l2Mappings_view.size() << " L2 mappings\n";
         }
 
       /**
@@ -2988,23 +3023,34 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
        * @param mappings Mappings to filter
        * @param param Algorithm parameters
        */
-      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
-          if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& owned_mappings, progress_meter::ProgressMeter& progress) {
+          if (owned_mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
 
-          // Make a copy of the raw mappings for scaffolding
-          MappingResultsVector_t rawMappings = mappings;
+          // Create views from owned vectors
+          MappingResultsView_t mappings_view = createViewFromMappings(owned_mappings);
+          
+          // Create a copy of the raw mappings for scaffolding
+          MappingResultsVector_t raw_mappings_copy = owned_mappings;
+          MappingResultsView_t raw_view = createViewFromMappings(raw_mappings_copy);
+          
+          // Container for merged mappings
+          MappingResultsVector_t merged_mappings_owner;
+          MappingResultsView_t merged_view;
           
           // Only merge once and keep both versions
-          auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-
-          // Process both merged and non-merged mappings
           if (param.mergeMappings && param.split) {
-              filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
+              // Merge mappings and get a view to them
+              merged_mappings_owner = mergeMappingsInRange(owned_mappings, param.chain_gap, progress);
+              merged_view = createViewFromMappings(merged_mappings_owner);
+              
+              // Process merged mappings
+              filterMaximallyMerged(merged_mappings_owner, std::floor(param.block_length / param.segLength), progress);
               // Also apply scaffold filtering to merged mappings
-              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
+              filterByScaffolds(merged_mappings_owner, raw_mappings_copy, param, progress);
           } else {
-              filterNonMergedMappings(mappings, param, progress);
-              filterByScaffolds(mappings, rawMappings, param, progress);
+              // Process non-merged mappings
+              filterNonMergedMappings(owned_mappings, param, progress);
+              filterByScaffolds(owned_mappings, raw_mappings_copy, param, progress);
           }
 
           // Build dense chain ID mapping
@@ -3012,12 +3058,12 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
           offset_t next_id = 0;
           
           // First pass - build the mapping from both sets
-          for (const auto& mapping : mappings) {
+          for (const auto& mapping : owned_mappings) {
               if (id_map.count(mapping.splitMappingId) == 0) {
                   id_map[mapping.splitMappingId] = next_id++;
               }
           }
-          for (const auto& mapping : maximallyMergedMappings) {
+          for (const auto& mapping : merged_mappings_owner) {
               if (id_map.count(mapping.splitMappingId) == 0) {
                   id_map[mapping.splitMappingId] = next_id++;
               }
@@ -3027,14 +3073,14 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
           offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
           
           // Apply compacted IDs with offset
-          for (auto& mapping : mappings) {
+          for (auto& mapping : owned_mappings) {
               mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
           }
-          for (auto& mapping : maximallyMergedMappings) {
+          for (auto& mapping : merged_mappings_owner) {
               mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
           }
 
-          return {std::move(mappings), std::move(maximallyMergedMappings)};
+          return {std::move(owned_mappings), std::move(merged_mappings_owner)};
       }
 
       /**
