@@ -1091,64 +1091,87 @@ namespace skch
       /**
        * @brief                    helper to main filtering function
        * @details                  filters mappings by group
-       * @param[in]   input        unfiltered mappings
-       * @param[in]   output       filtered mappings
+       * @param[in]   input        unfiltered mappings view
+       * @param[in]   output       filtered mappings (ownership)
        * @param[in]   n_mappings   num mappings per segment
        * @param[in]   filter_ref   use Filter::ref instead of Filter::query
        * @return                   void
        */
       void filterByGroup(
-          MappingResultsVector_t &unfilteredMappings,
+          MappingResultsView_t &unfilteredMappings_view,
           MappingResultsVector_t &filteredMappings,
           int n_mappings,
           bool filter_ref,
           const SequenceIdManager& idManager,
           progress_meter::ProgressMeter& progress)
       {
-        filteredMappings.reserve(unfilteredMappings.size());
+        filteredMappings.reserve(unfilteredMappings_view.size());
 
-        std::sort(unfilteredMappings.begin(), unfilteredMappings.end(), [](const auto& a, const auto& b) 
-            { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
-        auto subrange_begin = unfilteredMappings.begin();
-        auto subrange_end = unfilteredMappings.begin();
+        // Sort the view by reference coordinates
+        std::sort(unfilteredMappings_view.begin(), unfilteredMappings_view.end(), 
+            [](const auto* a, const auto* b) { 
+                return std::tie(a->refSeqId, a->refStartPos) < std::tie(b->refSeqId, b->refStartPos); 
+            });
+            
+        auto subrange_begin = unfilteredMappings_view.begin();
+        auto subrange_end = unfilteredMappings_view.begin();
+        
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) 
         {
-          std::vector<skch::MappingResult> tmpMappings;
-          while (subrange_end != unfilteredMappings.end())
+          // Temporary vectors for processing
+          MappingResultsVector_t tmpMappingsOwner;
+          MappingResultsView_t tmpMappingsView;
+          
+          while (subrange_end != unfilteredMappings_view.end())
           {
             if (param.skip_prefix)
             {
-              int currGroup = idManager.getRefGroup(subrange_begin->refSeqId);
-              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings.end(), [this, currGroup, &idManager] (const auto& candidate) {
-                  return currGroup == idManager.getRefGroup(candidate.refSeqId);
-              });
+              int currGroup = idManager.getRefGroup((*subrange_begin)->refSeqId);
+              subrange_end = std::find_if_not(subrange_begin, unfilteredMappings_view.end(), 
+                  [this, currGroup, &idManager](const auto* candidate) {
+                      return currGroup == idManager.getRefGroup(candidate->refSeqId);
+                  });
             }
             else
             {
-              subrange_end = unfilteredMappings.end();
+              subrange_end = unfilteredMappings_view.end();
             }
-            tmpMappings.insert(
-                tmpMappings.end(), 
-                std::make_move_iterator(subrange_begin), 
-                std::make_move_iterator(subrange_end));
-            std::sort(tmpMappings.begin(), tmpMappings.end(), [](const auto& a, const auto& b) 
-                { return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos) < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos); });
+            
+            // Copy mappings from view to temporary owner
+            tmpMappingsOwner.clear();
+            for (auto it = subrange_begin; it != subrange_end; ++it) {
+                tmpMappingsOwner.push_back(**it);
+            }
+            
+            // Create view of temporary owner
+            tmpMappingsView = createViewFromMappings(tmpMappingsOwner);
+            
+            // Sort by query position
+            std::sort(tmpMappingsView.begin(), tmpMappingsView.end(), 
+                [](const auto* a, const auto* b) { 
+                    return std::tie(a->queryStartPos, a->refSeqId, a->refStartPos) 
+                        < std::tie(b->queryStartPos, b->refSeqId, b->refStartPos); 
+                });
+                
+            // Apply appropriate filtering
             if (filter_ref)
             {
-                skch::Filter::ref::filterMappings(tmpMappings, idManager, n_mappings, param.dropRand, param.overlap_threshold);
+                skch::Filter::ref::filterMappings(tmpMappingsView, idManager, n_mappings, param.dropRand, param.overlap_threshold);
             }
             else
             {
-                skch::Filter::query::filterMappings(tmpMappings, n_mappings, param.dropRand, param.overlap_threshold, progress);
+                skch::Filter::query::filterMappings(tmpMappingsView, tmpMappingsOwner, n_mappings, param.dropRand, param.overlap_threshold, progress);
             }
-            filteredMappings.insert(
-                filteredMappings.end(), 
-                std::make_move_iterator(tmpMappings.begin()), 
-                std::make_move_iterator(tmpMappings.end()));
-            tmpMappings.clear();
+            
+            // Add filtered mappings to output
+            for (auto* mapping_ptr : tmpMappingsView) {
+                filteredMappings.push_back(*mapping_ptr);
+            }
+            
             subrange_begin = subrange_end;
           }
         }
+        
         //Sort the mappings by query (then reference) position
         std::sort(
             filteredMappings.begin(), filteredMappings.end(),
@@ -1205,8 +1228,14 @@ namespace skch
       void filterNonMergedMappings(MappingResultsVector_t &readMappings, const Parameters& param, progress_meter::ProgressMeter& progress)
       {
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              // Create a view of the mappings
+              MappingResultsView_t mappings_view = createViewFromMappings(readMappings);
+              
+              // Filter using the view
               MappingResultsVector_t filteredMappings;
-              filterByGroup(readMappings, filteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
+              filterByGroup(mappings_view, filteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
+              
+              // Replace the original mappings with filtered ones
               readMappings = std::move(filteredMappings);
           }
       }
@@ -2768,8 +2797,14 @@ namespace skch
 
           // Apply group filtering if necessary
           if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+              // Create a view of the mappings
+              MappingResultsView_t mappings_view = createViewFromMappings(readMappings);
+              
+              // Filter using the view
               MappingResultsVector_t groupFilteredMappings;
-              filterByGroup(readMappings, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
+              filterByGroup(mappings_view, groupFilteredMappings, param.numMappingsForSegment - 1, false, *idManager, progress);
+              
+              // Replace the original mappings with filtered ones
               readMappings = std::move(groupFilteredMappings);
           }
 
