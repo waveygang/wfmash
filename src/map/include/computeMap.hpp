@@ -755,8 +755,7 @@ namespace skch
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  query_sf.emplace([&, i, &fragment_results, 
-                                                    &sequence, seqId, queryName, refGroup, input_len = input->len]() {
+                                  query_sf.emplace([&, i, seqId, queryName, refGroup, input_len = input->len]() {
                                       // Thread-local storage for results - completely independent
                                       MappingResultsVector_t thread_local_mappings_owner;
                                       // Reserve space to avoid reallocations
@@ -805,8 +804,7 @@ namespace skch
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&, &fragment_results,
-                                                    &sequence, seqId, queryName, refGroup, 
+                                  query_sf.emplace([&, seqId, queryName, refGroup, 
                                                     input_len = input->len, noOverlapFragmentCount]() {
                                       // Thread-local storage for results - completely independent
                                       MappingResultsVector_t thread_local_mappings_owner;
