@@ -214,7 +214,11 @@ namespace skch
 
   };
 
+  //Vector type for storing MappingResult objects (ownership)
   typedef std::vector<MappingResult> MappingResultsVector_t;
+
+  //Vector type for views of MappingResult objects (non-owning pointers)
+  typedef std::vector<MappingResult*> MappingResultsView_t;
 
   //Vector type for storing MinmerInfo
   typedef std::vector<MinmerInfo> MinVec_Type;
