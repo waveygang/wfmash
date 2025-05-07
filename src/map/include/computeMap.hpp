@@ -963,7 +963,11 @@ namespace skch
                   std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;
                   for (auto& [targetSeqId, mappings] : targetMappings) {
                       MappingResultsVector_t filteredMappings;
-                      filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
+                      
+                      // Create a view of the mappings before passing to filterByGroup
+                      MappingResultsView_t mappings_view = createViewFromMappings(mappings);
+                      
+                      filterByGroup(mappings_view, filteredMappings, param.numMappingsForSegment - 1, 
                                    true, *idManager, *filterProgress);
                       
                       // Organize by query ID for output
