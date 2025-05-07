@@ -78,7 +78,7 @@ namespace skch
 
       using MI_Type = std::vector< MinmerInfo >;
       using MIIter_t = MI_Type::const_iterator;
-      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
+      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t, IdentityHash>;
 
       public:
         uint64_t total_seq_length = 0;
@@ -95,18 +95,16 @@ namespace skch
             return unique_seqs.size();
         }
 
-      //Index for fast seed lookup (unordered_map)
+      //Index for fast seed lookup - single sorted vector by hash
       /*
-       * [minmer #1] -> [pos1, pos2, pos3 ...]
-       * [minmer #2] -> [pos1, pos2...]
+       * Sorted vector of IntervalPoint, primarily by hash:
+       * [hash1, pos1, seqId1, OPEN]
+       * [hash1, pos2, seqId2, OPEN]
+       * ...
+       * [hash2, pos1, seqId1, OPEN]
        * ...
        */
-      //using MI_Map_t = google::dense_hash_map< MinmerMapKeyType, MinmerMapValueType >;
-      //using MI_Map_t = phmap::flat_hash_map< MinmerMapKeyType, MinmerMapValueType >;
-      //using MI_Map_t = absl::flat_hash_map< MinmerMapKeyType, MinmerMapValueType >;
-      //using MI_Map_t = tsl::sparse_map< MinmerMapKeyType, MinmerMapValueType >;
-      using MI_Map_t = ankerl::unordered_dense::map< MinmerMapKeyType, MinmerMapValueType >;
-      MI_Map_t minmerPosLookupIndex;
+      SortedIndexPoints sortedIndexPoints;
       MI_Type minmerIndex;
 
       // Atomic queues for input and output
@@ -287,14 +285,15 @@ namespace skch
 
           // Merge frequency maps
           HF_Map_t kmer_freqs;
-          for (const auto& thread_freq : thread_kmer_freqs) {
+          for (auto& thread_freq : thread_kmer_freqs) {
               for (const auto& [hash, freq] : thread_freq) {
                   kmer_freqs[hash] += freq;
               }
+              thread_freq.clear();
           }
 
           // Parallel index building
-          std::vector<MI_Map_t> thread_pos_indexes(param.threads);
+          std::vector<SortedIndexPoints> thread_interval_points(param.threads);
           std::vector<MI_Type> thread_minmer_indexes(param.threads);
           std::vector<uint64_t> thread_total_kmers(param.threads, 0);
           std::vector<uint64_t> thread_filtered_kmers(param.threads, 0);
@@ -314,19 +313,15 @@ namespace skch
                               continue;  // Should never happen
                           }
 
+                          // Same frequency filtering logic as used for reference targets
                           uint64_t freq = freq_it->second;
-                          uint64_t min_occ = 10;
-                          uint64_t max_occ = std::numeric_limits<uint64_t>::max();
+                          uint64_t min_occ = 10; // Minimum occurrence threshold
                           uint64_t count_threshold;
                           
-                          if (param.max_kmer_freq <= 1.0) {
-                              count_threshold = std::min(max_occ, 
-                                                       std::max(min_occ, 
-                                                              (uint64_t)(total_windows * param.max_kmer_freq)));
+                          if (param.max_kmer_freq <= 1.0) { // Fractional threshold
+                              count_threshold = std::max(10UL, (uint64_t)(total_windows * param.max_kmer_freq));
                           } else {
-                              count_threshold = std::min(max_occ,
-                                                       std::max(min_occ,
-                                                              (uint64_t)param.max_kmer_freq));
+                              count_threshold = (uint64_t)param.max_kmer_freq;
                           }
 
                           if (freq > count_threshold && freq > min_occ) {
@@ -334,14 +329,15 @@ namespace skch
                               continue;
                           }
 
-                          auto& pos_list = thread_pos_indexes[t][mi.hash];
-                          if (pos_list.size() == 0 
-                                  || pos_list.back().hash != mi.hash 
-                                  || pos_list.back().pos != mi.wpos) {
-                              pos_list.push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-                              pos_list.push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+                          // Add interval points directly to thread-local vector
+                          auto& points_vec = thread_interval_points[t];
+                          if (points_vec.empty() || 
+                              points_vec.back().hash != mi.hash || 
+                              points_vec.back().pos != mi.wpos) {
+                              points_vec.push_back(IntervalPoint{mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                              points_vec.push_back(IntervalPoint{mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
                           } else {
-                              pos_list.back().pos = mi.wpos_end;
+                              points_vec.back().pos = mi.wpos_end;
                           }
 
                           thread_minmer_indexes[t].push_back(mi);
@@ -361,30 +357,49 @@ namespace skch
           uint64_t filtered_kmers = std::accumulate(thread_filtered_kmers.begin(), thread_filtered_kmers.end(), 0ULL);
 
           // Clear and resize main indexes
-          minmerPosLookupIndex.clear();
+          sortedIndexPoints.clear();
           minmerIndex.clear();
           
-          // Reserve approximate space
+          // Calculate total sizes for reservation
           size_t total_minmers = 0;
+          size_t total_interval_points = 0;
           for (const auto& thread_index : thread_minmer_indexes) {
               total_minmers += thread_index.size();
           }
-          minmerIndex.reserve(total_minmers);
-
-          // Merge position lookup indexes
-          for (auto& thread_pos_index : thread_pos_indexes) {
-              for (auto& [hash, pos_list] : thread_pos_index) {
-                  auto& main_pos_list = minmerPosLookupIndex[hash];
-                  main_pos_list.insert(main_pos_list.end(), pos_list.begin(), pos_list.end());
-              }
+          for (const auto& thread_points : thread_interval_points) {
+              total_interval_points += thread_points.size();
           }
+          
+          // Reserve space once
+          minmerIndex.reserve(total_minmers);
+          sortedIndexPoints.reserve(total_interval_points);
+
+          // Merge interval points from all threads
+          for (auto& thread_points : thread_interval_points) {
+              sortedIndexPoints.insert(sortedIndexPoints.end(),
+                                      std::make_move_iterator(thread_points.begin()),
+                                      std::make_move_iterator(thread_points.end()));
+          }
+          thread_interval_points.clear();
+          minmerIndex.reserve(total_minmers);
 
           // Merge minmer indexes
           for (auto& thread_index : thread_minmer_indexes) {
               minmerIndex.insert(minmerIndex.end(), 
                                std::make_move_iterator(thread_index.begin()),
                                std::make_move_iterator(thread_index.end()));
+              thread_index.clear();
           }
+          
+          // Sort the combined interval points vector by hash
+          std::sort(sortedIndexPoints.begin(), sortedIndexPoints.end(),
+                   [](const IntervalPoint& a, const IntervalPoint& b) {
+                       if (a.hash != b.hash) {
+                           return a.hash < b.hash;  // Primary sort by hash
+                       }
+                       // Secondary sort by position/seqId/side (using the original operator<)
+                       return std::tie(a.seqId, a.pos, a.side) < std::tie(b.seqId, b.pos, b.side);
+                   });
           
           // Finish second progress meter if we created it
           if (!external_progress) {
@@ -398,7 +413,7 @@ namespace skch
               freq_cutoff = (uint64_t)param.max_kmer_freq;
           }
           std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
-                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
+                    << (kmer_freqs.size()) << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
                     << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
                     << " k-mers occurring > " << freq_cutoff << " times"
                     << " (target: " << (param.max_kmer_freq <= 1.0 ? 
@@ -464,6 +479,8 @@ namespace skch
 
           // This function is kept for compatibility but should not be used
           // when parallel index building is enabled
+          SortedIndexPoints localPoints;
+          
           for (MinmerInfo& mi : *contigMinmerIndex) {
               // Skip high-frequency k-mers
               auto freq_it = kmer_freqs.find(mi.hash);
@@ -471,13 +488,13 @@ namespace skch
                   continue;
               }
 
-              if (minmerPosLookupIndex[mi.hash].size() == 0 
-                      || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                      || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos) {
-                  minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-                  minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+              if (localPoints.empty() || 
+                  localPoints.back().hash != mi.hash || 
+                  localPoints.back().pos != mi.wpos) {
+                  localPoints.push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+                  localPoints.push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
               } else {
-                  minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+                  localPoints.back().pos = mi.wpos_end;
               }
           }
 
@@ -525,20 +542,17 @@ namespace skch
       }
 
       /**
-       * @brief  Write posList for quick loading
+       * @brief  Write sorted interval points for quick loading
        */
       void writePosListBinary(std::ofstream& outStream) 
       {
-        typename MI_Map_t::size_type size = minmerPosLookupIndex.size();
+        // Write the total number of interval points
+        typename SortedIndexPoints::size_type size = sortedIndexPoints.size();
         outStream.write((char*)&size, sizeof(size));
-
-        for (auto& [hash, ipVec] : minmerPosLookupIndex) 
-        {
-          MinmerMapKeyType key = hash;
-          outStream.write((char*)&key, sizeof(key));
-          typename MI_Type::size_type size = ipVec.size();
-          outStream.write((char*)&size, sizeof(size));
-          outStream.write((char*)&ipVec[0], ipVec.size() * sizeof(MinmerMapValueType::value_type));
+        
+        // Write all interval points at once
+        if (size > 0) {
+          outStream.write((char*)sortedIndexPoints.data(), size * sizeof(IntervalPoint));
         }
       }
 
@@ -639,23 +653,18 @@ namespace skch
       }
 
       /**
-       * @brief  Save posList for quick reading
+       * @brief  Read sorted interval points
        */
       void readPosListBinary(std::ifstream& inStream) 
       {
-        typename MI_Map_t::size_type numKeys = 0;
-        inStream.read((char*)&numKeys, sizeof(numKeys));
-        minmerPosLookupIndex.reserve(numKeys);
-
-        for (auto idx = 0; idx < numKeys; idx++) 
-        {
-          MinmerMapKeyType key = 0;
-          inStream.read((char*)&key, sizeof(key));
-          typename MinmerMapValueType::size_type size = 0;
-          inStream.read((char*)&size, sizeof(size));
-
-          minmerPosLookupIndex[key].resize(size);
-          inStream.read((char*)&minmerPosLookupIndex[key][0], size * sizeof(MinmerMapValueType::value_type));
+        // Read the total number of interval points
+        typename SortedIndexPoints::size_type size = 0;
+        inStream.read((char*)&size, sizeof(size));
+        
+        // Resize the vector and read all points at once
+        sortedIndexPoints.resize(size);
+        if (size > 0) {
+          inStream.read((char*)sortedIndexPoints.data(), size * sizeof(IntervalPoint));
         }
       }
 
@@ -767,20 +776,10 @@ namespace skch
         inStream.read(reinterpret_cast<char*>(&size), sizeof(size));
         inStream.seekg(size * sizeof(MinmerInfo), std::ios::cur);
         
-        // Skip position lookup index
-        typename MI_Map_t::size_type numKeys = 0;
-        inStream.read(reinterpret_cast<char*>(&numKeys), sizeof(numKeys));
-        
-        for (auto idx = 0; idx < numKeys; idx++) {
-            // Skip key
-            MinmerMapKeyType key;
-            inStream.read(reinterpret_cast<char*>(&key), sizeof(key));
-            
-            // Skip value vector size and data
-            typename MinmerMapValueType::size_type valueSize = 0;
-            inStream.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
-            inStream.seekg(valueSize * sizeof(MinmerMapValueType::value_type), std::ios::cur);
-        }
+        // Skip interval points vector
+        typename SortedIndexPoints::size_type ipSize = 0;
+        inStream.read(reinterpret_cast<char*>(&ipSize), sizeof(ipSize));
+        inStream.seekg(ipSize * sizeof(IntervalPoint), std::ios::cur);
         
         return true;
       }
@@ -880,7 +879,7 @@ namespace skch
             
             std::string seqName(name_length, '\0');
             inStream.read(&seqName[0], name_length);
-            sequenceNames.push_back(seqName);
+            sequenceNames.emplace_back(std::move(seqName));
         }
         
         // Read and restore sequence ID mappings from index
@@ -952,7 +951,7 @@ namespace skch
 
       void clear()
       {
-        minmerPosLookupIndex.clear();
+        sortedIndexPoints.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();
       }

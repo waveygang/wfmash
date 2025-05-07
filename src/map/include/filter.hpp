@@ -40,35 +40,35 @@ namespace skch
       //helper functions for executing plane sweep over query sequence
       struct Helper
       {
-        MappingResultsVector_t &vec;
+        MappingResultsView_t &view;
 
-        Helper(MappingResultsVector_t &v) : vec(v) {}
+        Helper(MappingResultsView_t &v) : view(v) {}
 
         double get_score(const int x) const {
-            if (vec[x].blockLength <= 0 || vec[x].blockNucIdentity <= 0) {
+            if (view[x]->blockLength <= 0 || view[x]->blockNucIdentity <= 0) {
                 return std::numeric_limits<double>::lowest();
             }
-            return vec[x].blockNucIdentity * std::log(static_cast<double>(vec[x].blockLength));
+            return view[x]->blockNucIdentity * std::log(static_cast<double>(view[x]->blockLength));
         }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
         bool operator ()(const int x, const int y) const {
 
-          assert(x < vec.size());
-          assert(y < vec.size());
+          assert(x < view.size());
+          assert(y < view.size());
 
           auto x_score = get_score(x);
           auto y_score = get_score(y);
 
-          return std::tie(x_score, vec[x].queryStartPos, vec[x].refSeqId) > std::tie(y_score, vec[y].queryStartPos, vec[y].refSeqId);
+          return std::tie(x_score, view[x]->queryStartPos, view[x]->refSeqId) > std::tie(y_score, view[y]->queryStartPos, view[y]->refSeqId);
         }
 
         //Greater than comparison by score
         bool greater_score(const int x, const int y) const {
 
-          assert(x < vec.size());
-          assert(y < vec.size());
+          assert(x < view.size());
+          assert(y < view.size());
 
           auto x_score = get_score(x);
           auto y_score = get_score(y);
@@ -78,11 +78,11 @@ namespace skch
 
         // compute the overlap of the two mappings
         double get_overlap(const int x, const int y) const {
-            offset_t overlap_start = std::max(vec[x].queryStartPos, vec[y].queryStartPos);
-            offset_t overlap_end = std::min(vec[x].queryEndPos, vec[y].queryEndPos);
+            offset_t overlap_start = std::max(view[x]->queryStartPos, view[y]->queryStartPos);
+            offset_t overlap_end = std::min(view[x]->queryEndPos, view[y]->queryEndPos);
             offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
-            offset_t x_length = vec[x].queryEndPos - vec[x].queryStartPos;
-            offset_t y_length = vec[y].queryEndPos - vec[y].queryStartPos;
+            offset_t x_length = view[x]->queryEndPos - view[x]->queryStartPos;
+            offset_t y_length = view[y]->queryEndPos - view[y]->queryStartPos;
             return static_cast<double>(overlap_length) / std::min(x_length, y_length);
         }
 
@@ -103,11 +103,11 @@ namespace skch
             auto it = L.begin();
             for( ; it != L.end(); it++)
             {
-                if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
+                if ((this->greater_score(*beg, *it) || view[*it]->discard == 0) && kept > secondaryToKeep) {
                     break;
                 }
 
-                vec[*it].discard = 0;
+                view[*it]->discard = 0;
                 ++kept;
             }
             auto kit = it;
@@ -121,8 +121,8 @@ namespace skch
                     for (auto it2 = L.begin(); it2 != kit; it2++) {
                         double overlap = get_overlap(idx, *it2);
                         if (overlap > overlapThreshold) {
-                            vec[idx].overlapped = 1;  // Mark as bad if overlaps more than threshold
-                            vec[idx].discard = 1;
+                            view[idx]->overlapped = 1;  // Mark as bad if overlaps more than threshold
+                            view[idx]->discard = 1;
                             break;
                         }
                     }
@@ -139,9 +139,9 @@ namespace skch
               std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
               for(auto it = L.begin(); it != L.end(); it++)
               {
-                  if(vec[*it].discard == 0)
+                  if(view[*it]->discard == 0)
                   {
-                      score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
+                      score_and_hash.emplace_back(get_score(*it), view[*it]->hash(), view[*it]);
                   }
               }
               // now we'll sort the vector by score and hash
@@ -166,23 +166,24 @@ namespace skch
      /**
        * @brief                       filter mappings (best for query sequence)
        * @details                     evaluate best cover mapping for each base pair
-       * @param[in/out] readMappings  Mappings computed by Mashmap
+       * @param[in/out] readMappings_view  View of mappings computed by Mashmap
+       * @param[in/out] readMappings_owner Owner vector of mappings
        */
-      template <typename VecIn>
-      void liFilterAlgorithm(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
+      template <typename ViewIn, typename OwnerVec>
+      void liFilterAlgorithm(ViewIn &readMappings_view, OwnerVec &readMappings_owner, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
         {
-          if(readMappings.size() <= 1)
+          if(readMappings_view.size() <= 1)
             return;
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
-            e.discard = 1; 
-            e.overlapped = 0; 
-          });
+          for (auto* mapping_ptr : readMappings_view) {
+            mapping_ptr->discard = 1;
+            mapping_ptr->overlapped = 0;
+          }
 
           //Initialize object of Helper struct
-          Helper obj (readMappings);
+          Helper obj (readMappings_view);
 
           //Plane sweep status
           //binary search tree of segment ids, ordered by their scores
@@ -191,12 +192,12 @@ namespace skch
           //Event point schedule
           //vector of triplets <position, event type, segment id>
           typedef std::tuple<offset_t, int, int> eventRecord_t;
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
+          std::vector <eventRecord_t>  eventSchedule (2*readMappings_view.size());
 
-          for(int i = 0; i < readMappings.size(); i++)
+          for(int i = 0; i < readMappings_view.size(); i++)
           {
-            eventSchedule.emplace_back (readMappings[i].queryStartPos, event::BEGIN, i);
-            eventSchedule.emplace_back (readMappings[i].queryEndPos, event::END, i);
+            eventSchedule.emplace_back (readMappings_view[i]->queryStartPos, event::BEGIN, i);
+            eventSchedule.emplace_back (readMappings_view[i]->queryEndPos, event::END, i);
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
@@ -226,40 +227,42 @@ namespace skch
             it = it2;
           }
 
-          //Remove bad mappings
-          readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ 
-                return e.discard == 1 || e.overlapped == 1;
+          //Remove bad mappings from the view (not from the owner vector)
+          readMappings_view.erase(
+              std::remove_if(readMappings_view.begin(), readMappings_view.end(), [&](MappingResult* e){ 
+                return e->discard == 1 || e->overlapped == 1;
               }),
-              readMappings.end());
+              readMappings_view.end());
         }
 
       /**
        * @brief                       filter mappings (best for query sequence)
        * @details                     evaluate best N unmerged mappings for each position, assumes non-overlapping mappings in query
-       * @param[in/out] readMappings  Mappings computed by Mashmap
+       * @param[in/out] readMappings_view  View of mappings computed by Mashmap
        */
-      template <typename VecIn>
-      void indexedFilterAlgorithm(VecIn &readMappings, int secondaryToKeep)
+      template <typename ViewIn>
+      void indexedFilterAlgorithm(ViewIn &readMappings_view, int secondaryToKeep)
         {
-          if(readMappings.size() <= 1)
+          if(readMappings_view.size() <= 1)
             return;
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });
+          for (auto* mapping_ptr : readMappings_view) {
+            mapping_ptr->discard = 1;
+          }
 
           //Initialize object of Helper struct
-          Helper obj (readMappings);
+          Helper obj (readMappings_view);
 
           //Event point schedule
           //vector of triplets <position, event type, segment id>
           typedef std::tuple<offset_t, double, int, int> eventRecord_t;
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
+          std::vector <eventRecord_t>  eventSchedule (2*readMappings_view.size());
 
-          for(int i = 0; i < readMappings.size(); i++) {
-              eventSchedule.emplace_back (readMappings[i].queryStartPos, obj.get_score(i), event::BEGIN, i);
-              eventSchedule.emplace_back (readMappings[i].queryEndPos, 0, event::END, i); // end should not be preferred
+          for(int i = 0; i < readMappings_view.size(); i++) {
+              eventSchedule.emplace_back (readMappings_view[i]->queryStartPos, obj.get_score(i), event::BEGIN, i);
+              eventSchedule.emplace_back (readMappings_view[i]->queryEndPos, 0, event::END, i); // end should not be preferred
           }
 
           std::sort(eventSchedule.begin(), eventSchedule.end());
@@ -278,7 +281,7 @@ namespace skch
             std::for_each(it, it2, [&](const eventRecord_t &e)
                                     {
                                         if (std::get<2>(e) == event::BEGIN && kept <= secondaryToKeep) {
-                                            obj.vec[std::get<3>(e)].discard = 0;
+                                            obj.view[std::get<3>(e)]->discard = 0;
                                             ++kept;
                                         }
                                     });
@@ -286,35 +289,36 @@ namespace skch
             it = it2;
           }
 
-          //Remove bad mappings
-          readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
-              readMappings.end());
+          //Remove bad mappings from the view
+          readMappings_view.erase(
+              std::remove_if(readMappings_view.begin(), readMappings_view.end(), [&](MappingResult* e){ return e->discard == 1; }),
+              readMappings_view.end());
         }
 
       /**
        * @brief                          filter mappings (best for query sequence)
-       * @param[in/out] readMappings     Mappings computed by Mashmap (post merge step)
+       * @param[in/out] readMappings_view View of mappings computed by Mashmap
+       * @param[in/out] readMappings_owner Owner vector of mappings
        * @param[in]     secondaryToKeep  How many mappings in addition to the best to keep
        * @param[in]     dropRand         If multiple mappings have the same score, drop randomly
        *                                 until we only have secondaryToKeep secondary mappings
        */
-      template <typename VecIn>
-      void filterMappings(VecIn &readMappings, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
+      template <typename ViewIn, typename OwnerVec>
+      void filterMappings(ViewIn &readMappings_view, OwnerVec &readMappings_owner, int secondaryToKeep, bool dropRand, double overlapThreshold, progress_meter::ProgressMeter& progress)
       {
           //Apply the main filtering algorithm to ensure the best mappings across complete axis
-          liFilterAlgorithm(readMappings, secondaryToKeep, dropRand, overlapThreshold, progress);
+          liFilterAlgorithm(readMappings_view, readMappings_owner, secondaryToKeep, dropRand, overlapThreshold, progress);
       }
 
      /**
        * @brief                       filter mappings (best for query sequence)
-       * @param[in/out] readMappings  Mappings computed by Mashmap (post merge step)
+       * @param[in/out] readMappings_view View of mappings computed by Mashmap
        */
-      template <typename VecIn>
-      void filterUnmergedMappings(VecIn &readMappings, int secondaryToKeep, progress_meter::ProgressMeter& progress)
+      template <typename ViewIn>
+      void filterUnmergedMappings(ViewIn &readMappings_view, int secondaryToKeep, progress_meter::ProgressMeter& progress)
       {
           //Apply a simple filtering algorithm that keeps the best secondaryToKeep+1 mappings per position
-          indexedFilterAlgorithm(readMappings, secondaryToKeep, progress);
+          indexedFilterAlgorithm(readMappings_view, secondaryToKeep);
       }
     } //End of query namespace
 
@@ -328,30 +332,30 @@ namespace skch
       //helper functions for executing plane sweep over reference sequence
       struct Helper
       {
-        MappingResultsVector_t &vec;
+        MappingResultsView_t &view;
 
-        Helper(MappingResultsVector_t &v) : vec(v) {}
+        Helper(MappingResultsView_t &v) : view(v) {}
 
-        double get_score(const int x) const {return vec[x].blockNucIdentity * log(vec[x].blockLength); }
+        double get_score(const int x) const {return view[x]->blockNucIdentity * log(view[x]->blockLength); }
 
         //Greater than comparison by score and begin position
         //used to define order in BST
         bool operator ()(const int x, const int y) const {
 
-          assert(x < vec.size());
-          assert(y < vec.size());
+          assert(x < view.size());
+          assert(y < view.size());
 
           auto x_score = get_score(x);
           auto y_score = get_score(y);
 
-          return std::tie(x_score, vec[x].refStartPos) > std::tie(y_score, vec[y].refStartPos);
+          return std::tie(x_score, view[x]->refStartPos) > std::tie(y_score, view[y]->refStartPos);
         }
 
         //Greater than comparison by score
         bool greater_score(const int x, const int y) const {
 
-          assert(x < vec.size());
-          assert(y < vec.size());
+          assert(x < view.size());
+          assert(y < view.size());
 
           auto x_score = get_score(x);
           auto y_score = get_score(y);
@@ -361,11 +365,11 @@ namespace skch
 
         // compute the overlap of the two mappings
         double get_overlap(const int x, const int y) const {
-            offset_t overlap_start = std::max(vec[x].refStartPos, vec[y].refStartPos);
-            offset_t overlap_end = std::min(vec[x].refEndPos, vec[y].refEndPos);
+            offset_t overlap_start = std::max(view[x]->refStartPos, view[y]->refStartPos);
+            offset_t overlap_end = std::min(view[x]->refEndPos, view[y]->refEndPos);
             offset_t overlap_length = std::max(0, static_cast<int>(overlap_end - overlap_start));
-            offset_t x_length = vec[x].refEndPos - vec[x].refStartPos;
-            offset_t y_length = vec[y].refEndPos - vec[y].refStartPos;
+            offset_t x_length = view[x]->refEndPos - view[x]->refStartPos;
+            offset_t y_length = view[y]->refEndPos - view[y]->refStartPos;
             return static_cast<double>(overlap_length) / std::min(x_length, y_length);
         }
 
@@ -386,11 +390,11 @@ namespace skch
             auto it = L.begin();
             for( ; it != L.end(); it++)
             {
-                if ((this->greater_score(*beg, *it) || vec[*it].discard == 0) && kept > secondaryToKeep) {
+                if ((this->greater_score(*beg, *it) || view[*it]->discard == 0) && kept > secondaryToKeep) {
                     break;
                 }
 
-                vec[*it].discard = 0;
+                view[*it]->discard = 0;
                 ++kept;
             }
             auto kit = it;
@@ -403,8 +407,8 @@ namespace skch
                     int idx = *it;
                     for (auto it2 = L.begin(); it2 != kit; it2++) {
                         if (get_overlap(idx, *it2) > overlapThreshold) {
-                            vec[idx].overlapped = 1;  // Mark as bad if overlaps more than threshold
-                            vec[idx].discard = 1;
+                            view[idx]->overlapped = 1;  // Mark as bad if overlaps more than threshold
+                            view[idx]->discard = 1;
                             break;
                         }
                     }
@@ -421,9 +425,9 @@ namespace skch
               std::vector<std::tuple<double, size_t, MappingResult*>> score_and_hash; // The tuple is (score, hash, pointer to the mapping)
               for(auto it = L.begin(); it != L.end(); it++)
               {
-                  if(vec[*it].discard == 0)
+                  if(view[*it]->discard == 0)
                   {
-                      score_and_hash.emplace_back(get_score(*it), vec[*it].hash(), &vec[*it]);
+                      score_and_hash.emplace_back(get_score(*it), view[*it]->hash(), view[*it]);
                   }
               }
               // now we'll sort the vector by score and hash
@@ -467,21 +471,23 @@ namespace skch
 
       /**
        * @brief                       filter mappings (best for reference sequence)
-       * @param[in/out] readMappings  Mappings computed by Mashmap (post merge step)
-       * @param[in]     refsketch     reference index class object, used to determine ref sequence lengths
+       * @param[in/out] readMappings_view View of mappings computed by Mashmap
+       * @param[in]     idManager     ID manager object, used to determine ref sequence lengths
        */
-      template <typename VecIn>
-      void filterMappings(VecIn &readMappings, const skch::SequenceIdManager &idManager, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
+      template <typename ViewIn>
+      void filterMappings(ViewIn &readMappings_view, const skch::SequenceIdManager &idManager, uint16_t secondaryToKeep, bool dropRand, double overlapThreshold)
         {
-          if(readMappings.size() <= 1)
+          if(readMappings_view.size() <= 1)
             return;
 
           //Initially mark all mappings as bad
           //Maintain the order of this vector till end of this function
-          std::for_each(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ e.discard = 1; });
+          for (auto* mapping_ptr : readMappings_view) {
+            mapping_ptr->discard = 1;
+          }
 
           //Initialize object of Helper struct
-          Helper obj (readMappings);
+          Helper obj (readMappings_view);
 
           //Plane sweep status
           //binary search tree of segment ids, ordered by their scores
@@ -489,13 +495,13 @@ namespace skch
 
           //Event point schedule
           //vector of triplets <position, event type, segment id>
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
+          std::vector <eventRecord_t>  eventSchedule (2*readMappings_view.size());
 
-          for(int i = 0; i < readMappings.size(); i++)
+          for(int i = 0; i < readMappings_view.size(); i++)
           {
-            eventSchedule.emplace_back (readMappings[i].refSeqId, readMappings[i].refStartPos, event::BEGIN, i);
+            eventSchedule.emplace_back (readMappings_view[i]->refSeqId, readMappings_view[i]->refStartPos, event::BEGIN, i);
 
-            eventRecord_t endEvent = std::make_tuple(readMappings[i].refSeqId, readMappings[i].refEndPos, event::END, i);
+            eventRecord_t endEvent = std::make_tuple(readMappings_view[i]->refSeqId, readMappings_view[i]->refEndPos, event::END, i);
             //add one to above coordinate
             obj.refPosDoPlusOne(endEvent, idManager);
             eventSchedule.push_back (endEvent);
@@ -527,10 +533,10 @@ namespace skch
             it = it2;
           }
 
-          //Remove bad mappings
-          readMappings.erase(
-              std::remove_if(readMappings.begin(), readMappings.end(), [&](MappingResult &e){ return e.discard == 1; }),
-              readMappings.end());
+          //Remove bad mappings from the view
+          readMappings_view.erase(
+              std::remove_if(readMappings_view.begin(), readMappings_view.end(), [&](MappingResult* e){ return e->discard == 1; }),
+              readMappings_view.end());
         }
     } //End of reference namespace
   }
