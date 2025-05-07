@@ -750,22 +750,24 @@ namespace skch
                               int refGroup = idManager->getRefGroup(seqId);
                               int noOverlapFragmentCount = input->len / param.segLength;
 
-                              // Create a mutex to protect access to output->owned_raw_mappings
-                              std::mutex results_mutex;
+                              // Collection of fragment results to be merged at the end
+                              std::vector<MappingResultsVector_t> fragment_results;
+                              std::mutex fragment_results_mutex; // Only for adding to the collection vector
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
-                                  query_sf.emplace([&, i]() {
-                                      // Thread-local storage for results
+                                  query_sf.emplace([&, i, &fragment_results, &fragment_results_mutex, 
+                                                    &sequence, seqId, queryName, refGroup, input_len = input->len]() {
+                                      // Thread-local storage for results - completely independent
                                       MappingResultsVector_t thread_local_mappings_owner;
-                                      // Reserve some space to avoid frequent reallocations
+                                      // Reserve space to avoid reallocations
                                       thread_local_mappings_owner.reserve(1000);
                                       MappingResultsView_t thread_local_mappings_view;
                                       
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
-                                          static_cast<int>(input->len),
+                                          static_cast<int>(input_len),
                                           seqId,
                                           queryName,
                                           refGroup,
@@ -791,34 +793,37 @@ namespace skch
                                                      l2Mappings_owner, l2Mappings_view, 
                                                      Q, thread_local_mappings_view);
                                       
-                                      // Safely merge results into output
+                                      // Add results to the collection (no contention on output->owned_raw_mappings)
                                       if (!thread_local_mappings_view.empty()) {
-                                          std::lock_guard<std::mutex> lock(results_mutex);
-                                          
-                                          // Copy mappings from thread-local owner to shared owner
+                                          // Copy mappings from thread-local view to a new owner vector
+                                          MappingResultsVector_t fragment_owned_mappings;
+                                          fragment_owned_mappings.reserve(thread_local_mappings_view.size());
                                           for (auto* mapping_ptr : thread_local_mappings_view) {
-                                              addToOwner(output->owned_raw_mappings, *mapping_ptr);
+                                              fragment_owned_mappings.push_back(*mapping_ptr);
                                           }
                                           
-                                          // Update the view in the output
-                                          output->raw_mappings_view = createViewFromMappings(output->owned_raw_mappings);
+                                          // Add to the collection with minimal lock contention
+                                          std::lock_guard<std::mutex> lock(fragment_results_mutex);
+                                          fragment_results.push_back(std::move(fragment_owned_mappings));
                                       }
                                   });
                               }
 
                               // Handle final fragment if needed
                               if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
-                                  query_sf.emplace([&]() {
-                                      // Thread-local storage for results
+                                  query_sf.emplace([&, &fragment_results, &fragment_results_mutex, 
+                                                    &sequence, seqId, queryName, refGroup, 
+                                                    input_len = input->len, noOverlapFragmentCount]() {
+                                      // Thread-local storage for results - completely independent
                                       MappingResultsVector_t thread_local_mappings_owner;
-                                      // Reserve some space to avoid frequent reallocations
+                                      // Reserve space to avoid reallocations
                                       thread_local_mappings_owner.reserve(1000);
                                       MappingResultsView_t thread_local_mappings_view;
                                       
                                       auto fragment = std::make_shared<FragmentData>(
-                                          &(sequence)[0u] + input->len - param.segLength,
+                                          &(sequence)[0u] + input_len - param.segLength,
                                           static_cast<int>(param.segLength),
-                                          static_cast<int>(input->len),
+                                          static_cast<int>(input_len),
                                           seqId,
                                           queryName,
                                           refGroup,
@@ -836,17 +841,18 @@ namespace skch
                                                      l2Mappings_owner, l2Mappings_view, 
                                                      Q, thread_local_mappings_view);
                                       
-                                      // Safely merge results into output
+                                      // Add results to the collection (no contention on output->owned_raw_mappings)
                                       if (!thread_local_mappings_view.empty()) {
-                                          std::lock_guard<std::mutex> lock(results_mutex);
-                                          
-                                          // Copy mappings from thread-local owner to shared owner
+                                          // Copy mappings from thread-local view to a new owner vector
+                                          MappingResultsVector_t fragment_owned_mappings;
+                                          fragment_owned_mappings.reserve(thread_local_mappings_view.size());
                                           for (auto* mapping_ptr : thread_local_mappings_view) {
-                                              addToOwner(output->owned_raw_mappings, *mapping_ptr);
+                                              fragment_owned_mappings.push_back(*mapping_ptr);
                                           }
                                           
-                                          // Update the view in the output
-                                          output->raw_mappings_view = createViewFromMappings(output->owned_raw_mappings);
+                                          // Add to the collection with minimal lock contention
+                                          std::lock_guard<std::mutex> lock(fragment_results_mutex);
+                                          fragment_results.push_back(std::move(fragment_owned_mappings));
                                       }
                                   });
                               }
@@ -854,12 +860,35 @@ namespace skch
                               // Join ensures all fragments complete before finalization
                               query_sf.join();
 
-                              // After all fragments are processed, perform final processing
+                              // After all fragments are processed, aggregate results (No mutex needed here)
+                              // This is done once per query after all its fragments are processed
+                              size_t total_mapping_count = 0;
+                              for (const auto& frag_results : fragment_results) {
+                                  total_mapping_count += frag_results.size();
+                              }
+                              
+                              // Reserve space for all mappings to avoid reallocations
+                              output->owned_raw_mappings.reserve(output->owned_raw_mappings.size() + total_mapping_count);
+                              
+                              // Combine all fragment results
+                              for (auto& frag_results : fragment_results) {
+                                  output->owned_raw_mappings.insert(
+                                      output->owned_raw_mappings.end(),
+                                      std::make_move_iterator(frag_results.begin()),
+                                      std::make_move_iterator(frag_results.end())
+                                  );
+                              }
+                              
+                              // Clear the temporary collection to free memory
+                              fragment_results.clear();
+                              
+                              // Perform final processing
                               mappingBoundarySanityCheck(input.get(), output->owned_raw_mappings);
                               auto [nonMergedMappings, mergedMappings] = 
                                   filterSubsetMappings(output->owned_raw_mappings, output->progress);
 
                               // Store the merged mappings
+                              output->owned_raw_mappings = std::move(nonMergedMappings);
                               output->owned_merged_mappings = std::move(mergedMappings);
                               
                               // Update views
