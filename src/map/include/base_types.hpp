@@ -220,8 +220,84 @@ namespace skch
   //Vector type for views of MappingResult objects (non-owning pointers)
   typedef std::vector<MappingResult*> MappingResultsView_t;
 
+  /**
+   * @brief Create a view from a vector of MappingResult objects
+   * @param mappings Vector of MappingResult objects (ownership)
+   * @return Vector of pointers to MappingResult objects
+   */
+  inline MappingResultsView_t createViewFromMappings(MappingResultsVector_t& mappings) {
+    MappingResultsView_t view;
+    view.reserve(mappings.size());
+    for (auto& mapping : mappings) {
+      view.push_back(&mapping);
+    }
+    return view;
+  }
+
+  /**
+   * @brief Add a new MappingResult to an owner vector and return a pointer to it
+   * @param mappingsOwner Vector that will own the MappingResult
+   * @param result The MappingResult to add
+   * @return Pointer to the added MappingResult in the owner vector
+   */
+  inline MappingResult* addToOwner(MappingResultsVector_t& mappingsOwner, const MappingResult& result) {
+    mappingsOwner.push_back(result);
+    return &mappingsOwner.back();
+  }
+
+  /**
+   * @brief Add a new MappingResult to an owner vector and add its pointer to a view
+   * @param mappingsOwner Vector that will own the MappingResult
+   * @param mappingsView View that will get a pointer to the new MappingResult
+   * @param result The MappingResult to add
+   */
+  inline void addToOwnerAndView(MappingResultsVector_t& mappingsOwner, 
+                               MappingResultsView_t& mappingsView, 
+                               const MappingResult& result) {
+    mappingsOwner.push_back(result);
+    mappingsView.push_back(&mappingsOwner.back());
+  }
+
   //Vector type for storing MinmerInfo
   typedef std::vector<MinmerInfo> MinVec_Type;
+
+  //Helper functions for working with MappingResultsView_t
+  
+  /**
+   * @brief Copy MappingResult objects from a view to an owner vector
+   * @param view Source view containing pointers to MappingResult objects
+   * @param owner Destination vector to own the copied MappingResult objects
+   */
+  inline void copyFromViewToOwner(const MappingResultsView_t& view, MappingResultsVector_t& owner) {
+    owner.reserve(owner.size() + view.size());
+    for (const auto* mapping_ptr : view) {
+      owner.push_back(*mapping_ptr);
+    }
+  }
+
+  /**
+   * @brief Filter a view in-place using a predicate function
+   * @param view Vector of pointers to MappingResult objects
+   * @param predicate Function that takes a MappingResult pointer and returns bool
+   */
+  template<typename Predicate>
+  inline void filterViewInPlace(MappingResultsView_t& view, Predicate predicate) {
+    view.erase(
+      std::remove_if(view.begin(), view.end(), 
+                    [&predicate](const MappingResult* m) { return !predicate(m); }),
+      view.end()
+    );
+  }
+
+  /**
+   * @brief Mark mappings in a view as discarded
+   * @param view Vector of pointers to MappingResult objects to be discarded
+   */
+  inline void markViewAsDiscarded(const MappingResultsView_t& view) {
+    for (auto* mapping_ptr : view) {
+      mapping_ptr->discard = 1;
+    }
+  }
 
   //Container to save copy of kseq object
   struct InputSeqContainer
