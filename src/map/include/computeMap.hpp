@@ -758,6 +758,8 @@ namespace skch
                                   query_sf.emplace([&, i]() {
                                       // Thread-local storage for results
                                       MappingResultsVector_t thread_local_mappings_owner;
+                                      // Reserve some space to avoid frequent reallocations
+                                      thread_local_mappings_owner.reserve(1000);
                                       MappingResultsView_t thread_local_mappings_view;
                                       
                                       auto fragment = std::make_shared<FragmentData>(
@@ -809,6 +811,8 @@ namespace skch
                                   query_sf.emplace([&]() {
                                       // Thread-local storage for results
                                       MappingResultsVector_t thread_local_mappings_owner;
+                                      // Reserve some space to avoid frequent reallocations
+                                      thread_local_mappings_owner.reserve(1000);
                                       MappingResultsView_t thread_local_mappings_view;
                                       
                                       auto fragment = std::make_shared<FragmentData>(
@@ -1295,19 +1299,27 @@ namespace skch
             l1_begin = l1_end;
           }
 
-          // Sort output mappings using pointers (by reference coordinates)
-          std::sort(l2Mappings_view.begin(), l2Mappings_view.end(), [](const auto* a, const auto* b) 
-              { return std::tie(a->refSeqId, a->refStartPos) < std::tie(b->refSeqId, b->refStartPos); });
+          // Sorting the owner directly to avoid potential pointer invalidation
+          std::sort(l2Mappings_owner.begin(), l2Mappings_owner.end(), [](const auto& a, const auto& b) 
+              { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
+          
+          // Rebuild the view to ensure all pointers are valid after sorting
+          l2Mappings_view.clear();
+          for (auto& mapping : l2Mappings_owner) {
+              l2Mappings_view.push_back(&mapping);
+          }
 
           // Add chain information
           // All mappings in this batch form a chain
           int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
           int32_t chain_length = l2Mappings_view.size();
           int32_t chain_pos = 1;
-          for (auto* mapping_ptr : l2Mappings_view) {
-              mapping_ptr->chain_id = chain_id;
-              mapping_ptr->chain_length = chain_length;
-              mapping_ptr->chain_pos = chain_pos++;
+          
+          // Update the chain information directly in the owner vector
+          for (auto& mapping : l2Mappings_owner) {
+              mapping.chain_id = chain_id;
+              mapping.chain_length = chain_length;
+              mapping.chain_pos = chain_pos++;
           }
 
 #ifdef ENABLE_TIME_PROFILE_L1_L2
@@ -1819,6 +1831,11 @@ namespace skch
           std::vector<L2_mapLocus_t> l2_vec;
           double bestJaccardNumerator = 0;
           auto loc_iterator = l1_begin;
+          
+          // Estimate the number of mappings to pre-allocate memory
+          size_t estimated_mappings = std::distance(l1_begin, l1_end) * 2;
+          l2Mappings_owner.reserve(l2Mappings_owner.size() + estimated_mappings);
+          
           while (loc_iterator != l1_end)
           {
             L1_candidateLocus_t& candidateLocus = *loc_iterator;

@@ -254,8 +254,20 @@ namespace skch
   inline void addToOwnerAndView(MappingResultsVector_t& mappingsOwner, 
                                MappingResultsView_t& mappingsView, 
                                const MappingResult& result) {
+    // The push_back operation could invalidate references if the vector needs to reallocate
+    size_t prev_size = mappingsOwner.size();
     mappingsOwner.push_back(result);
-    mappingsView.push_back(&mappingsOwner.back());
+    
+    // If reallocation happened, rebuild the entire view
+    if (mappingsOwner.size() > 1 && &mappingsOwner[prev_size] != &mappingsOwner.back()) {
+      mappingsView.clear();
+      for (auto& mapping : mappingsOwner) {
+        mappingsView.push_back(&mapping);
+      }
+    } else {
+      // Safe to just add the new pointer
+      mappingsView.push_back(&mappingsOwner.back());
+    }
   }
 
   //Vector type for storing MinmerInfo
