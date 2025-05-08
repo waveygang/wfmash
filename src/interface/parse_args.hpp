@@ -79,7 +79,7 @@ void parse_args(int argc,
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
-    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
+    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum floor for L1 hits threshold [4]", {'H', "l1-hits"});
     args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter minimizers occurring > FLOAT of total [0.0002]", {'F', "filter-freq"});
 
     args::Group alignment_opts(options_group, "Alignment:");
@@ -614,9 +614,9 @@ void parse_args(int argc,
     }
 
     if (min_hits) {
-        map_parameters.minimum_hits = args::get(min_hits);
+        map_parameters.minimum_hits = std::max(4, args::get(min_hits));
     } else {
-        map_parameters.minimum_hits = -1; // auto
+        map_parameters.minimum_hits = 4; // minimum floor
     }
 
     if (max_kmer_freq) {
