@@ -81,6 +81,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
     args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
     args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter minimizers occurring > FLOAT of total [0.0002]", {'F', "filter-freq"});
+    args::ValueFlag<double> map_sparsification(mapping_opts, "FLOAT", "sparsification factor [1.0]", {'x', "sparsify"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
@@ -202,7 +203,6 @@ void parse_args(int argc,
         }
     }
 
-    args::ValueFlag<double> map_sparsification(parser, "FLOAT", "sparsification factor [1.0]", {"sparsification"});
     if (map_sparsification) {
         if (args::get(map_sparsification) == 1) {
             // overflows
