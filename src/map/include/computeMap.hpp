@@ -154,7 +154,7 @@ namespace skch
       skch::Parameters param;
 
       //reference sketch
-      skch::Sketch* refSketch;
+      std::unique_ptr<skch::Sketch> refSketch;
 
       // Vector to store fragments
       std::vector<FragmentData*> fragments;
@@ -558,16 +558,12 @@ namespace skch
                             << "/" << target_subsets.size() << " (indexing): " << indexFilename << std::endl;
     
                   // Build the index directly
-                  refSketch = new skch::Sketch(param, *idManager, target_subset);
+                  refSketch.reset(new skch::Sketch(param, *idManager, target_subset));
     
                   // Append to the same file for all but the first subset
                   bool append = (subset_idx > 0);
                   refSketch->writeIndex(target_subset, indexFilename, append, subset_idx, target_subsets.size());
     
-                  // Clean up
-                  delete refSketch;
-                  refSketch = nullptr;
-                      
                   // Show completed message for index building
                   std::cerr << "[wfmash::mashmap] index construction completed" << std::endl;
     
@@ -576,7 +572,7 @@ namespace skch
               }
               
               // If we're doing mapping, set up the taskflow
-              auto subset_flow = std::make_shared<tf::Taskflow>();
+              tf::Taskflow subset_flow;
 
               // Initialize progress meter
               // Calculate total query length for progress meter
@@ -592,7 +588,7 @@ namespace skch
                   );
 
               // Build or load index task
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size(), &target_subsets]() {
+              auto buildIndex_task = subset_flow.emplace([this, &target_subset=target_subset, subset_idx, total_subsets=target_subsets.size(), &target_subsets]() {
                   if (!param.indexFilename.empty()) {
                       // Load existing index
                       std::string indexFilename = param.indexFilename.string();
@@ -643,7 +639,7 @@ namespace skch
                       }
                       
                       // Create sketch from current file position
-                      refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+                      refSketch.reset(new skch::Sketch(param, *idManager, target_subset, &indexStream));
                       
                       // Get the number of sequences from the sketch
                       size_t seq_count = refSketch->getSequenceCount();
@@ -660,7 +656,7 @@ namespace skch
                       }
                       
                       // Build index in memory with progress meter
-                      refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
+                      refSketch.reset(new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress));
                       
                       // Second stage: building index data structures
                       // Instead of just updating the banner, print a clear message that indexing is done
@@ -688,8 +684,8 @@ namespace skch
               }
 
               // Process queries using subflows for parallelism
-              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
-                                                           outstream, outstream_mutex, subset_flow](tf::Subflow& sf) {
+              auto processQueries_task = subset_flow.emplace([this, progress, subsetMappings, subsetMappings_mutex,
+                                                           outstream, outstream_mutex](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   // Load the query file index once and share it
@@ -860,7 +856,7 @@ namespace skch
               }).name("process_queries");
 
               // Merge subset results into combined mappings (only for ONETOONE mode)
-              auto merge_task = subset_flow->emplace([this,
+              auto merge_task = subset_flow.emplace([this,
                                                     subsetMappings,
                                                     &combinedMappings,
                                                     &combinedMappings_mutex]() {
@@ -878,14 +874,11 @@ namespace skch
               }).name("merge_results");
 
               // Cleanup task
-              auto cleanup_task = subset_flow->emplace([this, outstream]() {
+              auto cleanup_task = subset_flow.emplace([this, outstream]() {
                   // Close output file if it's open (for non-ONETOONE modes)
                   if (param.filterMode != filter::ONETOONE && outstream->is_open()) {
                       outstream->close();
                   }
-                  
-                  delete refSketch;
-                  refSketch = nullptr;
               }).name("cleanup");
 
               // Set up dependencies
@@ -894,7 +887,7 @@ namespace skch
               merge_task.precede(cleanup_task);
 
               // Run this subset's taskflow
-              executor.run(*subset_flow).wait();
+              executor.run(subset_flow).wait();
         
               progress->finish();
           }
@@ -1321,12 +1314,27 @@ namespace skch
 
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
-            //Check if hash value exists in the reference lookup index
-            const auto seedFind = refSketch->minmerPosLookupIndex.find(it->hash);
-
-            if(seedFind != refSketch->minmerPosLookupIndex.end())
+            //Check if hash value exists in the reference lookup index using binary search
+            hash_t currentHash = it->hash;
+            
+            // Binary search for hash in the sorted vector
+            auto range = std::equal_range(
+                refSketch->sortedIndexPoints.begin(),
+                refSketch->sortedIndexPoints.end(),
+                currentHash,
+                [](const auto& a, const auto& b) {
+                    // Handle both IntervalPoint vs hash_t and hash_t vs IntervalPoint comparisons
+                    if constexpr (std::is_same_v<std::decay_t<decltype(a)>, IntervalPoint>) {
+                        return a.hash < b;
+                    } else {
+                        return a < b.hash;
+                    }
+                });
+            
+            // If hash found (range not empty)
+            if(range.first != range.second)
             {
-              pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
+              pq.emplace_back(boundPtr<IP_const_iterator> {range.first, range.second});
             }
           }
           std::make_heap(pq.begin(), pq.end(), heap_cmp);
