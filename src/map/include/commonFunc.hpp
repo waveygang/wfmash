@@ -7,15 +7,13 @@
 #define COMMON_FUNC_HPP
 
 #include <vector>
-#include <map>
 #include <algorithm>
 #include <deque>
 #include <cmath>
 #include <fstream>
 #include <limits>
-#include <numeric>
-#include <queue>
 #include <sstream>
+#include <utility>
 
 //Own includes
 #include "map/include/map_parameters.hpp"
@@ -27,14 +25,20 @@
 
 #include "assert.h"
 
+struct IdentityHash {
+    constexpr std::size_t operator()(const skch::hash_t hash) const noexcept {
+        return static_cast<std::size_t>(hash);
+    }
+};
+
 namespace skch {
     /**
      * @namespace skch::CommonFunc
      * @brief     Implements frequently used common functions
      */
     namespace CommonFunc {
-        //seed for murmerhash
-        const int seed = 42;
+        //seed for hash
+        static inline constexpr int seed = 42;
 
         // Pivot to keep track of sketch border
         template <typename I>
@@ -71,9 +75,11 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
          *
          */
         inline void reverseComplement(const char *src, char *dest, int length) {
-            constexpr unsigned char complement[] = "                                                                 TBGDEFCHIJKLMNOPQRSAUVWXYZ      tbgdefchijklmnopqrsauvwxyz";
-            assert(complement[65]=='T');
-            assert(complement[66]=='B');
+            static constexpr char complement[] = "                                                                 TBGDEFCHIJKLMNOPQRSAUVWXYZ      tbgdefchijklmnopqrsauvwxyz";
+
+            static_assert(complement[65]=='T');
+            static_assert(complement[66]=='B');
+
             const int length1 = length-1;
             for (int i = 0; i < length; i++) {
                 dest[length1-i] = complement[src[i]];
@@ -210,7 +216,7 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
          * @param[in]   seq                 pointer to input sequence
          * @param[in]   len                 length of input sequence
          * @param[in]   kmerSize
-         * @param[in]   s                   sketch size.
+         * @param[in]   sketchSize                   sketch size.
          * @param[in]   seqCounter          current sequence number, used while saving the position of minimizer
          */
         template <typename T>
@@ -233,7 +239,7 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
             CommonFunc::reverseComplement(seq, seqRev.get(), len);
 
           // TODO cleanup
-          ankerl::unordered_dense::map<hash_t, MinmerInfo> sketched_vals;
+          ankerl::unordered_dense::map<hash_t, MinmerInfo, IdentityHash> sketched_vals;
           std::vector<hash_t> sketched_heap;
           sketched_heap.reserve(sketchSize+1);
 
@@ -255,23 +261,34 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
             {
               ambig_kmer_count = kmerSize;
             }
-            //Hash kmers
-            hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
-            hash_t hashBwd;
 
-            if(alphabetSize == 4)
-              hashBwd = CommonFunc::getHash(seqRev.get() + len - i - kmerSize, kmerSize);
-            else  //proteins
-              hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
+
+              if (ambig_kmer_count == 0) {
+
+                  //Hash kmers
+                  hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
+                  hash_t hashBwd;
+
+                  if(alphabetSize == 4)
+                      hashBwd = CommonFunc::getHash(seqRev.get() + len - i - kmerSize, kmerSize);
+                  else  //proteins
+                      hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
 
             //Consider non-symmetric kmers only
-            if(hashBwd != hashFwd && ambig_kmer_count == 0)
+            if(hashBwd != hashFwd)
             {
-              //Take minimum value of kmer and its reverse complement
-              hash_t currentKmer = std::min(hashFwd, hashBwd);
+                // minimize hash comparisons, which are slow
+                const auto [currentKmer, currentStrand] = [&]() {
+                    //Take minimum value of kmer and its reverse complement
+                    //Check the strand of this minimizer hash value
 
-              //Check the strand of this minimizer hash value
-              auto currentStrand = hashFwd < hashBwd ? strnd::FWD : strnd::REV;
+                    if (hashFwd < hashBwd) {
+
+                        return std::make_pair(hashFwd, strnd::FWD);
+                    }
+                    return std::make_pair(hashBwd, strnd::REV);
+
+                }();
 
               if (sketched_heap.size() < sketchSize || currentKmer <= sketched_heap.front())
               {
@@ -303,7 +320,8 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
                 }
               }
             }
-            if (ambig_kmer_count > 0)
+            }
+            else // (ambig_kmer_count > 0)
             {
               ambig_kmer_count--;
             }
@@ -414,7 +432,7 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
               {
                 const auto [leaving_hash, leaving_strand, _] = Q.front();
 
-                if (sortedWindow.size() > 0 && leaving_hash <= std::prev(sortedWindow.end())->first)
+                if (!sortedWindow.empty() && leaving_hash <= std::prev(sortedWindow.end())->first)
                 {
 
                   auto& leaving_pair = sortedWindow.find(leaving_hash)->second;
@@ -496,7 +514,7 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
                 }
 
                 //TODO leq?
-                if (sortedWindow.size() > 0 && heapWindow.size() > 0
+                if (!sortedWindow.empty() && !heapWindow.empty()
                     && sortedWindow.size() == sketchSize
                     && (heapWindow.front().hash < std::prev(sortedWindow.end())->first))
                 {
@@ -567,7 +585,9 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
             std::for_each(minmerIndex.begin(), minmerIndex.end(), [&chunkedMIs, windowSize, kmerSize] (auto& mi) {
               mi.strand = mi.strand < 0 ? (mi.strand == 0 ? strnd::AMBIG : strnd::REV) : strnd::FWD;
               if (mi.wpos_end > mi.wpos + windowSize) {
-                for (int chunk = 0; chunk < std::ceil(float(mi.wpos_end - mi.wpos) / float(windowSize)); chunk++) {
+                  const auto stop = std::ceil(float(mi.wpos_end - mi.wpos) / float(windowSize));
+                chunkedMIs.reserve(stop);
+                for (int chunk = 0; chunk < stop; chunk++) {
                   chunkedMIs.push_back(
                     MinmerInfo{
                       mi.hash,
