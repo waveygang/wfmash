@@ -531,7 +531,7 @@ void parse_args(int argc,
             map_parameters.sketchSize = ss;
         } else {
             const double md = 1 - map_parameters.percentageIdentity;
-            double dens = 0.02 * (1 + (md / 0.05));
+            double dens = 0.01 * (1 + (md / 0.1));
             map_parameters.sketchSize = dens * (map_parameters.segLength - map_parameters.kmerSize);
         }
     }
