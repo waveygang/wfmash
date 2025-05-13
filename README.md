@@ -196,6 +196,39 @@ cmake -H. -Bbuild -DBUILD_RETARGETABLE=ON && cmake --build build -- -j 8
 
 This will configure the build without `-march=native`, allowing the binary to be run on different types of machines.
 
+### Building on Apple Silicon
+
+First homebrew must be installed from either the [webpage](https://docs.brew.sh/Installation), or by following the commands below (from the webpage).
+
+```bash
+export HOMEBREW_NO_INSTALL_FROM_API=1
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Once homebrew is installed the dependancies must be installed.
+
+```bash
+brew install htslib
+brew install gsl
+brew install libomp
+brew install llvm
+brew install libdeflate
+brew install zlib
+brew install bzip2
+brew install gcc
+```
+
+Then `wfmash` can be built after exporting the following environmental variables - allowing cmake to see the homebrew libraries.
+
+```bash
+export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:${PKG_CONFIG_PATH}"
+export CC=$(brew --prefix llvm)/bin/clang
+export CXX=$(brew --prefix llvm)/bin/clang++
+export LDFLAGS="-L$(brew --prefix libomp)/lib -L$(brew --prefix llvm)/lib"
+export CPPFLAGS="-I$(brew --prefix libomp)/include -I$(brew --prefix llvm)/include"
+cmake -H. -Bbuild -DBUILD_RETARGETABLE=ON && cmake --build build -- -j 8 > build.txt 2>&1
+```
+
 ### Installing
 
 After building, you can install `wfmash` using:

@@ -81,3 +81,16 @@ set_target_properties(wflign PROPERTIES OUTPUT_NAME wflign)
 
 target_include_directories(wflign_static PRIVATE ${wflign_INCLUDE})
 target_include_directories(wflign PRIVATE ${wflign_INCLUDE})
+
+# Conditionally link wflign libraries against wfa2cpp only on Apple Silicon
+if (APPLE AND (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64"))
+    message(STATUS "Apple Silicon detected: Linking wflign and wflign_static against wfa2cpp.")
+    target_link_libraries(wflign_static PRIVATE wfa2cpp)
+    target_link_libraries(wflign PRIVATE wfa2cpp)
+else()
+    message(STATUS "Not Apple Silicon (or CMAKE_SYSTEM_PROCESSOR not arm64/aarch64): wflign linking to wfa2cpp is SKIPPED based on conditional logic.")
+    # If there was specific linking for other platforms that was working before,
+    # it would go here. Otherwise, leaving this empty means no explicit link to wfa2cpp
+    # is added for non-Apple Silicon builds, matching the original state of this file
+    # before we added the target_link_libraries calls.
+endif()

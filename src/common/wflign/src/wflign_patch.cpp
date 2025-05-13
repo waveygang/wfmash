@@ -6,6 +6,8 @@
 #include "rkmh.hpp"
 #include "wflign_patch.hpp"
 #include "wflign_git_version.hpp"
+#include <algorithm> // For std::max
+#include <cstdint>   // For int64_t
 
 namespace wflign {
 
@@ -1260,7 +1262,14 @@ void write_merged_alignment(
             // Head patching
             if (query_start > 0 || target_start > 0) {
                 // Calculate how far we need to shift to cover the query, and how far we can safely shift
-                int64_t needed_shift = std::max(0L, static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
+                #if defined(__APPLE__) && defined(__MACH__) && (defined(__arm64__) || defined(__aarch64__))
+                    // Apple Silicon (ARM64) specific fix
+                    int64_t needed_shift = std::max(0LL, static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
+                #else
+                    // Original code for other platforms
+                    int64_t needed_shift = std::max(0L, static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
+                #endif
+                // int64_t needed_shift = std::max(0L, static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
                 int64_t max_safe_shift = std::min(
                     static_cast<int64_t>(wflign_max_len_minor),
                     static_cast<int64_t>(target_offset)
@@ -1650,7 +1659,14 @@ void write_merged_alignment(
             // Tail patching
             if (query_pos < query_length || target_pos < target_length) {
                 // Calculate how much additional target sequence we need
-                int64_t needed_extension = std::max(0L, static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
+                #if defined(__APPLE__) && defined(__MACH__) && (defined(__arm64__) || defined(__aarch64__))
+                    // Apple Silicon (ARM64) specific fix
+                    int64_t needed_extension = std::max(0LL, static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
+                #else
+                    // Original code for other platforms
+                    int64_t needed_extension = std::max(0L, static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
+                #endif
+                // int64_t needed_extension = std::max(0L, static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
     
                 // Calculate how much we can safely extend
                 int64_t max_safe_extension = std::min(
