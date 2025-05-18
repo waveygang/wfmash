@@ -25,7 +25,7 @@ namespace wfmash {
         }
 
         const std::string tmp = value.substr(0, str_len);
-        return is_a_number(tmp) ? (int)(stof(tmp) * pow(10, exp)) : -1;
+        return is_a_number(tmp) ? (int64_t)(stod(tmp) * pow(10, exp)) : -1;
     }
 
 }
