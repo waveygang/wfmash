@@ -175,7 +175,14 @@ namespace skch
       void build(bool compute_seeds, const std::vector<std::string>& target_names = {}, 
                 std::shared_ptr<progress_meter::ProgressMeter> external_progress = nullptr)
       {
-        std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
+        #if defined(__APPLE__) && defined(__MACH__) && (defined(__arm64__) || defined(__aarch64__))
+            // Patched for Apple Silicon:
+            std::chrono::time_point<std::chrono::steady_clock> t0 = skch::Time::now();
+        #else
+            // Original code for other platforms:
+            std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
+        #endif
+        // std::chrono::time_point<std::chrono::system_clock> t0 = skch::Time::now();
 
         if (compute_seeds) {
           // Calculate total sequence length from id manager
@@ -393,7 +400,16 @@ namespace skch
 
           uint64_t freq_cutoff;
           if (param.max_kmer_freq <= 1.0) {
+            #if defined(__APPLE__) && defined(__MACH__) && (defined(__arm64__) || defined(__aarch64__))
+              // Patched for Apple Silicon (change 1UL to 1ULL to match uint64_t, or use a cast):
+              freq_cutoff = std::max(1ULL, (uint64_t)(total_windows * param.max_kmer_freq));
+              // Alternative patch for Apple Silicon, using static_cast for clarity:
+              // freq_cutoff = std::max(static_cast<uint64_t>(1), (uint64_t)(total_windows * param.max_kmer_freq));
+            #else
+              // Original code for other platforms:
               freq_cutoff = std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
+            #endif
+            //   freq_cutoff = std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
           } else {
               freq_cutoff = (uint64_t)param.max_kmer_freq;
           }
