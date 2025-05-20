@@ -246,7 +246,7 @@ namespace skch
             p.query_list,
             p.target_list)),
         cached_segment_length(p.segLength),
-        cached_minimum_hits(p.minimum_hits > 0 ? p.minimum_hits : Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval))
+        cached_minimum_hits(std::max(p.minimum_hits, Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval)))
           {
               // Initialize sequence names right after creating idManager
               // Important: Apply any prefix filters here to ensure consistent query/target list
@@ -1611,11 +1611,9 @@ namespace skch
 
           //3. Compute L1 windows
           // Always respect the minimum hits parameter if set
-          int minimumHits = param.minimum_hits > 0 ? 
-              param.minimum_hits : 
-              (Q.len == cached_segment_length ? 
-                  cached_minimum_hits : 
-                  Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval));
+          int minimumHits = (Q.len == cached_segment_length) ?
+              cached_minimum_hits :
+              std::max(param.minimum_hits, Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval));
 
           // For each "group"
           auto ip_begin = intervalPoints.begin();

@@ -79,7 +79,7 @@ void parse_args(int argc,
     args::Flag no_merge(mapping_opts, "", "disable merging of consecutive mappings", {'M', "no-merge"});
     args::ValueFlag<double> kmer_complexity(mapping_opts, "FLOAT", "minimum k-mer complexity threshold", {'J', "kmer-cmplx"});
     args::ValueFlag<std::string> hg_filter(mapping_opts, "numer,ani-Δ,conf", "hypergeometric filter params [1.0,0.0,99.9]", {"hg-filter"});
-    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [auto]", {'H', "l1-hits"});
+    args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [3]", {'H', "l1-hits"});
     args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter minimizers occurring > FLOAT of total [0.0002]", {'F', "filter-freq"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FLOAT", "keep this fraction of mappings [1.0]", {'x', "sparsify"});
 
@@ -531,7 +531,7 @@ void parse_args(int argc,
             map_parameters.sketchSize = ss;
         } else {
             const double md = 1 - map_parameters.percentageIdentity;
-            double dens = 0.02 * (1 + (md / 0.05));
+            double dens = 0.01 * (1 + (md / 0.1));
             map_parameters.sketchSize = dens * (map_parameters.segLength - map_parameters.kmerSize);
         }
     }
@@ -616,7 +616,7 @@ void parse_args(int argc,
     if (min_hits) {
         map_parameters.minimum_hits = args::get(min_hits);
     } else {
-        map_parameters.minimum_hits = -1; // auto
+        map_parameters.minimum_hits = 3; // default minimum
     }
 
     if (max_kmer_freq) {
