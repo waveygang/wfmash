@@ -346,7 +346,7 @@ void computeAlignmentsTaskflow() {
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
                 try {
-                    parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding);
+                    parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding, param.query_padding);
                     total_query_length += currentRecord.qEndPos - currentRecord.qStartPos;
                     total_target_length += currentRecord.rEndPos - currentRecord.rStartPos;
                     mapping_records.push_back(std::move(mappingRecordLine));
