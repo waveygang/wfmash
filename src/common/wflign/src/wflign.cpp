@@ -205,6 +205,36 @@ void do_biwfa_alignment(
             return short_cigar;
         };
 
+        // Helper function to merge adjacent CIGAR operations at concatenation point
+        auto merge_adjacent_ops = [](const std::string& cigar1, const std::string& cigar2) -> std::string {
+            if (cigar1.empty()) return cigar2;
+            if (cigar2.empty()) return cigar1;
+            
+            // Find the last operation in cigar1
+            size_t pos1 = cigar1.length() - 1;
+            while (pos1 > 0 && !std::isdigit(cigar1[pos1])) pos1--;
+            char op1 = cigar1.back();
+            size_t start1 = cigar1.rfind(std::isdigit(cigar1[pos1]) ? cigar1[pos1] : ' ');
+            while (start1 > 0 && std::isdigit(cigar1[start1-1])) start1--;
+            int count1 = std::stoi(cigar1.substr(start1, pos1 - start1 + 1));
+            
+            // Find the first operation in cigar2
+            size_t pos2 = 0;
+            while (pos2 < cigar2.length() && std::isdigit(cigar2[pos2])) pos2++;
+            if (pos2 >= cigar2.length()) return cigar1 + cigar2;
+            char op2 = cigar2[pos2];
+            int count2 = std::stoi(cigar2.substr(0, pos2));
+            
+            // If operations match, merge them
+            if (op1 == op2) {
+                return cigar1.substr(0, start1) + 
+                    std::to_string(count1 + count2) + op1 + 
+                    cigar2.substr(pos2 + 1);
+            }
+            
+            return cigar1 + cigar2;
+        };
+
         // Perform head patching
         {
             u_int64_t query_eroded = 0;
@@ -282,7 +312,7 @@ void do_biwfa_alignment(
                     head_cigar_short = erode_short_matches_in_cigar(head_cigar_short, 3);
                     
                     // Remove the eroded part from the beginning of main_cigar
-                    main_cigar = head_cigar_short + main_cigar.substr(erode_end_pos);
+                    main_cigar = merge_adjacent_ops(head_cigar_short, main_cigar.substr(erode_end_pos));
                 }
             }
         }
@@ -380,7 +410,7 @@ void do_biwfa_alignment(
                     }
                     
                     // Combine the truncated main CIGAR with the tail CIGAR
-                    main_cigar = truncated_cigar + tail_cigar_short;
+                    main_cigar = merge_adjacent_ops(truncated_cigar, tail_cigar_short);
                 }
             }
         }
