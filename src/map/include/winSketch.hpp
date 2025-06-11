@@ -293,6 +293,54 @@ namespace skch
               }
           }
 
+          // print frequency map
+          for (const auto& [hash, freq] : kmer_freqs) {
+              std::cout << hash << "\t" << freq << std::endl;
+          }
+
+          // Calculate count_threshold ONCE before parallel section
+          uint64_t min_occ = 10;
+          uint64_t max_occ = std::numeric_limits<uint64_t>::max();
+          uint64_t count_threshold;
+
+          if (param.max_kmer_freq <= 1.0) {
+              count_threshold = std::min(max_occ, 
+                                      std::max(min_occ, 
+                                              (uint64_t)(total_windows * param.max_kmer_freq)));
+          } else {
+              count_threshold = std::min(max_occ,
+                                      std::max(min_occ,
+                                              (uint64_t)param.max_kmer_freq));
+          }
+
+          // Safety check to prevent filtering all k-mers
+          size_t would_filter = 0;
+          for (const auto& [hash, freq] : kmer_freqs) {
+              if (freq > count_threshold && freq > min_occ) {
+                  would_filter++;
+              }
+          }
+
+          // If we would filter too many k-mers (>70%), adjust threshold
+          if (would_filter > kmer_freqs.size() * 0.7) {
+              // Collect all frequencies and sort them
+              std::vector<uint64_t> all_freqs;
+              all_freqs.reserve(kmer_freqs.size());
+              for (const auto& [hash, freq] : kmer_freqs) {
+                  all_freqs.push_back(freq);
+              }
+              std::sort(all_freqs.begin(), all_freqs.end());
+              
+              // Find threshold that keeps at least 10% of k-mers
+              size_t keep_index = kmer_freqs.size() - (kmer_freqs.size() / 10);
+              count_threshold = all_freqs[keep_index];
+              
+              std::cerr << "[wfmash::mashmap] WARNING: Adjusted k-mer frequency threshold from " 
+                      << (uint64_t)(total_windows * param.max_kmer_freq) 
+                      << " to " << count_threshold 
+                      << " to prevent filtering all k-mers" << std::endl;
+          }
+          
           // Parallel index building
           std::vector<MI_Map_t> thread_pos_indexes(param.threads);
           std::vector<MI_Type> thread_minmer_indexes(param.threads);
@@ -301,7 +349,7 @@ namespace skch
           std::vector<std::thread> index_threads;
 
           for (size_t t = 0; t < param.threads; ++t) {
-              index_threads.emplace_back([&, t]() {
+              index_threads.emplace_back([&, t, count_threshold]() {
                   size_t start = t * chunk_size;
                   size_t end = std::min(start + chunk_size, threadOutputs.size());
 
@@ -315,20 +363,8 @@ namespace skch
                           }
 
                           uint64_t freq = freq_it->second;
-                          uint64_t min_occ = 10;
-                          uint64_t max_occ = std::numeric_limits<uint64_t>::max();
-                          uint64_t count_threshold;
                           
-                          if (param.max_kmer_freq <= 1.0) {
-                              count_threshold = std::min(max_occ, 
-                                                       std::max(min_occ, 
-                                                              (uint64_t)(total_windows * param.max_kmer_freq)));
-                          } else {
-                              count_threshold = std::min(max_occ,
-                                                       std::max(min_occ,
-                                                              (uint64_t)param.max_kmer_freq));
-                          }
-
+                          // Use the captured count_threshold instead of recalculating
                           if (freq > count_threshold && freq > min_occ) {
                               thread_filtered_kmers[t]++;
                               continue;
@@ -400,7 +436,7 @@ namespace skch
           std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
                     << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
                     << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
-                    << " k-mers occurring > " << freq_cutoff << " times"
+                    << " k-mers occurring > " << count_threshold << " times"
                     << " (target: " << (param.max_kmer_freq <= 1.0 ? 
                                       ([&]() { 
                                           std::stringstream ss;
