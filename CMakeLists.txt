@@ -274,7 +274,7 @@ add_test(
 
 add_test(
   NAME wfmash-mapping-coverage-with-8-yeast-genomes-to-PAF
-  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y \\# > scerevisiae8.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai scerevisiae8.paf 0.89"
+  COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -p 95 -n 7 -m -L -Y \\# --quiet > scerevisiae8.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai scerevisiae8.paf 0.89"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
