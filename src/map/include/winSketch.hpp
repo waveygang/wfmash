@@ -78,7 +78,7 @@ namespace skch
 
       using MI_Type = std::vector< MinmerInfo >;
       using MIIter_t = MI_Type::const_iterator;
-      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t>;
+      using HF_Map_t = ankerl::unordered_dense::map<hash_t, uint64_t, IdentityHash>;
 
       public:
         uint64_t total_seq_length = 0;
@@ -105,7 +105,7 @@ namespace skch
       //using MI_Map_t = phmap::flat_hash_map< MinmerMapKeyType, MinmerMapValueType >;
       //using MI_Map_t = absl::flat_hash_map< MinmerMapKeyType, MinmerMapValueType >;
       //using MI_Map_t = tsl::sparse_map< MinmerMapKeyType, MinmerMapValueType >;
-      using MI_Map_t = ankerl::unordered_dense::map< MinmerMapKeyType, MinmerMapValueType >;
+      using MI_Map_t = ankerl::unordered_dense::map< MinmerMapKeyType, MinmerMapValueType, IdentityHash>;
       MI_Map_t minmerPosLookupIndex;
       MI_Type minmerIndex;
 
@@ -287,10 +287,11 @@ namespace skch
 
           // Merge frequency maps
           HF_Map_t kmer_freqs;
-          for (const auto& thread_freq : thread_kmer_freqs) {
+          for (auto& thread_freq : thread_kmer_freqs) {
               for (const auto& [hash, freq] : thread_freq) {
                   kmer_freqs[hash] += freq;
               }
+              thread_freq.clear();
           }
 
           // Parallel index building
@@ -369,7 +370,6 @@ namespace skch
           for (const auto& thread_index : thread_minmer_indexes) {
               total_minmers += thread_index.size();
           }
-          minmerIndex.reserve(total_minmers);
 
           // Merge position lookup indexes
           for (auto& thread_pos_index : thread_pos_indexes) {
@@ -377,15 +377,20 @@ namespace skch
                   auto& main_pos_list = minmerPosLookupIndex[hash];
                   main_pos_list.insert(main_pos_list.end(), pos_list.begin(), pos_list.end());
               }
+              thread_pos_index.clear();
           }
+          const auto unique_hashes = minmerPosLookupIndex.size();
+          thread_pos_indexes.clear();
+          minmerIndex.reserve(total_minmers);
 
           // Merge minmer indexes
           for (auto& thread_index : thread_minmer_indexes) {
               minmerIndex.insert(minmerIndex.end(), 
                                std::make_move_iterator(thread_index.begin()),
                                std::make_move_iterator(thread_index.end()));
+              thread_index.clear();
           }
-          
+
           // Finish second progress meter if we created it
           if (!external_progress) {
               index_progress->finish();
@@ -398,7 +403,7 @@ namespace skch
               freq_cutoff = (uint64_t)param.max_kmer_freq;
           }
           std::cerr << "[wfmash::mashmap] Processed " << totalSeqProcessed << " sequences (" << totalSeqSkipped << " skipped, " << total_seq_length << " total bp), " 
-                    << minmerPosLookupIndex.size() << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
+                    << unique_hashes << " unique hashes, " << minmerIndex.size() << " windows" << std::endl
                     << "[wfmash::mashmap] Filtered " << filtered_kmers << "/" << total_kmers 
                     << " k-mers occurring > " << freq_cutoff << " times"
                     << " (target: " << (param.max_kmer_freq <= 1.0 ? 
@@ -880,7 +885,7 @@ namespace skch
             
             std::string seqName(name_length, '\0');
             inStream.read(&seqName[0], name_length);
-            sequenceNames.push_back(seqName);
+            sequenceNames.emplace_back(std::move(seqName));
         }
         
         // Read and restore sequence ID mappings from index
