@@ -396,9 +396,9 @@ private:
             if (prefixMatch && (allowedNames.empty() || allowedNames.find(seqName) != allowedNames.end())) {
                 seqno_t seqId = addSequence(seqName, seqLength);
                 if (isQuery) {
-                    querySequenceNames.push_back(seqName);
+                    querySequenceNames.emplace_back(std::move(seqName));
                 } else {
-                    targetSequenceNames.push_back(seqName);
+                    targetSequenceNames.emplace_back(std::move(seqName));
                 }
             }
         }
