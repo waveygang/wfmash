@@ -831,12 +831,7 @@ namespace skch
 
                               // After all fragments are processed, set the output results
                               mappingBoundarySanityCheck(input.get(), output->results);
-                              auto [nonMergedMappings, mergedMappings] = 
-                                  filterSubsetMappings(output->results, output->progress);
-
-                              // Select the appropriate mappings
-                              auto& mappings = param.mergeMappings && param.split ?
-                                    mergedMappings : nonMergedMappings;
+                              auto mappings = filterSubsetMappings(output->results, output->progress);
 
                               // Handle based on filter mode
                               if (param.filterMode == filter::ONETOONE) {
@@ -2932,62 +2927,73 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
       }
 
       /**
-       * @brief Compute and assign chain statistics to all mappings in the chain
-       * @param begin Iterator to the start of the chain
-       * @param end Iterator to the end of the chain
-       */
-      /**
        * @brief Filter mappings within a subset before aggregation
        * @param mappings Mappings to filter
        * @param param Algorithm parameters
        */
-      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
-          if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+      MappingResultsVector_t filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
+          if (mappings.empty()) return {MappingResultsVector_t()};
 
           // Make a copy of the raw mappings for scaffolding
           MappingResultsVector_t rawMappings = mappings;
-          
-          // Only merge once and keep both versions
-          auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
-
-          // Process both merged and non-merged mappings
-          if (param.mergeMappings && param.split) {
-              filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
-              // Also apply scaffold filtering to merged mappings
-              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
-          } else {
-              filterNonMergedMappings(mappings, param, progress);
-              filterByScaffolds(mappings, rawMappings, param, progress);
-          }
 
           // Build dense chain ID mapping
           std::unordered_map<offset_t, offset_t> id_map;
           offset_t next_id = 0;
-          
-          // First pass - build the mapping from both sets
-          for (const auto& mapping : mappings) {
-              if (id_map.count(mapping.splitMappingId) == 0) {
-                  id_map[mapping.splitMappingId] = next_id++;
-              }
-          }
-          for (const auto& mapping : maximallyMergedMappings) {
-              if (id_map.count(mapping.splitMappingId) == 0) {
-                  id_map[mapping.splitMappingId] = next_id++;
-              }
-          }
 
-          // Get atomic offset for this batch of chain IDs
-          offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
-          
-          // Apply compacted IDs with offset
-          for (auto& mapping : mappings) {
-              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
-          }
-          for (auto& mapping : maximallyMergedMappings) {
-              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
-          }
+          if (param.mergeMappings && param.split) {
+            // Only merge once and keep both versions
+            auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
 
-          return {std::move(mappings), std::move(maximallyMergedMappings)};
+            filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
+            // Also apply scaffold filtering to merged mappings
+            filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
+
+            // First pass - build the mapping from both sets
+            for (const auto& mapping : mappings) {
+                if (id_map.count(mapping.splitMappingId) == 0) {
+                    id_map[mapping.splitMappingId] = next_id++;
+                }
+            }
+            for (const auto& mapping : maximallyMergedMappings) {
+                if (id_map.count(mapping.splitMappingId) == 0) {
+                    id_map[mapping.splitMappingId] = next_id++;
+                }
+            }
+
+            // Get atomic offset for this batch of chain IDs
+            offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
+            
+            // Apply compacted IDs with offset
+            for (auto& mapping : mappings) {
+                mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+            }
+            for (auto& mapping : maximallyMergedMappings) {
+                mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+            }
+
+            return {std::move(maximallyMergedMappings)};
+          } else {
+            filterNonMergedMappings(mappings, param, progress);
+            filterByScaffolds(mappings, rawMappings, param, progress);
+
+            // First pass - build the mapping from both sets
+            for (const auto& mapping : mappings) {
+                if (id_map.count(mapping.splitMappingId) == 0) {
+                    id_map[mapping.splitMappingId] = next_id++;
+                }
+            }
+
+            // Get atomic offset for this batch of chain IDs
+            offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
+            
+            // Apply compacted IDs with offset
+            for (auto& mapping : mappings) {
+                mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
+            }
+
+            return {std::move(mappings)};
+          }
       }
 
       /**
