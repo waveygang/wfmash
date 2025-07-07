@@ -72,7 +72,7 @@ void parse_args(int argc,
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> scaffolding(mapping_opts, "G,L,D", 
-        "homology scaffolding [100k,3k,100k]", {'S', "scaffolding"});
+        "homology scaffolding [100k,5k,100k]", {'S', "scaffolding"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -375,7 +375,7 @@ void parse_args(int argc,
     } else {
         // Default values
         map_parameters.scaffold_gap = 100000;         // 100k
-        map_parameters.scaffold_min_length = 3000;    // 3k  
+        map_parameters.scaffold_min_length = 5000;    // 5k  
         map_parameters.scaffold_max_deviation = 100000; // 100k
     }
 
