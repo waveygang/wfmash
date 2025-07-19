@@ -569,11 +569,7 @@ namespace skch
                                   
                                   if (!all_fragment_results.empty()) {
                                       std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.insert(
-                                          output->results.end(),
-                                          all_fragment_results.begin(),
-                                          all_fragment_results.end()
-                                      );
+                                      output->results.addMappings(all_fragment_results);
                                   }
                               });
                           }
@@ -601,20 +597,18 @@ namespace skch
                                   
                                   if (!all_fragment_results.empty()) {
                                       std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.insert(
-                                          output->results.end(),
-                                          all_fragment_results.begin(),
-                                          all_fragment_results.end()
-                                      );
+                                      output->results.addMappings(all_fragment_results);
                                   }
                               });
                           }
 
                           query_sf.join();
 
-                          OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
+                          // Get uncompressed results for processing
+                          auto uncompressed_results = output->results.getAllMappings();
+                          OutputHandler::mappingBoundarySanityCheck(input.get(), uncompressed_results, *idManager);
                           auto [nonMergedMappings, mergedMappings] = 
-                              filterSubsetMappings(output->results, output->progress);
+                              filterSubsetMappings(uncompressed_results, output->progress);
 
                           auto& mappings = param.mergeMappings && param.split ?
                                 mergedMappings : nonMergedMappings;

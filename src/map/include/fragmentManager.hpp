@@ -13,6 +13,7 @@
 #include <atomic>
 #include <string>
 #include "map/include/base_types.hpp"
+#include "map/include/compressedMapping.hpp"
 #include "common/progress.hpp"
 
 namespace skch
@@ -48,14 +49,18 @@ namespace skch
    */
   struct QueryMappingOutput {
       std::string queryName;
-      std::vector<MappingResult> results;        // Non-merged mappings
-      std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
+      CompressedMappingStore results;            // Non-merged mappings (compressed)
+      CompressedMappingStore mergedResults;      // Maximally merged mappings (compressed)
       std::mutex mutex;
       progress_meter::ProgressMeter& progress;
       
       QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
                         const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
-          : queryName(name), results(r), mergedResults(mr), progress(p) {}
+          : queryName(name), results(), mergedResults(), progress(p) {
+          // Convert existing vectors to compressed storage
+          results.addMappings(r);
+          mergedResults.addMappings(mr);
+      }
   };
 
   /**
