@@ -534,13 +534,14 @@ namespace skch
                           auto input = std::make_shared<InputSeqProgContainer>(
                               sequence, queryName, seqId, *progress);
                           auto output = std::make_shared<QueryMappingOutput>(
-                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
+                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress,
+                              seqId, static_cast<offset_t>(input->len));
             
                           int refGroup = idManager->getRefGroup(seqId);
                           int noOverlapFragmentCount = input->len / param.segLength;
 
-                          std::mutex results_mutex;
-
+                          // Lock-free: threads can add directly without contention
+                          
                           // Regular fragments
                           for(int i = 0; i < noOverlapFragmentCount; i++) {
                               query_sf.emplace([&, i]() {
@@ -567,9 +568,9 @@ namespace skch
                                   QueryMetaData<MinVec_Type> Q;
                                   processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                   
+                                  // Lock-free batch add - no contention!
                                   if (!all_fragment_results.empty()) {
-                                      std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.addMappings(all_fragment_results);
+                                      output->results.addMappingsBatch(all_fragment_results);
                                   }
                               });
                           }
@@ -595,15 +596,17 @@ namespace skch
                                   QueryMetaData<MinVec_Type> Q;
                                   processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                   
+                                  // Lock-free batch add - no contention!
                                   if (!all_fragment_results.empty()) {
-                                      std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.addMappings(all_fragment_results);
+                                      output->results.addMappingsBatch(all_fragment_results);
                                   }
                               });
                           }
 
                           query_sf.join();
 
+                          // All results have been added lock-free during parallel processing
+                          
                           // Get uncompressed results for processing
                           auto uncompressed_results = output->results.getAllMappings();
                           OutputHandler::mappingBoundarySanityCheck(input.get(), uncompressed_results, *idManager);

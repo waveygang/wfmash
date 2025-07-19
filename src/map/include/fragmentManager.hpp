@@ -13,7 +13,7 @@
 #include <atomic>
 #include <string>
 #include "map/include/base_types.hpp"
-#include "map/include/compressedMapping.hpp"
+#include "map/include/lockFreeCompressedMapping.hpp"
 #include "common/progress.hpp"
 
 namespace skch
@@ -49,17 +49,22 @@ namespace skch
    */
   struct QueryMappingOutput {
       std::string queryName;
-      CompressedMappingStore results;            // Non-merged mappings (compressed)
-      CompressedMappingStore mergedResults;      // Maximally merged mappings (compressed)
-      std::mutex mutex;
+      LockFreeCompressedMappingStore results;      // Non-merged mappings (lock-free)
+      LockFreeCompressedMappingStore mergedResults; // Maximally merged mappings (lock-free)
+      // No mutex needed - lock-free!
       progress_meter::ProgressMeter& progress;
       
       QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
-                        const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
-          : queryName(name), results(), mergedResults(), progress(p) {
-          // Convert existing vectors to compressed storage
-          results.addMappings(r);
-          mergedResults.addMappings(mr);
+                        const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p,
+                        seqno_t querySeqId = 0, offset_t queryLen = 0)
+          : queryName(name), results(50000, querySeqId, queryLen), mergedResults(50000, querySeqId, queryLen), progress(p) {
+          // Pre-allocate reasonable capacity for lock-free operation
+          if (!r.empty()) {
+              results.addMappingsBatch(r);
+          }
+          if (!mr.empty()) {
+              mergedResults.addMappingsBatch(mr);
+          }
       }
   };
 
