@@ -107,7 +107,6 @@ namespace skch
         
         intervalPoints.clear();
         l1Mappings.clear();
-        l2Mappings.clear();
         thread_local_results.clear();
 
         Q.seq = const_cast<char*>(fragment.seq);
@@ -117,36 +116,22 @@ namespace skch
         Q.seqName = fragment.seqName;
         Q.refGroup = fragment.refGroup;
 
-        if (param.use_compressed_mappings) {
-            // Use compressed storage path
-            CompressedMappingStore compressedStore(fragment.seqId, fragment.fullLen);
-            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, compressedStore);
-            
-            // Retrieve and update mappings with query positions
-            auto mappings = compressedStore.getAllMappings();
-            for (auto& e : mappings) {
-                e.queryLen = fragment.fullLen;
-                e.queryStartPos = fragment.fragmentIndex * param.segLength;
-                e.queryEndPos = e.queryStartPos + fragment.len;
-            }
-            
-            thread_local_results = std::move(mappings);
-        } else {
-            // Use original path
-            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
-
-            std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-                e.queryLen = fragment.fullLen;
-                e.queryStartPos = fragment.fragmentIndex * param.segLength;
-                e.queryEndPos = e.queryStartPos + fragment.len;
-            });
-
-            if (!l2Mappings.empty()) {
-                thread_local_results.insert(thread_local_results.end(), 
-                                           l2Mappings.begin(), 
-                                           l2Mappings.end());
-            }
+        // Always use compressed storage internally for memory efficiency
+        CompressedMappingStore compressedStore(fragment.seqId, fragment.fullLen);
+        mapSingleQueryFrag(Q, intervalPoints, l1Mappings, compressedStore);
+        
+        // Retrieve and update mappings with query positions
+        auto mappings = compressedStore.getAllMappings();
+        for (auto& e : mappings) {
+            e.queryLen = fragment.fullLen;
+            e.queryStartPos = fragment.fragmentIndex * param.segLength;
+            e.queryEndPos = e.queryStartPos + fragment.len;
         }
+        
+        thread_local_results = std::move(mappings);
+        
+        // Note: l2Mappings parameter is now unused but kept for interface compatibility
+        l2Mappings.clear();
         
         if (fragment.output) {
             fragment.output->progress.increment(fragment.len);
