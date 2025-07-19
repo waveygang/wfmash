@@ -57,7 +57,7 @@ namespace skch
       QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
                         const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p,
                         seqno_t querySeqId = 0, offset_t queryLen = 0)
-          : queryName(name), results(50000, querySeqId, queryLen), mergedResults(50000, querySeqId, queryLen), progress(p) {
+          : queryName(name), results(10000000, querySeqId, queryLen), mergedResults(10000000, querySeqId, queryLen), progress(p) {
           // Pre-allocate reasonable capacity for lock-free operation
           if (!r.empty()) {
               results.addMappingsBatch(r);

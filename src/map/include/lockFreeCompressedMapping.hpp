@@ -20,14 +20,25 @@ namespace skch
    * @brief Lock-free storage for mappings using atomic operations
    *
    * This class provides a memory-efficient, lock-free storage for mapping results.
-   * It uses a pre-allocated buffer and atomic index for thread-safe appending.
+   * It uses dynamically growing storage with lock-free operations.
    */
   class LockFreeCompressedMappingStore {
   private:
-    // Pre-allocated storage
-    std::unique_ptr<MinimalMapping[]> mappings;
-    size_t capacity;
-    std::atomic<size_t> size{0};
+    // Dynamic storage with growth capability
+    struct StorageBlock {
+      std::unique_ptr<MinimalMapping[]> data;
+      size_t capacity;
+      std::atomic<size_t> used{0};
+      
+      StorageBlock(size_t cap) : capacity(cap) {
+        data = std::make_unique<MinimalMapping[]>(capacity);
+      }
+    };
+    
+    std::vector<std::unique_ptr<StorageBlock>> blocks;
+    std::mutex growth_mutex;  // Only for growing, not for adding
+    size_t block_size;
+    std::atomic<size_t> total_size{0};
     
     // Query information
     seqno_t querySeqId;
@@ -38,15 +49,16 @@ namespace skch
     std::atomic<int> defaultSketchSize{0};
     
   public:
-    // Constructor with pre-allocated capacity
-    explicit LockFreeCompressedMappingStore(size_t initialCapacity = 10000, 
+    // Constructor with initial block size
+    explicit LockFreeCompressedMappingStore(size_t initialCapacity = 10000000,  // 10M default
                                            seqno_t qSeqId = 0, 
                                            offset_t qLen = 0) 
-        : capacity(initialCapacity), querySeqId(qSeqId), queryLen(qLen) {
-      mappings = std::make_unique<MinimalMapping[]>(capacity);
+        : block_size(initialCapacity), querySeqId(qSeqId), queryLen(qLen) {
+      // Start with one block
+      blocks.emplace_back(std::make_unique<StorageBlock>(block_size));
     }
     
-    // Lock-free add single mapping
+    // Lock-free add single mapping with automatic growth
     bool addMapping(const MappingResult& m) {
       // Update query info if not set (first mapping sets it)
       if (querySeqId == 0 && m.querySeqId != 0) {
@@ -54,75 +66,81 @@ namespace skch
         queryLen = m.queryLen;
       }
       
-      // Atomically claim a slot
-      size_t index = size.fetch_add(1, std::memory_order_relaxed);
-      
-      if (index >= capacity) {
-        // Buffer full - in production, could implement wait-free growth
-        size.fetch_sub(1, std::memory_order_relaxed);
-        return false;
+      // Try to add to existing blocks
+      while (true) {
+        // Try each block in order
+        for (size_t i = 0; i < blocks.size(); ++i) {
+          auto& block = blocks[i];
+          size_t idx = block->used.fetch_add(1, std::memory_order_relaxed);
+          
+          if (idx < block->capacity) {
+            // Success - we have a slot
+            block->data[idx] = compressMapping(m);
+            total_size.fetch_add(1, std::memory_order_relaxed);
+            
+            // Update metadata if needed
+            if (defaultSketchSize.load(std::memory_order_relaxed) == 0 && m.sketchSize > 0) {
+              defaultSketchSize.store(m.sketchSize, std::memory_order_relaxed);
+            }
+            if (defaultKmerComplexity.load(std::memory_order_relaxed) == 0.0 && m.kmerComplexity > 0.0) {
+              defaultKmerComplexity.store(m.kmerComplexity, std::memory_order_relaxed);
+            }
+            
+            return true;
+          } else {
+            // This block is full, undo the increment
+            block->used.fetch_sub(1, std::memory_order_relaxed);
+          }
+        }
+        
+        // All blocks are full, need to grow
+        std::lock_guard<std::mutex> lock(growth_mutex);
+        
+        // Check again in case another thread already grew
+        if (blocks.back()->used.load() < blocks.back()->capacity) {
+          continue;  // Retry with the new block
+        }
+        
+        // Add a new block (double the size each time, up to a limit)
+        size_t new_block_size = std::min(blocks.back()->capacity * 2, size_t(100000000)); // Up to 100M per block
+        blocks.emplace_back(std::make_unique<StorageBlock>(new_block_size));
       }
-      
-      // Write to our exclusive slot (no contention)
-      mappings[index] = compressMapping(m);
-      
-      // Update metadata if needed (race condition acceptable for these)
-      if (defaultSketchSize.load(std::memory_order_relaxed) == 0 && m.sketchSize > 0) {
-        defaultSketchSize.store(m.sketchSize, std::memory_order_relaxed);
-      }
-      if (defaultKmerComplexity.load(std::memory_order_relaxed) == 0.0 && m.kmerComplexity > 0.0) {
-        defaultKmerComplexity.store(m.kmerComplexity, std::memory_order_relaxed);
-      }
-      
-      return true;
     }
     
-    // Batch add - each thread can add its own batch without contention
+    // Batch add - more efficient than individual adds
     size_t addMappingsBatch(const std::vector<MappingResult>& batch) {
       if (batch.empty()) return 0;
       
-      // Atomically reserve space for entire batch
-      size_t batchSize = batch.size();
-      size_t startIndex = size.fetch_add(batchSize, std::memory_order_relaxed);
-      
-      if (startIndex + batchSize > capacity) {
-        // Not enough space - roll back
-        size.fetch_sub(batchSize, std::memory_order_relaxed);
-        return 0;
-      }
-      
-      // Write entire batch to our exclusive range
-      for (size_t i = 0; i < batchSize; ++i) {
-        mappings[startIndex + i] = compressMapping(batch[i]);
-        
-        // Update metadata for first few mappings
-        if (i < 10) {
-          if (defaultSketchSize.load(std::memory_order_relaxed) == 0 && batch[i].sketchSize > 0) {
-            defaultSketchSize.store(batch[i].sketchSize, std::memory_order_relaxed);
-          }
-          if (defaultKmerComplexity.load(std::memory_order_relaxed) == 0.0 && batch[i].kmerComplexity > 0.0) {
-            defaultKmerComplexity.store(batch[i].kmerComplexity, std::memory_order_relaxed);
-          }
+      // Just use individual adds for now - the overhead is minimal
+      // and it ensures we never lose mappings
+      size_t added = 0;
+      for (const auto& m : batch) {
+        if (addMapping(m)) {
+          added++;
         }
       }
       
-      return batchSize;
+      return added;
     }
     
     // Get all mappings (read-only after parallel phase)
     std::vector<MappingResult> getAllMappings() const {
-      size_t currentSize = size.load(std::memory_order_acquire);
+      size_t currentSize = total_size.load(std::memory_order_acquire);
       std::vector<MappingResult> results;
       results.reserve(currentSize);
       
       int sketchSize = defaultSketchSize.load(std::memory_order_relaxed);
       float kmerComplexity = defaultKmerComplexity.load(std::memory_order_relaxed);
       
-      for (size_t i = 0; i < currentSize; ++i) {
-        MappingResult result = expandMinimalMapping(mappings[i], querySeqId, queryLen);
-        result.sketchSize = sketchSize;
-        result.kmerComplexity = kmerComplexity;
-        results.push_back(result);
+      // Collect from all blocks
+      for (const auto& block : blocks) {
+        size_t block_used = block->used.load(std::memory_order_acquire);
+        for (size_t i = 0; i < block_used && i < block->capacity; ++i) {
+          MappingResult result = expandMinimalMapping(block->data[i], querySeqId, queryLen);
+          result.sketchSize = sketchSize;
+          result.kmerComplexity = kmerComplexity;
+          results.push_back(result);
+        }
       }
       
       return results;
@@ -130,12 +148,16 @@ namespace skch
     
     // Get compressed mappings directly
     std::vector<MinimalMapping> getCompressedMappings() const {
-      size_t currentSize = size.load(std::memory_order_acquire);
+      size_t currentSize = total_size.load(std::memory_order_acquire);
       std::vector<MinimalMapping> results;
       results.reserve(currentSize);
       
-      for (size_t i = 0; i < currentSize; ++i) {
-        results.push_back(mappings[i]);
+      // Collect from all blocks
+      for (const auto& block : blocks) {
+        size_t block_used = block->used.load(std::memory_order_acquire);
+        for (size_t i = 0; i < block_used && i < block->capacity; ++i) {
+          results.push_back(block->data[i]);
+        }
       }
       
       return results;
@@ -143,11 +165,15 @@ namespace skch
     
     // Size and capacity
     size_t getSize() const { 
-      return size.load(std::memory_order_acquire);
+      return total_size.load(std::memory_order_acquire);
     }
     
     size_t getCapacity() const { 
-      return capacity;
+      size_t total_cap = 0;
+      for (const auto& block : blocks) {
+        total_cap += block->capacity;
+      }
+      return total_cap;
     }
     
     bool empty() const { 
@@ -155,20 +181,21 @@ namespace skch
     }
     
     void clear() {
-      size.store(0, std::memory_order_release);
+      // Clear all blocks
+      for (auto& block : blocks) {
+        block->used.store(0, std::memory_order_release);
+      }
+      total_size.store(0, std::memory_order_release);
     }
     
-    // Reserve capacity (must be called before parallel phase)
+    // Reserve is a no-op now since we grow dynamically
     void reserve(size_t newCapacity) {
-      if (newCapacity > capacity && size.load(std::memory_order_acquire) == 0) {
-        mappings = std::make_unique<MinimalMapping[]>(newCapacity);
-        capacity = newCapacity;
-      }
+      // No-op - we grow dynamically
     }
     
     // Memory statistics
     size_t memoryUsage() const {
-      return capacity * sizeof(MinimalMapping) + sizeof(*this);
+      return getCapacity() * sizeof(MinimalMapping) + sizeof(*this);
     }
     
     size_t actualMemoryUsage() const {
@@ -177,20 +204,46 @@ namespace skch
     
     // Sort operations (only safe after parallel phase completes)
     void sortByQueryPos() {
-      size_t currentSize = size.load(std::memory_order_acquire);
-      std::sort(mappings.get(), mappings.get() + currentSize,
+      // First collect all mappings
+      auto all_mappings = getCompressedMappings();
+      
+      // Sort them
+      std::sort(all_mappings.begin(), all_mappings.end(),
                 [](const MinimalMapping& a, const MinimalMapping& b) {
                   return a.query_pos < b.query_pos;
                 });
+      
+      // Clear and re-add in sorted order
+      clear();
+      for (const auto& m : all_mappings) {
+        // Convert back to MappingResult for adding
+        MappingResult mr = expandMinimalMapping(m, querySeqId, queryLen);
+        mr.sketchSize = defaultSketchSize.load();
+        mr.kmerComplexity = defaultKmerComplexity.load();
+        addMapping(mr);
+      }
     }
     
     void sortByRefPos() {
-      size_t currentSize = size.load(std::memory_order_acquire);
-      std::sort(mappings.get(), mappings.get() + currentSize,
+      // First collect all mappings
+      auto all_mappings = getCompressedMappings();
+      
+      // Sort them
+      std::sort(all_mappings.begin(), all_mappings.end(),
                 [](const MinimalMapping& a, const MinimalMapping& b) {
                   return std::tie(a.ref_seqId, a.ref_pos) < 
                          std::tie(b.ref_seqId, b.ref_pos);
                 });
+      
+      // Clear and re-add in sorted order
+      clear();
+      for (const auto& m : all_mappings) {
+        // Convert back to MappingResult for adding
+        MappingResult mr = expandMinimalMapping(m, querySeqId, queryLen);
+        mr.sketchSize = defaultSketchSize.load();
+        mr.kmerComplexity = defaultKmerComplexity.load();
+        addMapping(mr);
+      }
     }
   };
 }
