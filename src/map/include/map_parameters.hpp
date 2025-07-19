@@ -87,6 +87,7 @@ struct Parameters
     int64_t scaffold_min_length = 50000;            // minimum scaffold block length
     
     bool legacy_output;
+    bool use_compressed_mappings = false;           // Use memory-efficient compressed mapping storage
     //std::unordered_set<std::string> high_freq_kmers;  //
     int64_t index_by_size = std::numeric_limits<int64_t>::max();  // Target total size of sequences for each index subset
     int minimum_hits = -1;  // Minimum number of hits required for L1 filtering (-1 means auto)
