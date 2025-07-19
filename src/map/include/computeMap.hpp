@@ -43,6 +43,7 @@ namespace fs = std::filesystem;
 #include "map/include/mappingCore.hpp"
 #include "map/include/mappingFilter.hpp"
 #include "map/include/mappingOutput.hpp"
+#include "map/include/compressedMapping.hpp"
 
 //External includes
 #include "common/seqiter.hpp"
@@ -116,18 +117,35 @@ namespace skch
         Q.seqName = fragment.seqName;
         Q.refGroup = fragment.refGroup;
 
-        mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+        if (param.use_compressed_mappings) {
+            // Use compressed storage path
+            CompressedMappingStore compressedStore(fragment.seqId, fragment.fullLen);
+            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, compressedStore);
+            
+            // Retrieve and update mappings with query positions
+            auto mappings = compressedStore.getAllMappings();
+            for (auto& e : mappings) {
+                e.queryLen = fragment.fullLen;
+                e.queryStartPos = fragment.fragmentIndex * param.segLength;
+                e.queryEndPos = e.queryStartPos + fragment.len;
+            }
+            
+            thread_local_results = std::move(mappings);
+        } else {
+            // Use original path
+            mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
-        std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-            e.queryLen = fragment.fullLen;
-            e.queryStartPos = fragment.fragmentIndex * param.segLength;
-            e.queryEndPos = e.queryStartPos + fragment.len;
-        });
+            std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
+                e.queryLen = fragment.fullLen;
+                e.queryStartPos = fragment.fragmentIndex * param.segLength;
+                e.queryEndPos = e.queryStartPos + fragment.len;
+            });
 
-        if (!l2Mappings.empty()) {
-            thread_local_results.insert(thread_local_results.end(), 
-                                       l2Mappings.begin(), 
-                                       l2Mappings.end());
+            if (!l2Mappings.empty()) {
+                thread_local_results.insert(thread_local_results.end(), 
+                                           l2Mappings.begin(), 
+                                           l2Mappings.end());
+            }
         }
         
         if (fragment.output) {
@@ -782,6 +800,94 @@ namespace skch
             mapping.chain_id = chain_id;
             mapping.chain_length = chain_length;
             mapping.chain_pos = chain_pos++;
+        }
+
+#ifdef ENABLE_TIME_PROFILE_L1_L2
+        {
+          std::chrono::duration<double> timeSpentL2 = skch::Time::now() - t1;
+          std::chrono::duration<double> timeSpentMappingFragment = skch::Time::now() - t0;
+
+          std::cerr << Q.seqId << " " << Q.len
+            << " " << timeSpentL1.count()
+            << " " << timeSpentL2.count()
+            << " " << timeSpentMappingFragment.count()
+            << "\n";
+        }
+#endif
+      }
+
+      /**
+       * @brief Map single query fragment through L1 and L2 stages with compressed storage
+       * @note This is the memory-efficient path using CompressedMappingStore
+       */
+      template<typename Q_Info, typename IPVec, typename L1Vec>
+      void mapSingleQueryFrag(Q_Info &Q, IPVec& intervalPoints, L1Vec& l1Mappings, CompressedMappingStore &compressedStore)
+      {
+#ifdef ENABLE_TIME_PROFILE_L1_L2
+        auto t0 = skch::Time::now();
+#endif
+        //L1 Mapping
+        doL1Mapping(Q, intervalPoints, l1Mappings);
+        if (l1Mappings.size() == 0) {
+          return;
+        }
+
+#ifdef ENABLE_TIME_PROFILE_L1_L2
+        std::chrono::duration<double> timeSpentL1 = skch::Time::now() - t0;
+        auto t1 = skch::Time::now();
+#endif
+
+        // Temporary vector for L2 mappings
+        MappingResultsVector_t tempL2Mappings;
+        
+        auto l1_begin = l1Mappings.begin();
+        auto l1_end = l1Mappings.begin();
+        while (l1_end != l1Mappings.end())
+        {
+          if (param.skip_prefix)
+          {
+            int currGroup = this->idManager->getRefGroup(l1_begin->seqId);
+            l1_end = std::find_if_not(l1_begin, l1Mappings.end(), [this, currGroup] (const auto& candidate) {
+                return currGroup == this->idManager->getRefGroup(candidate.seqId);
+            });
+          }
+          else
+          {
+            l1_end = l1Mappings.end();
+          }
+
+          if (param.stage1_topANI_filter)
+          {
+            std::make_heap(l1_begin, l1_end, L1_locus_intersection_cmp);
+          }
+          
+          tempL2Mappings.clear();
+          doL2Mapping(Q, l1_begin, l1_end, tempL2Mappings);
+          
+          // Add mappings to compressed store immediately
+          compressedStore.addMappings(tempL2Mappings);
+
+          l1_begin = l1_end;
+        }
+        
+        // Sort all mappings in the compressed store
+        compressedStore.sortByRefPos();
+        
+        // Assign chain IDs to compressed mappings
+        int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
+        int32_t chain_length = compressedStore.size();
+        int32_t chain_pos = 1;
+        
+        // We need to update chain info, but compressed store doesn't support direct modification
+        // So we'll retrieve, update, and re-store
+        auto allMappings = compressedStore.getAllMappings();
+        compressedStore.clear();
+        
+        for (auto& mapping : allMappings) {
+            mapping.chain_id = chain_id;
+            mapping.chain_length = chain_length;
+            mapping.chain_pos = chain_pos++;
+            compressedStore.addMapping(mapping);
         }
 
 #ifdef ENABLE_TIME_PROFILE_L1_L2

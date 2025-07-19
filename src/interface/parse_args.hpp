@@ -82,6 +82,7 @@ void parse_args(int argc,
     args::ValueFlag<int> min_hits(mapping_opts, "INT", "minimum number of hits for L1 filtering [3]", {'H', "l1-hits"});
     args::ValueFlag<double> max_kmer_freq(mapping_opts, "FLOAT", "filter minimizers occurring > FLOAT of total [0.0002]", {'F', "filter-freq"});
     args::ValueFlag<double> map_sparsification(mapping_opts, "FLOAT", "keep this fraction of mappings [1.0]", {'x', "sparsify"});
+    args::Flag use_compressed_mappings(mapping_opts, "", "use memory-efficient compressed mapping storage", {"compress-mappings"});
 
     args::Group alignment_opts(options_group, "Alignment:");
     args::ValueFlag<std::string> input_mapping(alignment_opts, "FILE", "input PAF file for alignment", {'i', "align-paf"});
@@ -139,6 +140,7 @@ void parse_args(int argc,
     map_parameters.skip_self = !args::get(enable_self_mappings);
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
+    map_parameters.use_compressed_mappings = args::get(use_compressed_mappings);
 
     map_parameters.use_progress_bar = !args::get(quiet);
     align_parameters.use_progress_bar = !args::get(quiet);
