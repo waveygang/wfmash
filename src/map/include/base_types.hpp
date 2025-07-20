@@ -10,10 +10,15 @@
 #include <tuple>
 #include <vector>
 #include <chrono>
+#include <cmath>
+#include <algorithm>
+#include <limits>
 #include "common/progress.hpp"
 
 namespace skch
 {
+  // Forward declaration
+  class SequenceIdManager;
   typedef uint64_t hash_t;    //hash type
   typedef int64_t offset_t;   //position within sequence
   typedef int32_t seqno_t;    //sequence counter in file
@@ -212,6 +217,57 @@ namespace skch
 
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
+  // Minimal mapping representation for memory efficiency
+  // Stores only essential data in 32 bytes instead of 176+ bytes
+  struct MinimalMapping {
+    uint32_t ref_seqId;     // 4 bytes - reference sequence ID
+    uint32_t ref_pos;       // 4 bytes - reference start position
+    uint32_t query_pos;     // 4 bytes - query start position  
+    uint32_t n_merged;      // 4 bytes - number of merged mappings (was uint16_t, now uint32_t for large scaffolds)
+    uint32_t conservedSketches; // 4 bytes - conserved sketches count (was uint16_t, now uint32_t for large sequences)
+    uint32_t length;        // 4 bytes - mapping length (was uint16_t, now uint32_t for long reads)
+    uint16_t identity;      // 2 bytes - identity percentage (0-10000 for 0.00-100.00%)
+    uint8_t flags;          // 1 byte - packed flags (strand, discard, overlapped)
+    uint8_t kmerComplexity; // 1 byte - kmer complexity (0-255)
+                           // Total: 32 bytes exactly, no padding needed
+    
+    // Flag bit positions
+    static constexpr uint8_t FLAG_STRAND_MASK = 0x03;  // bits 0-1 for strand (-1, 0, 1)
+    static constexpr uint8_t FLAG_DISCARD = 0x04;      // bit 2
+    static constexpr uint8_t FLAG_OVERLAPPED = 0x08;   // bit 3
+    
+    // Helper methods for flag manipulation
+    strand_t getStrand() const {
+      uint8_t strand_bits = flags & FLAG_STRAND_MASK;
+      return (strand_bits == 0) ? strnd::REV : 
+             (strand_bits == 1) ? strnd::AMBIG : strnd::FWD;
+    }
+    
+    void setStrand(strand_t s) {
+      flags = (flags & ~FLAG_STRAND_MASK) | 
+              ((s == strnd::REV) ? 0 : (s == strnd::AMBIG) ? 1 : 2);
+    }
+    
+    bool isDiscarded() const { return flags & FLAG_DISCARD; }
+    void setDiscarded(bool d) { 
+      if (d) flags |= FLAG_DISCARD; 
+      else flags &= ~FLAG_DISCARD;
+    }
+    
+    bool isOverlapped() const { return flags & FLAG_OVERLAPPED; }
+    void setOverlapped(bool o) { 
+      if (o) flags |= FLAG_OVERLAPPED;
+      else flags &= ~FLAG_OVERLAPPED;
+    }
+  };
+
+  // Forward declarations for conversion functions
+  MappingResult expandMinimalMapping(const MinimalMapping& m, 
+                                   seqno_t querySeqId, 
+                                   offset_t queryLen);
+  
+  MinimalMapping compressMapping(const MappingResult& full);
+
   //Vector type for storing MinmerInfo
   typedef std::vector<MinmerInfo> MinVec_Type;
 
@@ -284,6 +340,88 @@ namespace skch
       int refGroup;                       //Prefix group of sequence
       float kmerComplexity;                //Estimated sequence complexity
     };
+
+  // Implementation of conversion functions
+  inline MinimalMapping compressMapping(const MappingResult& full) {
+    MinimalMapping minimal;
+    
+    // Direct assignments for simple fields
+    minimal.ref_seqId = static_cast<uint32_t>(full.refSeqId);
+    minimal.ref_pos = static_cast<uint32_t>(full.refStartPos);
+    minimal.query_pos = static_cast<uint32_t>(full.queryStartPos);
+    
+    // Calculate length (use the larger of ref/query length)
+    offset_t ref_len = full.refEndPos - full.refStartPos;
+    offset_t query_len = full.queryEndPos - full.queryStartPos;
+    minimal.length = static_cast<uint32_t>(std::max(ref_len, query_len));
+    
+    // Store n_merged (no cap needed with uint32_t)
+    minimal.n_merged = full.n_merged;
+    
+    // Convert identity from float (0.0-1.0) to uint16_t (0-10000 for 0.00-100.00%)
+    minimal.identity = static_cast<uint16_t>(std::round(full.nucIdentity * 10000));
+    
+    // Store conserved sketches (no cap needed with uint32_t)
+    minimal.conservedSketches = full.conservedSketches;
+    
+    // Convert kmer complexity - can be > 1.0, so cap at 255
+    minimal.kmerComplexity = static_cast<uint8_t>(std::min(255, static_cast<int>(std::round(full.kmerComplexity * 100))));
+    
+    // Pack flags
+    minimal.flags = 0;
+    minimal.setStrand(full.strand);
+    minimal.setDiscarded(full.discard != 0);
+    minimal.setOverlapped(full.overlapped);
+    
+    
+    return minimal;
+  }
+  
+  inline MappingResult expandMinimalMapping(const MinimalMapping& m, 
+                                          seqno_t querySeqId, 
+                                          offset_t queryLen) {
+    MappingResult full;
+    
+    // Query information
+    full.querySeqId = querySeqId;
+    full.queryLen = queryLen;
+    full.queryStartPos = m.query_pos;
+    full.queryEndPos = m.query_pos + m.length;
+    
+    // Reference information
+    full.refSeqId = m.ref_seqId;
+    full.refStartPos = m.ref_pos;
+    full.refEndPos = m.ref_pos + m.length;
+    
+    // Identity (convert from 0-10000 to 0.0-1.0)
+    full.nucIdentity = m.identity / 10000.0f;
+    full.nucIdentityUpperBound = full.nucIdentity; // Conservative estimate
+    
+    // Block information
+    full.blockLength = m.length;
+    full.blockNucIdentity = full.nucIdentity;
+    full.approxMatches = static_cast<int>(std::round(full.nucIdentity * full.blockLength));
+    
+    // Strand and flags
+    full.strand = m.getStrand();
+    full.discard = m.isDiscarded() ? 1 : 0;
+    full.overlapped = m.isOverlapped();
+    
+    // Restore metadata from MinimalMapping
+    full.sketchSize = 0; // Not stored, would need to be recomputed
+    full.conservedSketches = m.conservedSketches;
+    full.kmerComplexity = m.kmerComplexity / 100.0f;
+    full.n_merged = m.n_merged;
+    full.splitMappingId = 0;
+    full.selfMapFilter = false;
+    full.chainPairScore = std::numeric_limits<double>::max();
+    full.chainPairId = std::numeric_limits<int64_t>::min();
+    full.chain_id = -1;
+    full.chain_length = 1;
+    full.chain_pos = 1;
+    
+    return full;
+  }
 }
 
 #endif

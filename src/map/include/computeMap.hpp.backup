@@ -34,7 +34,6 @@ namespace fs = std::filesystem;
 //Own includes
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
-#include "map/include/fragmentManager.hpp"
 #include "map/include/commonFunc.hpp"
 #include "map/include/winSketch.hpp"
 #include "map/include/map_stats.hpp"
@@ -56,7 +55,58 @@ namespace fs = std::filesystem;
 
 namespace skch
 {
-  // Fragment and output structures are now defined in fragmentManager.hpp
+  struct QueryMappingOutput {
+      std::string queryName;
+      std::vector<MappingResult> results;        // Non-merged mappings
+      std::vector<MappingResult> mergedResults;  // Maximally merged mappings  
+      std::mutex mutex;
+      progress_meter::ProgressMeter& progress;
+      QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
+                        const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p)
+          : queryName(name), results(r), mergedResults(mr), progress(p) {}
+  };
+
+  struct FragmentData {
+      const char* seq;
+      int len;
+      int fullLen; 
+      seqno_t seqId;
+      std::string seqName;
+      int refGroup;
+      int fragmentIndex;
+      std::shared_ptr<QueryMappingOutput> output;
+      std::shared_ptr<std::atomic<int>> processedCounter;
+
+      // Add constructor for convenience
+      FragmentData(const char* s, int l, int fl, seqno_t sid, 
+                   const std::string& sn, int rg, int idx,
+                   std::shared_ptr<QueryMappingOutput> out,
+                   std::shared_ptr<std::atomic<int>> counter = nullptr)
+          : seq(s), len(l), fullLen(fl), seqId(sid), seqName(sn),
+            refGroup(rg), fragmentIndex(idx), output(out), processedCounter(counter) {}
+  };
+
+  // Manages fragment lifetime and processing
+  class FragmentManager {
+  private:
+      std::vector<std::shared_ptr<FragmentData>> fragments;
+      std::mutex fragments_mutex;
+
+  public:
+      void add_fragment(std::shared_ptr<FragmentData> fragment) {
+          std::lock_guard<std::mutex> lock(fragments_mutex);
+          fragments.push_back(fragment);
+      }
+
+      void clear() {
+          std::lock_guard<std::mutex> lock(fragments_mutex);
+          fragments.clear();
+      }
+
+      const std::vector<std::shared_ptr<FragmentData>>& get_fragments() const {
+          return fragments;
+      }
+  };
 
   /**
    * @class     skch::Map
@@ -435,9 +485,8 @@ namespace skch
           tf::Taskflow taskflow;
 
           // Storage for combining results across all subsets
-          // Store references to query outputs instead of copying mappings
-          std::vector<std::shared_ptr<QueryMappingOutput>> allQueryOutputs;
-          std::mutex allQueryOutputs_mutex;
+          std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
+          std::mutex combinedMappings_mutex;
 
           // If we're using an index file, read its header to get batch size
           if (!param.indexFilename.empty() && !param.create_index_only) {
@@ -620,7 +669,9 @@ namespace skch
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
-              // No longer need subset mappings - we store QueryMappingOutput directly
+              // Storage for this subset's mappings (only used for ONETOONE mode)
+              auto subsetMappings = std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
+              auto subsetMappings_mutex = std::make_shared<std::mutex>();
 
               // Create output stream for non-ONETOONE modes
               auto outstream = std::make_shared<std::ofstream>();
@@ -637,7 +688,7 @@ namespace skch
               }
 
               // Process queries using subflows for parallelism
-              auto processQueries_task = subset_flow->emplace([this, progress, &allQueryOutputs, &allQueryOutputs_mutex,
+              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
                                                            outstream, outstream_mutex, subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
@@ -679,7 +730,6 @@ namespace skch
                           continue;
                       }
                       
-                      
                       // Create a string from the fetched data (will be copied)
                       std::string sequence(seq_data, seq_len);
                       free(seq_data); // Free the raw data after copying
@@ -690,16 +740,15 @@ namespace skch
                               seqno_t seqId = idManager->getSequenceId(queryName);
                               auto input = std::make_shared<InputSeqProgContainer>(
                                   sequence, queryName, seqId, *progress);
-                              
-                              
                               auto output = std::make_shared<QueryMappingOutput>(
-                                  queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress, seqId, input->len);
+                                  queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
                 
                               // Process fragments in parallel using subflows
                               int refGroup = idManager->getRefGroup(seqId);
                               int noOverlapFragmentCount = input->len / param.segLength;
 
-                              // Lock-free: threads can add directly without contention
+                              // Create a mutex to protect access to output->results
+                              std::mutex results_mutex;
 
                               // Regular fragments
                               for(int i = 0; i < noOverlapFragmentCount; i++) {
@@ -709,7 +758,7 @@ namespace skch
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
-                                          static_cast<int>(idManager->getSequenceLength(seqId)),
+                                          static_cast<int>(input->len),
                                           seqId,
                                           queryName,
                                           refGroup,
@@ -731,9 +780,14 @@ namespace skch
                                       QueryMetaData<MinVec_Type> Q;
                                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                       
-                                      // Lock-free batch add - no contention!
+                                      // Safely merge results into output
                                       if (!all_fragment_results.empty()) {
-                                          output->results.addMappingsBatch(all_fragment_results);
+                                          std::lock_guard<std::mutex> lock(results_mutex);
+                                          output->results.insert(
+                                              output->results.end(),
+                                              all_fragment_results.begin(),
+                                              all_fragment_results.end()
+                                          );
                                       }
                                   });
                               }
@@ -746,7 +800,7 @@ namespace skch
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + input->len - param.segLength,
                                           static_cast<int>(param.segLength),
-                                          static_cast<int>(idManager->getSequenceLength(seqId)),
+                                          static_cast<int>(input->len),
                                           seqId,
                                           queryName,
                                           refGroup,
@@ -760,9 +814,14 @@ namespace skch
                                       QueryMetaData<MinVec_Type> Q;
                                       processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
                                       
-                                      // Lock-free batch add - no contention!
+                                      // Safely merge results into output
                                       if (!all_fragment_results.empty()) {
-                                          output->results.addMappingsBatch(all_fragment_results);
+                                          std::lock_guard<std::mutex> lock(results_mutex);
+                                          output->results.insert(
+                                              output->results.end(),
+                                              all_fragment_results.begin(),
+                                              all_fragment_results.end()
+                                          );
                                       }
                                   });
                               }
@@ -770,38 +829,28 @@ namespace skch
                               // Join ensures all fragments complete before finalization
                               query_sf.join();
 
+                              // After all fragments are processed, set the output results
+                              mappingBoundarySanityCheck(input.get(), output->results);
+                              auto [nonMergedMappings, mergedMappings] = 
+                                  filterSubsetMappings(output->results, output->progress);
+
+                              // Select the appropriate mappings
+                              auto& mappings = param.mergeMappings && param.split ?
+                                    mergedMappings : nonMergedMappings;
+
                               // Handle based on filter mode
                               if (param.filterMode == filter::ONETOONE) {
-                                  // For ONETOONE mode, store the output object for later processing
-                                  std::lock_guard<std::mutex> lock(allQueryOutputs_mutex);
-                                  allQueryOutputs.push_back(output);
+                                  // For ONETOONE mode, store mappings for later merging across subsets
+                                  std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
+                                  (*subsetMappings)[seqId].insert(
+                                      (*subsetMappings)[seqId].end(),
+                                      std::make_move_iterator(mappings.begin()),
+                                      std::make_move_iterator(mappings.end())
+                                  );
                               } else {
-                                  // For non-ONETOONE modes, we need to process all mappings together for proper merging
-                                  // But we'll expand them all at once since we're writing immediately
-                                  
-                                  auto compressedMappings = output->results.getCompressedMappings();
-                                  if (!compressedMappings.empty()) {
-                                      seqno_t qSeqId = idManager->getSequenceId(output->queryName);
-                                      offset_t qLen = idManager->getSequenceLength(qSeqId);
-                                      
-                                      // We must expand all mappings to properly merge them
-                                      // Use getAllMappings() which includes metadata
-                                      auto allMappings = output->results.getAllMappings();
-                                      
-                                      // Apply filters
-                                      mappingBoundarySanityCheck(input.get(), allMappings);
-                                      
-                                      std::lock_guard<std::mutex> lock(*outstream_mutex);
-                                      
-                                      if (param.mergeMappings && param.split) {
-                                          auto merged = mergeMappingsInRange(allMappings, param.chain_gap, output->progress);
-                                          filterMaximallyMerged(merged, std::floor(param.block_length / param.segLength), output->progress);
-                                          reportReadMappings(merged, queryName, *outstream);
-                                      } else {
-                                          filterNonMergedMappings(allMappings, param, output->progress);
-                                          reportReadMappings(allMappings, queryName, *outstream);
-                                      }
-                                  }
+                                  // For non-ONETOONE modes, write mappings immediately
+                                  std::lock_guard<std::mutex> lock(*outstream_mutex);
+                                  reportReadMappings(mappings, queryName, *outstream);
                               }
                           }).name("query_" + queryName);
                   }
@@ -810,9 +859,22 @@ namespace skch
                   faidx_meta_destroy(query_meta);
               }).name("process_queries");
 
-              // No merge needed - QueryMappingOutputs are stored directly in allQueryOutputs
-              auto merge_task = subset_flow->emplace([]() {
-                  // No-op - outputs are already collected
+              // Merge subset results into combined mappings (only for ONETOONE mode)
+              auto merge_task = subset_flow->emplace([this,
+                                                    subsetMappings,
+                                                    &combinedMappings,
+                                                    &combinedMappings_mutex]() {
+                  // Only merge results if we're in ONETOONE mode
+                  if (param.filterMode == filter::ONETOONE) {
+                      std::lock_guard<std::mutex> lock(combinedMappings_mutex);
+                      for (auto& [querySeqId, mappings] : *subsetMappings) {
+                          combinedMappings[querySeqId].insert(
+                              combinedMappings[querySeqId].end(),
+                              std::make_move_iterator(mappings.begin()),
+                              std::make_move_iterator(mappings.end())
+                              );
+                      }
+                  }
               }).name("merge_results");
 
               // Cleanup task
@@ -851,78 +913,50 @@ namespace skch
               auto final_task = final_flow.emplace([&]() {
                   // Count total mappings for logging
                   size_t total_mappings = 0;
-                  size_t total_queries = allQueryOutputs.size();
-                  
-                  for (const auto& output : allQueryOutputs) {
-                      total_mappings += output->results.getSize();
+                  for (auto& [querySeqId, mappings] : combinedMappings) {
+                      total_mappings += mappings.size();
                   }
-                  
                   std::cerr << "[wfmash::mashmap] Processing " << total_mappings 
-                            << " mappings from " << total_queries 
+                            << " mappings from " << combinedMappings.size() 
                             << " queries for one-to-one filtering" << std::endl;
                   
-                  // NEW: Process compressed mappings directly without expanding all at once
-                  // Structure: ref_seqId -> vector of {queryOutput, mapping_index}
-                  struct CompressedMappingRef {
-                      std::shared_ptr<QueryMappingOutput> output;
-                      size_t index;
-                  };
-                  std::unordered_map<seqno_t, std::vector<CompressedMappingRef>> targetMappingRefs;
-                  
-                  // Collect references to compressed mappings by target
-                  for (const auto& output : allQueryOutputs) {
-                      auto compressedMappings = output->results.getCompressedMappings();
-                      for (size_t i = 0; i < compressedMappings.size(); ++i) {
-                          targetMappingRefs[compressedMappings[i].ref_seqId].push_back({output, i});
+                  // Reorganize mappings by target for reference-based filtering
+                  std::unordered_map<seqno_t, MappingResultsVector_t> targetMappings;
+                  for (auto& [querySeqId, mappings] : combinedMappings) {
+                      for (auto& mapping : mappings) {
+                          targetMappings[mapping.refSeqId].push_back(mapping);
                       }
                   }
                   
                   // Use a progress meter for the filtering step
                   auto filterProgress = std::make_shared<progress_meter::ProgressMeter>(
-                      targetMappingRefs.size(), 
+                      targetMappings.size(), 
                       "[wfmash::mashmap] One-to-one reference filtering",
                       param.use_progress_bar);
                   
-                  // Write output directly without storing all filtered mappings
-                  std::ofstream outstrm(param.outFileName);
-                  size_t final_mapping_count = 0;
-                  
-                  // Process each reference's mappings
-                  for (auto& [targetSeqId, mappingRefs] : targetMappingRefs) {
-                      // Only expand mappings for this reference temporarily
-                      MappingResultsVector_t refMappings;
-                      refMappings.reserve(mappingRefs.size());
-                      
-                      for (const auto& ref : mappingRefs) {
-                          auto compressedMappings = ref.output->results.getCompressedMappings();
-                          seqno_t qSeqId = idManager->getSequenceId(ref.output->queryName);
-                          offset_t qLen = idManager->getSequenceLength(qSeqId);
-                          
-                          MappingResult expanded = expandMinimalMapping(compressedMappings[ref.index], qSeqId, qLen);
-                          refMappings.push_back(expanded);
-                      }
-                      
-                      // Apply filtering for this reference
+                  // Filter mappings by reference
+                  std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;
+                  for (auto& [targetSeqId, mappings] : targetMappings) {
                       MappingResultsVector_t filteredMappings;
-                      filterByGroup(refMappings, filteredMappings, param.numMappingsForSegment - 1, 
+                      filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
                                    true, *idManager, *filterProgress);
                       
-                      // Write filtered mappings immediately grouped by query
-                      std::unordered_map<seqno_t, MappingResultsVector_t> queryGrouped;
+                      // Organize by query ID for output
                       for (auto& mapping : filteredMappings) {
-                          queryGrouped[mapping.querySeqId].push_back(mapping);
+                          finalMappings[mapping.querySeqId].push_back(mapping);
                       }
-                      
-                      for (auto& [querySeqId, mappings] : queryGrouped) {
-                          std::string queryName = idManager->getSequenceName(querySeqId);
-                          reportReadMappings(mappings, queryName, outstrm);
-                          final_mapping_count += mappings.size();
-                      }
-                      
                       filterProgress->increment(1);
-                      // Memory freed automatically when refMappings and filteredMappings go out of scope
                   }
                   filterProgress->finish();
+                  
+                  // Write the final filtered mappings
+                  std::ofstream outstrm(param.outFileName);
+                  size_t final_mapping_count = 0;
+                  for (auto& [querySeqId, mappings] : finalMappings) {
+                      std::string queryName = idManager->getSequenceName(querySeqId);
+                      reportReadMappings(mappings, queryName, outstrm);
+                      final_mapping_count += mappings.size();
+                  }
                   
                   std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
                             << " mappings after one-to-one filtering" << std::endl;
@@ -1736,7 +1770,6 @@ namespace skch
                   res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
                   res.strand = l2.strand; 
                   res.kmerComplexity = Q.kmerComplexity;
-                  res.n_merged = 1;  // Single mapping, not merged yet
 
                   res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
@@ -2908,48 +2941,23 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
        * @param mappings Mappings to filter
        * @param param Algorithm parameters
        */
-      // Process mappings from compressed storage - expand all at once for proper merging
-      void processCompressedMappings(QueryMappingOutput& output, std::ofstream& outstrm, progress_meter::ProgressMeter& progress) {
-          if (output.results.empty()) return;
-          
-          // We must expand all mappings to properly merge them
-          // Use getAllMappings() which includes metadata (sketchSize, kmerComplexity)
-          auto allMappings = output.results.getAllMappings();
-          
-          // Apply all filters
-          mappingBoundarySanityCheck(nullptr, allMappings);
-          
-          if (param.mergeMappings && param.split) {
-              auto merged = mergeMappingsInRange(allMappings, param.chain_gap, progress);
-              filterMaximallyMerged(merged, std::floor(param.block_length / param.segLength), progress);
-              
-              if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-                  filterByScaffolds(merged, merged, param, progress);
-              }
-              
-              reportReadMappings(merged, output.queryName, outstrm);
-          } else {
-              filterNonMergedMappings(allMappings, param, progress);
-              reportReadMappings(allMappings, output.queryName, outstrm);
-          }
-      }
-      
       std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(MappingResultsVector_t& mappings, progress_meter::ProgressMeter& progress) {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
 
-          // CRITICAL: DO NOT COPY! Work with the original mappings
+          // Make a copy of the raw mappings for scaffolding
+          MappingResultsVector_t rawMappings = mappings;
+          
           // Only merge once and keep both versions
           auto maximallyMergedMappings = mergeMappingsInRange(mappings, param.chain_gap, progress);
 
           // Process both merged and non-merged mappings
           if (param.mergeMappings && param.split) {
               filterMaximallyMerged(maximallyMergedMappings, std::floor(param.block_length / param.segLength), progress);
-              // Apply scaffold filtering if enabled
-              if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-                  filterByScaffolds(maximallyMergedMappings, maximallyMergedMappings, param, progress);
-              }
+              // Also apply scaffold filtering to merged mappings
+              filterByScaffolds(maximallyMergedMappings, rawMappings, param, progress);
           } else {
               filterNonMergedMappings(mappings, param, progress);
+              filterByScaffolds(mappings, rawMappings, param, progress);
           }
 
           // Build dense chain ID mapping
@@ -3079,65 +3087,6 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
        * @param[in]   queryName         input required if reporting one read at a time
        * @param[in]   outstrm           file output stream object
        */
-      // Direct output of compressed mappings without creating full vectors
-      void reportCompressedMappings(const std::vector<MinimalMapping>& compressedMappings,
-                                   const std::string& queryName,
-                                   seqno_t querySeqId,
-                                   offset_t queryLen,
-                                   std::ostream& outstrm)
-      {
-        if (compressedMappings.empty()) return;
-        
-        // For chain assignment, we need to expand mappings temporarily
-        // but we can process them in smaller batches
-        const size_t BATCH_SIZE = 1000;
-        
-        for (size_t start = 0; start < compressedMappings.size(); start += BATCH_SIZE) {
-            size_t end = std::min(start + BATCH_SIZE, compressedMappings.size());
-            
-            // Output batch directly without storing
-            for (size_t i = start; i < end; ++i) {
-                const auto& compressed = compressedMappings[i];
-                
-                // Expand only for output
-                float identity = compressed.identity / 100.0f;
-                float fakeMapQ = identity == 1 ? 255 : std::round(-10.0 * std::log10(1-identity));
-                std::string sep = param.legacy_output ? " " : "\t";
-                
-                outstrm << queryName
-                        << sep << queryLen
-                        << sep << compressed.query_pos
-                        << sep << (compressed.query_pos + compressed.length) - (param.legacy_output ? 1 : 0)
-                        << sep << (compressed.getStrand() == strnd::FWD ? "+" : "-")
-                        << sep << idManager->getSequenceName(compressed.ref_seqId)
-                        << sep << idManager->getSequenceLength(compressed.ref_seqId)
-                        << sep << compressed.ref_pos
-                        << sep << (compressed.ref_pos + compressed.length) - (param.legacy_output ? 1 : 0);
-                
-                if (!param.legacy_output) {
-                    // For compressed mappings, we don't store all metadata
-                    // Use reasonable defaults
-                    outstrm << sep << 0 // conservedSketches - would need to store
-                            << sep << compressed.length // blockLength
-                            << sep << fakeMapQ
-                            << sep << "id:f:" << identity
-                            << sep << "kc:f:" << 0; // kmerComplexity - would need to store
-                    
-                    if (!param.mergeMappings) {
-                        outstrm << sep << "jc:f:" << 0; // jaccard - would need to store
-                    } else {
-                        // Chain info would need separate tracking
-                        outstrm << sep << "ch:Z:" << i << ".1.1"; // Simple chain per mapping for now
-                    }
-                } else {
-                    outstrm << sep << identity * 100.0;
-                }
-                
-                outstrm << "\n";
-            }
-        }
-      }
-      
       void reportReadMappings(MappingResultsVector_t &readMappings, const std::string &queryName,
           std::ostream &outstrm)
       {
