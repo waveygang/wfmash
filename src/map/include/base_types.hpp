@@ -218,19 +218,18 @@ namespace skch
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
   // Minimal mapping representation for memory efficiency
-  // Stores only essential data in ~28 bytes instead of 176+ bytes
+  // Stores only essential data in 32 bytes instead of 176+ bytes
   struct MinimalMapping {
     uint32_t ref_seqId;     // 4 bytes - reference sequence ID
     uint32_t ref_pos;       // 4 bytes - reference start position
     uint32_t query_pos;     // 4 bytes - query start position  
     uint32_t n_merged;      // 4 bytes - number of merged mappings (was uint16_t, now uint32_t for large scaffolds)
-    uint16_t length;        // 2 bytes - mapping length
-    uint16_t conservedSketches; // 2 bytes - conserved sketches count
-    uint8_t identity;       // 1 byte - identity percentage (0-100)
+    uint32_t conservedSketches; // 4 bytes - conserved sketches count (was uint16_t, now uint32_t for large sequences)
+    uint32_t length;        // 4 bytes - mapping length (was uint16_t, now uint32_t for long reads)
+    uint16_t identity;      // 2 bytes - identity percentage (0-10000 for 0.00-100.00%)
     uint8_t flags;          // 1 byte - packed flags (strand, discard, overlapped)
-    uint8_t kmerComplexity; // 1 byte - kmer complexity (0-100)
-    uint8_t padding;        // 1 byte - padding for alignment
-                           // Total: 24 bytes (will be padded to 28)
+    uint8_t kmerComplexity; // 1 byte - kmer complexity (0-255)
+                           // Total: 32 bytes exactly, no padding needed
     
     // Flag bit positions
     static constexpr uint8_t FLAG_STRAND_MASK = 0x03;  // bits 0-1 for strand (-1, 0, 1)
@@ -354,16 +353,16 @@ namespace skch
     // Calculate length (use the larger of ref/query length)
     offset_t ref_len = full.refEndPos - full.refStartPos;
     offset_t query_len = full.queryEndPos - full.queryStartPos;
-    minimal.length = static_cast<uint16_t>(std::max(ref_len, query_len));
+    minimal.length = static_cast<uint32_t>(std::max(ref_len, query_len));
     
     // Store n_merged (no cap needed with uint32_t)
     minimal.n_merged = full.n_merged;
     
-    // Convert identity from float (0.0-1.0) to byte (0-100)
-    minimal.identity = static_cast<uint8_t>(std::round(full.nucIdentity * 100));
+    // Convert identity from float (0.0-1.0) to uint16_t (0-10000 for 0.00-100.00%)
+    minimal.identity = static_cast<uint16_t>(std::round(full.nucIdentity * 10000));
     
-    // Store conserved sketches
-    minimal.conservedSketches = static_cast<uint16_t>(std::min(full.conservedSketches, 65535));
+    // Store conserved sketches (no cap needed with uint32_t)
+    minimal.conservedSketches = full.conservedSketches;
     
     // Convert kmer complexity - can be > 1.0, so cap at 255
     minimal.kmerComplexity = static_cast<uint8_t>(std::min(255, static_cast<int>(std::round(full.kmerComplexity * 100))));
@@ -374,8 +373,6 @@ namespace skch
     minimal.setDiscarded(full.discard != 0);
     minimal.setOverlapped(full.overlapped);
     
-    // Initialize padding
-    minimal.padding = 0;
     
     return minimal;
   }
@@ -396,8 +393,8 @@ namespace skch
     full.refStartPos = m.ref_pos;
     full.refEndPos = m.ref_pos + m.length;
     
-    // Identity
-    full.nucIdentity = m.identity / 100.0f;
+    // Identity (convert from 0-10000 to 0.0-1.0)
+    full.nucIdentity = m.identity / 10000.0f;
     full.nucIdentityUpperBound = full.nucIdentity; // Conservative estimate
     
     // Block information
