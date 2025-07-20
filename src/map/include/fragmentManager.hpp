@@ -12,6 +12,7 @@
 #include <mutex>
 #include <atomic>
 #include <string>
+#include <limits>
 #include "map/include/base_types.hpp"
 #include "map/include/lockFreeCompressedMapping.hpp"
 #include "common/progress.hpp"
@@ -56,7 +57,7 @@ namespace skch
       
       QueryMappingOutput(const std::string& name, const std::vector<MappingResult>& r, 
                         const std::vector<MappingResult>& mr, progress_meter::ProgressMeter& p,
-                        seqno_t querySeqId = 0, offset_t queryLen = 0)
+                        seqno_t querySeqId = std::numeric_limits<seqno_t>::max(), offset_t queryLen = 0)
           : queryName(name), results(1000, querySeqId, queryLen), mergedResults(1000, querySeqId, queryLen), progress(p) {
           // Pre-allocate reasonable capacity for lock-free operation
           if (!r.empty()) {

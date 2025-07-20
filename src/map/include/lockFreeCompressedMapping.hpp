@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <atomic>
 #include <memory>
+#include <limits>
+#include <mutex>
 #include "base_types.hpp"
 
 namespace skch
@@ -51,7 +53,7 @@ namespace skch
   public:
     // Constructor with initial block size
     explicit LockFreeCompressedMappingStore(size_t initialCapacity = 1000,  // Start small!
-                                           seqno_t qSeqId = 0, 
+                                           seqno_t qSeqId = std::numeric_limits<seqno_t>::max(), 
                                            offset_t qLen = 0) 
         : block_size(initialCapacity), querySeqId(qSeqId), queryLen(qLen) {
       // Start with one block
@@ -61,7 +63,7 @@ namespace skch
     // Lock-free add single mapping with automatic growth
     bool addMapping(const MappingResult& m) {
       // Update query info if not set (first mapping sets it)
-      if (querySeqId == 0 && m.querySeqId != 0) {
+      if (querySeqId == std::numeric_limits<seqno_t>::max()) {
         querySeqId = m.querySeqId;
         queryLen = m.queryLen;
       }

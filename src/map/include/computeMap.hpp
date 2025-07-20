@@ -679,6 +679,7 @@ namespace skch
                           continue;
                       }
                       
+                      
                       // Create a string from the fetched data (will be copied)
                       std::string sequence(seq_data, seq_len);
                       free(seq_data); // Free the raw data after copying
@@ -689,8 +690,10 @@ namespace skch
                               seqno_t seqId = idManager->getSequenceId(queryName);
                               auto input = std::make_shared<InputSeqProgContainer>(
                                   sequence, queryName, seqId, *progress);
+                              
+                              
                               auto output = std::make_shared<QueryMappingOutput>(
-                                  queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
+                                  queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress, seqId, input->len);
                 
                               // Process fragments in parallel using subflows
                               int refGroup = idManager->getRefGroup(seqId);
@@ -706,7 +709,7 @@ namespace skch
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + i * param.segLength,
                                           static_cast<int>(param.segLength),
-                                          static_cast<int>(input->len),
+                                          static_cast<int>(idManager->getSequenceLength(seqId)),
                                           seqId,
                                           queryName,
                                           refGroup,
@@ -743,7 +746,7 @@ namespace skch
                                       auto fragment = std::make_shared<FragmentData>(
                                           &(sequence)[0u] + input->len - param.segLength,
                                           static_cast<int>(param.segLength),
-                                          static_cast<int>(input->len),
+                                          static_cast<int>(idManager->getSequenceLength(seqId)),
                                           seqId,
                                           queryName,
                                           refGroup,
