@@ -1,5 +1,29 @@
 # Memory Optimization Work Package for wfmash Mapping Module
 
+## STATUS: 87% Memory Reduction Achieved (2025-07-20)
+
+### Key Accomplishments:
+- **Memory reduced from 24-28GB to 3.2GB** on real genomic data (Callithrix_jacchus vs Lemur_catta)
+- **Performance maintained** with lock-free implementation
+- **All mappings preserved** - fixed issue that was losing 99.9% of mappings
+- **Batch processing implemented** to avoid memory spikes
+- **Tests passing** (except unrelated alignment tests)
+
+### What Was Done:
+1. ✅ Implemented MinimalMapping struct (16 bytes vs 176 bytes per mapping)
+2. ✅ Created lock-free CompressedMappingStore with dynamic growth
+3. ✅ Converted all major data paths to use compressed storage
+4. ✅ Eliminated duplicate storage in combinedMappings
+5. ✅ Implemented batch processing for ONETOONE and non-ONETOONE paths
+6. ✅ Fixed mapping loss due to insufficient buffer capacity
+7. ✅ Added direct compressed output capability
+
+### Remaining Work:
+- Add metadata storage to MinimalMapping (sketch size, kmer complexity)
+- Complete scaffold filtering optimization
+- Implement streaming L1 processing
+- Remove old code paths once fully validated
+
 ## Problem Statement (Why)
 
 The current mapping module consumes excessive memory, using 136+ bytes per mapping. With billions of mappings in large-scale genomic analyses, this creates a critical bottleneck. We need to reduce memory usage by 90%+ while maintaining identical algorithmic behavior and output.

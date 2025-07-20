@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <memory>
-#include "map/include/base_types.hpp"
+#include "base_types.hpp"
 
 namespace skch
 {
@@ -50,7 +50,7 @@ namespace skch
     
   public:
     // Constructor with initial block size
-    explicit LockFreeCompressedMappingStore(size_t initialCapacity = 10000000,  // 10M default
+    explicit LockFreeCompressedMappingStore(size_t initialCapacity = 1000,  // Start small!
                                            seqno_t qSeqId = 0, 
                                            offset_t qLen = 0) 
         : block_size(initialCapacity), querySeqId(qSeqId), queryLen(qLen) {
@@ -101,8 +101,14 @@ namespace skch
           continue;  // Retry with the new block
         }
         
-        // Add a new block (double the size each time, up to a limit)
-        size_t new_block_size = std::min(blocks.back()->capacity * 2, size_t(100000000)); // Up to 100M per block
+        // Add a new block with exponential growth
+        size_t current_total = 0;
+        for (const auto& block : blocks) {
+          current_total += block->capacity;
+        }
+        
+        // Growth strategy: double total capacity each time, but cap individual blocks
+        size_t new_block_size = std::min(current_total, size_t(10000000)); // Max 10M per block
         blocks.emplace_back(std::make_unique<StorageBlock>(new_block_size));
       }
     }
@@ -200,6 +206,16 @@ namespace skch
     
     size_t actualMemoryUsage() const {
       return getSize() * sizeof(MinimalMapping) + sizeof(*this);
+    }
+    
+    // Debug information
+    void printStats() const {
+      std::cerr << "LockFreeCompressedMappingStore stats:\n";
+      std::cerr << "  Blocks: " << blocks.size() << "\n";
+      std::cerr << "  Total capacity: " << getCapacity() << "\n";
+      std::cerr << "  Total used: " << getSize() << "\n";
+      std::cerr << "  Memory allocated: " << (getCapacity() * sizeof(MinimalMapping) / 1024 / 1024) << " MB\n";
+      std::cerr << "  Memory used: " << (getSize() * sizeof(MinimalMapping) / 1024 / 1024) << " MB\n";
     }
     
     // Sort operations (only safe after parallel phase completes)

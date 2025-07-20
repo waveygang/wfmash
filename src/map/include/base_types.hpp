@@ -218,7 +218,7 @@ namespace skch
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
   // Minimal mapping representation for memory efficiency
-  // Stores only essential data in ~12 bytes instead of 136+ bytes
+  // Stores only essential data in ~16 bytes instead of 176+ bytes
   struct MinimalMapping {
     uint32_t ref_seqId;     // 4 bytes - reference sequence ID
     uint32_t ref_pos;       // 4 bytes - reference start position
@@ -226,7 +226,7 @@ namespace skch
     uint16_t length;        // 2 bytes - mapping length
     uint8_t identity;       // 1 byte - identity percentage (0-100)
     uint8_t flags;          // 1 byte - packed flags (strand, discard, overlapped)
-                           // Total: 16 bytes (with padding)
+                           // Total: 16 bytes
     
     // Flag bit positions
     static constexpr uint8_t FLAG_STRAND_MASK = 0x03;  // bits 0-1 for strand (-1, 0, 1)
