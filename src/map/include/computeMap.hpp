@@ -773,42 +773,30 @@ namespace skch
                                   std::lock_guard<std::mutex> lock(allQueryOutputs_mutex);
                                   allQueryOutputs.push_back(output);
                               } else {
-                                  // For non-ONETOONE modes, process and write immediately
-                                  // to avoid storing all mappings in memory
+                                  // For non-ONETOONE modes, we need to process all mappings together for proper merging
+                                  // But we'll expand them all at once since we're writing immediately
                                   
-                                  // Get compressed mappings
                                   auto compressedMappings = output->results.getCompressedMappings();
-                                  
-                                  // Process in smaller batches to minimize memory
-                                  const size_t BATCH_SIZE = 10000;
-                                  MappingResultsVector_t batchMappings;
-                                  batchMappings.reserve(BATCH_SIZE);
-                                  
-                                  seqno_t qSeqId = idManager->getSequenceId(output->queryName);
-                                  offset_t qLen = idManager->getSequenceLength(qSeqId);
-                                  
-                                  std::lock_guard<std::mutex> lock(*outstream_mutex);
-                                  
-                                  for (size_t i = 0; i < compressedMappings.size(); i += BATCH_SIZE) {
-                                      batchMappings.clear();
+                                  if (!compressedMappings.empty()) {
+                                      seqno_t qSeqId = idManager->getSequenceId(output->queryName);
+                                      offset_t qLen = idManager->getSequenceLength(qSeqId);
                                       
-                                      // Expand a batch
-                                      size_t end = std::min(i + BATCH_SIZE, compressedMappings.size());
-                                      for (size_t j = i; j < end; ++j) {
-                                          MappingResult expanded = expandMinimalMapping(compressedMappings[j], qSeqId, qLen);
-                                          batchMappings.push_back(expanded);
-                                      }
+                                      // We must expand all mappings to properly merge them
+                                      // Use getAllMappings() which includes metadata
+                                      auto allMappings = output->results.getAllMappings();
                                       
-                                      // Apply filters and write this batch
-                                      mappingBoundarySanityCheck(input.get(), batchMappings);
+                                      // Apply filters
+                                      mappingBoundarySanityCheck(input.get(), allMappings);
+                                      
+                                      std::lock_guard<std::mutex> lock(*outstream_mutex);
                                       
                                       if (param.mergeMappings && param.split) {
-                                          auto merged = mergeMappingsInRange(batchMappings, param.chain_gap, output->progress);
+                                          auto merged = mergeMappingsInRange(allMappings, param.chain_gap, output->progress);
                                           filterMaximallyMerged(merged, std::floor(param.block_length / param.segLength), output->progress);
                                           reportReadMappings(merged, queryName, *outstream);
                                       } else {
-                                          filterNonMergedMappings(batchMappings, param, output->progress);
-                                          reportReadMappings(batchMappings, queryName, *outstream);
+                                          filterNonMergedMappings(allMappings, param, output->progress);
+                                          reportReadMappings(allMappings, queryName, *outstream);
                                       }
                                   }
                               }
@@ -2916,46 +2904,29 @@ VecIn mergeMappingsInRange(VecIn &readMappings,
        * @param mappings Mappings to filter
        * @param param Algorithm parameters
        */
-      // Process mappings directly from compressed storage without creating full vectors
+      // Process mappings from compressed storage - expand all at once for proper merging
       void processCompressedMappings(QueryMappingOutput& output, std::ofstream& outstrm, progress_meter::ProgressMeter& progress) {
-          auto compressedMappings = output.results.getCompressedMappings();
-          if (compressedMappings.empty()) return;
+          if (output.results.empty()) return;
           
-          // Get query info
-          seqno_t qSeqId = idManager->getSequenceId(output.queryName);
-          offset_t qLen = idManager->getSequenceLength(qSeqId);
+          // We must expand all mappings to properly merge them
+          // Use getAllMappings() which includes metadata (sketchSize, kmerComplexity)
+          auto allMappings = output.results.getAllMappings();
           
-          // Process in batches to minimize memory usage
-          const size_t BATCH_SIZE = 10000;
+          // Apply all filters
+          mappingBoundarySanityCheck(nullptr, allMappings);
           
-          for (size_t i = 0; i < compressedMappings.size(); i += BATCH_SIZE) {
-              MappingResultsVector_t batchMappings;
-              batchMappings.reserve(std::min(BATCH_SIZE, compressedMappings.size() - i));
+          if (param.mergeMappings && param.split) {
+              auto merged = mergeMappingsInRange(allMappings, param.chain_gap, progress);
+              filterMaximallyMerged(merged, std::floor(param.block_length / param.segLength), progress);
               
-              // Expand only this batch
-              size_t end = std::min(i + BATCH_SIZE, compressedMappings.size());
-              for (size_t j = i; j < end; ++j) {
-                  MappingResult expanded = expandMinimalMapping(compressedMappings[j], qSeqId, qLen);
-                  batchMappings.push_back(expanded);
+              if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
+                  filterByScaffolds(merged, merged, param, progress);
               }
               
-              // Apply all filters to this batch
-              mappingBoundarySanityCheck(nullptr, batchMappings);
-              
-              if (param.mergeMappings && param.split) {
-                  auto merged = mergeMappingsInRange(batchMappings, param.chain_gap, progress);
-                  filterMaximallyMerged(merged, std::floor(param.block_length / param.segLength), progress);
-                  
-                  if (param.scaffold_gap > 0 || param.scaffold_min_length > 0 || param.scaffold_max_deviation > 0) {
-                      // Apply scaffold filtering directly on this batch
-                      filterByScaffolds(merged, merged, param, progress);
-                  }
-                  
-                  reportReadMappings(merged, output.queryName, outstrm);
-              } else {
-                  filterNonMergedMappings(batchMappings, param, progress);
-                  reportReadMappings(batchMappings, output.queryName, outstrm);
-              }
+              reportReadMappings(merged, output.queryName, outstrm);
+          } else {
+              filterNonMergedMappings(allMappings, param, progress);
+              reportReadMappings(allMappings, output.queryName, outstrm);
           }
       }
       
