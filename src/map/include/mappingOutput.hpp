@@ -140,7 +140,9 @@ namespace skch
           {
             outstrm << sep << "jc:f:" << float(e.conservedSketches) / e.sketchSize;
           } else {
-            outstrm << sep << "ch:Z:" << e.splitMappingId << "." << e.chain_pos << "." << e.chain_length;
+            // Use chain_id if set, otherwise use splitMappingId
+            int32_t chainId = (e.chain_id >= 0) ? e.chain_id : e.splitMappingId;
+            outstrm << sep << "ch:Z:" << chainId << "." << e.chain_pos << "." << e.chain_length;
           }
         } else
         {

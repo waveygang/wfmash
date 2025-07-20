@@ -218,15 +218,19 @@ namespace skch
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
   // Minimal mapping representation for memory efficiency
-  // Stores only essential data in ~16 bytes instead of 176+ bytes
+  // Stores only essential data in ~28 bytes instead of 176+ bytes
   struct MinimalMapping {
     uint32_t ref_seqId;     // 4 bytes - reference sequence ID
     uint32_t ref_pos;       // 4 bytes - reference start position
     uint32_t query_pos;     // 4 bytes - query start position  
+    uint32_t n_merged;      // 4 bytes - number of merged mappings (was uint16_t, now uint32_t for large scaffolds)
     uint16_t length;        // 2 bytes - mapping length
+    uint16_t conservedSketches; // 2 bytes - conserved sketches count
     uint8_t identity;       // 1 byte - identity percentage (0-100)
     uint8_t flags;          // 1 byte - packed flags (strand, discard, overlapped)
-                           // Total: 16 bytes
+    uint8_t kmerComplexity; // 1 byte - kmer complexity (0-100)
+    uint8_t padding;        // 1 byte - padding for alignment
+                           // Total: 24 bytes (will be padded to 28)
     
     // Flag bit positions
     static constexpr uint8_t FLAG_STRAND_MASK = 0x03;  // bits 0-1 for strand (-1, 0, 1)
@@ -352,14 +356,26 @@ namespace skch
     offset_t query_len = full.queryEndPos - full.queryStartPos;
     minimal.length = static_cast<uint16_t>(std::max(ref_len, query_len));
     
+    // Store n_merged (no cap needed with uint32_t)
+    minimal.n_merged = full.n_merged;
+    
     // Convert identity from float (0.0-1.0) to byte (0-100)
     minimal.identity = static_cast<uint8_t>(std::round(full.nucIdentity * 100));
+    
+    // Store conserved sketches
+    minimal.conservedSketches = static_cast<uint16_t>(std::min(full.conservedSketches, 65535));
+    
+    // Convert kmer complexity - can be > 1.0, so cap at 255
+    minimal.kmerComplexity = static_cast<uint8_t>(std::min(255, static_cast<int>(std::round(full.kmerComplexity * 100))));
     
     // Pack flags
     minimal.flags = 0;
     minimal.setStrand(full.strand);
     minimal.setDiscarded(full.discard != 0);
     minimal.setOverlapped(full.overlapped);
+    
+    // Initialize padding
+    minimal.padding = 0;
     
     return minimal;
   }
@@ -394,11 +410,11 @@ namespace skch
     full.discard = m.isDiscarded() ? 1 : 0;
     full.overlapped = m.isOverlapped();
     
-    // Default values for fields not stored in MinimalMapping
-    full.sketchSize = 0;
-    full.conservedSketches = 0;
-    full.kmerComplexity = 0.0;
-    full.n_merged = 1;
+    // Restore metadata from MinimalMapping
+    full.sketchSize = 0; // Not stored, would need to be recomputed
+    full.conservedSketches = m.conservedSketches;
+    full.kmerComplexity = m.kmerComplexity / 100.0f;
+    full.n_merged = m.n_merged;
     full.splitMappingId = 0;
     full.selfMapFilter = false;
     full.chainPairScore = std::numeric_limits<double>::max();

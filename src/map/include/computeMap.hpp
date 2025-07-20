@@ -1733,6 +1733,7 @@ namespace skch
                   res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
                   res.strand = l2.strand; 
                   res.kmerComplexity = Q.kmerComplexity;
+                  res.n_merged = 1;  // Single mapping, not merged yet
 
                   res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
 
