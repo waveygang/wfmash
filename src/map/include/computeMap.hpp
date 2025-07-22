@@ -611,7 +611,7 @@ namespace skch
 
                           OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
                           auto [nonMergedMappings, mergedMappings] = 
-                              filterSubsetMappings(output->results, output->progress);
+                              filterSubsetMappings(output->results, output->progress, seqId, input->len);
 
                           auto& mappings = param.mergeMappings && param.split ?
                                 mergedMappings : nonMergedMappings;
@@ -924,17 +924,21 @@ namespace skch
        */
       std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(
           MappingResultsVector_t& mappings, 
-          progress_meter::ProgressMeter& progress) 
+          progress_meter::ProgressMeter& progress,
+          seqno_t querySeqId, // ADD THIS
+          offset_t queryLen) // ADD THIS
       {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
 
           MappingResultsVector_t rawMappings = mappings;
           
-          auto maximallyMergedMappings = FilterUtils::mergeMappingsInRange(mappings, param.chain_gap, param, progress);
+          // Pass context to the merge function
+          auto maximallyMergedMappings = FilterUtils::mergeMappingsInRange(mappings, param.chain_gap, param, progress, querySeqId, queryLen);
 
           if (param.mergeMappings && param.split) {
+              // Pass context (queryLen) to weak mapping filter
               FilterUtils::filterWeakMappings(maximallyMergedMappings, 
-                  std::floor(param.block_length / param.segLength), param, *idManager);
+                  std::floor(param.block_length / param.segLength), param, *idManager, queryLen);
               
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                   MappingResultsVector_t groupFilteredMappings;
@@ -948,16 +952,17 @@ namespace skch
               }
               
               FilterUtils::sparsifyMappings(maximallyMergedMappings, param);
-              FilterUtils::filterByScaffolds(maximallyMergedMappings, rawMappings, param, *idManager, progress);
+              // Pass context to scaffold filter
+              FilterUtils::filterByScaffolds(maximallyMergedMappings, rawMappings, param, *idManager, progress, querySeqId, queryLen);
           } else {
-              // Filter non-merged mappings
+              // Same for non-merged path
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                   MappingResultsVector_t filteredMappings;
                   FilterUtils::filterByGroup(mappings, filteredMappings, 
                       param.numMappingsForSegment - 1, false, *idManager, param, progress);
                   mappings = std::move(filteredMappings);
               }
-              FilterUtils::filterByScaffolds(mappings, rawMappings, param, *idManager, progress);
+              FilterUtils::filterByScaffolds(mappings, rawMappings, param, *idManager, progress, querySeqId, queryLen);
           }
 
           // Build dense chain ID mapping
