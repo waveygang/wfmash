@@ -59,7 +59,7 @@ void parse_args(int argc,
     args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum mapping identity [70]", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "number of mappings to keep per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> segment_length(mapping_opts, "INT", "segment length for mapping [1k]", {'s', "segment-length"});
-    args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [3*segment-length]", {'l', "block-length"});
+    args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::Flag one_to_one(mapping_opts, "", "Perform one-to-one filtering", {'o', "one-to-one"});
     args::Flag lower_triangular(mapping_opts, "", "Only compute the lower triangular for all-vs-all mapping", {'L', "lower-triangular"});
     args::ValueFlag<char> skip_prefix(mapping_opts, "C", "map between sequence groups with different prefix [#]", {'Y', "group-prefix"});
@@ -72,7 +72,7 @@ void parse_args(int argc,
     args::Flag no_split(mapping_opts, "no-split", "map each sequence in one piece", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> scaffolding(mapping_opts, "G,L,D", 
-        "homology scaffolding [100k,10k,100k]", {'S', "scaffolding"});
+        "homology scaffolding [100k,5k,100k]", {'S', "scaffolding"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -334,7 +334,7 @@ void parse_args(int argc,
         }
         map_parameters.block_length = l;
     } else {
-        map_parameters.block_length = 3 * map_parameters.segLength;
+        map_parameters.block_length = 0;
     }
 
     if (chain_gap) {
@@ -375,7 +375,7 @@ void parse_args(int argc,
     } else {
         // Default values
         map_parameters.scaffold_gap = 100000;         // 100k
-        map_parameters.scaffold_min_length = 10000;   // 10k  
+        map_parameters.scaffold_min_length = 5000;    // 5k
         map_parameters.scaffold_max_deviation = 100000; // 100k
     }
 
@@ -531,7 +531,7 @@ void parse_args(int argc,
             map_parameters.sketchSize = ss;
         } else {
             const double md = 1 - map_parameters.percentageIdentity;
-            double dens = 0.01 * (1 + (md / 0.1));
+            double dens = 0.02 * (1 + (md / 0.1));
             map_parameters.sketchSize = dens * (map_parameters.segLength - map_parameters.kmerSize);
         }
     }
