@@ -17,6 +17,10 @@
 #include <limits>
 #include <fstream>
 #include <iostream>
+#include <atomic>
+#include <thread>
+#include <queue>
+#include <memory>
 #include "map/include/base_types.hpp"
 #include "map/include/filter.hpp"
 #include "map/include/sequenceIds.hpp"
@@ -25,6 +29,104 @@
 
 namespace skch
 {
+  /**
+   * @struct Point2D
+   * @brief Simple 2D point for spatial indexing
+   */
+  struct Point2D {
+    float x, y;
+    uint32_t idx;
+    
+    Point2D(float x_, float y_, uint32_t idx_) : x(x_), y(y_), idx(idx_) {}
+  };
+
+  /**
+   * @class SimpleKDTree
+   * @brief Simple 2D KD-tree for nearest neighbor search
+   */
+  class SimpleKDTree {
+  private:
+    struct Node {
+      Point2D point;
+      std::unique_ptr<Node> left;
+      std::unique_ptr<Node> right;
+      
+      Node(const Point2D& p) : point(p) {}
+    };
+    
+    std::unique_ptr<Node> root;
+    std::vector<Point2D> points;
+    
+    std::unique_ptr<Node> buildTree(std::vector<Point2D>& pts, int start, int end, int depth) {
+      if (start >= end) return nullptr;
+      
+      int axis = depth % 2;
+      int mid = (start + end) / 2;
+      
+      // Sort by current axis
+      if (axis == 0) {
+        std::nth_element(pts.begin() + start, pts.begin() + mid, pts.begin() + end,
+                        [](const Point2D& a, const Point2D& b) { return a.x < b.x; });
+      } else {
+        std::nth_element(pts.begin() + start, pts.begin() + mid, pts.begin() + end,
+                        [](const Point2D& a, const Point2D& b) { return a.y < b.y; });
+      }
+      
+      auto node = std::make_unique<Node>(pts[mid]);
+      node->left = buildTree(pts, start, mid, depth + 1);
+      node->right = buildTree(pts, mid + 1, end, depth + 1);
+      
+      return node;
+    }
+    
+    void findKNearest(const Node* node, const Point2D& target, int k, int depth,
+                      std::priority_queue<std::pair<float, uint32_t>>& heap) const {
+      if (!node) return;
+      
+      float dist = std::sqrt((node->point.x - target.x) * (node->point.x - target.x) +
+                            (node->point.y - target.y) * (node->point.y - target.y));
+      
+      if (node->point.idx != target.idx) {  // Don't include self
+        if (heap.size() < k) {
+          heap.push({dist, node->point.idx});
+        } else if (dist < heap.top().first) {
+          heap.pop();
+          heap.push({dist, node->point.idx});
+        }
+      }
+      
+      int axis = depth % 2;
+      float diff = (axis == 0) ? (target.x - node->point.x) : (target.y - node->point.y);
+      
+      Node* first = (diff < 0) ? node->left.get() : node->right.get();
+      Node* second = (diff < 0) ? node->right.get() : node->left.get();
+      
+      findKNearest(first, target, k, depth + 1, heap);
+      
+      if (heap.size() < k || std::abs(diff) < heap.top().first) {
+        findKNearest(second, target, k, depth + 1, heap);
+      }
+    }
+    
+  public:
+    void build(std::vector<Point2D> pts) {
+      points = std::move(pts);
+      root = buildTree(points, 0, points.size(), 0);
+    }
+    
+    std::vector<std::pair<uint32_t, float>> findKNearest(const Point2D& target, int k) const {
+      std::priority_queue<std::pair<float, uint32_t>> heap;
+      findKNearest(root.get(), target, k, 0, heap);
+      
+      std::vector<std::pair<uint32_t, float>> result;
+      while (!heap.empty()) {
+        result.push_back({heap.top().second, heap.top().first});
+        heap.pop();
+      }
+      std::reverse(result.begin(), result.end());
+      return result;
+    }
+  };
   /**
    * @struct MappingAuxData
    * @brief A sidecar data structure holding all transient state for filtering/merging.
@@ -518,138 +620,10 @@ namespace skch
       }
     }
 
-    // Scaffold filtering structures and methods
-    struct RotatedEnvelope {
-        double u_start;
-        double u_end;
-        double v_min;
-        double v_max;
-        bool antidiagonal;
-    };
 
-    // Event types for sweep line algorithm
-    enum EventType { START, END };
-    enum MappingType { SCAFFOLD, RAW };
-
-    struct Event {
-        double u;
-        EventType type;
-        MappingType mappingType;
-        double v_min, v_max;
-        size_t id;
-        
-        bool operator<(const Event& other) const {
-            if (u != other.u) return u < other.u;
-            if (type != other.type) return type < other.type;
-            return mappingType < other.mappingType;
-        }
-    };
-
-    // Interval tree for v-coordinate ranges
-    struct Interval {
-        double low, high;
-        size_t id;
-        
-        bool operator<(const Interval& other) const {
-            return low < other.low;
-        }
-    };
-
-    class IntervalTree {
-        std::set<Interval> intervals;
-
-    public:
-        void insert(double low, double high, size_t id) {
-            intervals.insert({low, high, id});
-        }
-
-        void remove(double low, double high, size_t id) {
-            intervals.erase({low, high, id});
-        }
-
-        std::vector<size_t> findOverlapping(double low, double high) const {
-            std::vector<size_t> result;
-            auto it = intervals.upper_bound({low, 0, 0});
-            if (it != intervals.begin()) --it;
-            
-            while (it != intervals.end() && it->low <= high) {
-                if (!(it->high < low || it->low > high)) {
-                    result.push_back(it->id);
-                }
-                ++it;
-            }
-            return result;
-        }
-
-        bool hasOverlap(double low, double high) const {
-            auto it = intervals.upper_bound({low, 0, 0});
-            if (it != intervals.begin()) --it;
-            
-            while (it != intervals.end() && it->low <= high) {
-                if (!(it->high < low || it->low > high)) {
-                    return true;
-                }
-                ++it;
-            }
-            return false;
-        }
-    };
 
     /**
-     * @brief Compute orientation score for a mapping
-     */
-    static double computeOrientationScore(const MappingResult& m) {
-        int64_t q_span = m.queryEndPos() - m.queryStartPos;
-        int64_t r_span = m.refEndPos() - m.refStartPos;
-        double diag_proj = (r_span + q_span) / std::sqrt(2.0);
-        double anti_proj = (r_span - q_span) / std::sqrt(2.0);
-        return std::abs(anti_proj / diag_proj);
-    }
-
-    /**
-     * @brief Determine if group should use antidiagonal projection
-     */
-    static bool shouldUseAntidiagonal(const std::vector<MappingResult>& mappings) {
-        double total_weight = 0.0;
-        double weighted_score = 0.0;
-        for (const auto& m : mappings) {
-            double weight = m.queryEndPos() - m.queryStartPos;
-            total_weight += weight;
-            weighted_score += weight * computeOrientationScore(m);
-        }
-        return (weighted_score / total_weight) > 1.0;
-    }
-
-    /**
-     * @brief Compute rotated envelope for a mapping
-     */
-    static RotatedEnvelope computeRotatedEnvelope(const MappingResult& m, 
-                                                  bool use_antidiagonal,
-                                                  const Parameters& param) {
-        const double invSqrt2 = 1.0 / std::sqrt(2.0);
-        double u_start, u_end, v1, v2;
-             
-        if (!use_antidiagonal) {
-            u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
-            u_end   = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
-            v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
-            v2 = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
-        } else {
-            u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
-            u_end   = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
-            v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
-            v2 = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
-        }
-             
-        double u_min = std::min(u_start, u_end);
-        double u_max = std::max(u_start, u_end);
-        double v_min = std::min(v1, v2) - param.scaffold_max_deviation;
-        double v_max = std::max(v1, v2) + param.scaffold_max_deviation;
-        return { u_min, u_max, v_min, v_max, use_antidiagonal };
-    }
-
-    /**
-     * @brief Filter mappings by scaffolds
+     * @brief Filter mappings by scaffolds using parallel distance propagation
      */
     static void filterByScaffolds(MappingResultsVector_t& readMappings,
                                  const MappingResultsVector_t& mergedMappings,
@@ -659,33 +633,24 @@ namespace skch
                                  seqno_t querySeqId,   // Pass in context
                                  offset_t queryLen)    // Pass in context
     {
-        if (param.scaffold_gap == 0) return; // Simplified check
+        if (param.scaffold_gap <= 0) return;
 
-        // 1. Build scaffolds using the now-correct merge function
-        MappingResultsVector_t scaffoldMappings = readMappings; // Use raw mappings to build scaffolds
+        // Phase 1: Build scaffolds
+        MappingResultsVector_t scaffoldMappings = readMappings;
         Parameters scaffoldParam = param;
         scaffoldParam.chain_gap = param.scaffold_gap;
-        auto superChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
+        auto scaffolds = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
         
-        // 2. Filter scaffolds by length
-        superChains.erase(
-            std::remove_if(superChains.begin(), superChains.end(),
+        // Filter scaffolds by length
+        scaffolds.erase(
+            std::remove_if(scaffolds.begin(), scaffolds.end(),
                 [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
-            superChains.end());
-
-        // 3. Expand scaffold boundaries for tolerance (RESTORED LOGIC)
-        for (auto& mapping : superChains) {
-            int64_t expansion = param.scaffold_max_deviation;
-            
-            uint32_t newQueryStart = (mapping.queryStartPos > expansion) ? mapping.queryStartPos - expansion : 0;
-            uint32_t newRefStart = (mapping.refStartPos > expansion) ? mapping.refStartPos - expansion : 0;
-            
-            uint32_t newQueryEnd = std::min<offset_t>(queryLen, mapping.queryEndPos() + expansion);
-            uint32_t newRefEnd = std::min<offset_t>(idManager.getSequenceLength(mapping.refSeqId), mapping.refEndPos() + expansion);
-
-            mapping.blockLength = std::max(newQueryEnd - newQueryStart, newRefEnd - newRefStart);
-            mapping.queryStartPos = newQueryStart;
-            mapping.refStartPos = newRefStart;
+            scaffolds.end());
+        
+        if (scaffolds.empty()) {
+            // No scaffolds, filter out everything
+            readMappings.clear();
+            return;
         }
 
         // Output scaffolds to file if requested
@@ -704,8 +669,7 @@ namespace skch
             }
             
             if (scaffoldOut.is_open()) {
-                for (const auto& scaffold : superChains) {
-                    // Output in PAF format
+                for (const auto& scaffold : scaffolds) {
                     scaffoldOut << idManager.getSequenceName(querySeqId)
                                << "\t" << queryLen
                                << "\t" << scaffold.queryStartPos
@@ -717,8 +681,8 @@ namespace skch
                                << "\t" << scaffold.refEndPos()
                                << "\t" << scaffold.conservedSketches
                                << "\t" << scaffold.blockLength
-                               << "\t" << 60  // fake mapQ
-                               << "\t" << "tp:A:S"  // tag to indicate this is a scaffold
+                               << "\t" << 60
+                               << "\t" << "tp:A:S"
                                << "\t" << "id:f:" << scaffold.getNucIdentity()
                                << "\t" << "kc:f:" << scaffold.getKmerComplexity()
                                << "\n";
@@ -727,132 +691,129 @@ namespace skch
             }
         }
 
-        // Group mappings
-        struct GroupKey {
-            seqno_t querySeqId;
-            seqno_t refSeqId;
-            bool operator==(const GroupKey &other) const {
-                return querySeqId == other.querySeqId && refSeqId == other.refSeqId;
-            }
-        };
+        // Phase 2: Build unified mapping list and spatial index
+        std::vector<Point2D> all_points;
+        std::vector<uint32_t> scaffold_indices;
         
-        struct GroupKeyHash {
-            std::size_t operator()(const GroupKey &k) const {
-                auto h1 = std::hash<seqno_t>()(k.querySeqId);
-                auto h2 = std::hash<seqno_t>()(k.refSeqId);
-                return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
-            }
-        };
-
-        std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> rawGroups;
-        std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> scafGroups;
+        // Add scaffold mappings first
+        for (size_t i = 0; i < scaffolds.size(); ++i) {
+            const auto& m = scaffolds[i];
+            float x = m.queryStartPos + m.blockLength * 0.5f;
+            float y = m.refStartPos + m.blockLength * 0.5f;
+            all_points.emplace_back(x, y, i);
+            scaffold_indices.push_back(i);
+        }
         
-        for (const auto& m : readMappings) {
-            GroupKey key { querySeqId, static_cast<seqno_t>(m.refSeqId) }; // FIX: Use the passed-in querySeqId
-            rawGroups[key].push_back(m);
+        // Add raw mappings
+        size_t raw_start_idx = scaffolds.size();
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            const auto& m = readMappings[i];
+            float x = m.queryStartPos + m.blockLength * 0.5f;
+            float y = m.refStartPos + m.blockLength * 0.5f;
+            all_points.emplace_back(x, y, raw_start_idx + i);
         }
-        for (const auto& m : superChains) {
-            GroupKey key { querySeqId, static_cast<seqno_t>(m.refSeqId) }; // FIX: Use the passed-in querySeqId
-            scafGroups[key].push_back(m);
-        }
-
-        // Process each group with 2D sweep
-        MappingResultsVector_t filteredMappings;
-        for (const auto& kv : rawGroups) {
-            const GroupKey& key = kv.first;
-            const auto& groupRaw = kv.second;
-            
-            if (scafGroups.find(key) == scafGroups.end()) {
-                continue;
-            }
-            const auto& groupScaf = scafGroups[key];
-
-            bool use_antidiagonal = shouldUseAntidiagonal(groupScaf);
-
-            // Generate events
-            std::vector<Event> events;
-            std::vector<bool> keep(groupRaw.size(), false);
-
-            // Helper to compute rotated coordinates
-            auto computeRotatedCoords = [use_antidiagonal](const MappingResult& m) {
-                const double invSqrt2 = 1.0 / std::sqrt(2.0);
-                double u_start, u_end, v1, v2;
-                
-                if (!use_antidiagonal) {
-                    u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
-                    u_end = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
-                    v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
-                    v2 = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
-                } else {
-                    u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
-                    u_end = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
-                    v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
-                    v2 = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
-                }
-                
-                return std::make_tuple(
-                    std::min(u_start, u_end),
-                    std::max(u_start, u_end),
-                    std::min(v1, v2),
-                    std::max(v1, v2)
+        
+        // Build KD-tree
+        SimpleKDTree kdtree;
+        kdtree.build(all_points);
+        
+        // Phase 3: Find K nearest neighbors for each mapping
+        const int K_NEIGHBORS = 10;
+        std::vector<std::vector<std::pair<uint32_t, float>>> nearest_neighbors(all_points.size());
+        
+        // Parallel computation of nearest neighbors
+        int num_threads = param.threads > 0 ? param.threads : std::thread::hardware_concurrency();
+        std::vector<std::thread> threads;
+        std::atomic<size_t> work_index(0);
+        
+        auto compute_neighbors = [&]() {
+            size_t i;
+            while ((i = work_index.fetch_add(1)) < all_points.size()) {
+                nearest_neighbors[i] = kdtree.findKNearest(all_points[i], K_NEIGHBORS + 1);
+                // Remove self from neighbors list
+                nearest_neighbors[i].erase(
+                    std::remove_if(nearest_neighbors[i].begin(), nearest_neighbors[i].end(),
+                                  [i](const auto& p) { return p.first == i; }),
+                    nearest_neighbors[i].end()
                 );
-            };
-
-            // Generate events for scaffolds
-            for (size_t i = 0; i < groupScaf.size(); i++) {
-                auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(groupScaf[i]);
-                v_min -= param.scaffold_max_deviation;
-                v_max += param.scaffold_max_deviation;
-                events.push_back(Event{u_min, START, SCAFFOLD, v_min, v_max, i});
-                events.push_back(Event{u_max, END, SCAFFOLD, v_min, v_max, i});
             }
-
-            // Generate events for raw mappings
-            for (size_t i = 0; i < groupRaw.size(); i++) {
-                auto [u_min, u_max, v_min, v_max] = computeRotatedCoords(groupRaw[i]);
-                events.push_back(Event{u_min, START, RAW, v_min, v_max, i});
-                events.push_back(Event{u_max, END, RAW, v_min, v_max, i});
+        };
+        
+        for (int t = 0; t < num_threads; ++t) {
+            threads.emplace_back(compute_neighbors);
+        }
+        for (auto& t : threads) {
+            t.join();
+        }
+        
+        // Phase 4: Parallel distance propagation
+        std::vector<std::atomic<float>> dist_to_scaffold(all_points.size());
+        
+        // Initialize distances
+        for (size_t i = 0; i < all_points.size(); ++i) {
+            dist_to_scaffold[i].store(std::numeric_limits<float>::max());
+        }
+        for (uint32_t idx : scaffold_indices) {
+            dist_to_scaffold[idx].store(0.0f);
+        }
+        
+        // Run multiple iterations of distance propagation
+        const int MAX_ITERATIONS = 5;
+        for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
+            // Build work queue of nodes with finite distance
+            std::vector<uint32_t> work_queue;
+            for (size_t i = 0; i < all_points.size(); ++i) {
+                if (dist_to_scaffold[i].load() < std::numeric_limits<float>::max()) {
+                    work_queue.push_back(i);
+                }
             }
-
-            std::sort(events.begin(), events.end());
-
-            // Process events
-            IntervalTree activeScaffolds;
-            IntervalTree activeRaws;
-
-            for (const auto& event : events) {
-                if (event.type == START && event.mappingType == SCAFFOLD) {
-                    activeScaffolds.insert(event.v_min, event.v_max, event.id);
-                    auto overlapping = activeRaws.findOverlapping(event.v_min, event.v_max);
-                    for (auto raw_id : overlapping) {
-                        keep[raw_id] = true;
-                    }
-                } else if (event.type == END && event.mappingType == SCAFFOLD) {
-                    activeScaffolds.remove(event.v_min, event.v_max, event.id);
-                } else if (event.type == START && event.mappingType == RAW) {
-                    if (!keep[event.id]) {
-                        if (activeScaffolds.hasOverlap(event.v_min, event.v_max)) {
-                            keep[event.id] = true;
-                        } else {
-                            activeRaws.insert(event.v_min, event.v_max, event.id);
+            
+            if (work_queue.empty()) break;
+            
+            // Reset work index
+            work_index = 0;
+            
+            auto propagate_distances = [&]() {
+                size_t idx;
+                while ((idx = work_index.fetch_add(1)) < work_queue.size()) {
+                    uint32_t current = work_queue[idx];
+                    float current_dist = dist_to_scaffold[current].load();
+                    
+                    // Update all neighbors
+                    for (const auto& [neighbor, edge_weight] : nearest_neighbors[current]) {
+                        float new_dist = current_dist + edge_weight;
+                        
+                        // Atomic update if we found a shorter path
+                        float old_dist = dist_to_scaffold[neighbor].load();
+                        while (old_dist > new_dist && 
+                               !dist_to_scaffold[neighbor].compare_exchange_weak(old_dist, new_dist)) {
+                            // CAS failed, old_dist is updated, retry
                         }
                     }
-                } else if (event.type == END && event.mappingType == RAW) {
-                    if (!keep[event.id]) {
-                        activeRaws.remove(event.v_min, event.v_max, event.id);
-                    }
                 }
+            };
+            
+            // Launch threads for parallel propagation
+            threads.clear();
+            for (int t = 0; t < num_threads; ++t) {
+                threads.emplace_back(propagate_distances);
             }
-
-            // Collect kept mappings
-            for (size_t i = 0; i < groupRaw.size(); i++) {
-                if (keep[i]) {
-                    filteredMappings.push_back(groupRaw[i]);
-                }
+            for (auto& t : threads) {
+                t.join();
             }
         }
-
-        readMappings = std::move(filteredMappings);
+        
+        // Phase 5: Apply distance filter
+        MappingResultsVector_t filtered;
+        float max_dist = static_cast<float>(param.scaffold_max_deviation);
+        
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            if (dist_to_scaffold[raw_start_idx + i].load() <= max_dist) {
+                filtered.push_back(readMappings[i]);
+            }
+        }
+        
+        readMappings = std::move(filtered);
     }
 
     /**
