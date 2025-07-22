@@ -73,6 +73,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap: max distance to chain mappings [2k]", {'c', "chain-gap"});
     args::ValueFlag<std::string> scaffolding(mapping_opts, "G,L,D", 
         "homology scaffolding [100k,5k,100k]", {'S', "scaffolding"});
+    args::ValueFlag<std::string> scaffold_output(mapping_opts, "FILE", 
+        "output scaffold mappings to FILE", {"scaffold-out"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "target mapping length [50k, 'inf' for unlimited]", {'P', "max-length"});
     args::ValueFlag<double> overlap_threshold(mapping_opts, "FLOAT", "max overlap with better mappings (1.0=keep all) [1.0]", {'O', "overlap"});
     args::Flag no_filter(mapping_opts, "", "disable mapping filtering", {'f', "no-filter"});
@@ -377,6 +379,10 @@ void parse_args(int argc,
         map_parameters.scaffold_gap = 100000;         // 100k
         map_parameters.scaffold_min_length = 5000;    // 5k
         map_parameters.scaffold_max_deviation = 100000; // 100k
+    }
+
+    if (scaffold_output) {
+        map_parameters.scaffold_output_file = args::get(scaffold_output);
     }
 
     if (max_mapping_length) {

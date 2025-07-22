@@ -15,6 +15,8 @@
 #include <numeric>
 #include <set>
 #include <limits>
+#include <fstream>
+#include <iostream>
 #include "map/include/base_types.hpp"
 #include "map/include/filter.hpp"
 #include "map/include/sequenceIds.hpp"
@@ -684,6 +686,45 @@ namespace skch
             mapping.blockLength = std::max(newQueryEnd - newQueryStart, newRefEnd - newRefStart);
             mapping.queryStartPos = newQueryStart;
             mapping.refStartPos = newRefStart;
+        }
+
+        // Output scaffolds to file if requested
+        if (!param.scaffold_output_file.empty()) {
+            static std::ofstream scaffoldOut;
+            static bool firstWrite = true;
+            
+            if (firstWrite) {
+                scaffoldOut.open(param.scaffold_output_file);
+                if (!scaffoldOut.is_open()) {
+                    std::cerr << "[wfmash] WARNING: Unable to open scaffold output file: " 
+                              << param.scaffold_output_file << std::endl;
+                } else {
+                    firstWrite = false;
+                }
+            }
+            
+            if (scaffoldOut.is_open()) {
+                for (const auto& scaffold : superChains) {
+                    // Output in PAF format
+                    scaffoldOut << idManager.getSequenceName(querySeqId)
+                               << "\t" << queryLen
+                               << "\t" << scaffold.queryStartPos
+                               << "\t" << scaffold.queryEndPos()
+                               << "\t" << (scaffold.strand() == strnd::FWD ? "+" : "-")
+                               << "\t" << idManager.getSequenceName(scaffold.refSeqId)
+                               << "\t" << idManager.getSequenceLength(scaffold.refSeqId)
+                               << "\t" << scaffold.refStartPos
+                               << "\t" << scaffold.refEndPos()
+                               << "\t" << scaffold.conservedSketches
+                               << "\t" << scaffold.blockLength
+                               << "\t" << 60  // fake mapQ
+                               << "\t" << "tp:A:S"  // tag to indicate this is a scaffold
+                               << "\t" << "id:f:" << scaffold.getNucIdentity()
+                               << "\t" << "kc:f:" << scaffold.getKmerComplexity()
+                               << "\n";
+                }
+                scaffoldOut.flush();
+            }
         }
 
         // Group mappings
