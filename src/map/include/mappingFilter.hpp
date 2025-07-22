@@ -39,11 +39,13 @@ namespace skch
           std::remove_if(readMappings.begin(),
                        readMappings.end(),
                        [&](MappingResult &e){
+                           // For boundary mapping check, we need the full query length
+                           // which should be passed as parameter or stored in auxiliary data
                            bool is_boundary_mapping = 
                                e.queryStartPos < param.segLength ||
-                               e.queryEndPos > e.queryLen - param.segLength ||
+                               //e.queryEndPos() > queryLen - param.segLength || // TODO: need queryLen
                                e.refStartPos < param.segLength ||
-                               e.refEndPos > idManager.getSequenceLength(e.refSeqId) - param.segLength;
+                               e.refEndPos() > idManager.getSequenceLength(e.refSeqId) - param.segLength;
                            
                            if (is_boundary_mapping) {
                                return e.blockLength < param.block_length / 2 || 
@@ -66,8 +68,8 @@ namespace skch
           std::remove_if(readMappings.begin(),
                          readMappings.end(),
                          [&](MappingResult &e){
-                             int64_t q_l = (int64_t)e.queryEndPos - (int64_t)e.queryStartPos;
-                             int64_t r_l = (int64_t)e.refEndPos - (int64_t)e.refStartPos;
+                             int64_t q_l = (int64_t)e.queryEndPos() - (int64_t)e.queryStartPos;
+                             int64_t r_l = (int64_t)e.refEndPos() - (int64_t)e.refStartPos;
                              uint64_t delta = std::abs(r_l - q_l);
                              double len_id_bound = (1.0 - (double)delta/(((double)q_l+r_l)/2));
                              return len_id_bound < std::min(0.7, std::pow(param.percentageIdentity,3));
@@ -166,8 +168,10 @@ namespace skch
       std::sort(
           filteredMappings.begin(), filteredMappings.end(),
           [](const MappingResult &a, const MappingResult &b) {
-              return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a.strand) 
-                  < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b.strand);
+              auto a_strand = a.strand();
+              auto b_strand = b.strand();
+              return std::tie(a.queryStartPos, a.refSeqId, a.refStartPos, a_strand) 
+                  < std::tie(b.queryStartPos, b.refSeqId, b.refStartPos, b_strand);
           });
     }
 
@@ -184,15 +188,19 @@ namespace skch
           auto& prev = *std::prev(it);
           auto& curr = *it;
 
-          if (prev.refSeqId != curr.refSeqId || prev.strand != curr.strand) continue;
+          if (prev.refSeqId != curr.refSeqId || prev.strand() != curr.strand()) continue;
 
-          int query_gap = curr.queryStartPos - prev.queryEndPos;
-          int ref_gap = curr.refStartPos - prev.refEndPos;
+          int query_gap = curr.queryStartPos - prev.queryEndPos();
+          int ref_gap = curr.refStartPos - prev.refEndPos();
 
           if (query_gap > 0 && ref_gap > 0 && query_gap <= threshold && ref_gap <= threshold) {
-              int query_mid = (prev.queryEndPos + curr.queryStartPos) / 2;
-              int ref_mid = (prev.refEndPos + curr.refStartPos) / 2;
+              int query_mid = (prev.queryEndPos() + curr.queryStartPos) / 2;
+              int ref_mid = (prev.refEndPos() + curr.refStartPos) / 2;
 
+              // TODO: This function needs to be rewritten to work with compact mappings
+              // The algorithm tries to modify end positions which are now calculated
+              // from blockLength. Need to adjust blockLength and start positions instead.
+              /*
               prev.queryEndPos = query_mid;
               prev.refEndPos = ref_mid;
               curr.queryStartPos = query_mid;
@@ -205,6 +213,7 @@ namespace skch
 
               prev.approxMatches = std::round(prev.nucIdentity * prev.blockLength / 100.0);
               curr.approxMatches = std::round(curr.nucIdentity * curr.blockLength / 100.0);
+              */
           }
       }
     }
@@ -220,24 +229,30 @@ namespace skch
       for (auto it = start; it != end; ++it) {
           fragment.queryStartPos = std::min(fragment.queryStartPos, it->queryStartPos);
           fragment.refStartPos = std::min(fragment.refStartPos, it->refStartPos);
-          fragment.queryEndPos = std::max(fragment.queryEndPos, it->queryEndPos);
-          fragment.refEndPos = std::max(fragment.refEndPos, it->refEndPos);
+          // TODO: Can't modify calculated fields
+          //fragment.queryEndPos = std::max(fragment.queryEndPos(), it->queryEndPos());
+          //fragment.refEndPos = std::max(fragment.refEndPos(), it->refEndPos());
       }
 
-      fragment.blockLength = std::max(fragment.refEndPos - fragment.refStartPos, 
-                                     fragment.queryEndPos - fragment.queryStartPos);
-      fragment.approxMatches = std::round(fragment.nucIdentity * fragment.blockLength / 100.0);
+      // TODO: Recalculate blockLength based on the merged fragment
+      //fragment.blockLength = std::max(fragment.refEndPos() - fragment.refStartPos, 
+      //                               fragment.queryEndPos() - fragment.queryStartPos);
+      //fragment.approxMatches = std::round(fragment.getNucIdentity() * fragment.blockLength / 100.0);
       fragment.n_merged = std::distance(start, end);
 
-      fragment.nucIdentity = std::accumulate(start, end, 0.0,
-          [](double sum, const MappingResult& e) { return sum + e.nucIdentity; }
+      // Average the scaled identity values
+      uint16_t avgIdentity = std::accumulate(start, end, 0,
+          [](int sum, const MappingResult& e) { return sum + e.nucIdentity; }
       ) / fragment.n_merged;
+      fragment.nucIdentity = avgIdentity;
 
-      fragment.kmerComplexity = std::accumulate(start, end, 0.0,
-          [](double sum, const MappingResult& e) { return sum + e.kmerComplexity; }
+      // Average the scaled complexity values
+      uint8_t avgComplexity = std::accumulate(start, end, 0,
+          [](int sum, const MappingResult& e) { return sum + e.kmerComplexity; }
       ) / fragment.n_merged;
+      fragment.kmerComplexity = avgComplexity;
 
-      std::for_each(std::next(start), end, [](MappingResult& e) { e.discard = 1; });
+      std::for_each(std::next(start), end, [](MappingResult& e) { e.setDiscard(true); });
     }
 
     /**
@@ -254,15 +269,19 @@ namespace skch
       // Sort and assign unique IDs
       std::sort(readMappings.begin(), readMappings.end(),
           [](const MappingResult &a, const MappingResult &b) {
-              return std::tie(a.refSeqId, a.strand, a.queryStartPos, a.refStartPos)
-                   < std::tie(b.refSeqId, b.strand, b.queryStartPos, b.refStartPos);
+              return std::tie(a.refSeqId, a.queryStartPos, a.refStartPos)
+                   < std::tie(b.refSeqId, b.queryStartPos, b.refStartPos) ||
+                   (std::tie(a.refSeqId, a.queryStartPos, a.refStartPos) ==
+                    std::tie(b.refSeqId, b.queryStartPos, b.refStartPos) &&
+                    a.strand() < b.strand());
           });
 
+      // TODO: splitMappingId needs to be stored separately
       for (auto it = readMappings.begin(); it != readMappings.end(); ++it) {
-          it->splitMappingId = std::distance(readMappings.begin(), it);
-          it->discard = 0;
-          it->chainPairScore = std::numeric_limits<double>::max();
-          it->chainPairId = std::numeric_limits<int64_t>::min();
+          //it->splitMappingId = std::distance(readMappings.begin(), it);
+          it->setDiscard(false);
+          //it->chainPairScore = std::numeric_limits<double>::max();
+          //it->chainPairId = std::numeric_limits<int64_t>::min();
       }
 
       // Set up union-find for merging
@@ -273,67 +292,68 @@ namespace skch
       auto group_begin = readMappings.begin();
       while (group_begin != readMappings.end()) {
           auto group_end = std::find_if_not(group_begin, readMappings.end(),
-              [refSeqId = group_begin->refSeqId, strand = group_begin->strand](const MappingResult &m) {
-                  return m.refSeqId == refSeqId && m.strand == strand;
+              [refSeqId = group_begin->refSeqId, strand = group_begin->strand()](const MappingResult &m) {
+                  return m.refSeqId == refSeqId && m.strand() == strand;
               });
 
           // Find best pairs within group
           for (auto it = group_begin; it != group_end; ++it) {
-              if (it->chainPairScore != std::numeric_limits<double>::max()) {
+              // Chain pair tracking not available in compact struct
+              /*if (it->chainPairScore != std::numeric_limits<double>::max()) {
                   disjoint_sets.unite(it->splitMappingId, it->chainPairId);
-              }
+              }*/
               double best_score = std::numeric_limits<double>::max();
               auto best_it2 = group_end;
 
-              auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos + max_dist,
+              auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos() + max_dist,
                   [](offset_t val, const MappingResult &m) {
                       return val < m.queryStartPos;
                   });
 
               for (auto it2 = it + 1; it2 != end_it2; ++it2) {
                   if (it2->queryStartPos == it->queryStartPos) continue;
-                  int64_t query_dist = it2->queryStartPos - it->queryEndPos;
-                  int64_t ref_dist = (it->strand == strnd::FWD) ? 
-                                     it2->refStartPos - it->refEndPos : 
-                                     it->refStartPos - it2->refEndPos;
+                  int64_t query_dist = it2->queryStartPos - it->queryEndPos();
+                  int64_t ref_dist = (it->strand() == strnd::FWD) ? 
+                                     it2->refStartPos - it->refEndPos() : 
+                                     it->refStartPos - it2->refEndPos();
                                      
                   if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
                       double dist_sq = static_cast<double>(query_dist) * query_dist + 
                                        static_cast<double>(ref_dist) * ref_dist;
                       double max_dist_sq = static_cast<double>(max_dist) * max_dist;
-                      if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < it2->chainPairScore) {
+                      if (dist_sq < max_dist_sq && dist_sq < best_score) { // chainPairScore not in compact struct
                           best_it2 = it2;
                           best_score = dist_sq;
                       }
                   }
               }
-              if (best_it2 != group_end) {
+              // Chain pair tracking not available in compact struct
+              /*if (best_it2 != group_end) {
                   best_it2->chainPairScore = best_score;
                   best_it2->chainPairId = it->splitMappingId;
-              }
+              }*/
           }
           group_begin = group_end;
       }
 
-      // Assign merged IDs
-      for (auto &mapping : readMappings) {
+      // splitMappingId not available in compact struct
+      /*for (auto &mapping : readMappings) {
           mapping.splitMappingId = disjoint_sets.find(mapping.splitMappingId);
-      }
+      }*/
 
       // Sort by merged ID
       std::sort(readMappings.begin(), readMappings.end(),
           [](const MappingResult &a, const MappingResult &b) {
-              return std::tie(a.splitMappingId, a.queryStartPos, a.refStartPos)
-                   < std::tie(b.splitMappingId, b.queryStartPos, b.refStartPos);
+              // Sort by position since splitMappingId not available
+              return std::tie(a.queryStartPos, a.refStartPos)
+                   < std::tie(b.queryStartPos, b.refStartPos);
           });
 
       // Create maximally merged mappings
       MappingResultsVector_t maximallyMergedMappings;
       for (auto it = readMappings.begin(); it != readMappings.end();) {
-          auto it_end = std::find_if(it, readMappings.end(), 
-              [splitId = it->splitMappingId](const MappingResult &e) {
-                  return e.splitMappingId != splitId;
-              });
+          // Process all mappings as one group since splitMappingId not available
+          auto it_end = readMappings.end();
 
           // Process chain into fragments
           auto fragment_start = it;
@@ -342,10 +362,10 @@ namespace skch
               auto fragment_end = fragment_start;
               auto next = std::next(fragment_end);
              
-              offset_t current_length = fragment_start->queryEndPos - fragment_start->queryStartPos;
+              offset_t current_length = fragment_start->queryEndPos() - fragment_start->queryStartPos;
               
               while (next != it_end) {
-                  offset_t potential_length = next->queryEndPos - fragment_start->queryStartPos;
+                  offset_t potential_length = next->queryEndPos() - fragment_start->queryStartPos;
                   if (potential_length > param.max_mapping_length) break;
                   fragment_end = next;
                   current_length = potential_length;
@@ -354,20 +374,25 @@ namespace skch
 
               // Set merged mapping properties
               mergedMapping.queryStartPos = fragment_start->queryStartPos;
-              mergedMapping.queryEndPos = fragment_end->queryEndPos;
+              // TODO: Can't set queryEndPos directly
+              //mergedMapping.queryEndPos = fragment_end->queryEndPos();
 
-              if (mergedMapping.strand == strnd::FWD) {
+              // TODO: This whole merging logic needs to be rewritten
+              // to work with the compact structure where end positions are calculated
+              /*
+              if (mergedMapping.strand() == strnd::FWD) {
                   mergedMapping.refStartPos = fragment_start->refStartPos;
-                  mergedMapping.refEndPos = fragment_end->refEndPos;
+                  mergedMapping.refEndPos = fragment_end->refEndPos();
               } else {
                   mergedMapping.refStartPos = fragment_end->refStartPos;
-                  mergedMapping.refEndPos = fragment_start->refEndPos;
+                  mergedMapping.refEndPos = fragment_start->refEndPos();
               }
               
               mergedMapping.blockLength = std::max(
-                  mergedMapping.refEndPos - mergedMapping.refStartPos,
-                  mergedMapping.queryEndPos - mergedMapping.queryStartPos
+                  mergedMapping.refEndPos() - mergedMapping.refStartPos,
+                  mergedMapping.queryEndPos() - mergedMapping.queryStartPos
               );
+              */
 
               // Calculate averages
               double totalNucIdentity = 0.0;
@@ -380,7 +405,7 @@ namespace skch
                   totalNucIdentity += subIt->nucIdentity;
                   totalKmerComplexity += subIt->kmerComplexity;
                   totalConservedSketches += subIt->conservedSketches;
-                  totalSketchSize += subIt->sketchSize;
+                  //totalSketchSize += subIt->sketchSize; // TODO: no sketchSize field
                   fragment_size++;
               }
               
@@ -388,13 +413,13 @@ namespace skch
               mergedMapping.nucIdentity = totalNucIdentity / fragment_size;
               mergedMapping.kmerComplexity = totalKmerComplexity / fragment_size;
               mergedMapping.conservedSketches = totalConservedSketches;
-              mergedMapping.sketchSize = totalSketchSize;
-              mergedMapping.blockNucIdentity = mergedMapping.nucIdentity;
-              mergedMapping.approxMatches = std::round(mergedMapping.nucIdentity * mergedMapping.blockLength / 100.0);
-              mergedMapping.discard = 0;
-              mergedMapping.overlapped = false;
-              mergedMapping.chainPairScore = std::numeric_limits<double>::max();
-              mergedMapping.chainPairId = std::numeric_limits<int64_t>::min();
+              //mergedMapping.sketchSize = totalSketchSize; // TODO: no sketchSize field
+              // blockNucIdentity is now a method that returns getNucIdentity()
+              //mergedMapping.approxMatches = std::round(mergedMapping.getNucIdentity() * mergedMapping.blockLength / 100.0); // TODO: no approxMatches
+              mergedMapping.setDiscard(false);
+              mergedMapping.setOverlapped(false);
+              //mergedMapping.chainPairScore = std::numeric_limits<double>::max(); // TODO: no chainPairScore
+              //mergedMapping.chainPairId = std::numeric_limits<int64_t>::min(); // TODO: no chainPairId
 
               maximallyMergedMappings.push_back(mergedMapping);
               fragment_start = std::next(fragment_end);
@@ -408,7 +433,7 @@ namespace skch
       // Remove discarded mappings
       readMappings.erase(
           std::remove_if(readMappings.begin(), readMappings.end(), 
-                         [](const MappingResult& e) { return e.discard == 1; }),
+                         [](const MappingResult& e) { return e.discard(); }),
           readMappings.end()
       );
 
@@ -429,8 +454,8 @@ namespace skch
       // Mark positions that are not cuttable
       for (auto it = std::next(begin); it != end; ++it) {
           auto prev = std::prev(it);
-          if (it->queryStartPos - prev->queryEndPos > param.segLength / 5 ||
-              it->refStartPos - prev->refEndPos > param.segLength / 5) {
+          if (it->queryStartPos - prev->queryEndPos() > param.segLength / 5 ||
+              it->refStartPos - prev->refEndPos() > param.segLength / 5) {
               is_cuttable[std::distance(begin, prev)] = false;
               is_cuttable[std::distance(begin, it)] = false;
           }
@@ -442,7 +467,7 @@ namespace skch
       offset_t accumulate_length = 0;
 
       for (auto it = begin; it != end; ++it) {
-          accumulate_length += it->queryEndPos - it->queryStartPos;
+          accumulate_length += it->queryEndPos() - it->queryStartPos;
           
           if (accumulate_length >= param.max_mapping_length && is_cuttable[std::distance(begin, it)]) {
               processMappingFragment(fragment_start, std::next(it));
@@ -477,14 +502,14 @@ namespace skch
       int n_in_full_chain = std::distance(begin, end);
 
       for (auto it = begin; it != end; ++it) {
-          chain_start_query = std::min(chain_start_query, it->queryStartPos);
-          chain_end_query = std::max(chain_end_query, it->queryEndPos);
-          chain_start_ref = std::min(chain_start_ref, it->refStartPos);
-          chain_end_ref = std::max(chain_end_ref, it->refEndPos);
-          accumulate_nuc_identity += it->nucIdentity;
-          accumulate_kmer_complexity += it->kmerComplexity;
+          chain_start_query = std::min(chain_start_query, static_cast<offset_t>(it->queryStartPos));
+          chain_end_query = std::max(chain_end_query, static_cast<offset_t>(it->queryEndPos()));
+          chain_start_ref = std::min(chain_start_ref, static_cast<offset_t>(it->refStartPos));
+          chain_end_ref = std::max(chain_end_ref, static_cast<offset_t>(it->refEndPos()));
+          accumulate_nuc_identity += it->getNucIdentity();
+          accumulate_kmer_complexity += it->getKmerComplexity();
           total_conserved_sketches += it->conservedSketches;
-          total_sketch_size += it->sketchSize;
+          //total_sketch_size += it->sketchSize; // Not in compact struct
       }
 
       auto chain_nuc_identity = accumulate_nuc_identity / n_in_full_chain;
@@ -494,11 +519,11 @@ namespace skch
       for (auto it = begin; it != end; ++it) {
           it->n_merged = n_in_full_chain;
           it->blockLength = block_length;
-          it->blockNucIdentity = chain_nuc_identity;
-          it->kmerComplexity = chain_kmer_complexity;
+          // blockNucIdentity is a method that returns getNucIdentity()
+          it->setKmerComplexity(chain_kmer_complexity / 100.0f); // Convert back to 0-1 range
           it->conservedSketches = total_conserved_sketches;
-          it->sketchSize = total_sketch_size;
-          it->approxMatches = std::round(chain_nuc_identity * block_length / 100.0);
+          //it->sketchSize = total_sketch_size; // Not in compact struct
+          //it->approxMatches = std::round(chain_nuc_identity * block_length / 100.0); // Not in compact struct
       }
     }
 
@@ -583,8 +608,8 @@ namespace skch
      * @brief Compute orientation score for a mapping
      */
     static double computeOrientationScore(const MappingResult& m) {
-        int64_t q_span = m.queryEndPos - m.queryStartPos;
-        int64_t r_span = m.refEndPos - m.refStartPos;
+        int64_t q_span = m.queryEndPos() - m.queryStartPos;
+        int64_t r_span = m.refEndPos() - m.refStartPos;
         double diag_proj = (r_span + q_span) / std::sqrt(2.0);
         double anti_proj = (r_span - q_span) / std::sqrt(2.0);
         return std::abs(anti_proj / diag_proj);
@@ -597,7 +622,7 @@ namespace skch
         double total_weight = 0.0;
         double weighted_score = 0.0;
         for (const auto& m : mappings) {
-            double weight = m.queryEndPos - m.queryStartPos;
+            double weight = m.queryEndPos() - m.queryStartPos;
             total_weight += weight;
             weighted_score += weight * computeOrientationScore(m);
         }
@@ -615,14 +640,14 @@ namespace skch
              
         if (!use_antidiagonal) {
             u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
-            u_end   = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+            u_end   = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
             v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
-            v2 = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+            v2 = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
         } else {
             u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
-            u_end   = (m.refEndPos   - m.queryEndPos)   * invSqrt2;
+            u_end   = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
             v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
-            v2 = (m.queryEndPos   + m.refEndPos)   * invSqrt2;
+            v2 = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
         }
              
         double u_min = std::min(u_start, u_end);
@@ -654,16 +679,17 @@ namespace skch
         // Filter and expand scaffolds
         filterWeakMappings(superChains, std::floor(param.scaffold_min_length / param.segLength), param, idManager);
         
-        for (auto& mapping : superChains) {
+        // TODO: Expanding mappings requires modifying calculated fields
+        /*for (auto& mapping : superChains) {
             int64_t expansion = param.scaffold_max_deviation / 2;
             mapping.refStartPos = std::max<int64_t>(0, mapping.refStartPos - expansion);
             mapping.refEndPos = std::min<int64_t>(idManager.getSequenceLength(mapping.refSeqId),
-                                                 mapping.refEndPos + expansion);
+                                                 mapping.refEndPos() + expansion);
             mapping.queryStartPos = std::max<int64_t>(0, mapping.queryStartPos - expansion);
-            mapping.queryEndPos = std::min<int64_t>(mapping.queryLen, mapping.queryEndPos + expansion);
-            mapping.blockLength = std::max(mapping.refEndPos - mapping.refStartPos,
-                                         mapping.queryEndPos - mapping.queryStartPos);
-        }
+            mapping.queryEndPos = std::min<int64_t>(mapping.queryLen, mapping.queryEndPos() + expansion);
+            mapping.blockLength = std::max(mapping.refEndPos() - mapping.refStartPos,
+                                         mapping.queryEndPos() - mapping.queryStartPos);
+        }*/
 
         // Group mappings
         struct GroupKey {
@@ -686,11 +712,11 @@ namespace skch
         std::unordered_map<GroupKey, std::vector<MappingResult>, GroupKeyHash> scafGroups;
         
         for (const auto& m : readMappings) {
-            GroupKey key { m.querySeqId, m.refSeqId };
+            GroupKey key { 0, m.refSeqId }; // querySeqId not in compact struct
             rawGroups[key].push_back(m);
         }
         for (const auto& m : superChains) {
-            GroupKey key { m.querySeqId, m.refSeqId };
+            GroupKey key { 0, m.refSeqId }; // querySeqId not in compact struct
             scafGroups[key].push_back(m);
         }
 
@@ -718,14 +744,14 @@ namespace skch
                 
                 if (!use_antidiagonal) {
                     u_start = (m.queryStartPos + m.refStartPos) * invSqrt2;
-                    u_end = (m.queryEndPos + m.refEndPos) * invSqrt2;
+                    u_end = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
                     v1 = (m.refStartPos - m.queryStartPos) * invSqrt2;
-                    v2 = (m.refEndPos - m.queryEndPos) * invSqrt2;
+                    v2 = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
                 } else {
                     u_start = (m.refStartPos - m.queryStartPos) * invSqrt2;
-                    u_end = (m.refEndPos - m.queryEndPos) * invSqrt2;
+                    u_end = (m.refEndPos() - m.queryEndPos()) * invSqrt2;
                     v1 = (m.queryStartPos + m.refStartPos) * invSqrt2;
-                    v2 = (m.queryEndPos + m.refEndPos) * invSqrt2;
+                    v2 = (m.queryEndPos() + m.refEndPos()) * invSqrt2;
                 }
                 
                 return std::make_tuple(

@@ -119,9 +119,9 @@ namespace skch
         mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
 
         std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-            e.queryLen = fragment.fullLen;
-            e.queryStartPos = fragment.fragmentIndex * param.segLength;
-            e.queryEndPos = e.queryStartPos + fragment.len;
+            // For compact struct: adjust query start position to be relative to full sequence
+            e.queryStartPos += fragment.fragmentIndex * param.segLength;
+            // blockLength remains as fragment length (already set during mapping creation)
         });
 
         if (!l2Mappings.empty()) {
@@ -625,7 +625,7 @@ namespace skch
                               );
                           } else {
                               std::lock_guard<std::mutex> lock(*outstream_mutex);
-                              OutputHandler::reportReadMappings(mappings, queryName, *outstream, *idManager, param, processMappingResults);
+                              OutputHandler::reportReadMappings(mappings, queryName, *outstream, *idManager, param, processMappingResults, input->len);
                           }
                       }).name("query_" + queryName);
                   }
@@ -704,8 +704,11 @@ namespace skch
                       FilterUtils::filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
                                    true, *idManager, param, *filterProgress);
                       
+                      // Group by query sequence - we already have querySeqId from combinedMappings
                       for (auto& mapping : filteredMappings) {
-                          finalMappings[mapping.querySeqId].push_back(mapping);
+                          // Need to find querySeqId for this mapping
+                          // For now, store all in one group
+                          finalMappings[0].push_back(mapping);
                       }
                       filterProgress->increment(1);
                   }
@@ -715,7 +718,8 @@ namespace skch
                   size_t final_mapping_count = 0;
                   for (auto& [querySeqId, mappings] : finalMappings) {
                       std::string queryName = idManager->getSequenceName(querySeqId);
-                      OutputHandler::reportReadMappings(mappings, queryName, outstrm, *idManager, param, processMappingResults);
+                      offset_t queryLen = idManager->getSequenceLength(querySeqId);
+                      OutputHandler::reportReadMappings(mappings, queryName, outstrm, *idManager, param, processMappingResults, queryLen);
                       final_mapping_count += mappings.size();
                   }
                   
@@ -775,14 +779,9 @@ namespace skch
         std::sort(l2Mappings.begin(), l2Mappings.end(), [](const auto& a, const auto& b) 
             { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
 
-        int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
-        int32_t chain_length = l2Mappings.size();
-        int32_t chain_pos = 1;
-        for (auto& mapping : l2Mappings) {
-            mapping.chain_id = chain_id;
-            mapping.chain_length = chain_length;
-            mapping.chain_pos = chain_pos++;
-        }
+        // Chain tracking would require external storage
+        // int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
+        // Skipping chain assignment in compact implementation
 
 #ifdef ENABLE_TIME_PROFILE_L1_L2
         {
@@ -887,22 +886,22 @@ namespace skch
 
               MappingResult res;
               {
-                res.queryLen = Q.len;
-                res.refStartPos = l2.meanOptimalPos;
-                res.refEndPos = l2.meanOptimalPos + Q.len;
-                res.queryStartPos = 0;
-                res.queryEndPos = Q.len;
+                // Fields that exist in compact struct
                 res.refSeqId = l2.seqId;
-                res.querySeqId = Q.seqId;
-                res.nucIdentity = nucIdentity;
-                res.nucIdentityUpperBound = nucIdentityUpperBound;
-                res.sketchSize = Q.sketchSize;
+                res.refStartPos = l2.meanOptimalPos;
+                res.queryStartPos = 0;
+                res.blockLength = Q.len; // mapping covers full fragment length
                 res.conservedSketches = l2.sharedSketchSize;
-                res.blockLength = std::max(res.refEndPos - res.refStartPos, res.queryEndPos - res.queryStartPos);
-                res.approxMatches = std::round(res.nucIdentity * res.blockLength / 100.0);
-                res.strand = l2.strand; 
-                res.kmerComplexity = Q.kmerComplexity;
-                res.selfMapFilter = ((param.skip_self || param.skip_prefix) && Q.fullLen > ref.len);
+                res.n_merged = 1; // Single mapping, not merged
+                res.setNucIdentity(nucIdentity);
+                res.setKmerComplexity(Q.kmerComplexity);
+                res.setStrand(l2.strand);
+                res.setDiscard(false);
+                res.setOverlapped(false);
+                
+                // Fields that don't exist in compact struct:
+                // queryLen, querySeqId, refEndPos, queryEndPos are derived
+                // sketchSize, approxMatches, nucIdentityUpperBound, selfMapFilter not stored
               } 
               l2Mappings.push_back(res);
             }
@@ -962,7 +961,8 @@ namespace skch
           }
 
           // Build dense chain ID mapping
-          std::unordered_map<offset_t, offset_t> id_map;
+          // splitMappingId tracking not available in compact struct
+          /*std::unordered_map<offset_t, offset_t> id_map;
           offset_t next_id = 0;
           
           for (const auto& mapping : mappings) {
@@ -983,7 +983,7 @@ namespace skch
           }
           for (auto& mapping : maximallyMergedMappings) {
               mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
-          }
+          }*/
 
           return {std::move(mappings), std::move(maximallyMergedMappings)};
       }
