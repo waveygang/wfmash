@@ -25,25 +25,18 @@ namespace skch
 {
   /**
    * @struct MappingAuxData
-   * @brief A sidecar data structure to hold fields not present in the compact MappingResult.
-   * @note This is created temporarily inside functions that need this extra state.
-   *       Its index corresponds directly to the index in the MappingResultsVector_t.
+   * @brief A sidecar data structure holding all transient state for filtering/merging.
    */
   struct MappingAuxData {
-      offset_t splitMappingId;    // Unique ID for each initial mapping
-      double chainPairScore;      // Score for the best predecessor in a chain
-      int64_t chainPairId;        // ID of the best predecessor
-      seqno_t querySeqId;         // The query sequence ID for this mapping
-      offset_t queryLen;          // The total length of the query sequence
-
-      // Default constructor
-      MappingAuxData() : 
-          splitMappingId(0),
-          chainPairScore(std::numeric_limits<double>::max()),
-          chainPairId(std::numeric_limits<int64_t>::min()),
-          querySeqId(-1),
-          queryLen(0)
-      {}
+      offset_t splitMappingId{0};
+      double   chainPairScore{std::numeric_limits<double>::max()};
+      int64_t  chainPairId{std::numeric_limits<int64_t>::min()};
+      seqno_t  querySeqId{-1};
+      offset_t queryLen{0};
+      
+      // We also need a place to store mutable end coordinates for gap-filling
+      uint32_t tempQueryEndPos;
+      uint32_t tempRefEndPos;
   };
 
   /**
@@ -286,91 +279,94 @@ namespace skch
                                      int max_dist,
                                      const Parameters& param,
                                      progress_meter::ProgressMeter& progress,
-                                     seqno_t querySeqId,      // Pass in necessary context
-                                     offset_t queryLen)       // Pass in necessary context
+                                     seqno_t querySeqId,
+                                     offset_t queryLen)
     {
         if (!param.split || readMappings.size() < 2) return readMappings;
 
-        // --- Create and Populate Auxiliary Data ---
+        // 1. Create and Populate the "Sidecar" Auxiliary Data
         std::vector<MappingAuxData> aux_data(readMappings.size());
         for (size_t i = 0; i < readMappings.size(); ++i) {
-            aux_data[i].splitMappingId = i; // Assign a unique, stable ID
+            aux_data[i].splitMappingId = i; // Assign a unique, stable ID for chaining
             aux_data[i].querySeqId = querySeqId;
             aux_data[i].queryLen = queryLen;
         }
 
-        // --- Original Algorithm (Restored) ---
-        std::sort(readMappings.begin(), readMappings.end(),
-            [](const MappingResult &a, const MappingResult &b) {
+        // 2. Correct Lexicographic Sort (using indices for efficiency)
+        std::vector<uint32_t> p(readMappings.size());
+        std::iota(p.begin(), p.end(), 0);
+        std::sort(p.begin(), p.end(),
+            [&](uint32_t i, uint32_t j) {
+                const auto& a = readMappings[i];
+                const auto& b = readMappings[j];
                 auto a_strand = a.strand();
                 auto b_strand = b.strand();
                 return std::tie(a.refSeqId, a_strand, a.queryStartPos, a.refStartPos)
                      < std::tie(b.refSeqId, b_strand, b.queryStartPos, b.refStartPos);
             });
 
+        readMappings = reorder(readMappings, p);
+        aux_data = reorder(aux_data, p);
+        
+        // 3. Restore the Union-Find and Geometric Chaining Logic
         std::vector<dsets::DisjointSets::Aint> ufv(readMappings.size());
         auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
 
-        auto group_begin = readMappings.begin();
-        while (group_begin != readMappings.end()) {
-            auto group_end = std::find_if_not(group_begin, readMappings.end(),
-                [refSeqId = group_begin->refSeqId, strand = group_begin->strand()](const MappingResult &m) {
-                    return m.refSeqId == refSeqId && m.strand() == strand;
-                });
+        size_t group_start_idx = 0;
+        while (group_start_idx < readMappings.size()) {
+            const auto& start_map = readMappings[group_start_idx];
+            size_t group_end_idx = group_start_idx + 1;
+            while (group_end_idx < readMappings.size() &&
+                   readMappings[group_end_idx].refSeqId == start_map.refSeqId &&
+                   readMappings[group_end_idx].strand() == start_map.strand()) {
+                group_end_idx++;
+            }
 
-            for (auto it = group_begin; it != group_end; ++it) {
-                size_t idx1 = std::distance(readMappings.begin(), it);
-                
-                // This logic was broken, now fixed using aux_data
-                if (aux_data[idx1].chainPairScore != std::numeric_limits<double>::max()) {
-                    disjoint_sets.unite(aux_data[idx1].splitMappingId, aux_data[idx1].chainPairId);
+            for (size_t i = group_start_idx; i < group_end_idx; ++i) {
+                if (aux_data[i].chainPairScore != std::numeric_limits<double>::max()) {
+                    disjoint_sets.unite(aux_data[i].splitMappingId, aux_data[i].chainPairId);
                 }
-
+                
                 double best_score = std::numeric_limits<double>::max();
-                auto best_it2 = group_end;
+                size_t best_j = group_end_idx;
 
-                auto end_it2 = std::upper_bound(it + 1, group_end, it->queryEndPos() + max_dist,
-                    [](offset_t val, const MappingResult &m) { return val < m.queryStartPos; });
+                for (size_t j = i + 1; j < group_end_idx; ++j) {
+                    if (readMappings[j].queryStartPos > readMappings[i].queryEndPos() + max_dist) break;
 
-                for (auto it2 = it + 1; it2 != end_it2; ++it2) {
-                    if (it2->queryStartPos == it->queryStartPos) continue;
+                    int64_t q_dist = readMappings[j].queryStartPos - readMappings[i].queryEndPos();
+                    if (q_dist < 0) q_dist = 0; // Prevent negative distance from small overlaps
                     
-                    size_t idx2 = std::distance(readMappings.begin(), it2);
-
-                    int64_t query_dist = it2->queryStartPos - it->queryEndPos();
-                    int64_t ref_dist = (it->strand() == strnd::FWD) ? 
-                                       it2->refStartPos - it->refEndPos() : 
-                                       it->refStartPos - it2->refEndPos();
-                                       
-                    if (query_dist <= max_dist && ref_dist >= -param.segLength/5 && ref_dist <= max_dist) {
-                        double dist_sq = static_cast<double>(query_dist) * query_dist + 
-                                         static_cast<double>(ref_dist) * ref_dist;
-                        double max_dist_sq = static_cast<double>(max_dist) * max_dist;
-
-                        // This logic was broken, now fixed using aux_data
-                        if (dist_sq < max_dist_sq && dist_sq < best_score && dist_sq < aux_data[idx2].chainPairScore) {
-                            best_it2 = it2;
+                    int64_t r_dist = (readMappings[i].strand() == strnd::FWD) ? 
+                                     (readMappings[j].refStartPos - readMappings[i].refEndPos()) : 
+                                     (readMappings[i].refStartPos - readMappings[j].refEndPos());
+                    
+                    if (q_dist <= max_dist && r_dist >= -param.segLength/5 && r_dist <= max_dist) {
+                        double dist_sq = (double)q_dist * q_dist + (double)r_dist * r_dist;
+                        if (dist_sq < best_score && dist_sq < aux_data[j].chainPairScore) {
                             best_score = dist_sq;
+                            best_j = j;
                         }
                     }
                 }
-                // This logic was broken, now fixed using aux_data
-                if (best_it2 != group_end) {
-                    size_t best_idx2 = std::distance(readMappings.begin(), best_it2);
-                    aux_data[best_idx2].chainPairScore = best_score;
-                    aux_data[best_idx2].chainPairId = aux_data[idx1].splitMappingId;
+
+                if (best_j != group_end_idx) {
+                    aux_data[best_j].chainPairScore = best_score;
+                    aux_data[best_j].chainPairId = aux_data[i].splitMappingId;
                 }
             }
-            group_begin = group_end;
+            group_start_idx = group_end_idx;
         }
 
-        // --- Assign Merged IDs using Union-Find ---
+        // 4. Group by Chain and Construct Merged Fragments
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            if (aux_data[i].chainPairScore != std::numeric_limits<double>::max()) {
+                 disjoint_sets.unite(aux_data[i].splitMappingId, aux_data[i].chainPairId);
+            }
+        }
         for (size_t i = 0; i < readMappings.size(); ++i) {
             aux_data[i].splitMappingId = disjoint_sets.find(aux_data[i].splitMappingId);
         }
         
-        // Create a temporary vector of indices to sort, preserving original vector
-        std::vector<uint32_t> p(readMappings.size());
         std::iota(p.begin(), p.end(), 0);
         std::sort(p.begin(), p.end(),
             [&](uint32_t i, uint32_t j) {
@@ -378,74 +374,58 @@ namespace skch
                      < std::tie(aux_data[j].splitMappingId, readMappings[j].queryStartPos, readMappings[j].refStartPos);
             });
         
-        // Reorder both vectors based on the sorted indices
-        MappingResultsVector_t sorted_mappings = reorder(readMappings, p);
-        std::vector<MappingAuxData> sorted_aux = reorder(aux_data, p);
+        readMappings = reorder(readMappings, p);
+        aux_data = reorder(aux_data, p);
 
-        readMappings = sorted_mappings;
-        aux_data = sorted_aux;
-
-        // --- Fragment Construction (Logic largely unchanged) ---
         MappingResultsVector_t maximallyMergedMappings;
         size_t i = 0;
         while (i < readMappings.size()) {
             size_t j = i;
-            // Find the end of this chain
-            while (j < readMappings.size() && aux_data[j].splitMappingId == aux_data[i].splitMappingId) {
+            while (j + 1 < readMappings.size() && aux_data[j+1].splitMappingId == aux_data[i].splitMappingId) {
                 ++j;
             }
 
-            // Process this chain into fragments
-            size_t fragment_start = i;
-            while (fragment_start < j) {
-                size_t fragment_end = fragment_start;
-                
-                // Extend fragment as far as possible within max_mapping_length
-                while (fragment_end + 1 < j) {
-                    offset_t potential_length = readMappings[fragment_end + 1].queryEndPos() - 
-                                              readMappings[fragment_start].queryStartPos;
-                    if (potential_length > param.max_mapping_length) break;
-                    ++fragment_end;
+            size_t frag_start = i;
+            while(frag_start <= j) {
+                size_t frag_end = frag_start;
+                while(frag_end + 1 <= j && 
+                      (readMappings[frag_end+1].queryEndPos() - readMappings[frag_start].queryStartPos < param.max_mapping_length)) {
+                    frag_end++;
                 }
-
-                // --- Correctly merge the fragment ---
-                MappingResult merged = readMappings[fragment_start];
-                int fragment_size = fragment_end - fragment_start + 1;
-
-                uint32_t queryStart = readMappings[fragment_start].queryStartPos;
-                uint32_t queryEnd = readMappings[fragment_end].queryEndPos();
-                uint32_t refStartFwd = readMappings[fragment_start].refStartPos;
-                uint32_t refEndFwd = readMappings[fragment_end].refEndPos();
                 
-                double totalIdentity = 0;
-                double totalComplexity = 0;
-                int totalConserved = 0;
+                MappingResult merged = readMappings[frag_start];
+                uint32_t q_start = readMappings[frag_start].queryStartPos;
+                uint32_t q_end = readMappings[frag_end].queryEndPos();
+                uint32_t r_start_fwd = readMappings[frag_start].refStartPos;
+                uint32_t r_end_fwd = readMappings[frag_end].refEndPos();
                 
-                for (size_t k = fragment_start; k <= fragment_end; ++k) {
-                    totalIdentity += readMappings[k].getNucIdentity();
-                    totalComplexity += readMappings[k].getKmerComplexity();
-                    totalConserved += readMappings[k].conservedSketches;
+                double total_id = 0, total_comp = 0;
+                uint32_t total_conserved = 0;
+                for(size_t k = frag_start; k <= frag_end; ++k) {
+                    total_id += readMappings[k].getNucIdentity();
+                    total_comp += readMappings[k].getKmerComplexity();
+                    total_conserved += readMappings[k].conservedSketches;
                     if (merged.strand() == strnd::REV) {
-                        refStartFwd = std::min(refStartFwd, readMappings[k].refStartPos);
-                        refEndFwd = std::max(refEndFwd, static_cast<uint32_t>(readMappings[k].refEndPos()));
+                        r_start_fwd = std::min(r_start_fwd, readMappings[k].refStartPos);
+                        r_end_fwd = std::max(r_end_fwd, (uint32_t)readMappings[k].refEndPos());
                     }
                 }
 
-                merged.queryStartPos = queryStart;
-                merged.refStartPos = (merged.strand() == strnd::FWD) ? refStartFwd : readMappings[fragment_end].refStartPos;
-                merged.blockLength = queryEnd - queryStart; // Use query length as the basis for merged block length
+                merged.queryStartPos = q_start;
+                merged.refStartPos = (merged.strand() == strnd::FWD) ? r_start_fwd : readMappings[frag_end].refStartPos;
+                merged.blockLength = std::max(q_end - q_start, r_end_fwd - r_start_fwd);
                 
-                merged.n_merged = fragment_size;
-                merged.conservedSketches = totalConserved;
-                merged.setNucIdentity(totalIdentity / fragment_size);
-                merged.setKmerComplexity(totalComplexity / fragment_size);
-
+                merged.n_merged = frag_end - frag_start + 1;
+                merged.setNucIdentity(total_id / merged.n_merged);
+                merged.setKmerComplexity(total_comp / merged.n_merged);
+                merged.conservedSketches = total_conserved;
+                
                 maximallyMergedMappings.push_back(merged);
-                fragment_start = fragment_end + 1;
+                frag_start = frag_end + 1;
             }
-            i = j;
+            i = j + 1;
         }
-
+        
         return maximallyMergedMappings;
     }
 
@@ -677,30 +657,34 @@ namespace skch
                                  seqno_t querySeqId,   // Pass in context
                                  offset_t queryLen)    // Pass in context
     {
-        if (param.scaffold_gap == 0 && param.scaffold_min_length == 0 && param.scaffold_max_deviation == 0) {
-            return;
-        }
+        if (param.scaffold_gap == 0) return; // Simplified check
 
-        // Build scaffold mappings by calling the corrected merge function
-        MappingResultsVector_t scaffoldMappings = mergedMappings;
+        // 1. Build scaffolds using the now-correct merge function
+        MappingResultsVector_t scaffoldMappings = readMappings; // Use raw mappings to build scaffolds
         Parameters scaffoldParam = param;
-        scaffoldParam.chain_gap *= 2;
+        scaffoldParam.chain_gap = param.scaffold_gap;
         auto superChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
         
-        // Filter and expand scaffolds
-        filterWeakMappings(superChains, std::floor(param.scaffold_min_length / param.segLength), param, idManager, queryLen);
-        
-        // TODO: Expanding mappings requires modifying calculated fields
-        /*for (auto& mapping : superChains) {
-            int64_t expansion = param.scaffold_max_deviation / 2;
-            mapping.refStartPos = std::max<int64_t>(0, mapping.refStartPos - expansion);
-            mapping.refEndPos = std::min<int64_t>(idManager.getSequenceLength(mapping.refSeqId),
-                                                 mapping.refEndPos() + expansion);
-            mapping.queryStartPos = std::max<int64_t>(0, mapping.queryStartPos - expansion);
-            mapping.queryEndPos = std::min<int64_t>(mapping.queryLen, mapping.queryEndPos() + expansion);
-            mapping.blockLength = std::max(mapping.refEndPos() - mapping.refStartPos,
-                                         mapping.queryEndPos() - mapping.queryStartPos);
-        }*/
+        // 2. Filter scaffolds by length
+        superChains.erase(
+            std::remove_if(superChains.begin(), superChains.end(),
+                [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
+            superChains.end());
+
+        // 3. Expand scaffold boundaries for tolerance (RESTORED LOGIC)
+        for (auto& mapping : superChains) {
+            int64_t expansion = param.scaffold_max_deviation;
+            
+            uint32_t newQueryStart = (mapping.queryStartPos > expansion) ? mapping.queryStartPos - expansion : 0;
+            uint32_t newRefStart = (mapping.refStartPos > expansion) ? mapping.refStartPos - expansion : 0;
+            
+            uint32_t newQueryEnd = std::min<offset_t>(queryLen, mapping.queryEndPos() + expansion);
+            uint32_t newRefEnd = std::min<offset_t>(idManager.getSequenceLength(mapping.refSeqId), mapping.refEndPos() + expansion);
+
+            mapping.blockLength = std::max(newQueryEnd - newQueryStart, newRefEnd - newRefStart);
+            mapping.queryStartPos = newQueryStart;
+            mapping.refStartPos = newRefStart;
+        }
 
         // Group mappings
         struct GroupKey {
