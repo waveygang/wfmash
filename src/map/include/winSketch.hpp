@@ -249,17 +249,19 @@ namespace skch
               total_windows += output->size();
           }
 
-          // Second progress meter for index building
-          std::shared_ptr<progress_meter::ProgressMeter> index_progress;
+          // Finish the external progress meter if provided (sketching phase complete)
           if (external_progress) {
-              // Reuse the external progress meter if provided
-              index_progress = external_progress;
-          } else {
-              index_progress = std::make_shared<progress_meter::ProgressMeter>(
-                  total_windows,
-                  "[wfmash::mashmap] index build",
-                  param.use_progress_bar);
+              external_progress->finish();
           }
+
+          // Always create a new progress meter for index building
+          auto index_progress = std::make_shared<progress_meter::ProgressMeter>(
+              total_windows,
+              "[wfmash::mashmap] building",
+              param.use_progress_bar);
+          
+          // Reset timer to start tracking actual work
+          index_progress->reset_timer();
 
           // Parallel k-mer frequency counting
           std::vector<HF_Map_t> thread_kmer_freqs(param.threads);
@@ -386,10 +388,8 @@ namespace skch
                                std::make_move_iterator(thread_index.end()));
           }
           
-          // Finish second progress meter if we created it
-          if (!external_progress) {
-              index_progress->finish();
-          }
+          // Always finish the index progress meter
+          index_progress->finish();
 
           uint64_t freq_cutoff;
           if (param.max_kmer_freq <= 1.0) {

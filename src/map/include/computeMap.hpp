@@ -409,7 +409,7 @@ namespace skch
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
                   subset_query_length,
-                  "[wfmash::mashmap] mapping",
+                  "[wfmash::mashmap] mapping ",
                   param.use_progress_bar
                   );
 
@@ -467,7 +467,6 @@ namespace skch
                       }
                       
                       refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
-                      std::cerr << "[wfmash::mashmap] building index data structures..." << std::endl;
                   }
               }).name("build_index_" + std::to_string(subset_idx));
 
@@ -476,6 +475,13 @@ namespace skch
 
               auto outstream = std::make_shared<std::ofstream>();
               auto outstream_mutex = std::make_shared<std::mutex>();
+              
+              // Create scaffold progress meter at subset level
+              // Initialize with shared_ptr to nullptr - will be created when first query reaches scaffold filtering
+              auto scaffold_progress = std::make_shared<std::shared_ptr<progress_meter::ProgressMeter>>(nullptr);
+              auto scaffold_started = std::make_shared<std::atomic<bool>>(false);
+              auto scaffold_total_work = std::make_shared<std::atomic<size_t>>(0);
+              auto scaffold_mutex = std::make_shared<std::mutex>();
               
               if (param.filterMode != filter::ONETOONE) {
                   bool append = subset_idx > 0;
@@ -487,7 +493,8 @@ namespace skch
               }
 
               auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
-                                                           outstream, outstream_mutex, subset_flow](tf::Subflow& sf) {
+                                                           outstream, outstream_mutex, scaffold_progress, scaffold_started,
+                                                           scaffold_total_work, subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
@@ -526,7 +533,8 @@ namespace skch
                       std::string sequence(seq_data, seq_len);
                       free(seq_data);
             
-                      auto query_task = sf.emplace([&, queryName, sequence](tf::Subflow& query_sf) {
+                      auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress, scaffold_started,
+                                                    scaffold_total_work](tf::Subflow& query_sf) {
                           seqno_t seqId = idManager->getSequenceId(queryName);
                           auto input = std::make_shared<InputSeqProgContainer>(
                               sequence, queryName, seqId, *progress);
@@ -610,8 +618,10 @@ namespace skch
                           query_sf.join();
 
                           OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
+                          
                           auto [nonMergedMappings, mergedMappings] = 
-                              filterSubsetMappings(output->results, output->progress, seqId, input->len);
+                              filterSubsetMappings(output->results, output->progress, seqId, input->len,
+                                                  scaffold_progress, scaffold_started, scaffold_total_work);
 
                           auto& mappings = param.mergeMappings && param.split ?
                                 mergedMappings : nonMergedMappings;
@@ -665,6 +675,15 @@ namespace skch
               executor.run(*subset_flow).wait();
         
               progress->finish();
+              
+              // Finish scaffold progress if it was started
+              if (param.scaffold_gap > 0 && scaffold_started->load(std::memory_order_acquire)) {
+                  auto current_progress = std::atomic_load(scaffold_progress.get());
+                  if (current_progress) {
+                      current_progress->finish();
+                  }
+              }
+              
           }
 
           if (exit_after_indices) {
@@ -925,8 +944,11 @@ namespace skch
       std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(
           MappingResultsVector_t& mappings, 
           progress_meter::ProgressMeter& progress,
-          seqno_t querySeqId, // ADD THIS
-          offset_t queryLen) // ADD THIS
+          seqno_t querySeqId,
+          offset_t queryLen,
+          std::shared_ptr<std::shared_ptr<progress_meter::ProgressMeter>> scaffold_progress,
+          std::shared_ptr<std::atomic<bool>> scaffold_started,
+          std::shared_ptr<std::atomic<size_t>> scaffold_total_work)
       {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
 
@@ -953,7 +975,8 @@ namespace skch
               
               FilterUtils::sparsifyMappings(maximallyMergedMappings, param);
               // Pass context to scaffold filter
-              FilterUtils::filterByScaffolds(maximallyMergedMappings, rawMappings, param, *idManager, progress, querySeqId, queryLen);
+              FilterUtils::filterByScaffolds(maximallyMergedMappings, rawMappings, param, *idManager, progress, querySeqId, queryLen,
+                                           scaffold_progress, scaffold_started, scaffold_total_work);
           } else {
               // Same for non-merged path
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
@@ -962,7 +985,8 @@ namespace skch
                       param.numMappingsForSegment - 1, false, *idManager, param, progress);
                   mappings = std::move(filteredMappings);
               }
-              FilterUtils::filterByScaffolds(mappings, rawMappings, param, *idManager, progress, querySeqId, queryLen);
+              FilterUtils::filterByScaffolds(mappings, rawMappings, param, *idManager, progress, querySeqId, queryLen,
+                                           scaffold_progress, scaffold_started, scaffold_total_work);
           }
 
           // Build dense chain ID mapping
