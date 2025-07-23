@@ -623,7 +623,8 @@ namespace skch
 
 
     /**
-     * @brief Filter mappings by scaffolds using parallel distance propagation
+     * @brief Filter mappings by scaffolds using Direct Gravitational Model
+     * Keep mappings that are within a direct distance threshold from any anchor
      */
     static void filterByScaffolds(MappingResultsVector_t& readMappings,
                                  const MappingResultsVector_t& mergedMappings,
@@ -635,20 +636,21 @@ namespace skch
     {
         if (param.scaffold_gap <= 0) return;
 
-        // Phase 1: Build scaffolds
+        // Phase 1: Anchor Identification
         MappingResultsVector_t scaffoldMappings = readMappings;
         Parameters scaffoldParam = param;
         scaffoldParam.chain_gap = param.scaffold_gap;
-        auto scaffolds = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
+        auto anchors = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
         
-        // Filter scaffolds by length
-        scaffolds.erase(
-            std::remove_if(scaffolds.begin(), scaffolds.end(),
+        // Filter anchors by length
+        anchors.erase(
+            std::remove_if(anchors.begin(), anchors.end(),
                 [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
-            scaffolds.end());
+            anchors.end());
         
-        if (scaffolds.empty()) {
-            // No scaffolds, filter out everything
+        if (readMappings.empty()) return;
+        if (anchors.empty()) {
+            // No anchors, filter out everything
             readMappings.clear();
             return;
         }
@@ -669,7 +671,7 @@ namespace skch
             }
             
             if (scaffoldOut.is_open()) {
-                for (const auto& scaffold : scaffolds) {
+                for (const auto& scaffold : anchors) {
                     scaffoldOut << idManager.getSequenceName(querySeqId)
                                << "\t" << queryLen
                                << "\t" << scaffold.queryStartPos
@@ -691,129 +693,61 @@ namespace skch
             }
         }
 
-        // Phase 2: Build unified mapping list and spatial index
-        std::vector<Point2D> all_points;
-        std::vector<uint32_t> scaffold_indices;
-        
-        // Add scaffold mappings first
-        for (size_t i = 0; i < scaffolds.size(); ++i) {
-            const auto& m = scaffolds[i];
+        // Phase 2: Build spatial index of ANCHORS ONLY
+        std::vector<Point2D> anchor_points;
+        anchor_points.reserve(anchors.size());
+        for (size_t i = 0; i < anchors.size(); ++i) {
+            const auto& m = anchors[i];
             float x = m.queryStartPos + m.blockLength * 0.5f;
             float y = m.refStartPos + m.blockLength * 0.5f;
-            all_points.emplace_back(x, y, i);
-            scaffold_indices.push_back(i);
+            anchor_points.emplace_back(x, y, i);
         }
         
-        // Add raw mappings
-        size_t raw_start_idx = scaffolds.size();
-        for (size_t i = 0; i < readMappings.size(); ++i) {
-            const auto& m = readMappings[i];
-            float x = m.queryStartPos + m.blockLength * 0.5f;
-            float y = m.refStartPos + m.blockLength * 0.5f;
-            all_points.emplace_back(x, y, raw_start_idx + i);
-        }
+        SimpleKDTree anchor_kdtree;
+        anchor_kdtree.build(anchor_points);
         
-        // Build KD-tree
-        SimpleKDTree kdtree;
-        kdtree.build(all_points);
+        // Phase 3: Compute direct distance to nearest anchor for each mapping
+        std::vector<float> dist_to_nearest_anchor(readMappings.size());
         
-        // Phase 3: Find K nearest neighbors for each mapping
-        const int K_NEIGHBORS = 10;
-        std::vector<std::vector<std::pair<uint32_t, float>>> nearest_neighbors(all_points.size());
-        
-        // Parallel computation of nearest neighbors
+        // Parallel computation of distances
         int num_threads = param.threads > 0 ? param.threads : std::thread::hardware_concurrency();
         std::vector<std::thread> threads;
         std::atomic<size_t> work_index(0);
         
-        auto compute_neighbors = [&]() {
+        auto compute_anchor_distance = [&]() {
             size_t i;
-            while ((i = work_index.fetch_add(1)) < all_points.size()) {
-                nearest_neighbors[i] = kdtree.findKNearest(all_points[i], K_NEIGHBORS + 1);
-                // Remove self from neighbors list
-                nearest_neighbors[i].erase(
-                    std::remove_if(nearest_neighbors[i].begin(), nearest_neighbors[i].end(),
-                                  [i](const auto& p) { return p.first == i; }),
-                    nearest_neighbors[i].end()
-                );
+            while ((i = work_index.fetch_add(1)) < readMappings.size()) {
+                const auto& m = readMappings[i];
+                Point2D p(m.queryStartPos + m.blockLength * 0.5f, 
+                         m.refStartPos + m.blockLength * 0.5f, -1);
+                
+                auto nn = anchor_kdtree.findKNearest(p, 1);
+                if (nn.empty()) {
+                    dist_to_nearest_anchor[i] = std::numeric_limits<float>::infinity();
+                } else {
+                    dist_to_nearest_anchor[i] = nn[0].second;
+                }
             }
         };
         
         for (int t = 0; t < num_threads; ++t) {
-            threads.emplace_back(compute_neighbors);
+            threads.emplace_back(compute_anchor_distance);
         }
         for (auto& t : threads) {
             t.join();
         }
         
-        // Phase 4: Parallel distance propagation
-        std::vector<std::atomic<float>> dist_to_scaffold(all_points.size());
-        
-        // Initialize distances
-        for (size_t i = 0; i < all_points.size(); ++i) {
-            dist_to_scaffold[i].store(std::numeric_limits<float>::max());
-        }
-        for (uint32_t idx : scaffold_indices) {
-            dist_to_scaffold[idx].store(0.0f);
-        }
-        
-        // Run multiple iterations of distance propagation
-        const int MAX_ITERATIONS = 5;
-        for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
-            // Build work queue of nodes with finite distance
-            std::vector<uint32_t> work_queue;
-            for (size_t i = 0; i < all_points.size(); ++i) {
-                if (dist_to_scaffold[i].load() < std::numeric_limits<float>::max()) {
-                    work_queue.push_back(i);
-                }
-            }
-            
-            if (work_queue.empty()) break;
-            
-            // Reset work index
-            work_index = 0;
-            
-            auto propagate_distances = [&]() {
-                size_t idx;
-                while ((idx = work_index.fetch_add(1)) < work_queue.size()) {
-                    uint32_t current = work_queue[idx];
-                    float current_dist = dist_to_scaffold[current].load();
-                    
-                    // Update all neighbors
-                    for (const auto& [neighbor, edge_weight] : nearest_neighbors[current]) {
-                        float new_dist = current_dist + edge_weight;
-                        
-                        // Atomic update if we found a shorter path
-                        float old_dist = dist_to_scaffold[neighbor].load();
-                        while (old_dist > new_dist && 
-                               !dist_to_scaffold[neighbor].compare_exchange_weak(old_dist, new_dist)) {
-                            // CAS failed, old_dist is updated, retry
-                        }
-                    }
-                }
-            };
-            
-            // Launch threads for parallel propagation
-            threads.clear();
-            for (int t = 0; t < num_threads; ++t) {
-                threads.emplace_back(propagate_distances);
-            }
-            for (auto& t : threads) {
-                t.join();
-            }
-        }
-        
-        // Phase 5: Apply distance filter
-        MappingResultsVector_t filtered;
+        // Phase 4: Apply distance filter
+        MappingResultsVector_t keepers;
         float max_dist = static_cast<float>(param.scaffold_max_deviation);
         
         for (size_t i = 0; i < readMappings.size(); ++i) {
-            if (dist_to_scaffold[raw_start_idx + i].load() <= max_dist) {
-                filtered.push_back(readMappings[i]);
+            if (dist_to_nearest_anchor[i] <= max_dist) {
+                keepers.push_back(readMappings[i]);
             }
         }
         
-        readMappings = std::move(filtered);
+        readMappings = std::move(keepers);
     }
 
     /**
