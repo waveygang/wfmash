@@ -476,12 +476,11 @@ namespace skch
               auto outstream = std::make_shared<std::ofstream>();
               auto outstream_mutex = std::make_shared<std::mutex>();
               
-              // Create scaffold progress meter at subset level
-              // Initialize with shared_ptr to nullptr - will be created when first query reaches scaffold filtering
-              auto scaffold_progress = std::make_shared<std::shared_ptr<progress_meter::ProgressMeter>>(nullptr);
-              auto scaffold_started = std::make_shared<std::atomic<bool>>(false);
+              // Create scaffold progress tracking at subset level
+              auto scaffold_progress = std::make_shared<progress_meter::ProgressMeter>(
+                  1, "[wfmash::mashmap] scaffold", param.use_progress_bar);
               auto scaffold_total_work = std::make_shared<std::atomic<size_t>>(0);
-              auto scaffold_mutex = std::make_shared<std::mutex>();
+              auto scaffold_completed_work = std::make_shared<std::atomic<size_t>>(0);
               
               if (param.filterMode != filter::ONETOONE) {
                   bool append = subset_idx > 0;
@@ -493,8 +492,8 @@ namespace skch
               }
 
               auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
-                                                           outstream, outstream_mutex, scaffold_progress, scaffold_started,
-                                                           scaffold_total_work, subset_flow](tf::Subflow& sf) {
+                                                           outstream, outstream_mutex, scaffold_progress,
+                                                           scaffold_total_work, scaffold_completed_work, subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
@@ -533,8 +532,8 @@ namespace skch
                       std::string sequence(seq_data, seq_len);
                       free(seq_data);
             
-                      auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress, scaffold_started,
-                                                    scaffold_total_work](tf::Subflow& query_sf) {
+                      auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress,
+                                                    scaffold_total_work, scaffold_completed_work](tf::Subflow& query_sf) {
                           seqno_t seqId = idManager->getSequenceId(queryName);
                           auto input = std::make_shared<InputSeqProgContainer>(
                               sequence, queryName, seqId, *progress);
@@ -621,7 +620,7 @@ namespace skch
                           
                           auto [nonMergedMappings, mergedMappings] = 
                               filterSubsetMappings(output->results, output->progress, seqId, input->len,
-                                                  scaffold_progress, scaffold_started, scaffold_total_work);
+                                                  scaffold_progress, scaffold_total_work, scaffold_completed_work);
 
                           auto& mappings = param.mergeMappings && param.split ?
                                 mergedMappings : nonMergedMappings;
@@ -674,13 +673,34 @@ namespace skch
 
               executor.run(*subset_flow).wait();
         
+              // Immediately finish mapping progress when queries are done
               progress->finish();
               
-              // Finish scaffold progress if it was started
-              if (param.scaffold_gap > 0 && scaffold_started->load(std::memory_order_acquire)) {
-                  auto current_progress = std::atomic_load(scaffold_progress.get());
-                  if (current_progress) {
-                      current_progress->finish();
+              // If scaffolding is enabled, immediately start scaffold progress
+              if (param.scaffold_gap > 0) {
+                  size_t total_work = scaffold_total_work->load(std::memory_order_acquire);
+                  if (total_work > 0) {
+                      // Create scaffold progress meter with correct total
+                      scaffold_progress = std::make_shared<progress_meter::ProgressMeter>(
+                          total_work, "[wfmash::mashmap] scaffold", param.use_progress_bar);
+                      scaffold_progress->reset_timer();
+                      
+                      // Monitor progress and wait for completion
+                      std::thread monitor_thread([scaffold_progress, scaffold_completed_work, total_work]() {
+                          size_t last_completed = 0;
+                          while (last_completed < total_work) {
+                              size_t current_completed = scaffold_completed_work->load(std::memory_order_acquire);
+                              if (current_completed > last_completed) {
+                                  scaffold_progress->increment(current_completed - last_completed);
+                                  last_completed = current_completed;
+                              }
+                              std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                          }
+                          scaffold_progress->finish();
+                      });
+                      
+                      // Wait for all scaffold work to complete
+                      monitor_thread.join();
                   }
               }
               
@@ -946,9 +966,9 @@ namespace skch
           progress_meter::ProgressMeter& progress,
           seqno_t querySeqId,
           offset_t queryLen,
-          std::shared_ptr<std::shared_ptr<progress_meter::ProgressMeter>> scaffold_progress,
-          std::shared_ptr<std::atomic<bool>> scaffold_started,
-          std::shared_ptr<std::atomic<size_t>> scaffold_total_work)
+          std::shared_ptr<progress_meter::ProgressMeter> scaffold_progress,
+          std::shared_ptr<std::atomic<size_t>> scaffold_total_work,
+          std::shared_ptr<std::atomic<size_t>> scaffold_completed_work)
       {
           if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
 
@@ -976,7 +996,7 @@ namespace skch
               FilterUtils::sparsifyMappings(maximallyMergedMappings, param);
               // Pass context to scaffold filter
               FilterUtils::filterByScaffolds(maximallyMergedMappings, rawMappings, param, *idManager, progress, querySeqId, queryLen,
-                                           scaffold_progress, scaffold_started, scaffold_total_work);
+                                           scaffold_progress, scaffold_total_work, scaffold_completed_work);
           } else {
               // Same for non-merged path
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
@@ -986,7 +1006,7 @@ namespace skch
                   mappings = std::move(filteredMappings);
               }
               FilterUtils::filterByScaffolds(mappings, rawMappings, param, *idManager, progress, querySeqId, queryLen,
-                                           scaffold_progress, scaffold_started, scaffold_total_work);
+                                           scaffold_progress, scaffold_total_work, scaffold_completed_work);
           }
 
           // Build dense chain ID mapping

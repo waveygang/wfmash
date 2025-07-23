@@ -635,34 +635,15 @@ namespace skch
                                  progress_meter::ProgressMeter& progress,
                                  seqno_t querySeqId,
                                  offset_t queryLen,
-                                 std::shared_ptr<std::shared_ptr<progress_meter::ProgressMeter>> scaffold_progress,
-                                 std::shared_ptr<std::atomic<bool>> scaffold_started,
-                                 std::shared_ptr<std::atomic<size_t>> scaffold_total_work)
+                                 std::shared_ptr<progress_meter::ProgressMeter> scaffold_progress,
+                                 std::shared_ptr<std::atomic<size_t>> scaffold_total_work,
+                                 std::shared_ptr<std::atomic<size_t>> scaffold_completed_work)
     {
         if (param.scaffold_gap <= 0) return;
         
         // Add this query's scaffold work to the total
         size_t query_work = readMappings.size() * 3;  // 3 phases
         scaffold_total_work->fetch_add(query_work, std::memory_order_relaxed);
-        
-        // Finish the mapping progress for this query
-        progress.finish();
-        
-        // Try to start the scaffold progress meter (first query to get here wins)
-        bool expected = false;
-        if (scaffold_started->compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
-            // This thread won the race to start scaffold progress
-            // Wait a moment for other queries to register their work
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            
-            size_t total_work = scaffold_total_work->load(std::memory_order_relaxed);
-            // Create a new progress meter with the correct total
-            auto new_progress = std::make_shared<progress_meter::ProgressMeter>(
-                total_work, "[wfmash::mashmap] scaffold", param.use_progress_bar);
-            new_progress->reset_timer();
-            // Update the shared pointer
-            std::atomic_store(scaffold_progress.get(), new_progress);
-        }
         
 
         // Phase 1: Anchor Identification
@@ -672,13 +653,8 @@ namespace skch
         // Pass the query progress meter for anchor merging
         auto anchors = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
         
-        // Update scaffold progress if started
-        if (scaffold_started->load(std::memory_order_acquire)) {
-            auto current_progress = std::atomic_load(scaffold_progress.get());
-            if (current_progress) {
-                current_progress->increment(readMappings.size());
-            }
-        }
+        // Update completed work counter
+        scaffold_completed_work->fetch_add(readMappings.size(), std::memory_order_acq_rel);
         
         // Filter anchors by length
         anchors.erase(
@@ -752,7 +728,7 @@ namespace skch
         std::vector<std::thread> threads;
         std::atomic<size_t> work_index(0);
         
-        auto compute_anchor_distance = [&, scaffold_progress, scaffold_started]() {
+        auto compute_anchor_distance = [&, scaffold_progress]() {
             size_t i;
             while ((i = work_index.fetch_add(1)) < readMappings.size()) {
                 const auto& m = readMappings[i];
@@ -766,13 +742,8 @@ namespace skch
                     dist_to_nearest_anchor[i] = nn[0].second;
                 }
                 
-                // Update progress if scaffold progress has started
-                if (scaffold_started->load(std::memory_order_acquire)) {
-                    auto current_progress = std::atomic_load(scaffold_progress.get());
-                    if (current_progress) {
-                        current_progress->increment(1);
-                    }
-                }
+                // Update completed work counter
+                scaffold_completed_work->fetch_add(1, std::memory_order_acq_rel);
             }
         };
         
@@ -791,13 +762,8 @@ namespace skch
             if (dist_to_nearest_anchor[i] <= max_dist) {
                 keepers.push_back(readMappings[i]);
             }
-            // Update progress for filtering phase
-            if (scaffold_started->load(std::memory_order_acquire)) {
-                auto current_progress = std::atomic_load(scaffold_progress.get());
-                if (current_progress) {
-                    current_progress->increment(1);
-                }
-            }
+            // Update completed work counter
+            scaffold_completed_work->fetch_add(1, std::memory_order_acq_rel);
         }
         
         readMappings = std::move(keepers);

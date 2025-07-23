@@ -276,6 +276,11 @@ public:
         
         // Flush stderr to ensure all output is properly displayed
         std::cerr.flush();
+        
+        // Small delay to ensure clean output
+        if (use_progress_bar) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
     }
 };
 
