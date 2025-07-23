@@ -67,7 +67,7 @@ void parse_args(int argc,
     args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum identity % [70]", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
-    args::ValueFlag<std::string> chain_gap(mapping_opts, "INT", "chain gap [2k]", {'c', "chain-gap"});
+    args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "max mapping length [50k]", {'P', "max-length"});
     args::Flag no_split(mapping_opts, "", "map each sequence in one piece", {'N', "no-split"});
 
@@ -84,9 +84,9 @@ void parse_args(int argc,
 
     // SCAFFOLDING
     args::Group scaffold_opts(options_group, "SCAFFOLDING:");
-    args::ValueFlag<std::string> scaffolding(scaffold_opts, "INT", "scaffold gap [100k]", {'S', "scaffold-gap"});
+    args::ValueFlag<int> scaffold_mass(scaffold_opts, "INT", "scaffold mass (min segments) [5]", {'S', "scaffold-mass"});
     args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [100k]", {'D', "scaffold-dist"});
-    args::ValueFlag<int> scaffold_min_segs(scaffold_opts, "INT", "min scaffold segments [5]", {'j', "scaffold-min-segs"});
+    args::ValueFlag<std::string> scaffold_jump(scaffold_opts, "INT", "scaffold jump (gap) [100k]", {'j', "scaffold-jump"});
     args::ValueFlag<std::string> scaffold_output(scaffold_opts, "FILE", "output scaffold mappings to FILE", {"scaffold-out"});
 
     // SELECTION
@@ -345,10 +345,10 @@ void parse_args(int argc,
         map_parameters.block_length = 0; // Default 0 (no filtering)
     }
 
-    if (chain_gap) {
-        const int64_t l = wfmash::handy_parameter(args::get(chain_gap));
+    if (chain_jump) {
+        const int64_t l = wfmash::handy_parameter(args::get(chain_jump));
         if (l < 0) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, chain gap has to be a float value greater than or equal to 0." << std::endl;
+            std::cerr << "[wfmash] ERROR, skch::parseandSave, chain jump has to be a float value greater than or equal to 0." << std::endl;
             exit(1);
         }
         map_parameters.chain_gap = l;
@@ -358,11 +358,11 @@ void parse_args(int argc,
         align_parameters.chain_gap = 2000;
     }
 
-    // Parse scaffold gap
-    if (scaffolding) {
-        map_parameters.scaffold_gap = wfmash::handy_parameter(args::get(scaffolding));
+    // Parse scaffold jump (gap)
+    if (scaffold_jump) {
+        map_parameters.scaffold_gap = wfmash::handy_parameter(args::get(scaffold_jump));
         if (map_parameters.scaffold_gap < 0) {
-            std::cerr << "[wfmash] ERROR: Invalid scaffold gap" << std::endl;
+            std::cerr << "[wfmash] ERROR: Invalid scaffold jump" << std::endl;
             exit(1);
         }
     } else {
@@ -380,11 +380,11 @@ void parse_args(int argc,
         map_parameters.scaffold_max_deviation = 100000; // 100k default
     }
 
-    // Parse minimum scaffold segments
-    if (scaffold_min_segs) {
-        int min_segs = args::get(scaffold_min_segs);
+    // Parse scaffold mass (minimum segments)
+    if (scaffold_mass) {
+        int min_segs = args::get(scaffold_mass);
         if (min_segs <= 0) {
-            std::cerr << "[wfmash] ERROR: Invalid minimum scaffold segments" << std::endl;
+            std::cerr << "[wfmash] ERROR: Invalid scaffold mass" << std::endl;
             exit(1);
         }
         // Convert segments to length: segments * window_length
@@ -754,9 +754,9 @@ void parse_args(int argc,
               << ", l=" << map_parameters.block_length
               << ", c=" << map_parameters.chain_gap
               << ", P=" << map_parameters.max_mapping_length
-              << ", S=" << map_parameters.scaffold_gap 
+              << ", j=" << map_parameters.scaffold_gap 
               << ", D=" << map_parameters.scaffold_max_deviation
-              << ", j=" << (map_parameters.scaffold_min_length / map_parameters.windowLength)
+              << ", S=" << (map_parameters.scaffold_min_length / map_parameters.windowLength)
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
               << ", t=" << map_parameters.threads
