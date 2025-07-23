@@ -6,17 +6,14 @@ COVERAGE=$3
 PREFIX=${4:-""}  # Optional prefix to filter sequences, defaults to empty string
 
 cat $FASTA_FAI | awk -v OFS='\t' '{print($1,"0",$2)}' > $PAF.sequences.bed
-sed -n '11239p' $PAF.sequences.bed
 
 cat \
     <(cat $PAF | awk -v OFS='\t' '{print $1, $3, $4, "", "", $5}') \
     <(cat $PAF | awk -v OFS='\t' '{print $6, $8, $9, "", "", "+"}') \
     | bedtools sort | bedtools merge > $PAF.query+target.bed
-sed -n '11239p' $PAF.query+target.bed
 
 echo "#seq.name" coverage | tr ' ' '\t' > $PAF.coverage.txt
 bedtools intersect -a $PAF.sequences.bed -b $PAF.query+target.bed -wo > $PAF.overlap.bed
-sed -n '11239p' $PAF.overlap.bed
 
 awk 'BEGIN{FS=OFS="\t"}{
     if(NR==FNR){
