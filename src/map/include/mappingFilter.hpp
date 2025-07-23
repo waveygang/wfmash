@@ -666,10 +666,18 @@ namespace skch
                 [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
             mergedChains.end());
         
-        // Step 4: Collect ALL original mappings that fall within valid chain bounds
+        // Step 4: Apply plane sweep filter to the merged chains to remove off-diagonal/weaker scaffold chains
+        if (!mergedChains.empty() && (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)) {
+            MappingResultsVector_t filteredChains;
+            filterByGroup(mergedChains, filteredChains, param.numMappingsForSegment - 1, 
+                         false, idManager, param, progress);
+            mergedChains = std::move(filteredChains);
+        }
+
+        // Step 5: Collect original mappings that fall within the bounds of our filtered, high-quality scaffold chains.
+        // These will become the anchors.
         MappingResultsVector_t allAnchorMappings;
         for (const auto& chain : mergedChains) {
-            // Find all original mappings within this chain's bounds
             for (const auto& orig : originalMappings) {
                 if (orig.refSeqId == chain.refSeqId &&
                     orig.strand() == chain.strand() &&
@@ -680,14 +688,6 @@ namespace skch
                     allAnchorMappings.push_back(orig);
                 }
             }
-        }
-        
-        // Step 5: Apply plane sweep filter if needed
-        if (!allAnchorMappings.empty() && (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)) {
-            MappingResultsVector_t filteredAnchors;
-            filterByGroup(allAnchorMappings, filteredAnchors, param.numMappingsForSegment - 1, 
-                         false, idManager, param, progress);
-            allAnchorMappings = std::move(filteredAnchors);
         }
         
         // Use allAnchorMappings as anchors for the rest of the function
