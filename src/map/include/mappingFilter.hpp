@@ -662,6 +662,14 @@ namespace skch
                 [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
             anchors.end());
         
+        // Apply plane sweep filter to scaffold mappings to remove spurious anchors
+        if (!anchors.empty() && (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)) {
+            MappingResultsVector_t filteredAnchors;
+            filterByGroup(anchors, filteredAnchors, param.numMappingsForSegment - 1, 
+                         false, idManager, param, progress);
+            anchors = std::move(filteredAnchors);
+        }
+        
         if (readMappings.empty()) return;
         if (anchors.empty()) {
             // No anchors, filter out everything
