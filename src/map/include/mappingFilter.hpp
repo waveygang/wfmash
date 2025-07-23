@@ -646,29 +646,52 @@ namespace skch
         scaffold_total_work->fetch_add(query_work, std::memory_order_relaxed);
         
 
-        // Phase 1: Anchor Identification
+        // Phase 1: Anchor Identification - Modified approach
         MappingResultsVector_t scaffoldMappings = readMappings;
         Parameters scaffoldParam = param;
         scaffoldParam.chain_gap = param.scaffold_gap;
-        // Pass the query progress meter for anchor merging
-        auto anchors = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
+        
+        // Step 1: Keep a copy of original mappings before merging
+        MappingResultsVector_t originalMappings = scaffoldMappings;
+        
+        // Step 2: Merge to identify chains
+        auto mergedChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
         
         // Update completed work counter
         scaffold_completed_work->fetch_add(readMappings.size(), std::memory_order_acq_rel);
         
-        // Filter anchors by length
-        anchors.erase(
-            std::remove_if(anchors.begin(), anchors.end(),
+        // Step 3: Filter merged chains by length
+        mergedChains.erase(
+            std::remove_if(mergedChains.begin(), mergedChains.end(),
                 [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
-            anchors.end());
+            mergedChains.end());
         
-        // Apply plane sweep filter to scaffold mappings to remove spurious anchors
-        if (!anchors.empty() && (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)) {
-            MappingResultsVector_t filteredAnchors;
-            filterByGroup(anchors, filteredAnchors, param.numMappingsForSegment - 1, 
-                         false, idManager, param, progress);
-            anchors = std::move(filteredAnchors);
+        // Step 4: Collect ALL original mappings that fall within valid chain bounds
+        MappingResultsVector_t allAnchorMappings;
+        for (const auto& chain : mergedChains) {
+            // Find all original mappings within this chain's bounds
+            for (const auto& orig : originalMappings) {
+                if (orig.refSeqId == chain.refSeqId &&
+                    orig.strand() == chain.strand() &&
+                    orig.queryStartPos >= chain.queryStartPos &&
+                    orig.queryEndPos() <= chain.queryEndPos() &&
+                    orig.refStartPos >= chain.refStartPos &&
+                    orig.refEndPos() <= chain.refEndPos()) {
+                    allAnchorMappings.push_back(orig);
+                }
+            }
         }
+        
+        // Step 5: Apply plane sweep filter if needed
+        if (!allAnchorMappings.empty() && (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)) {
+            MappingResultsVector_t filteredAnchors;
+            filterByGroup(allAnchorMappings, filteredAnchors, param.numMappingsForSegment - 1, 
+                         false, idManager, param, progress);
+            allAnchorMappings = std::move(filteredAnchors);
+        }
+        
+        // Use allAnchorMappings as anchors for the rest of the function
+        auto& anchors = allAnchorMappings;
         
         if (readMappings.empty()) return;
         if (anchors.empty()) {
@@ -693,7 +716,8 @@ namespace skch
             }
             
             if (scaffoldOut.is_open()) {
-                for (const auto& scaffold : anchors) {
+                // Output the merged chains, not individual anchors
+                for (const auto& scaffold : mergedChains) {
                     scaffoldOut << idManager.getSequenceName(querySeqId)
                                << "\t" << queryLen
                                << "\t" << scaffold.queryStartPos
