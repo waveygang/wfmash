@@ -293,11 +293,6 @@ namespace skch
               }
           }
 
-          // print frequency map
-          for (const auto& [hash, freq] : kmer_freqs) {
-              std::cout << hash << "\t" << freq << std::endl;
-          }
-
           // Calculate count_threshold ONCE before parallel section
           uint64_t min_occ = 10;
           uint64_t max_occ = std::numeric_limits<uint64_t>::max();
