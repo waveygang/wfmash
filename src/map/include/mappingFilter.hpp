@@ -162,10 +162,10 @@ namespace skch
                        readMappings.end(),
                        [&](MappingResult &e){
                            bool is_boundary_mapping = 
-                               e.queryStartPos < param.segLength ||
-                               e.queryEndPos() > queryLen - param.segLength || // Use passed-in queryLen
-                               e.refStartPos < param.segLength ||
-                               e.refEndPos() > idManager.getSequenceLength(e.refSeqId) - param.segLength;
+                               e.queryStartPos < param.windowLength ||
+                               e.queryEndPos() > queryLen - param.windowLength || // Use passed-in queryLen
+                               e.refStartPos < param.windowLength ||
+                               e.refEndPos() > idManager.getSequenceLength(e.refSeqId) - param.windowLength;
                            
                            if (is_boundary_mapping) {
                                return e.blockLength < param.block_length / 2 || 
@@ -444,7 +444,7 @@ namespace skch
                                      (readMappings[j].refStartPos - readMappings[i].refEndPos()) : 
                                      (readMappings[i].refStartPos - readMappings[j].refEndPos());
                     
-                    if (q_dist <= max_dist && r_dist >= -param.segLength/5 && r_dist <= max_dist) {
+                    if (q_dist <= max_dist && r_dist >= -param.windowLength/5 && r_dist <= max_dist) {
                         double dist_sq = (double)q_dist * q_dist + (double)r_dist * r_dist;
                         if (dist_sq < best_score && dist_sq < aux_data[j].chainPairScore) {
                             best_score = dist_sq;
@@ -547,14 +547,14 @@ namespace skch
       // Mark positions that are not cuttable
       for (auto it = std::next(begin); it != end; ++it) {
           auto prev = std::prev(it);
-          if (it->queryStartPos - prev->queryEndPos() > param.segLength / 5 ||
-              it->refStartPos - prev->refEndPos() > param.segLength / 5) {
+          if (it->queryStartPos - prev->queryEndPos() > param.windowLength / 5 ||
+              it->refStartPos - prev->refEndPos() > param.windowLength / 5) {
               is_cuttable[std::distance(begin, prev)] = false;
               is_cuttable[std::distance(begin, it)] = false;
           }
       }
 
-      adjustConsecutiveMappings(begin, end, param.segLength);
+      adjustConsecutiveMappings(begin, end, param.windowLength);
 
       auto fragment_start = begin;
       offset_t accumulate_length = 0;

@@ -120,7 +120,7 @@ namespace skch
 
         std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
             // For compact struct: adjust query start position to be relative to full sequence
-            e.queryStartPos += fragment.fragmentIndex * param.segLength;
+            e.queryStartPos += fragment.fragmentIndex * param.windowLength;
             // blockLength remains as fragment length (already set during mapping creation)
         });
 
@@ -154,7 +154,7 @@ namespace skch
             std::string(1, p.prefix_delim),
             p.query_list,
             p.target_list)),
-        cached_segment_length(p.segLength),
+        cached_segment_length(p.windowLength),
         cached_minimum_hits(std::max(p.minimum_hits, Stat::estimateMinimumHitsRelaxed(p.sketchSize, p.kmerSize, p.percentageIdentity, skch::fixed::confidence_interval)))
       {
           // Initialize sequence names
@@ -534,7 +534,7 @@ namespace skch
                               queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
             
                           int refGroup = idManager->getRefGroup(seqId);
-                          int noOverlapFragmentCount = input->len / param.segLength;
+                          int noOverlapFragmentCount = input->len / param.windowLength;
 
                           std::mutex results_mutex;
 
@@ -543,8 +543,8 @@ namespace skch
                               query_sf.emplace([&, i]() {
                                   std::vector<MappingResult> all_fragment_results;
                                   auto fragment = std::make_shared<FragmentData>(
-                                      &(sequence)[0u] + i * param.segLength,
-                                      static_cast<int>(param.segLength),
+                                      &(sequence)[0u] + i * param.windowLength,
+                                      static_cast<int>(param.windowLength),
                                       static_cast<int>(input->len),
                                       seqId,
                                       queryName,
@@ -576,12 +576,12 @@ namespace skch
                           }
 
                           // Handle final fragment if needed
-                          if (noOverlapFragmentCount >= 1 && input->len % param.segLength != 0) {
+                          if (noOverlapFragmentCount >= 1 && input->len % param.windowLength != 0) {
                               query_sf.emplace([&]() {
                                   std::vector<MappingResult> all_fragment_results;
                                   auto fragment = std::make_shared<FragmentData>(
-                                      &(sequence)[0u] + input->len - param.segLength,
-                                      static_cast<int>(param.segLength),
+                                      &(sequence)[0u] + input->len - param.windowLength,
+                                      static_cast<int>(param.windowLength),
                                       static_cast<int>(input->len),
                                       seqId,
                                       queryName,
@@ -938,7 +938,7 @@ namespace skch
           if (param.mergeMappings && param.split) {
               // Pass context (queryLen) to weak mapping filter
               FilterUtils::filterWeakMappings(maximallyMergedMappings, 
-                  std::floor(param.block_length / param.segLength), param, *idManager, queryLen);
+                  std::floor(param.block_length / param.windowLength), param, *idManager, queryLen);
               
               if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
                   MappingResultsVector_t groupFilteredMappings;

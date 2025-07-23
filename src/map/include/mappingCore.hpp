@@ -148,10 +148,10 @@ namespace skch
       int bestIntersectionSize = 0;
       std::vector<L1_candidateLocus_t> localOpts;
 
-      int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
+      int windowLen = std::max<offset_t>(0, Q.len - param.windowLength);
       auto trailingIt = ip_begin;
       auto leadingIt = ip_begin;
-      int clusterLen = param.segLength;
+      int clusterLen = param.windowLength;
 
       std::unordered_map<hash_t, int> hash_to_freq;
 
@@ -311,7 +311,7 @@ namespace skch
         const Parameters& param)
     {
       auto& minmerIndex = refSketch->minmerIndex;
-      const MinmerInfo first_minmer = MinmerInfo {0, candidateLocus.rangeStartPos - param.segLength - 1, 0, candidateLocus.seqId, 0};
+      const MinmerInfo first_minmer = MinmerInfo {0, candidateLocus.rangeStartPos - param.windowLength - 1, 0, candidateLocus.seqId, 0};
       auto firstOpenIt = std::lower_bound(minmerIndex.begin(), minmerIndex.end(), first_minmer); 
 
       std::vector<skch::MinmerInfo> slidingWindow;
@@ -319,7 +319,7 @@ namespace skch
       constexpr auto heap_cmp = [](const skch::MinmerInfo& l, const skch::MinmerInfo& r) {return l.wpos_end > r.wpos_end;};
 
       auto windowIt = firstOpenIt;
-      int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
+      int windowLen = std::max<offset_t>(0, Q.len - param.windowLength);
       std::unordered_map<hash_t, int> hash_to_freq;
       
       SlideMapper<Q_Info> slideMap(Q);
@@ -406,7 +406,7 @@ namespace skch
             l2_out.seqId = windowIt->seqId;
             l2_out.strand = prev_strand_votes >= 0 ? strnd::FWD : strnd::REV;
             if (l2_vec_out.empty() 
-                || l2_vec_out.back().optimalEnd + param.segLength < l2_out.optimalStart)
+                || l2_vec_out.back().optimalEnd + param.windowLength < l2_out.optimalStart)
             {
               l2_vec_out.push_back(l2_out);
             }
@@ -429,7 +429,7 @@ namespace skch
         l2_out.seqId = std::prev(windowIt)->seqId;
         l2_out.strand = slideMap.strand_votes >= 0 ? strnd::FWD : strnd::REV;
         if (l2_vec_out.empty() 
-            || l2_vec_out.back().optimalEnd + param.segLength < l2_out.optimalStart)
+            || l2_vec_out.back().optimalEnd + param.windowLength < l2_out.optimalStart)
         {
           l2_vec_out.push_back(l2_out);
         }

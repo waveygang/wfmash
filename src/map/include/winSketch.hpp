@@ -215,7 +215,7 @@ namespace skch
                   fileName,
                   target_names,
                   [&](const std::string& seq_name, const std::string& seq) {
-                      if (seq.length() >= param.segLength) {
+                      if (seq.length() >= param.windowLength) {
                           seqno_t seqId = idManager.getSequenceId(seq_name);
                           threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqId));
                           totalSeqProcessed++;
@@ -440,7 +440,7 @@ namespace skch
                 &(input->seq[0u]), 
                 input->len, 
                 param.kmerSize, 
-                param.segLength, 
+                param.windowLength, 
                 param.alphabetSize, 
                 param.sketchSize,
                 input->seqId,
@@ -555,7 +555,7 @@ namespace skch
       void writeParameters(std::ofstream& outStream)
       {
         // Write segment length, sketch size, and kmer size
-        outStream.write((char*) &param.segLength, sizeof(param.segLength));
+        outStream.write((char*) &param.windowLength, sizeof(param.windowLength));
         outStream.write((char*) &param.sketchSize, sizeof(param.sketchSize));
         outStream.write((char*) &param.kmerSize, sizeof(param.kmerSize));
       }
@@ -665,22 +665,22 @@ namespace skch
        */
       void readParameters(std::ifstream& inStream)
       {
-        decltype(param.segLength) index_segLength;
+        decltype(param.windowLength) index_windowLength;
         decltype(param.sketchSize) index_sketchSize;
         decltype(param.kmerSize) index_kmerSize;
 
-        inStream.read((char*) &index_segLength, sizeof(index_segLength));
+        inStream.read((char*) &index_windowLength, sizeof(index_windowLength));
         inStream.read((char*) &index_sketchSize, sizeof(index_sketchSize));
         inStream.read((char*) &index_kmerSize, sizeof(index_kmerSize));
 
-        if (param.segLength != index_segLength 
+        if (param.windowLength != index_windowLength 
             || param.sketchSize != index_sketchSize
             || param.kmerSize != index_kmerSize)
         {
           std::cerr << "[wfmash::mashmap] ERROR: Parameters of indexed sketch differ from current parameters" << std::endl;
-          std::cerr << "[wfmash::mashmap] Index --> segLength=" << index_segLength
+          std::cerr << "[wfmash::mashmap] Index --> windowLength=" << index_windowLength
                     << " sketchSize=" << index_sketchSize << " kmerSize=" << index_kmerSize << std::endl;
-          std::cerr << "[wfmash::mashmap] Current --> segLength=" << param.segLength
+          std::cerr << "[wfmash::mashmap] Current --> windowLength=" << param.windowLength
                     << " sketchSize=" << param.sketchSize << " kmerSize=" << param.kmerSize << std::endl;
           exit(1);
         }
@@ -755,10 +755,10 @@ namespace skch
         }
         
         // Skip parameters
-        decltype(param.segLength) segLength;
+        decltype(param.windowLength) windowLength;
         decltype(param.sketchSize) sketchSize;
         decltype(param.kmerSize) kmerSize;
-        inStream.read(reinterpret_cast<char*>(&segLength), sizeof(segLength));
+        inStream.read(reinterpret_cast<char*>(&windowLength), sizeof(windowLength));
         inStream.read(reinterpret_cast<char*>(&sketchSize), sizeof(sketchSize));
         inStream.read(reinterpret_cast<char*>(&kmerSize), sizeof(kmerSize));
         

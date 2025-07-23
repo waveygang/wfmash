@@ -32,8 +32,7 @@ struct ales_params {
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
-    offset_t segLength;                                //For split mapping case, this represents the fragment length
-                                                      //for noSplit, it represents minimum read length to multimap
+    offset_t windowLength;                             //window size for sketching
     offset_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
     offset_t chain_gap;                                // max distance for 2d range union-find mapping chaining
     uint64_t max_mapping_length;                      // maximum length of a mapping
