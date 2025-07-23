@@ -79,7 +79,7 @@ void parse_args(int argc,
     args::ValueFlag<double> overlap_threshold(filtering_opts, "FLOAT", "max overlap ratio [1.0]", {'O', "overlap"});
     args::ValueFlag<double> map_sparsification(filtering_opts, "FLOAT", "keep this fraction of mappings [1.0]", {'x', "sparsify"});
     args::ValueFlag<std::string> hg_filter(filtering_opts, "n,Δ,conf", "hypergeometric filter [1.0,0.0,99.9]", {"hg-filter"});
-    args::ValueFlag<int> min_hits(filtering_opts, "INT", "min hits for L1 filtering [3]", {'H', "l1-hits"});
+    args::ValueFlag<int> min_hits(filtering_opts, "INT", "min hits for L1 filtering [1]", {'H', "l1-hits"});
     args::ValueFlag<double> max_kmer_freq(filtering_opts, "FLOAT", "filter high-freq minimizers [0.0002]", {'F', "filter-freq"});
 
     // SCAFFOLDING
@@ -638,7 +638,7 @@ void parse_args(int argc,
     if (min_hits) {
         map_parameters.minimum_hits = args::get(min_hits);
     } else {
-        map_parameters.minimum_hits = 3; // default minimum
+        map_parameters.minimum_hits = 1; // default minimum
     }
 
     if (max_kmer_freq) {
