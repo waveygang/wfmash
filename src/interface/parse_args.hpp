@@ -91,7 +91,7 @@ void parse_args(int argc,
 
     // SELECTION
     args::Group selection_opts(options_group, "SELECTION:");
-    args::ValueFlag<char> skip_prefix(selection_opts, "C", "group by prefix delimiter [#]", {'Y', "group-prefix"});
+    args::ValueFlag<char> skip_prefix(selection_opts, "C", "group by last occurrence of prefix delimiter [#]", {'Y', "group-prefix"});
     args::Flag enable_self_mappings(selection_opts, "", "include self mappings", {'X', "self-maps"});
     args::Flag lower_triangular(selection_opts, "", "only map seq_i to seq_j if i>j", {'L', "lower-triangular"});
     args::ValueFlag<std::string> target_prefix(selection_opts, "pfx", "target name prefix filter", {'T', "target-prefix"});
