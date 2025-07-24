@@ -32,8 +32,7 @@ struct ales_params {
 struct Parameters
 {
     int kmerSize;                                     //kmer size for sketching
-    offset_t segLength;                                //For split mapping case, this represents the fragment length
-                                                      //for noSplit, it represents minimum read length to multimap
+    offset_t windowLength;                             //window size for sketching
     offset_t block_length;                             // minimum (potentially merged) block to keep if we aren't split
     offset_t chain_gap;                                // max distance for 2d range union-find mapping chaining
     uint64_t max_mapping_length;                      // maximum length of a mapping
@@ -85,6 +84,7 @@ struct Parameters
     int64_t scaffold_max_deviation;                  // max diagonal deviation from scaffold chains
     int64_t scaffold_gap;                           // gap threshold for scaffold chaining
     int64_t scaffold_min_length = 50000;            // minimum scaffold block length
+    std::string scaffold_output_file;               // optional file to output scaffold mappings
     
     bool legacy_output;
     //std::unordered_set<std::string> high_freq_kmers;  //

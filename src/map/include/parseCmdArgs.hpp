@@ -53,9 +53,9 @@ $ mashmap --rl reference_files_list.txt -q seq.fq [OPTIONS]");
     cmd.defineOption("queryList", "a file containing list of query files, one per line", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("queryList","ql");
 
-    cmd.defineOption("segLength", "mapping segment length [default : 5,000]\n\
+    cmd.defineOption("windowLength", "mapping window length [default : 5,000]\n\
 sequences shorter than segment length will be ignored", ArgvParser::OptionRequiresValue);
-    cmd.defineOptionAlternative("segLength","s");
+    cmd.defineOptionAlternative("windowLength","s");
 
     cmd.defineOption("sketchSize", "Number of sketch elements", ArgvParser::OptionRequiresValue);
     cmd.defineOptionAlternative("sketchSize","J");
@@ -400,13 +400,13 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     }
     str.clear();
 
-    if(cmd.foundOption("segLength"))
+    if(cmd.foundOption("windowLength"))
     {
-      str << cmd.optionValue("segLength");
-      str >> parameters.segLength;
+      str << cmd.optionValue("windowLength");
+      str >> parameters.windowLength;
       str.clear();
 
-      if(parameters.segLength < 100)
+      if(parameters.windowLength < 100)
       {
         std::cerr << "ERROR, skch::parseandSave, minimum segment length is required to be >= 100 bp.\n\
           This is because Mashmap is not designed for computing short local alignments.\n" << std::endl;
@@ -414,7 +414,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       }
     }
     else
-      parameters.segLength = 5000;
+      parameters.windowLength = 5000;
 
     if(cmd.foundOption("blockLength"))
     {
@@ -427,7 +427,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
     } else {
         // n.b. we map-merge across gaps up to 3x segment length
         // and then filter for things that are at least block_length long
-        parameters.block_length = parameters.segLength;
+        parameters.block_length = parameters.windowLength;
     }
     str.clear();
 
@@ -441,7 +441,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       }
       parameters.chain_gap = l;
     } else {
-      parameters.chain_gap = parameters.segLength;
+      parameters.chain_gap = parameters.windowLength;
     }
     str.clear();
 
@@ -575,7 +575,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
       {
         const double md = 1 - parameters.percentageIdentity;
         double dens = 0.02 * (1 + (md / 0.05));
-        parameters.sketchSize = dens * (parameters.segLength - parameters.kmerSize);
+        parameters.sketchSize = dens * (parameters.windowLength - parameters.kmerSize);
       }
       else 
       {
@@ -584,7 +584,7 @@ sequences shorter than segment length will be ignored", ArgvParser::OptionRequir
             skch::fixed::pval_cutoff, skch::fixed::confidence_interval,
             parameters.kmerSize, parameters.alphabetSize,
             parameters.percentageIdentity,
-            parameters.segLength, parameters.referenceSize);
+            parameters.windowLength, parameters.referenceSize);
       }
     }
 

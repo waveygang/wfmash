@@ -10,6 +10,7 @@
 #include <tuple>
 #include <vector>
 #include <chrono>
+#include <cmath>
 #include "common/progress.hpp"
 
 namespace skch
@@ -146,68 +147,109 @@ namespace skch
       s^= h(v) + 0x9e3779b9 + (s<< 6) + (s>> 2);
   }
 
-  //Fragment mapping result
-  //Do not save variable sized objects in this struct
+  /**
+   * @struct MappingResult
+   * @brief Compact 32-byte mapping structure for memory efficiency
+   */
   struct MappingResult
   {
-    offset_t queryLen;                                  //length of the query sequence
-    offset_t refStartPos;                               //start position of the mapping on reference
-    offset_t refEndPos;                                 //end pos
-    offset_t queryStartPos;                             //start position of the query for this mapping
-    offset_t queryEndPos;                               //end position of the query for this mapping
-    seqno_t refSeqId;                                   //internal sequence id of the reference contig
-    seqno_t querySeqId;                                 //internal sequence id of the query sequence
-    offset_t blockLength;                                    //the block length of the mapping
-    float blockNucIdentity;
-          
-    float nucIdentity;                                  //calculated identity
-    float nucIdentityUpperBound;                        //upper bound on identity (90% C.I.)
-    int sketchSize;                                     //sketch size
-    int conservedSketches;                              //count of conserved sketches
-    strand_t strand;                                    //strand
-    int approxMatches;                                  //the approximate number of matches in the alignment
+    uint32_t refSeqId;         // 4 bytes - reference sequence ID
+    uint32_t refStartPos;      // 4 bytes - reference start position  
+    uint32_t queryStartPos;    // 4 bytes - query start position
+    uint32_t blockLength;      // 4 bytes - mapping block length
+    uint32_t n_merged;         // 4 bytes - number of merged segments
+    uint32_t conservedSketches;// 4 bytes - count of conserved sketches
+    uint16_t nucIdentity;      // 2 bytes - scaled identity (0-10000 for 0.00-100.00%)
+    uint8_t  flags;            // 1 byte - bit-packed flags (strand, discard, overlapped)
+    uint8_t  kmerComplexity;   // 1 byte - scaled kmer complexity (0-100)
+                               // Total: 32 bytes
 
-                                                        //--for split read mapping
-
-    long double kmerComplexity;                               // Estimated sequence complexity
-    int n_merged;                                       // how many mappings we've merged into this one
-    offset_t splitMappingId;                            // To identify split mappings that are chained
-    uint8_t discard;                                    // set to 1 for deletion
-    bool overlapped;                                    // set to true if this mapping is overlapped with another mapping
-    bool selfMapFilter;                                 // set to true if a long-to-short mapping in all-vs-all mode (we report short as the query)
-    double chainPairScore;                              // best score for potential chain pair
-    int64_t chainPairId;                                // best partner mapping for potential chain pair
-    int32_t chain_id{-1};                               //unique ID for this chain (-1 if not part of chain)
-    int32_t chain_length{1};                            //total segments in chain (1 if not part of chain)
-    int32_t chain_pos{1};                               //position in chain, 1-based (1 if not part of chain)
-
-    offset_t qlen() {                                   //length of this mapping on query axis
-      return queryEndPos - queryStartPos + 1;
+    // Helper methods to extract flag values
+    strand_t strand() const {
+      return (flags & 0x01) ? strnd::REV : strnd::FWD;
+    }
+    
+    bool discard() const {
+      return (flags & 0x02) != 0;
+    }
+    
+    bool overlapped() const {
+      return (flags & 0x04) != 0;
+    }
+    
+    // Helper methods to set flag values
+    void setStrand(strand_t s) {
+      if (s == strnd::REV) flags |= 0x01;
+      else flags &= ~0x01;
+    }
+    
+    void setDiscard(bool d) {
+      if (d) flags |= 0x02;
+      else flags &= ~0x02;
+    }
+    
+    void setOverlapped(bool o) {
+      if (o) flags |= 0x04;
+      else flags &= ~0x04;
+    }
+    
+    // Helper methods to get unscaled values
+    float getNucIdentity() const {
+      return nucIdentity / 10000.0f;
+    }
+    
+    float getKmerComplexity() const {
+      return kmerComplexity / 100.0f;
+    }
+    
+    // Helper methods to set scaled values
+    void setNucIdentity(float identity) {
+      nucIdentity = static_cast<uint16_t>(roundf(identity * 10000.0f));
+    }
+    
+    void setKmerComplexity(float complexity) {
+      kmerComplexity = static_cast<uint8_t>(roundf(complexity * 100.0f));
     }
 
-    offset_t rlen() {                                   //length of this mapping on reference axis
-      return refEndPos - refStartPos + 1;
+    // Calculate derived values
+    offset_t refEndPos() const {
+      return refStartPos + blockLength;
     }
-
-    size_t hash(void) {
+    
+    offset_t queryEndPos() const {
+      return queryStartPos + blockLength;
+    }
+    
+    offset_t qlen() const {
+      return blockLength;
+    }
+    
+    offset_t rlen() const {
+      return blockLength;
+    }
+    
+    // Compatibility accessors for code that expects these as fields
+    float blockNucIdentity() const {
+      return getNucIdentity();
+    }
+    
+    // Hash function for compatibility
+    size_t hash(void) const {
       size_t res = 0;
-      hash_combine(res, queryLen);
-      hash_combine(res, refStartPos);
-      hash_combine(res, refEndPos);
-      hash_combine(res, queryStartPos);
-      hash_combine(res, queryEndPos);
       hash_combine(res, refSeqId);
-      hash_combine(res, querySeqId);
+      hash_combine(res, refStartPos);
+      hash_combine(res, queryStartPos);
       hash_combine(res, blockLength);
       hash_combine(res, nucIdentity);
-      hash_combine(res, nucIdentityUpperBound);
-      hash_combine(res, sketchSize);
       hash_combine(res, conservedSketches);
-      hash_combine(res, strand);
-      hash_combine(res, approxMatches);
+      hash_combine(res, flags);
       return res;
     }
 
+    // Initialize all fields to default values
+    MappingResult() : refSeqId(0), refStartPos(0), queryStartPos(0), 
+                      blockLength(0), n_merged(1), conservedSketches(0),
+                      nucIdentity(0), flags(0), kmerComplexity(0) {}
   };
 
   typedef std::vector<MappingResult> MappingResultsVector_t;
