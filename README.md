@@ -8,7 +8,7 @@ _**a pangenome-scale aligner**_
 
 `wfmash` is an aligner for pangenomes that combines efficient homology mapping with base-level alignment. It uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) to obtain base-level alignments. MashMap 3.5 employs minmers, a generalization of minimizers that provides unbiased Jaccard similarity estimation for improved mapping accuracy.
 
-`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%.
+`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%. By default, `wfmash` automatically determines an appropriate identity threshold based on the ANI (Average Nucleotide Identity) distribution of your input sequences.
 
 `wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph. It can scale to support the all-to-all alignment of hundreds of human genomes.
 
@@ -72,7 +72,10 @@ wfmash -Y '#' pangenome.fa >aln.paf
 
 #### Mapping Parameters
 * `-m, --approx-mapping` - output mappings only, no alignment
-* `-p[FLOAT], --map-pct-id=[FLOAT]` - minimum identity percentage (default: 70%)
+* `-p[FLOAT|aniXX[+/-N]], --map-pct-id=[FLOAT|aniXX[+/-N]]` - minimum identity percentage or ANI preset (default: ani25-5)
+  * Fixed percentage: `-p 85` sets 85% identity threshold
+  * ANI presets: `-p ani25` uses 25th percentile of ANI distribution
+  * Adjustments: `-p ani50-10` uses median minus 10%, `-p ani75+5` uses 75th percentile plus 5%
 * `-n[INT], --mappings=[INT]` - number of mappings per segment (default: 1)
 * `-l[INT], --block-length=[INT]` - minimum mapping block length (default: 0, no minimum)
 * `-c[INT], --chain-jump=[INT]` - maximum gap to chain mappings (default: 2k)
@@ -145,7 +148,7 @@ wfmash -m -w 50k -P 500k reference.fa query.fa >mappings.paf
 ```
 
 ### Standard alignment with default parameters
-For typical whole-genome alignment (default: 70% identity):
+For typical whole-genome alignment (default: ani25-5):
 ```sh
 wfmash reference.fa query.fa >aln.paf
 ```
@@ -154,6 +157,16 @@ wfmash reference.fa query.fa >aln.paf
 For very similar sequences only (e.g., 95% identity):
 ```sh
 wfmash -p 95 reference.fa query.fa >aln.paf
+```
+
+### Using ANI presets
+Automatically determine identity threshold from data:
+```sh
+# Use median ANI for balanced sensitivity/specificity
+wfmash -p ani50 reference.fa query.fa >aln.paf
+
+# Use 75th percentile minus 5% for higher sensitivity
+wfmash -p ani75-5 reference.fa query.fa >aln.paf
 ```
 
 ### Multiple mappings per segment
