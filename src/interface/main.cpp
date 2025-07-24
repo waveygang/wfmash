@@ -13,9 +13,13 @@
 #include <chrono>
 #include <functional>
 #include <cstdio>
+#include <iomanip>
+#include <memory>
 
 #include "map/include/computeMap.hpp"
 #include "map/include/parseCmdArgs.hpp"
+#include "map/include/sequenceIds.hpp"
+#include "map/include/map_stats.hpp"
 
 #include "map/include/winSketch.hpp"
 
@@ -45,6 +49,32 @@ int main(int argc, char** argv) {
 
     //skch::parseandSave(argc, argv, cmd, parameters);
     if (!yeet_parameters.remapping) {
+        // Handle auto percentage identity estimation
+        if (map_parameters.auto_pct_identity) {
+            std::cerr << "[wfmash] -p auto detected. Estimating optimal identity from sequence groups..." << std::endl;
+
+            // Instantiate the SequenceIdManager here to get the correct grouping information.
+            // This is the single source of truth for grouping.
+            auto idManager = std::make_unique<skch::SequenceIdManager>(
+                map_parameters.querySequences,
+                map_parameters.refSequences,
+                map_parameters.query_prefix,
+                std::vector<std::string>{map_parameters.target_prefix}, // Constructor expects a vector
+                std::string(1, map_parameters.prefix_delim),
+                map_parameters.query_list,
+                map_parameters.target_list
+            );
+
+            // Call the estimation function, which will respect the groups defined in the idManager.
+            double estimated_identity = skch::Stat::estimate_identity_for_groups(map_parameters, *idManager);
+            
+            // Update the parameters that the rest of the program will use.
+            map_parameters.percentageIdentity = estimated_identity;
+            
+            std::cerr << "[wfmash] Using estimated identity cutoff: " 
+                      << std::fixed << std::setprecision(2) << estimated_identity * 100 << "%" << std::endl;
+        }
+
         skch::printCmdOptions(map_parameters);
 
         auto t0 = skch::Time::now();

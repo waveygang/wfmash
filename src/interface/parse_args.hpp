@@ -64,7 +64,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum identity % [70]", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|auto", "minimum identity % [70] or 'auto' for automatic estimation", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
@@ -317,13 +317,29 @@ void parse_args(int argc,
     }
 
     if (map_pct_identity) {
-        if (args::get(map_pct_identity) < 50) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%." << std::endl;
-            exit(1);
+        std::string pct_id_str = args::get(map_pct_identity);
+        if (pct_id_str == "auto") {
+            map_parameters.auto_pct_identity = true;
+            // Percentage identity will be set later after estimation
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Use default temporarily
+        } else {
+            try {
+                float pct_id = std::stof(pct_id_str);
+                if (pct_id < 50) {
+                    std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%." << std::endl;
+                    exit(1);
+                }
+                map_parameters.percentageIdentity = pct_id / 100.0; // scale to [0,1]
+                map_parameters.auto_pct_identity = false;
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash] ERROR: Invalid value for -p/--map-pct-id: " << pct_id_str << std::endl;
+                std::cerr << "[wfmash] Expected a float value or 'auto'" << std::endl;
+                exit(1);
+            }
         }
-        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
     } else {
         map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+        map_parameters.auto_pct_identity = false;
     }
 
     if (block_length) {

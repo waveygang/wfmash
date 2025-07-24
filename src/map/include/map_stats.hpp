@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <deque>
 #include <cmath>
+#include <unordered_set>
+#include <iomanip>
 
 #ifdef USE_BOOST
     #include <boost/math/distributions/binomial.hpp>
@@ -21,11 +23,14 @@
 //Own includes
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
+#include "map/include/sequenceIds.hpp"
+#include "map/include/commonFunc.hpp"
 
 //External includes
 #include "common/murmur3.h"
 #include "common/kseq.h"
 #include "common/prettyprint.hpp"
+#include "common/seqiter.hpp"
 
 namespace skch
 {
@@ -255,6 +260,146 @@ namespace skch
       }
 
       return optimalSketchSize;
+    }
+
+    /**
+     * @brief Helper function to compute minihash sketch for a single sequence
+     * @param[in] seq The sequence string
+     * @param[out] sketch_set Set to store the computed sketch
+     * @param[in] k K-mer size
+     * @param[in] sketch_size Number of minimizers to retain
+     */
+    inline void get_minihash_sketch(const std::string& seq, std::set<hash_t>& sketch_set, int k, int sketch_size) {
+      if ((int)seq.length() < k) return;
+
+      std::vector<hash_t> hashes;
+      char* seq_data = const_cast<char*>(seq.c_str());
+
+      for (offset_t i = 0; i <= (offset_t)seq.length() - k; ++i) {
+        hashes.push_back(CommonFunc::getHash(seq_data + i, k));
+      }
+
+      // Use nth_element for efficiency if sketch_size is much smaller than total hashes
+      if ((int)hashes.size() > sketch_size) {
+        std::nth_element(hashes.begin(), hashes.begin() + sketch_size, hashes.end());
+        hashes.resize(sketch_size);
+      }
+      
+      sketch_set.insert(hashes.begin(), hashes.end());
+    }
+
+    /**
+     * @brief Estimate optimal identity threshold based on sequence groups
+     * @param[in] params Mapping parameters
+     * @param[in] idManager Sequence ID manager with grouping information
+     * @return Estimated identity threshold [0,1]
+     */
+    inline double estimate_identity_for_groups(const skch::Parameters& params, const skch::SequenceIdManager& idManager) {
+      // Use k=21 to match Mash defaults for genome comparison
+      // This provides good sensitivity while avoiding too many random matches
+      const int estimation_k = 21;
+      // Use larger sketch size for better accuracy with whole genomes
+      // Mash uses 1000 by default, but for large/divergent genomes we need more
+      // 10000 provides good accuracy even for divergent comparisons
+      const int estimation_sketch_size = 10000;
+
+      std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
+                << ", sketch_size=" << estimation_sketch_size << std::endl;
+
+      std::map<int, std::set<hash_t>> query_group_sketches;
+      std::map<int, std::set<hash_t>> target_group_sketches;
+
+      // Sketch query sequences and group them using the provided idManager
+      int query_seq_count = 0;
+      for (const auto& file : params.querySequences) {
+        std::unordered_set<std::string> keep_seq; // Empty set means keep all
+        std::string keep_prefix = ""; // Empty prefix means no prefix filtering
+        seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
+          seqno_t seqId = idManager.getSequenceId(name);
+          int groupId = idManager.getRefGroup(seqId);
+          get_minihash_sketch(seq, query_group_sketches[groupId], estimation_k, estimation_sketch_size);
+          query_seq_count++;
+        });
+      }
+
+      // Sketch target sequences
+      int target_seq_count = 0;
+      for (const auto& file : params.refSequences) {
+        std::unordered_set<std::string> keep_seq; // Empty set means keep all
+        std::string keep_prefix = ""; // Empty prefix means no prefix filtering
+        seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
+          seqno_t seqId = idManager.getSequenceId(name);
+          int groupId = idManager.getRefGroup(seqId);
+          get_minihash_sketch(seq, target_group_sketches[groupId], estimation_k, estimation_sketch_size);
+          target_seq_count++;
+        });
+      }
+
+      std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count << " query sequences into " 
+                << query_group_sketches.size() << " groups" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count << " target sequences into " 
+                << target_group_sketches.size() << " groups" << std::endl;
+
+      std::vector<double> all_anis;
+      int comparison_count = 0;
+
+      for (const auto& q_pair : query_group_sketches) {
+        for (const auto& t_pair : target_group_sketches) {
+          // Self-comparison logic for all-vs-all mode
+          bool is_self_mode = (&params.querySequences == &params.refSequences);
+          if (is_self_mode && q_pair.first > t_pair.first) {
+            continue; // Avoid redundant (B vs A) check if (A vs B) is done
+          }
+          
+          const auto& q_sketch = q_pair.second;
+          const auto& t_sketch = t_pair.second;
+
+          if (q_sketch.empty() || t_sketch.empty()) continue;
+
+          std::vector<hash_t> intersection;
+          std::set_intersection(q_sketch.begin(), q_sketch.end(),
+                                t_sketch.begin(), t_sketch.end(),
+                                std::back_inserter(intersection));
+
+          if (intersection.empty()) continue;
+
+          size_t union_size = q_sketch.size() + t_sketch.size() - intersection.size();
+          double jaccard = static_cast<double>(intersection.size()) / union_size;
+          
+          double mash_dist = j2md(jaccard, estimation_k);
+          double ani = 1.0 - mash_dist;
+          all_anis.push_back(ani);
+          
+          comparison_count++;
+          std::cerr << "[wfmash::auto-identity] Group " << q_pair.first << " vs " << t_pair.first 
+                    << ": " << intersection.size() << "/" << std::min(q_sketch.size(), t_sketch.size()) 
+                    << " sketches overlap, Jaccard=" << std::fixed << std::setprecision(4) << jaccard 
+                    << ", ANI=" << std::fixed << std::setprecision(2) << ani * 100 << "%" << std::endl;
+        }
+      }
+
+      std::cerr << "[wfmash::auto-identity] Performed " << comparison_count << " group comparisons" << std::endl;
+
+      if (all_anis.empty()) {
+        std::cerr << "[wfmash::auto-identity] Warning: No k-mer overlap found between any query and target groups. Falling back to default identity." << std::endl;
+        return skch::fixed::percentage_identity;
+      }
+
+      // Use the 25th percentile (a quartile) as a robust and conservative estimate
+      std::sort(all_anis.begin(), all_anis.end());
+      size_t percentile_idx = all_anis.size() / 4;
+      
+      // Log the distribution of ANI values
+      std::cerr << "[wfmash::auto-identity] ANI distribution: min=" 
+                << std::fixed << std::setprecision(2) << all_anis.front() * 100 << "%, "
+                << "25th percentile=" << all_anis[percentile_idx] * 100 << "%, "
+                << "median=" << all_anis[all_anis.size() / 2] * 100 << "%, "
+                << "max=" << all_anis.back() * 100 << "%" << std::endl;
+      
+      std::cerr << "[wfmash::auto-identity] Selected 25th percentile as threshold: " 
+                << std::fixed << std::setprecision(2) << all_anis[percentile_idx] * 100 << "%" << std::endl;
+      
+      return all_anis[percentile_idx];
     }
   }
 }
