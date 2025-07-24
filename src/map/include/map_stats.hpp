@@ -496,21 +496,42 @@ namespace skch
         return skch::fixed::percentage_identity;
       }
 
-      // Use the 25th percentile (a quartile) as a robust and conservative estimate
+      // Sort ANI values to compute percentiles
       std::sort(all_anis.begin(), all_anis.end());
-      size_t percentile_idx = all_anis.size() / 4;
+      
+      // Calculate the requested percentile
+      size_t percentile_idx = (params.ani_percentile * all_anis.size()) / 100;
+      if (percentile_idx >= all_anis.size()) {
+        percentile_idx = all_anis.size() - 1;
+      }
+      
+      // Apply adjustment
+      double selected_ani = all_anis[percentile_idx];
+      double adjusted_ani = selected_ani + (params.ani_adjustment / 100.0);
+      
+      // Clamp to valid range [0, 1]
+      if (adjusted_ani < 0.0) adjusted_ani = 0.0;
+      if (adjusted_ani > 1.0) adjusted_ani = 1.0;
       
       // Log the distribution of ANI values
       std::cerr << "[wfmash::auto-identity] ANI distribution: min=" 
                 << std::fixed << std::setprecision(2) << all_anis.front() * 100 << "%, "
-                << "25th percentile=" << all_anis[percentile_idx] * 100 << "%, "
+                << "25th percentile=" << all_anis[all_anis.size() / 4] * 100 << "%, "
                 << "median=" << all_anis[all_anis.size() / 2] * 100 << "%, "
+                << "75th percentile=" << all_anis[(3 * all_anis.size()) / 4] * 100 << "%, "
                 << "max=" << all_anis.back() * 100 << "%" << std::endl;
       
-      std::cerr << "[wfmash::auto-identity] Selected 25th percentile as threshold: " 
-                << std::fixed << std::setprecision(2) << all_anis[percentile_idx] * 100 << "%" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Selected ani" << params.ani_percentile 
+                << " (" << params.ani_percentile << "th percentile) = " 
+                << std::fixed << std::setprecision(2) << selected_ani * 100 << "%";
       
-      return all_anis[percentile_idx];
+      if (params.ani_adjustment != 0) {
+        std::cerr << ", adjusted by " << std::showpos << params.ani_adjustment << std::noshowpos 
+                  << "% to " << std::fixed << std::setprecision(2) << adjusted_ani * 100 << "%";
+      }
+      std::cerr << std::endl;
+      
+      return adjusted_ani;
     }
   }
 }

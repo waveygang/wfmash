@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <limits.h>
+#include <regex>
 
 #include "common/args.hxx"
 
@@ -64,7 +65,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|auto", "minimum identity % (default: auto for automatic estimation)", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani25-5)", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
@@ -318,29 +319,56 @@ void parse_args(int argc,
 
     if (map_pct_identity) {
         std::string pct_id_str = args::get(map_pct_identity);
-        if (pct_id_str == "auto") {
+        
+        // Check if it's an ANI preset (e.g., ani25, ani50-10, ani75+5)
+        std::regex ani_pattern("^ani(\\d+)([+-]\\d+)?$");
+        std::smatch matches;
+        
+        if (std::regex_match(pct_id_str, matches, ani_pattern)) {
             map_parameters.auto_pct_identity = true;
-            // Percentage identity will be set later after estimation
-            map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Use default temporarily
+            map_parameters.ani_percentile = std::stoi(matches[1]);
+            
+            // Validate percentile
+            if (map_parameters.ani_percentile < 1 || map_parameters.ani_percentile > 99) {
+                std::cerr << "[wfmash] ERROR: ANI percentile must be between 1 and 99, got: " 
+                          << map_parameters.ani_percentile << std::endl;
+                exit(1);
+            }
+            
+            // Parse adjustment if present
+            if (matches[2].matched) {
+                map_parameters.ani_adjustment = std::stof(matches[2].str());
+            } else {
+                map_parameters.ani_adjustment = 0.0;
+            }
+            
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
+        } else if (pct_id_str == "auto") {
+            // Legacy support for "auto" = ani25
+            map_parameters.auto_pct_identity = true;
+            map_parameters.ani_percentile = 25;
+            map_parameters.ani_adjustment = 0.0;
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity;
         } else {
+            // Try to parse as a float percentage
             try {
                 float pct_id = std::stof(pct_id_str);
                 if (pct_id < 50) {
-                    std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%." << std::endl;
+                    std::cerr << "[wfmash] ERROR: minimum nucleotide identity requirement should be >= 50%." << std::endl;
                     exit(1);
                 }
                 map_parameters.percentageIdentity = pct_id / 100.0; // scale to [0,1]
                 map_parameters.auto_pct_identity = false;
             } catch (const std::exception& e) {
                 std::cerr << "[wfmash] ERROR: Invalid value for -p/--map-pct-id: " << pct_id_str << std::endl;
-                std::cerr << "[wfmash] Expected a float value or 'auto'" << std::endl;
+                std::cerr << "[wfmash] Expected a float value or ANI preset (e.g., ani25, ani50-10, ani75+5)" << std::endl;
                 exit(1);
             }
         }
     } else {
-        // No -p flag provided, use auto by default
-        map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden by auto estimation
-        // auto_pct_identity is already true by default in Parameters struct
+        // No -p flag provided, use ani25-5 by default
+        map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
+        // auto_pct_identity, ani_percentile=25, ani_adjustment=-5.0 already set in Parameters struct
     }
 
     if (block_length) {

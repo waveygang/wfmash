@@ -94,6 +94,8 @@ struct Parameters
 
     bool use_progress_bar = false;
     bool auto_pct_identity = true;  // default to auto identity estimation
+    int ani_percentile = 25;  // which percentile to use (25, 50, 75, etc.)
+    float ani_adjustment = -5.0;  // adjustment to apply to the percentile (+/- percentage points)
 };
 
 

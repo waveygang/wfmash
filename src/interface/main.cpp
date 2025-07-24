@@ -51,7 +51,11 @@ int main(int argc, char** argv) {
     if (!yeet_parameters.remapping) {
         // Handle auto percentage identity estimation
         if (map_parameters.auto_pct_identity) {
-            std::cerr << "[wfmash] -p auto detected. Estimating optimal identity from sequence groups..." << std::endl;
+            std::cerr << "[wfmash] ANI-based identity estimation enabled (ani" << map_parameters.ani_percentile;
+            if (map_parameters.ani_adjustment != 0) {
+                std::cerr << std::showpos << map_parameters.ani_adjustment << std::noshowpos;
+            }
+            std::cerr << ")..." << std::endl;
 
             // Instantiate the SequenceIdManager here to get the correct grouping information.
             // This is the single source of truth for grouping.
