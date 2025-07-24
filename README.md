@@ -12,37 +12,108 @@ _**a pangenome-scale aligner**_
 
 `wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph. It can scale to support the all-to-all alignment of hundreds of human genomes.
 
-## Process
+## Algorithm Overview
 
-By default, `wfmash` breaks query sequences into non-overlapping segments (default: 1kb) and maps them using MashMap with minmer sketches. Minmers are a generalization of minimizers that select multiple smallest k-mers per window, enabling unbiased Jaccard similarity estimation. Consecutive mappings separated by less than the chain gap (default: 2kb) are merged. Mappings are limited to 50kb in length by default, which allows efficient base-level alignment using WFA. This length limit is important because WFA's computational complexity is quadratic in the number of differences between sequences, not their percent divergence - meaning longer sequences with the same divergence percentage require dramatically more compute time.
+`wfmash` performs alignment in several stages:
 
-For longer sequences, use `-m/--approx-mapping` to get approximate mappings only, which allows working with much larger segment and mapping lengths.
+1. **Mapping**: Query sequences are broken into segments based on window size (default: 1kb) and mapped using MashMap with minmer sketches. Minmers are a generalization of minimizers that select multiple smallest k-mers per window, enabling unbiased Jaccard similarity estimation.
 
-## usage
+2. **Chaining**: Consecutive mappings separated by less than the chain gap (default: 2kb) are merged into longer approximate mappings.
 
-`wfmash` has been developed to accelerate the alignment step in variation graph induction (the first step in the `seqwish` / `smoothxg` pipeline).
-Suitable default settings are provided for this purpose.
+3. **Filtering**: Various filters can be applied:
+   - L1 filtering requires a minimum number of sketch hits (default: 3)
+   - Plane-sweep filtering removes overlapping mappings
+   - Hypergeometric filtering assesses mapping significance
 
-Seven parameters shape the length, number, identity, and alignment divergence of the resulting mappings.
+4. **Scaffolding** (optional): For large-scale alignments, scaffolding identifies syntenic regions:
+   - Chains are merged with larger gaps (default: 100kb) to form scaffolds
+   - Only chains with sufficient segments (default: 5) are considered
+   - Mappings are retained if they fall within a maximum distance (default: 100kb) from scaffold anchors
+   - This helps focus alignment on truly homologous regions while filtering out spurious matches
 
-### mapping settings
+5. **Alignment**: Filtered mappings are aligned at base-level using WFA. Mappings are limited to 50kb by default because WFA's complexity is quadratic in the number of differences.
 
-These parameters affect the structure of the mappings:
+For approximate mapping only, use `-m/--approx-mapping` to skip the alignment stage, which allows working with much larger segment and mapping lengths.
 
-* `-s[N], --segment-length=[N]` is the length of the mapping seed (default: `1k`). The best pairs of consecutive segment mappings are merged where separated by less than `-c[N], --chain-gap=[N]` bases.
-* `-l[N], --block-length-min=[N]` requires seed mappings in a merged mapping to sum to more than the given length (default 5kb).
-* `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
-* `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length-min` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
+## Usage
 
-By default, we obtain base-level alignments by applying a high-order version of WFA to the mappings.
-Various settings affect the behavior of the pairwise alignment, but in general the alignment parameters are adjusted based on expected divergence between the mapped subsequences.
-Specifying `-m, --approx-map` lets us stop before alignment and obtain the approximate mappings (akin to `minimap2` without `-c`).
+```
+wfmash [target.fa] [query.fa] {OPTIONS}
+```
 
-### all-to-all mapping
+### Basic Examples
 
-Together, these settings allow us to precisely define an alignment space to consider.
-During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
-When working with large sequence collections we frequently use [PanSN](https://github.com/pangenome/PanSN-spec) naming convention and `-Y'#'` to specify that we want to group mappings by prefix, which in this context means genome or haplotype groupings.
+Map query sequences against a reference:
+```sh
+wfmash reference.fa query.fa >aln.paf
+```
+
+All-vs-all alignment (map a set of sequences to themselves):
+```sh
+wfmash sequences.fa >aln.paf
+```
+
+Output only approximate mappings without base-level alignment:
+```sh
+wfmash -m reference.fa query.fa >mappings.paf
+```
+
+For PanSN-formatted all-vs-all mapping, exclude mappings within the same genome:
+```sh
+wfmash -Y '#' pangenome.fa >aln.paf
+```
+
+### Parameter Groups
+
+#### Minmer Sketching
+* `-k[INT], --kmer-size=[INT]` - k-mer size (default: 15)
+* `-s[INT], --sketch-size=[INT]` - number of minmers per window (default: auto-calculated)
+* `-w[INT], --window-size=[INT]` - window size for minmer selection (default: 1k)
+
+#### Mapping Parameters
+* `-m, --approx-mapping` - output mappings only, no alignment
+* `-p[FLOAT], --map-pct-id=[FLOAT]` - minimum identity percentage (default: 70%)
+* `-n[INT], --mappings=[INT]` - number of mappings per segment (default: 1)
+* `-l[INT], --block-length=[INT]` - minimum mapping block length (default: 0, no minimum)
+* `-c[INT], --chain-jump=[INT]` - maximum gap to chain mappings (default: 2k)
+* `-P[INT], --max-length=[INT]` - maximum mapping length for alignment (default: 50k)
+* `-N, --no-split` - map each sequence as a single block
+
+#### Filtering Options
+* `-f, --no-filter` - disable all filtering
+* `-M, --no-merge` - keep fragment mappings separate
+* `-o, --one-to-one` - report only best mapping per query/target pair
+* `-H[INT], --l1-hits=[INT]` - minimum sketch hits for L1 filter (default: 3)
+* `-F[FLOAT], --filter-freq=[FLOAT]` - filter high-frequency minimizers (default: 0.0002)
+* `--hg-filter=[n,Δ,conf]` - hypergeometric filter parameters (default: 1.0,0.0,99.9)
+
+#### Scaffolding Parameters (for synteny filtering)
+* `-S[INT], --scaffold-mass=[INT]` - minimum segments per scaffold (default: 5)
+* `-D[INT], --scaffold-dist=[INT]` - maximum distance from scaffold anchors (default: 100k)
+* `-j[INT], --scaffold-jump=[INT]` - maximum gap for scaffold chaining (default: 100k)
+* `--scaffold-out=[FILE]` - output scaffold chains to FILE
+
+#### Selection Filters
+* `-X, --self-maps` - include self-mappings
+* `-Y[C], --group-prefix=[C]` - exclude mappings within groups by prefix delimiter
+* `-L, --lower-triangular` - only map seq_i to seq_j if i>j
+* `-T[pfx], --target-prefix=[pfx]` - only map to targets with prefix
+* `-Q[pfxs], --query-prefix=[pfxs]` - only map queries with prefix(es)
+
+#### Alignment Parameters
+* `-g[m,go1,ge1,go2,ge2], --wfa-params=[m,go1,ge1,go2,ge2]` - WFA gap costs (default: 5,8,2,24,1)
+* `-E[INT], --target-padding=[INT]` - bases to extend target region
+* `-U[INT], --query-padding=[INT]` - bases to extend query region
+
+#### Output Options
+* `-a, --sam` - output in SAM format (default: PAF)
+* `-d, --md-tag` - include MD tag in output
+
+#### System Parameters
+* `-t[INT], --threads=[INT]` - number of threads (default: 1)
+* `-I[FILE], --read-index=[FILE]` - load pre-built index from FILE
+* `-W[FILE], --write-index=[FILE]` - save index to FILE
+* `-b[SIZE], --batch=[SIZE]` - target index batch size (default: 4G)
 
 
 ## input indexing
@@ -65,33 +136,59 @@ ref.fa.gz.gzi
 ref.fa.gz.fai
 ```
 
-## examples
+## Advanced Examples
 
-Map a set of query sequences against a reference genome:
+### Mapping longer sequences without alignment
+For long sequences where you only need approximate mappings:
+```sh
+wfmash -m -w 50k -P 500k reference.fa query.fa >mappings.paf
+```
 
+### Standard alignment with default parameters
+For typical whole-genome alignment (default: 70% identity):
 ```sh
 wfmash reference.fa query.fa >aln.paf
 ```
 
-For mapping longer sequences without alignment, use -m with larger segment and max length values:
-
+### Higher identity threshold
+For very similar sequences only (e.g., 95% identity):
 ```sh
-wfmash -m -s 50k -P 500k reference.fa query.fa >mappings.paf
+wfmash -p 95 reference.fa query.fa >aln.paf
 ```
 
-Self-mapping of sequences:
-
+### Multiple mappings per segment
+To explore alternative alignments:
 ```sh
-wfmash -X query.fa query.fa >aln.paf
+wfmash -n 3 reference.fa query.fa >aln.paf
 ```
 
-Or just
-
+### Pangenome all-vs-all with scaffolding
+For large-scale pangenome construction with synteny filtering:
 ```sh
-wfmash query.fa >aln.paf
+wfmash -Y '#' -S 10 -j 200k --scaffold-out scaffolds.paf pangenome.fa >aln.paf
 ```
 
-## sequence indexing
+### One-to-one mapping
+To get only the best mapping between each query-target pair:
+```sh
+wfmash -o reference.fa query.fa >aln.paf
+```
+
+## Scaffolding for Large-Scale Alignments
+
+Scaffolding is a powerful feature for filtering alignments to focus on syntenic regions. It's particularly useful for:
+- Whole-genome alignments
+- Pangenome construction  
+- Reducing noise in highly repetitive sequences
+
+The scaffolding algorithm:
+1. Merges chains with large gaps (up to `-j/--scaffold-jump`, default 100kb)
+2. Filters for chains with sufficient support (≥ `-S/--scaffold-mass` segments, default 5)
+3. Keeps only mappings within `-D/--scaffold-dist` (default 100kb) of scaffold anchors
+
+This effectively identifies and preserves large-scale syntenic blocks while filtering out spurious matches.
+
+## Sequence Indexing
 
 `wfmash` provides a progress log that estimates time to completion.
 
