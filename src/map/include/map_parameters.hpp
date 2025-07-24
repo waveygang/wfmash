@@ -93,7 +93,7 @@ struct Parameters
     double max_kmer_freq = 0.0002;  // Maximum allowed k-mer frequency fraction (0-1) or count (>1)
 
     bool use_progress_bar = false;
-    bool auto_pct_identity = false;  // true if -p auto was specified
+    bool auto_pct_identity = true;  // default to auto identity estimation
 };
 
 

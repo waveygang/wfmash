@@ -64,7 +64,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|auto", "minimum identity % [70] or 'auto' for automatic estimation", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|auto", "minimum identity % (default: auto for automatic estimation)", {'p', "map-pct-id"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
@@ -338,8 +338,9 @@ void parse_args(int argc,
             }
         }
     } else {
-        map_parameters.percentageIdentity = skch::fixed::percentage_identity;
-        map_parameters.auto_pct_identity = false;
+        // No -p flag provided, use auto by default
+        map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden by auto estimation
+        // auto_pct_identity is already true by default in Parameters struct
     }
 
     if (block_length) {

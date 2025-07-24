@@ -55,24 +55,38 @@ int main(int argc, char** argv) {
 
             // Instantiate the SequenceIdManager here to get the correct grouping information.
             // This is the single source of truth for grouping.
+            // Create target prefix vector, handling empty strings properly
+            std::vector<std::string> target_prefix_vec;
+            if (!map_parameters.target_prefix.empty()) {
+                target_prefix_vec.push_back(map_parameters.target_prefix);
+            }
+            
             auto idManager = std::make_unique<skch::SequenceIdManager>(
                 map_parameters.querySequences,
                 map_parameters.refSequences,
                 map_parameters.query_prefix,
-                std::vector<std::string>{map_parameters.target_prefix}, // Constructor expects a vector
+                target_prefix_vec,
                 std::string(1, map_parameters.prefix_delim),
                 map_parameters.query_list,
                 map_parameters.target_list
             );
 
-            // Call the estimation function, which will respect the groups defined in the idManager.
-            double estimated_identity = skch::Stat::estimate_identity_for_groups(map_parameters, *idManager);
-            
-            // Update the parameters that the rest of the program will use.
-            map_parameters.percentageIdentity = estimated_identity;
-            
-            std::cerr << "[wfmash] Using estimated identity cutoff: " 
-                      << std::fixed << std::setprecision(2) << estimated_identity * 100 << "%" << std::endl;
+            try {
+                // Call the estimation function, which will respect the groups defined in the idManager.
+                double estimated_identity = skch::Stat::estimate_identity_for_groups(map_parameters, *idManager);
+                
+                // Update the parameters that the rest of the program will use.
+                map_parameters.percentageIdentity = estimated_identity;
+                
+                std::cerr << "[wfmash] Using estimated identity cutoff: " 
+                          << std::fixed << std::setprecision(2) << estimated_identity * 100 << "%" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash] Error during identity estimation: " << e.what() << std::endl;
+                std::cerr << "[wfmash] Falling back to default identity threshold: " 
+                          << std::fixed << std::setprecision(2) << skch::fixed::percentage_identity * 100 << "%" << std::endl;
+                map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+                map_parameters.auto_pct_identity = false;
+            }
         }
 
         skch::printCmdOptions(map_parameters);

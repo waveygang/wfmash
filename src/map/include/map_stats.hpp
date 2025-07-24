@@ -294,7 +294,7 @@ namespace skch
      * @param[in] idManager Sequence ID manager with grouping information
      * @return Estimated identity threshold [0,1]
      */
-    inline double estimate_identity_for_groups(const skch::Parameters& params, const skch::SequenceIdManager& idManager) {
+    inline double estimate_identity_for_groups(const skch::Parameters& params, skch::SequenceIdManager& idManager) {
       // Use k=21 to match Mash defaults for genome comparison
       // This provides good sensitivity while avoiding too many random matches
       const int estimation_k = 21;
@@ -315,10 +315,21 @@ namespace skch
         std::unordered_set<std::string> keep_seq; // Empty set means keep all
         std::string keep_prefix = ""; // Empty prefix means no prefix filtering
         seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          seqno_t seqId = idManager.getSequenceId(name);
-          int groupId = idManager.getRefGroup(seqId);
-          get_minihash_sketch(seq, query_group_sketches[groupId], estimation_k, estimation_sketch_size);
-          query_seq_count++;
+          try {
+            // Only process sequences that are already in the SequenceIdManager (from FAI files)
+            const auto& seqMap = idManager.getSequenceNameToIdMap();
+            auto it = seqMap.find(name);
+            if (it == seqMap.end()) {
+              // Skip sequences not in FAI file
+              return;
+            }
+            seqno_t seqId = it->second;
+            int groupId = idManager.getRefGroup(seqId);
+            get_minihash_sketch(seq, query_group_sketches[groupId], estimation_k, estimation_sketch_size);
+            query_seq_count++;
+          } catch (const std::exception& e) {
+            std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" << name << "': " << e.what() << std::endl;
+          }
         });
       }
 
@@ -328,10 +339,21 @@ namespace skch
         std::unordered_set<std::string> keep_seq; // Empty set means keep all
         std::string keep_prefix = ""; // Empty prefix means no prefix filtering
         seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          seqno_t seqId = idManager.getSequenceId(name);
-          int groupId = idManager.getRefGroup(seqId);
-          get_minihash_sketch(seq, target_group_sketches[groupId], estimation_k, estimation_sketch_size);
-          target_seq_count++;
+          try {
+            // Only process sequences that are already in the SequenceIdManager (from FAI files)
+            const auto& seqMap = idManager.getSequenceNameToIdMap();
+            auto it = seqMap.find(name);
+            if (it == seqMap.end()) {
+              // Skip sequences not in FAI file
+              return;
+            }
+            seqno_t seqId = it->second;
+            int groupId = idManager.getRefGroup(seqId);
+            get_minihash_sketch(seq, target_group_sketches[groupId], estimation_k, estimation_sketch_size);
+            target_seq_count++;
+          } catch (const std::exception& e) {
+            std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" << name << "': " << e.what() << std::endl;
+          }
         });
       }
 
@@ -339,6 +361,12 @@ namespace skch
                 << query_group_sketches.size() << " groups" << std::endl;
       std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count << " target sequences into " 
                 << target_group_sketches.size() << " groups" << std::endl;
+
+      if (query_seq_count == 0 || target_seq_count == 0) {
+        std::cerr << "[wfmash::auto-identity] Warning: No sequences found in FAI files. " 
+                  << "Make sure .fai index files exist (run 'samtools faidx' on your FASTA files)" << std::endl;
+        return skch::fixed::percentage_identity;
+      }
 
       std::vector<double> all_anis;
       int comparison_count = 0;
