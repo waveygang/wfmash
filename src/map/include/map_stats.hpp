@@ -266,36 +266,48 @@ namespace skch
     }
 
     /**
-     * @brief Helper function to add k-mers from a sequence to a hash multiset
+     * @brief Helper function to update a MinHash sketch with k-mers from a sequence
      * @param[in] seq The sequence string
-     * @param[out] all_hashes Multiset to store all k-mer hashes
+     * @param[in,out] sketch Vector maintaining the MinHash sketch (smallest hashes)
      * @param[in] k K-mer size
+     * @param[in] sketch_size Number of minimizers to retain
      */
-    inline void add_sequence_kmers(const std::string& seq, std::multiset<hash_t>& all_hashes, int k) {
+    inline void update_minhash_sketch(const std::string& seq, std::vector<hash_t>& sketch, int k, int sketch_size) {
       if ((int)seq.length() < k) return;
 
       char* seq_data = const_cast<char*>(seq.c_str());
       for (offset_t i = 0; i <= (offset_t)seq.length() - k; ++i) {
-        all_hashes.insert(CommonFunc::getHash(seq_data + i, k));
+        hash_t hash = CommonFunc::getHash(seq_data + i, k);
+        
+        // If sketch isn't full or this hash is smaller than the largest in sketch
+        if ((int)sketch.size() < sketch_size) {
+          sketch.push_back(hash);
+          std::push_heap(sketch.begin(), sketch.end()); // Max heap
+        } else if (hash < sketch.front()) {
+          // Replace largest hash with this smaller one
+          std::pop_heap(sketch.begin(), sketch.end());
+          sketch.back() = hash;
+          std::push_heap(sketch.begin(), sketch.end());
+        }
       }
     }
 
     /**
-     * @brief Compute MinHash sketch from a multiset of all k-mer hashes
-     * @param[in] all_hashes All k-mer hashes from the group
-     * @param[out] sketch Vector to store the MinHash sketch
+     * @brief Finalize MinHash sketch by sorting to get the smallest hashes
+     * @param[in,out] sketch Vector containing the MinHash sketch
      * @param[in] sketch_size Number of minimizers to retain
      */
-    inline void compute_group_sketch(const std::multiset<hash_t>& all_hashes, 
-                                     std::vector<hash_t>& sketch, int sketch_size) {
-      sketch.clear();
-      sketch.reserve(sketch_size);
+    inline void finalize_minhash_sketch(std::vector<hash_t>& sketch, int sketch_size) {
+      // Convert from max heap to sorted vector of smallest hashes
+      std::sort_heap(sketch.begin(), sketch.end());
       
-      // MinHash: take the smallest sketch_size hash values
-      auto it = all_hashes.begin();
-      for (int i = 0; i < sketch_size && it != all_hashes.end(); ++i, ++it) {
-        sketch.push_back(*it);
+      // Keep only the smallest sketch_size elements
+      if ((int)sketch.size() > sketch_size) {
+        sketch.resize(sketch_size);
       }
+      
+      // Sort in ascending order for efficient comparison
+      std::sort(sketch.begin(), sketch.end());
     }
 
     /**
@@ -308,17 +320,16 @@ namespace skch
       // Use k=21 to match Mash defaults for genome comparison
       // This provides good sensitivity while avoiding too many random matches
       const int estimation_k = 21;
-      // For whole genome comparisons, use larger sketch size for better accuracy
-      // 10000 provides excellent accuracy even for divergent genomes
-      const int estimation_sketch_size = 10000;
+      // Use 1000 for reasonable accuracy while keeping memory usage sane
+      const int estimation_sketch_size = 1000;
 
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;
 
-      // Maps to collect all k-mers per group
-      std::map<int, std::multiset<hash_t>> query_group_kmers;
-      std::map<int, std::multiset<hash_t>> target_group_kmers;
-      std::mutex kmer_mutex;
+      // Maps to maintain MinHash sketches per group
+      std::map<int, std::vector<hash_t>> query_group_sketches;
+      std::map<int, std::vector<hash_t>> target_group_sketches;
+      std::mutex sketch_mutex;
       std::atomic<int> query_seq_count(0);
       std::atomic<int> target_seq_count(0);
 
@@ -373,9 +384,9 @@ namespace skch
         if (start >= all_sequences.size()) break;
         
         threads.emplace_back([&, start, end]() {
-          // Thread-local temporary k-mer collections
-          std::map<int, std::multiset<hash_t>> local_query_kmers;
-          std::map<int, std::multiset<hash_t>> local_target_kmers;
+          // Thread-local temporary MinHash sketches
+          std::map<int, std::vector<hash_t>> local_query_sketches;
+          std::map<int, std::vector<hash_t>> local_target_sketches;
           
           for (size_t i = start; i < end; i++) {
             const auto& seq_info = all_sequences[i];
@@ -388,10 +399,10 @@ namespace skch
               int groupId = idManager.getRefGroup(seqId);
               
               if (seq_info.is_query) {
-                add_sequence_kmers(seq_info.seq, local_query_kmers[groupId], estimation_k);
+                update_minhash_sketch(seq_info.seq, local_query_sketches[groupId], estimation_k, estimation_sketch_size);
                 query_seq_count++;
               } else {
-                add_sequence_kmers(seq_info.seq, local_target_kmers[groupId], estimation_k);
+                update_minhash_sketch(seq_info.seq, local_target_sketches[groupId], estimation_k, estimation_sketch_size);
                 target_seq_count++;
               }
             } catch (const std::exception& e) {
@@ -400,13 +411,39 @@ namespace skch
             }
           }
           
-          // Merge local k-mers into global maps
-          std::lock_guard<std::mutex> lock(kmer_mutex);
-          for (const auto& [groupId, kmers] : local_query_kmers) {
-            query_group_kmers[groupId].insert(kmers.begin(), kmers.end());
+          // Merge local sketches into global maps
+          std::lock_guard<std::mutex> lock(sketch_mutex);
+          for (const auto& [groupId, sketch] : local_query_sketches) {
+            auto& global_sketch = query_group_sketches[groupId];
+            // Merge sketches by keeping only the smallest values
+            std::vector<hash_t> merged;
+            merged.reserve(global_sketch.size() + sketch.size());
+            merged.insert(merged.end(), global_sketch.begin(), global_sketch.end());
+            merged.insert(merged.end(), sketch.begin(), sketch.end());
+            
+            // Use heap to keep only smallest values
+            std::make_heap(merged.begin(), merged.end());
+            while ((int)merged.size() > estimation_sketch_size) {
+              std::pop_heap(merged.begin(), merged.end());
+              merged.pop_back();
+            }
+            global_sketch = std::move(merged);
           }
-          for (const auto& [groupId, kmers] : local_target_kmers) {
-            target_group_kmers[groupId].insert(kmers.begin(), kmers.end());
+          for (const auto& [groupId, sketch] : local_target_sketches) {
+            auto& global_sketch = target_group_sketches[groupId];
+            // Merge sketches by keeping only the smallest values
+            std::vector<hash_t> merged;
+            merged.reserve(global_sketch.size() + sketch.size());
+            merged.insert(merged.end(), global_sketch.begin(), global_sketch.end());
+            merged.insert(merged.end(), sketch.begin(), sketch.end());
+            
+            // Use heap to keep only smallest values
+            std::make_heap(merged.begin(), merged.end());
+            while ((int)merged.size() > estimation_sketch_size) {
+              std::pop_heap(merged.begin(), merged.end());
+              merged.pop_back();
+            }
+            global_sketch = std::move(merged);
           }
         });
       }
@@ -416,10 +453,10 @@ namespace skch
         t.join();
       }
 
-      std::cerr << "[wfmash::auto-identity] Collected k-mers from " << query_seq_count 
-                << " query sequences into " << query_group_kmers.size() << " groups" << std::endl;
-      std::cerr << "[wfmash::auto-identity] Collected k-mers from " << target_seq_count 
-                << " target sequences into " << target_group_kmers.size() << " groups" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count 
+                << " query sequences into " << query_group_sketches.size() << " groups" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count 
+                << " target sequences into " << target_group_sketches.size() << " groups" << std::endl;
 
       if (query_seq_count == 0 || target_seq_count == 0) {
         std::cerr << "[wfmash::auto-identity] Warning: No sequences found in FAI files. " 
@@ -427,17 +464,15 @@ namespace skch
         return skch::fixed::percentage_identity;
       }
 
-      // Now compute MinHash sketches for each group
-      std::cerr << "[wfmash::auto-identity] Computing MinHash sketches for each group..." << std::endl;
-      std::map<int, std::vector<hash_t>> query_group_sketches;
-      std::map<int, std::vector<hash_t>> target_group_sketches;
+      // Finalize sketches for each group
+      std::cerr << "[wfmash::auto-identity] Finalizing MinHash sketches..." << std::endl;
       
-      for (const auto& [groupId, kmers] : query_group_kmers) {
-        compute_group_sketch(kmers, query_group_sketches[groupId], estimation_sketch_size);
+      for (auto& [groupId, sketch] : query_group_sketches) {
+        finalize_minhash_sketch(sketch, estimation_sketch_size);
       }
       
-      for (const auto& [groupId, kmers] : target_group_kmers) {
-        compute_group_sketch(kmers, target_group_sketches[groupId], estimation_sketch_size);
+      for (auto& [groupId, sketch] : target_group_sketches) {
+        finalize_minhash_sketch(sketch, estimation_sketch_size);
       }
 
       std::vector<double> all_anis;

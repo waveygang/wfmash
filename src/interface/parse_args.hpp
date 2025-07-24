@@ -803,7 +803,19 @@ void parse_args(int argc,
               << ", D=" << map_parameters.scaffold_max_deviation
               << ", S=" << (map_parameters.scaffold_min_length / map_parameters.windowLength)
               << ", n=" << map_parameters.numMappingsForSegment
-              << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
+              << ", p=";
+    
+    // Show the ANI preset if auto_pct_identity is enabled
+    if (map_parameters.auto_pct_identity) {
+        std::cerr << "ani" << map_parameters.ani_percentile;
+        if (map_parameters.ani_adjustment != 0) {
+            std::cerr << std::showpos << map_parameters.ani_adjustment << std::noshowpos;
+        }
+    } else {
+        std::cerr << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%";
+    }
+    
+    std::cerr
               << ", t=" << map_parameters.threads
               << ", b=" << map_parameters.index_by_size << std::endl;
     std::cerr << "[wfmash] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
