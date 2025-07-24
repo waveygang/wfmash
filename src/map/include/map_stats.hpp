@@ -308,10 +308,9 @@ namespace skch
       // Use k=21 to match Mash defaults for genome comparison
       // This provides good sensitivity while avoiding too many random matches
       const int estimation_k = 21;
-      // Research shows diminishing returns above s=1000 for similar genomes
-      // We use 5000 as a balanced choice: 5x better than default but not excessive
-      // This provides good accuracy for divergent genomes without 10x computational cost
-      const int estimation_sketch_size = 5000;
+      // For whole genome comparisons, use larger sketch size for better accuracy
+      // 10000 provides excellent accuracy even for divergent genomes
+      const int estimation_sketch_size = 10000;
 
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;
