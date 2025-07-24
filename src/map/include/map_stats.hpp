@@ -12,6 +12,9 @@
 #include <cmath>
 #include <unordered_set>
 #include <iomanip>
+#include <mutex>
+#include <thread>
+#include <atomic>
 
 #ifdef USE_BOOST
     #include <boost/math/distributions/binomial.hpp>
@@ -298,63 +301,113 @@ namespace skch
       // Use k=21 to match Mash defaults for genome comparison
       // This provides good sensitivity while avoiding too many random matches
       const int estimation_k = 21;
-      // Use larger sketch size for better accuracy with whole genomes
-      // Mash uses 1000 by default, but for large/divergent genomes we need more
-      // 10000 provides good accuracy even for divergent comparisons
-      const int estimation_sketch_size = 10000;
+      // Research shows diminishing returns above s=1000 for similar genomes
+      // We use 5000 as a balanced choice: 5x better than default but not excessive
+      // This provides good accuracy for divergent genomes without 10x computational cost
+      const int estimation_sketch_size = 5000;
 
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;
 
+      // Thread-safe maps for collecting sketches
       std::map<int, std::set<hash_t>> query_group_sketches;
       std::map<int, std::set<hash_t>> target_group_sketches;
+      std::mutex sketch_mutex;
+      std::atomic<int> query_seq_count(0);
+      std::atomic<int> target_seq_count(0);
 
-      // Sketch query sequences and group them using the provided idManager
-      int query_seq_count = 0;
+      // Determine number of threads to use
+      int num_threads = params.threads > 0 ? params.threads : std::thread::hardware_concurrency();
+      if (num_threads == 0) num_threads = 1;
+      
+      std::cerr << "[wfmash::auto-identity] Using " << num_threads << " threads for sketch computation" << std::endl;
+
+      // First, collect all sequences to process
+      struct SeqInfo {
+        std::string name;
+        std::string seq;
+        bool is_query;
+      };
+      std::vector<SeqInfo> all_sequences;
+      
+      // Collect query sequences
       for (const auto& file : params.querySequences) {
         std::unordered_set<std::string> keep_seq; // Empty set means keep all
         std::string keep_prefix = ""; // Empty prefix means no prefix filtering
         seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          try {
-            // Only process sequences that are already in the SequenceIdManager (from FAI files)
-            const auto& seqMap = idManager.getSequenceNameToIdMap();
-            auto it = seqMap.find(name);
-            if (it == seqMap.end()) {
-              // Skip sequences not in FAI file
-              return;
-            }
-            seqno_t seqId = it->second;
-            int groupId = idManager.getRefGroup(seqId);
-            get_minihash_sketch(seq, query_group_sketches[groupId], estimation_k, estimation_sketch_size);
-            query_seq_count++;
-          } catch (const std::exception& e) {
-            std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" << name << "': " << e.what() << std::endl;
+          // Only process sequences that are already in the SequenceIdManager
+          const auto& seqMap = idManager.getSequenceNameToIdMap();
+          if (seqMap.find(name) != seqMap.end()) {
+            all_sequences.push_back({name, seq, true});
           }
         });
       }
 
-      // Sketch target sequences
-      int target_seq_count = 0;
+      // Collect target sequences
       for (const auto& file : params.refSequences) {
         std::unordered_set<std::string> keep_seq; // Empty set means keep all
         std::string keep_prefix = ""; // Empty prefix means no prefix filtering
         seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          try {
-            // Only process sequences that are already in the SequenceIdManager (from FAI files)
-            const auto& seqMap = idManager.getSequenceNameToIdMap();
-            auto it = seqMap.find(name);
-            if (it == seqMap.end()) {
-              // Skip sequences not in FAI file
-              return;
-            }
-            seqno_t seqId = it->second;
-            int groupId = idManager.getRefGroup(seqId);
-            get_minihash_sketch(seq, target_group_sketches[groupId], estimation_k, estimation_sketch_size);
-            target_seq_count++;
-          } catch (const std::exception& e) {
-            std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" << name << "': " << e.what() << std::endl;
+          // Only process sequences that are already in the SequenceIdManager
+          const auto& seqMap = idManager.getSequenceNameToIdMap();
+          if (seqMap.find(name) != seqMap.end()) {
+            all_sequences.push_back({name, seq, false});
           }
         });
+      }
+
+      // Process sequences in parallel
+      std::vector<std::thread> threads;
+      size_t chunk_size = (all_sequences.size() + num_threads - 1) / num_threads;
+      
+      for (int t = 0; t < num_threads; t++) {
+        size_t start = t * chunk_size;
+        size_t end = std::min(start + chunk_size, all_sequences.size());
+        
+        if (start >= all_sequences.size()) break;
+        
+        threads.emplace_back([&, start, end]() {
+          // Thread-local temporary sketches
+          std::map<int, std::set<hash_t>> local_query_sketches;
+          std::map<int, std::set<hash_t>> local_target_sketches;
+          
+          for (size_t i = start; i < end; i++) {
+            const auto& seq_info = all_sequences[i];
+            try {
+              const auto& seqMap = idManager.getSequenceNameToIdMap();
+              auto it = seqMap.find(seq_info.name);
+              if (it == seqMap.end()) continue;
+              
+              seqno_t seqId = it->second;
+              int groupId = idManager.getRefGroup(seqId);
+              
+              if (seq_info.is_query) {
+                get_minihash_sketch(seq_info.seq, local_query_sketches[groupId], estimation_k, estimation_sketch_size);
+                query_seq_count++;
+              } else {
+                get_minihash_sketch(seq_info.seq, local_target_sketches[groupId], estimation_k, estimation_sketch_size);
+                target_seq_count++;
+              }
+            } catch (const std::exception& e) {
+              std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" 
+                        << seq_info.name << "': " << e.what() << std::endl;
+            }
+          }
+          
+          // Merge local sketches into global maps
+          std::lock_guard<std::mutex> lock(sketch_mutex);
+          for (const auto& [groupId, sketches] : local_query_sketches) {
+            query_group_sketches[groupId].insert(sketches.begin(), sketches.end());
+          }
+          for (const auto& [groupId, sketches] : local_target_sketches) {
+            target_group_sketches[groupId].insert(sketches.begin(), sketches.end());
+          }
+        });
+      }
+      
+      // Wait for all threads to complete
+      for (auto& t : threads) {
+        t.join();
       }
 
       std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count << " query sequences into " 
