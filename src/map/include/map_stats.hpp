@@ -266,29 +266,36 @@ namespace skch
     }
 
     /**
-     * @brief Helper function to compute minihash sketch for a single sequence
+     * @brief Helper function to add k-mers from a sequence to a hash multiset
      * @param[in] seq The sequence string
-     * @param[out] sketch_set Set to store the computed sketch
+     * @param[out] all_hashes Multiset to store all k-mer hashes
      * @param[in] k K-mer size
-     * @param[in] sketch_size Number of minimizers to retain
      */
-    inline void get_minihash_sketch(const std::string& seq, std::set<hash_t>& sketch_set, int k, int sketch_size) {
+    inline void add_sequence_kmers(const std::string& seq, std::multiset<hash_t>& all_hashes, int k) {
       if ((int)seq.length() < k) return;
 
-      std::vector<hash_t> hashes;
       char* seq_data = const_cast<char*>(seq.c_str());
-
       for (offset_t i = 0; i <= (offset_t)seq.length() - k; ++i) {
-        hashes.push_back(CommonFunc::getHash(seq_data + i, k));
+        all_hashes.insert(CommonFunc::getHash(seq_data + i, k));
       }
+    }
 
-      // Use nth_element for efficiency if sketch_size is much smaller than total hashes
-      if ((int)hashes.size() > sketch_size) {
-        std::nth_element(hashes.begin(), hashes.begin() + sketch_size, hashes.end());
-        hashes.resize(sketch_size);
-      }
+    /**
+     * @brief Compute MinHash sketch from a multiset of all k-mer hashes
+     * @param[in] all_hashes All k-mer hashes from the group
+     * @param[out] sketch Vector to store the MinHash sketch
+     * @param[in] sketch_size Number of minimizers to retain
+     */
+    inline void compute_group_sketch(const std::multiset<hash_t>& all_hashes, 
+                                     std::vector<hash_t>& sketch, int sketch_size) {
+      sketch.clear();
+      sketch.reserve(sketch_size);
       
-      sketch_set.insert(hashes.begin(), hashes.end());
+      // MinHash: take the smallest sketch_size hash values
+      auto it = all_hashes.begin();
+      for (int i = 0; i < sketch_size && it != all_hashes.end(); ++i, ++it) {
+        sketch.push_back(*it);
+      }
     }
 
     /**
@@ -309,10 +316,10 @@ namespace skch
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;
 
-      // Thread-safe maps for collecting sketches
-      std::map<int, std::set<hash_t>> query_group_sketches;
-      std::map<int, std::set<hash_t>> target_group_sketches;
-      std::mutex sketch_mutex;
+      // Maps to collect all k-mers per group
+      std::map<int, std::multiset<hash_t>> query_group_kmers;
+      std::map<int, std::multiset<hash_t>> target_group_kmers;
+      std::mutex kmer_mutex;
       std::atomic<int> query_seq_count(0);
       std::atomic<int> target_seq_count(0);
 
@@ -320,7 +327,7 @@ namespace skch
       int num_threads = params.threads > 0 ? params.threads : std::thread::hardware_concurrency();
       if (num_threads == 0) num_threads = 1;
       
-      std::cerr << "[wfmash::auto-identity] Using " << num_threads << " threads for sketch computation" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Using " << num_threads << " threads for k-mer extraction" << std::endl;
 
       // First, collect all sequences to process
       struct SeqInfo {
@@ -367,9 +374,9 @@ namespace skch
         if (start >= all_sequences.size()) break;
         
         threads.emplace_back([&, start, end]() {
-          // Thread-local temporary sketches
-          std::map<int, std::set<hash_t>> local_query_sketches;
-          std::map<int, std::set<hash_t>> local_target_sketches;
+          // Thread-local temporary k-mer collections
+          std::map<int, std::multiset<hash_t>> local_query_kmers;
+          std::map<int, std::multiset<hash_t>> local_target_kmers;
           
           for (size_t i = start; i < end; i++) {
             const auto& seq_info = all_sequences[i];
@@ -382,10 +389,10 @@ namespace skch
               int groupId = idManager.getRefGroup(seqId);
               
               if (seq_info.is_query) {
-                get_minihash_sketch(seq_info.seq, local_query_sketches[groupId], estimation_k, estimation_sketch_size);
+                add_sequence_kmers(seq_info.seq, local_query_kmers[groupId], estimation_k);
                 query_seq_count++;
               } else {
-                get_minihash_sketch(seq_info.seq, local_target_sketches[groupId], estimation_k, estimation_sketch_size);
+                add_sequence_kmers(seq_info.seq, local_target_kmers[groupId], estimation_k);
                 target_seq_count++;
               }
             } catch (const std::exception& e) {
@@ -394,13 +401,13 @@ namespace skch
             }
           }
           
-          // Merge local sketches into global maps
-          std::lock_guard<std::mutex> lock(sketch_mutex);
-          for (const auto& [groupId, sketches] : local_query_sketches) {
-            query_group_sketches[groupId].insert(sketches.begin(), sketches.end());
+          // Merge local k-mers into global maps
+          std::lock_guard<std::mutex> lock(kmer_mutex);
+          for (const auto& [groupId, kmers] : local_query_kmers) {
+            query_group_kmers[groupId].insert(kmers.begin(), kmers.end());
           }
-          for (const auto& [groupId, sketches] : local_target_sketches) {
-            target_group_sketches[groupId].insert(sketches.begin(), sketches.end());
+          for (const auto& [groupId, kmers] : local_target_kmers) {
+            target_group_kmers[groupId].insert(kmers.begin(), kmers.end());
           }
         });
       }
@@ -410,15 +417,28 @@ namespace skch
         t.join();
       }
 
-      std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count << " query sequences into " 
-                << query_group_sketches.size() << " groups" << std::endl;
-      std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count << " target sequences into " 
-                << target_group_sketches.size() << " groups" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Collected k-mers from " << query_seq_count 
+                << " query sequences into " << query_group_kmers.size() << " groups" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Collected k-mers from " << target_seq_count 
+                << " target sequences into " << target_group_kmers.size() << " groups" << std::endl;
 
       if (query_seq_count == 0 || target_seq_count == 0) {
         std::cerr << "[wfmash::auto-identity] Warning: No sequences found in FAI files. " 
                   << "Make sure .fai index files exist (run 'samtools faidx' on your FASTA files)" << std::endl;
         return skch::fixed::percentage_identity;
+      }
+
+      // Now compute MinHash sketches for each group
+      std::cerr << "[wfmash::auto-identity] Computing MinHash sketches for each group..." << std::endl;
+      std::map<int, std::vector<hash_t>> query_group_sketches;
+      std::map<int, std::vector<hash_t>> target_group_sketches;
+      
+      for (const auto& [groupId, kmers] : query_group_kmers) {
+        compute_group_sketch(kmers, query_group_sketches[groupId], estimation_sketch_size);
+      }
+      
+      for (const auto& [groupId, kmers] : target_group_kmers) {
+        compute_group_sketch(kmers, target_group_sketches[groupId], estimation_sketch_size);
       }
 
       std::vector<double> all_anis;
@@ -437,15 +457,26 @@ namespace skch
 
           if (q_sketch.empty() || t_sketch.empty()) continue;
 
-          std::vector<hash_t> intersection;
-          std::set_intersection(q_sketch.begin(), q_sketch.end(),
-                                t_sketch.begin(), t_sketch.end(),
-                                std::back_inserter(intersection));
+          // For MinHash, both sketches are already sorted (smallest hashes first)
+          // Count intersection of the two sketches
+          size_t intersection_count = 0;
+          size_t i = 0, j = 0;
+          while (i < q_sketch.size() && j < t_sketch.size()) {
+            if (q_sketch[i] == t_sketch[j]) {
+              intersection_count++;
+              i++;
+              j++;
+            } else if (q_sketch[i] < t_sketch[j]) {
+              i++;
+            } else {
+              j++;
+            }
+          }
 
-          if (intersection.empty()) continue;
+          if (intersection_count == 0) continue;
 
-          size_t union_size = q_sketch.size() + t_sketch.size() - intersection.size();
-          double jaccard = static_cast<double>(intersection.size()) / union_size;
+          // For MinHash, Jaccard = intersection / sketch_size (when both sketches have same size)
+          double jaccard = static_cast<double>(intersection_count) / std::min(q_sketch.size(), t_sketch.size());
           
           double mash_dist = j2md(jaccard, estimation_k);
           double ani = 1.0 - mash_dist;
@@ -453,7 +484,7 @@ namespace skch
           
           comparison_count++;
           std::cerr << "[wfmash::auto-identity] Group " << q_pair.first << " vs " << t_pair.first 
-                    << ": " << intersection.size() << "/" << std::min(q_sketch.size(), t_sketch.size()) 
+                    << ": " << intersection_count << "/" << std::min(q_sketch.size(), t_sketch.size()) 
                     << " sketches overlap, Jaccard=" << std::fixed << std::setprecision(4) << jaccard 
                     << ", ANI=" << std::fixed << std::setprecision(2) << ani * 100 << "%" << std::endl;
         }
