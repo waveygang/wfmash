@@ -635,15 +635,13 @@ namespace skch
                                  progress_meter::ProgressMeter& progress,
                                  seqno_t querySeqId,
                                  offset_t queryLen,
-                                 std::shared_ptr<progress_meter::ProgressMeter> scaffold_progress,
-                                 std::shared_ptr<std::atomic<size_t>> scaffold_total_work,
-                                 std::shared_ptr<std::atomic<size_t>> scaffold_completed_work)
+                                 std::shared_ptr<progress_meter::ProgressMeter> scaffold_progress = nullptr,
+                                 std::shared_ptr<std::atomic<size_t>> scaffold_total_work = nullptr,
+                                 std::shared_ptr<std::atomic<size_t>> scaffold_completed_work = nullptr)
     {
         if (param.scaffold_gap <= 0) return;
         
-        // Add this query's scaffold work to the total
-        size_t query_work = readMappings.size() * 3;  // 3 phases
-        scaffold_total_work->fetch_add(query_work, std::memory_order_relaxed);
+        // Skip scaffold progress tracking
         
 
         // Phase 1: Anchor Identification - Modified approach
@@ -656,9 +654,6 @@ namespace skch
         
         // Step 2: Merge to identify chains
         auto mergedChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
-        
-        // Update completed work counter
-        scaffold_completed_work->fetch_add(readMappings.size(), std::memory_order_acq_rel);
         
         // Step 3: Filter merged chains by length
         mergedChains.erase(
@@ -760,7 +755,7 @@ namespace skch
         std::vector<std::thread> threads;
         std::atomic<size_t> work_index(0);
         
-        auto compute_anchor_distance = [&, scaffold_progress]() {
+        auto compute_anchor_distance = [&]() {
             size_t i;
             while ((i = work_index.fetch_add(1)) < readMappings.size()) {
                 const auto& m = readMappings[i];
@@ -773,9 +768,6 @@ namespace skch
                 } else {
                     dist_to_nearest_anchor[i] = nn[0].second;
                 }
-                
-                // Update completed work counter
-                scaffold_completed_work->fetch_add(1, std::memory_order_acq_rel);
             }
         };
         
@@ -794,8 +786,6 @@ namespace skch
             if (dist_to_nearest_anchor[i] <= max_dist) {
                 keepers.push_back(readMappings[i]);
             }
-            // Update completed work counter
-            scaffold_completed_work->fetch_add(1, std::memory_order_acq_rel);
         }
         
         readMappings = std::move(keepers);

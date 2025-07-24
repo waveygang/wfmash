@@ -476,11 +476,10 @@ namespace skch
               auto outstream = std::make_shared<std::ofstream>();
               auto outstream_mutex = std::make_shared<std::mutex>();
               
-              // Create scaffold progress tracking at subset level
-              auto scaffold_progress = std::make_shared<progress_meter::ProgressMeter>(
-                  1, "[wfmash::mashmap] scaffold", param.use_progress_bar);
-              auto scaffold_total_work = std::make_shared<std::atomic<size_t>>(0);
-              auto scaffold_completed_work = std::make_shared<std::atomic<size_t>>(0);
+              // Scaffold progress tracking - simplified
+              auto scaffold_progress = std::shared_ptr<progress_meter::ProgressMeter>(nullptr);
+              auto scaffold_total_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
+              auto scaffold_completed_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
               
               if (param.filterMode != filter::ONETOONE) {
                   bool append = subset_idx > 0;
@@ -676,32 +675,9 @@ namespace skch
               // Immediately finish mapping progress when queries are done
               progress->finish();
               
-              // If scaffolding is enabled, immediately start scaffold progress
+              // If scaffolding is enabled, log a simple message
               if (param.scaffold_gap > 0) {
-                  size_t total_work = scaffold_total_work->load(std::memory_order_acquire);
-                  if (total_work > 0) {
-                      // Create scaffold progress meter with correct total
-                      scaffold_progress = std::make_shared<progress_meter::ProgressMeter>(
-                          total_work, "[wfmash::mashmap] scaffold", param.use_progress_bar);
-                      scaffold_progress->reset_timer();
-                      
-                      // Monitor progress and wait for completion
-                      std::thread monitor_thread([scaffold_progress, scaffold_completed_work, total_work]() {
-                          size_t last_completed = 0;
-                          while (last_completed < total_work) {
-                              size_t current_completed = scaffold_completed_work->load(std::memory_order_acquire);
-                              if (current_completed > last_completed) {
-                                  scaffold_progress->increment(current_completed - last_completed);
-                                  last_completed = current_completed;
-                              }
-                              std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                          }
-                          scaffold_progress->finish();
-                      });
-                      
-                      // Wait for all scaffold work to complete
-                      monitor_thread.join();
-                  }
+                  std::cerr << "[wfmash::mashmap] Scaffolding mappings..." << std::endl;
               }
               
           }
