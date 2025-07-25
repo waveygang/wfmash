@@ -29,6 +29,7 @@
 #include "map/include/sequenceIds.hpp"
 #include "map/include/commonFunc.hpp"
 #include "map/include/streamingMinHash.hpp"
+#include "common/taskflow/taskflow.hpp"
 
 //External includes
 #include "common/murmur3.h"
@@ -343,7 +344,11 @@ namespace skch
       
       std::cerr << "[wfmash::auto-identity] Using " << num_threads << " threads for k-mer extraction" << std::endl;
 
-      // First, collect all sequences to process
+      // Process sequences in parallel using GroupedStreamingMinHash
+      GroupedStreamingMinHash query_grouped_sketch(estimation_sketch_size, 0);
+      GroupedStreamingMinHash target_grouped_sketch(estimation_sketch_size, 0);
+      
+      // Collect all sequences to process
       struct SeqInfo {
         std::string name;
         std::string seq;
@@ -353,108 +358,95 @@ namespace skch
       
       // Collect query sequences
       for (const auto& file : params.querySequences) {
-        std::unordered_set<std::string> keep_seq; // Empty set means keep all
-        std::string keep_prefix = ""; // Empty prefix means no prefix filtering
+        std::unordered_set<std::string> keep_seq;
+        std::string keep_prefix = "";
         seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          // Only process sequences that are already in the SequenceIdManager
           const auto& seqMap = idManager.getSequenceNameToIdMap();
           if (seqMap.find(name) != seqMap.end()) {
             all_sequences.push_back({name, seq, true});
           }
         });
       }
-
+      
       // Collect target sequences
       for (const auto& file : params.refSequences) {
-        std::unordered_set<std::string> keep_seq; // Empty set means keep all
-        std::string keep_prefix = ""; // Empty prefix means no prefix filtering
+        std::unordered_set<std::string> keep_seq;
+        std::string keep_prefix = "";
         seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          // Only process sequences that are already in the SequenceIdManager
           const auto& seqMap = idManager.getSequenceNameToIdMap();
           if (seqMap.find(name) != seqMap.end()) {
             all_sequences.push_back({name, seq, false});
           }
         });
       }
-
+      
+      // Create progress meter for ANI sketching
+      progress_meter::ProgressMeter ani_progress(
+          all_sequences.size(),
+          "[wfmash::auto-identity] sketching",
+          params.use_progress_bar);
+      
+      // Use taskflow for parallel processing
+      tf::Executor executor(num_threads);
+      tf::Taskflow taskflow;
+      
       // Process sequences in parallel
-      std::vector<std::thread> threads;
-      size_t chunk_size = (all_sequences.size() + num_threads - 1) / num_threads;
+      taskflow.for_each_index(size_t(0), all_sequences.size(), size_t(1), [&](size_t i) {
+        const auto& seq_info = all_sequences[i];
+        
+        try {
+          const auto& seqMap = idManager.getSequenceNameToIdMap();
+          auto it = seqMap.find(seq_info.name);
+          if (it != seqMap.end()) {
+            seqno_t seqId = it->second;
+            int groupId = idManager.getRefGroup(seqId);
+            
+            // Process the sequence using GroupedStreamingMinHash
+            if (seq_info.is_query) {
+              query_grouped_sketch.processSequence(
+                  seq_info.seq.c_str(),
+                  seq_info.seq.length(),
+                  seqId,
+                  groupId,
+                  estimation_k,
+                  4,  // alphabetSize for DNA
+                  nullptr);
+              query_seq_count++;
+            } else {
+              target_grouped_sketch.processSequence(
+                  seq_info.seq.c_str(),
+                  seq_info.seq.length(),
+                  seqId,
+                  groupId,
+                  estimation_k,
+                  4,  // alphabetSize for DNA
+                  nullptr);
+              target_seq_count++;
+            }
+          }
+        } catch (const std::exception& e) {
+          std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" 
+                    << seq_info.name << "': " << e.what() << std::endl;
+        }
+        
+        ani_progress.increment(1);
+      });
       
-      for (int t = 0; t < num_threads; t++) {
-        size_t start = t * chunk_size;
-        size_t end = std::min(start + chunk_size, all_sequences.size());
-        
-        if (start >= all_sequences.size()) break;
-        
-        threads.emplace_back([&, start, end]() {
-          // Thread-local temporary MinHash sketches
-          std::map<int, std::vector<hash_t>> local_query_sketches;
-          std::map<int, std::vector<hash_t>> local_target_sketches;
-          
-          for (size_t i = start; i < end; i++) {
-            const auto& seq_info = all_sequences[i];
-            try {
-              const auto& seqMap = idManager.getSequenceNameToIdMap();
-              auto it = seqMap.find(seq_info.name);
-              if (it == seqMap.end()) continue;
-              
-              seqno_t seqId = it->second;
-              int groupId = idManager.getRefGroup(seqId);
-              
-              if (seq_info.is_query) {
-                update_minhash_sketch(seq_info.seq, local_query_sketches[groupId], estimation_k, estimation_sketch_size);
-                query_seq_count++;
-              } else {
-                update_minhash_sketch(seq_info.seq, local_target_sketches[groupId], estimation_k, estimation_sketch_size);
-                target_seq_count++;
-              }
-            } catch (const std::exception& e) {
-              std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" 
-                        << seq_info.name << "': " << e.what() << std::endl;
-            }
-          }
-          
-          // Merge local sketches into global maps
-          std::lock_guard<std::mutex> lock(sketch_mutex);
-          for (const auto& [groupId, sketch] : local_query_sketches) {
-            auto& global_sketch = query_group_sketches[groupId];
-            // Merge sketches by keeping only the smallest values
-            std::vector<hash_t> merged;
-            merged.reserve(global_sketch.size() + sketch.size());
-            merged.insert(merged.end(), global_sketch.begin(), global_sketch.end());
-            merged.insert(merged.end(), sketch.begin(), sketch.end());
-            
-            // Use heap to keep only smallest values
-            std::make_heap(merged.begin(), merged.end());
-            while ((int)merged.size() > estimation_sketch_size) {
-              std::pop_heap(merged.begin(), merged.end());
-              merged.pop_back();
-            }
-            global_sketch = std::move(merged);
-          }
-          for (const auto& [groupId, sketch] : local_target_sketches) {
-            auto& global_sketch = target_group_sketches[groupId];
-            // Merge sketches by keeping only the smallest values
-            std::vector<hash_t> merged;
-            merged.reserve(global_sketch.size() + sketch.size());
-            merged.insert(merged.end(), global_sketch.begin(), global_sketch.end());
-            merged.insert(merged.end(), sketch.begin(), sketch.end());
-            
-            // Use heap to keep only smallest values
-            std::make_heap(merged.begin(), merged.end());
-            while ((int)merged.size() > estimation_sketch_size) {
-              std::pop_heap(merged.begin(), merged.end());
-              merged.pop_back();
-            }
-            global_sketch = std::move(merged);
-          }
-        });
+      // Execute the taskflow
+      executor.run(taskflow).wait();
+      
+      ani_progress.finish();
+      
+      // Get the final sketches from GroupedStreamingMinHash
+      auto query_sketches = query_grouped_sketch.getAllGroupSketches();
+      auto target_sketches = target_grouped_sketch.getAllGroupSketches();
+      
+      // Convert to the expected format
+      for (const auto& [groupId, sketch] : query_sketches) {
+        query_group_sketches[groupId] = sketch;
       }
-      
-      // Wait for all threads to complete
-      for (auto& t : threads) {
-        t.join();
+      for (const auto& [groupId, sketch] : target_sketches) {
+        target_group_sketches[groupId] = sketch;
       }
 
       std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count 
