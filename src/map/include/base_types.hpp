@@ -254,6 +254,27 @@ namespace skch
 
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
+  /**
+   * @struct ChainInfo
+   * @brief Auxiliary data for tracking chain information for PAF output
+   */
+  struct ChainInfo {
+    uint32_t chainId;    // Which chain this mapping belongs to
+    uint16_t chainPos;   // Position within chain (1-based)
+    uint16_t chainLen;   // Total mappings in this chain
+  };
+  
+  typedef std::vector<ChainInfo> ChainInfoVector_t;
+  
+  /**
+   * @struct MappingsWithChains
+   * @brief Container for mappings with their associated chain information
+   */
+  struct MappingsWithChains {
+    MappingResultsVector_t mappings;
+    ChainInfoVector_t chainInfo;
+  };
+
   //Vector type for storing MinmerInfo
   typedef std::vector<MinmerInfo> MinVec_Type;
 

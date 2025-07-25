@@ -376,7 +376,197 @@ namespace skch
     }
 
     /**
-     * @brief Merge mappings within specified range
+     * @brief Merge mappings within specified range (with chain info)
+     */
+    template <typename VecIn>
+    static MappingsWithChains mergeMappingsInRangeWithChains(VecIn &readMappings,
+                                     int max_dist,
+                                     const Parameters& param,
+                                     progress_meter::ProgressMeter& progress,
+                                     seqno_t querySeqId,
+                                     offset_t queryLen)
+    {
+        MappingsWithChains result;
+        
+        if (!param.split || readMappings.size() < 2) {
+            result.mappings = readMappings;
+            // For unmerged mappings, each is its own chain
+            result.chainInfo.resize(readMappings.size());
+            for (size_t i = 0; i < readMappings.size(); ++i) {
+                result.chainInfo[i] = {static_cast<uint32_t>(i), 1, 1};
+            }
+            return result;
+        }
+
+        // Continue with existing merge logic...
+        // 1. Create and Populate the "Sidecar" Auxiliary Data
+        std::vector<MappingAuxData> aux_data(readMappings.size());
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            aux_data[i].splitMappingId = i; // Assign a unique, stable ID for chaining
+            aux_data[i].querySeqId = querySeqId;
+            aux_data[i].queryLen = queryLen;
+        }
+
+        // 2. Correct Lexicographic Sort (using indices for efficiency)
+        std::vector<uint32_t> p(readMappings.size());
+        std::iota(p.begin(), p.end(), 0);
+        std::sort(p.begin(), p.end(),
+            [&](uint32_t i, uint32_t j) {
+                const auto& a = readMappings[i];
+                const auto& b = readMappings[j];
+                auto a_strand = a.strand();
+                auto b_strand = b.strand();
+                return std::tie(a.refSeqId, a_strand, a.queryStartPos, a.refStartPos)
+                     < std::tie(b.refSeqId, b_strand, b.queryStartPos, b.refStartPos);
+            });
+
+        readMappings = reorder(readMappings, p);
+        aux_data = reorder(aux_data, p);
+        
+        // 3. Restore the Union-Find and Geometric Chaining Logic
+        std::vector<dsets::DisjointSets::Aint> ufv(readMappings.size());
+        auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
+
+        size_t group_start_idx = 0;
+        while (group_start_idx < readMappings.size()) {
+            const auto& start_map = readMappings[group_start_idx];
+            size_t group_end_idx = group_start_idx + 1;
+            while (group_end_idx < readMappings.size() &&
+                   readMappings[group_end_idx].refSeqId == start_map.refSeqId &&
+                   readMappings[group_end_idx].strand() == start_map.strand()) {
+                group_end_idx++;
+            }
+
+            for (size_t i = group_start_idx; i < group_end_idx; ++i) {
+                if (aux_data[i].chainPairScore != std::numeric_limits<double>::max()) {
+                    disjoint_sets.unite(aux_data[i].splitMappingId, aux_data[i].chainPairId);
+                }
+                
+                double best_score = std::numeric_limits<double>::max();
+                size_t best_j = group_end_idx;
+
+                for (size_t j = i + 1; j < group_end_idx; ++j) {
+                    if (readMappings[j].queryStartPos > readMappings[i].queryEndPos() + max_dist) break;
+
+                    int64_t q_dist = readMappings[j].queryStartPos - readMappings[i].queryEndPos();
+                    if (q_dist < 0) q_dist = 0; // Prevent negative distance from small overlaps
+                    
+                    int64_t r_dist = (readMappings[i].strand() == strnd::FWD) ? 
+                                     (readMappings[j].refStartPos - readMappings[i].refEndPos()) : 
+                                     (readMappings[i].refStartPos - readMappings[j].refEndPos());
+                    
+                    if (q_dist <= max_dist && r_dist >= -param.windowLength/5 && r_dist <= max_dist) {
+                        double dist_sq = (double)q_dist * q_dist + (double)r_dist * r_dist;
+                        if (dist_sq < best_score && dist_sq < aux_data[j].chainPairScore) {
+                            best_score = dist_sq;
+                            best_j = j;
+                        }
+                    }
+                }
+
+                if (best_j != group_end_idx) {
+                    aux_data[best_j].chainPairScore = best_score;
+                    aux_data[best_j].chainPairId = aux_data[i].splitMappingId;
+                }
+            }
+            group_start_idx = group_end_idx;
+        }
+
+        // 4. Group by Chain and Construct Merged Fragments
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            if (aux_data[i].chainPairScore != std::numeric_limits<double>::max()) {
+                 disjoint_sets.unite(aux_data[i].splitMappingId, aux_data[i].chainPairId);
+            }
+        }
+        for (size_t i = 0; i < readMappings.size(); ++i) {
+            aux_data[i].splitMappingId = disjoint_sets.find(aux_data[i].splitMappingId);
+            // Update progress for union-find processing
+            progress.increment(1);
+        }
+        
+        std::iota(p.begin(), p.end(), 0);
+        std::sort(p.begin(), p.end(),
+            [&](uint32_t i, uint32_t j) {
+                return std::tie(aux_data[i].splitMappingId, readMappings[i].queryStartPos, readMappings[i].refStartPos)
+                     < std::tie(aux_data[j].splitMappingId, readMappings[j].queryStartPos, readMappings[j].refStartPos);
+            });
+        
+        readMappings = reorder(readMappings, p);
+        aux_data = reorder(aux_data, p);
+
+        // Track chain assignments
+        std::map<uint32_t, uint32_t> chainIdMap; // splitMappingId -> sequential chainId
+        uint32_t nextChainId = 0;
+
+        size_t i = 0;
+        while (i < readMappings.size()) {
+            size_t j = i;
+            while (j + 1 < readMappings.size() && aux_data[j+1].splitMappingId == aux_data[i].splitMappingId) {
+                ++j;
+            }
+
+            // Assign sequential chain ID if not seen before
+            uint32_t chainId = nextChainId;
+            auto it = chainIdMap.find(aux_data[i].splitMappingId);
+            if (it == chainIdMap.end()) {
+                chainIdMap[aux_data[i].splitMappingId] = nextChainId++;
+                chainId = chainIdMap[aux_data[i].splitMappingId];
+            } else {
+                chainId = it->second;
+            }
+
+            // Count total mappings in this chain
+            uint16_t chainLen = j - i + 1;
+            uint16_t chainPos = 1;
+
+            size_t frag_start = i;
+            while(frag_start <= j) {
+                size_t frag_end = frag_start;
+                while(frag_end + 1 <= j && 
+                      (readMappings[frag_end+1].queryEndPos() - readMappings[frag_start].queryStartPos < param.max_mapping_length)) {
+                    frag_end++;
+                }
+                
+                MappingResult merged = readMappings[frag_start];
+                uint32_t q_start = readMappings[frag_start].queryStartPos;
+                uint32_t q_end = readMappings[frag_end].queryEndPos();
+                uint32_t r_start_fwd = readMappings[frag_start].refStartPos;
+                uint32_t r_end_fwd = readMappings[frag_end].refEndPos();
+                
+                double total_id = 0, total_comp = 0;
+                uint32_t total_conserved = 0;
+                for(size_t k = frag_start; k <= frag_end; ++k) {
+                    total_id += readMappings[k].getNucIdentity();
+                    total_comp += readMappings[k].getKmerComplexity();
+                    total_conserved += readMappings[k].conservedSketches;
+                    if (merged.strand() == strnd::REV) {
+                        r_start_fwd = std::min(r_start_fwd, readMappings[k].refStartPos);
+                        r_end_fwd = std::max(r_end_fwd, (uint32_t)readMappings[k].refEndPos());
+                    }
+                }
+
+                merged.queryStartPos = q_start;
+                merged.refStartPos = (merged.strand() == strnd::FWD) ? r_start_fwd : readMappings[frag_end].refStartPos;
+                merged.blockLength = std::max(q_end - q_start, r_end_fwd - r_start_fwd);
+                
+                merged.n_merged = frag_end - frag_start + 1;
+                merged.setNucIdentity(total_id / merged.n_merged);
+                merged.setKmerComplexity(total_comp / merged.n_merged);
+                merged.conservedSketches = total_conserved;
+                
+                result.mappings.push_back(merged);
+                result.chainInfo.push_back({chainId, chainPos++, chainLen});
+                
+                frag_start = frag_end + 1;
+            }
+            i = j + 1;
+        }
+        
+        return result;
+    }
+
+    /**
+     * @brief Merge mappings within specified range (legacy interface)
      */
     template <typename VecIn>
     static VecIn mergeMappingsInRange(VecIn &readMappings,

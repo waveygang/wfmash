@@ -18,6 +18,7 @@
 #include <numeric>
 #include <iostream>
 #include <filesystem>
+#include <map>
 namespace fs = std::filesystem;
 #include <queue>
 #include <algorithm>
@@ -617,12 +618,13 @@ namespace skch
 
                           OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
                           
-                          auto [nonMergedMappings, mergedMappings] = 
-                              filterSubsetMappings(output->results, output->progress, seqId, input->len,
+                          auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
                                                   scaffold_progress, scaffold_total_work, scaffold_completed_work);
 
                           auto& mappings = param.mergeMappings && param.split ?
-                                mergedMappings : nonMergedMappings;
+                                filteredResult.mergedMappings : filteredResult.nonMergedMappings;
+                          auto& chainInfo = param.mergeMappings && param.split ?
+                                filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
 
                           if (param.filterMode == filter::ONETOONE) {
                               std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
@@ -633,7 +635,7 @@ namespace skch
                               );
                           } else {
                               std::lock_guard<std::mutex> lock(*outstream_mutex);
-                              OutputHandler::reportReadMappings(mappings, queryName, *outstream, *idManager, param, processMappingResults, input->len);
+                              OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *outstream, *idManager, param, processMappingResults, input->len);
                           }
                       }).name("query_" + queryName);
                   }
@@ -935,9 +937,19 @@ namespace skch
       }
 
       /**
+       * @brief Result structure for filtered mappings with chain info
+       */
+      struct FilteredMappingsResult {
+          MappingResultsVector_t nonMergedMappings;
+          MappingResultsVector_t mergedMappings;
+          ChainInfoVector_t nonMergedChainInfo;
+          ChainInfoVector_t mergedChainInfo;
+      };
+
+      /**
        * @brief Filter mappings for a subset before aggregation
        */
-      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(
+      FilteredMappingsResult filterSubsetMappings(
           MappingResultsVector_t& mappings, 
           progress_meter::ProgressMeter& progress,
           seqno_t querySeqId,
@@ -946,12 +958,16 @@ namespace skch
           std::shared_ptr<std::atomic<size_t>> scaffold_total_work,
           std::shared_ptr<std::atomic<size_t>> scaffold_completed_work)
       {
-          if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+          FilteredMappingsResult result;
+          
+          if (mappings.empty()) return result;
 
           MappingResultsVector_t rawMappings = mappings;
           
-          // Pass context to the merge function
-          auto maximallyMergedMappings = FilterUtils::mergeMappingsInRange(mappings, param.chain_gap, param, progress, querySeqId, queryLen);
+          // Pass context to the merge function - now returns mappings with chain info
+          auto mappingsWithChains = FilterUtils::mergeMappingsInRangeWithChains(mappings, param.chain_gap, param, progress, querySeqId, queryLen);
+          auto& maximallyMergedMappings = mappingsWithChains.mappings;
+          auto& chainInfo = mappingsWithChains.chainInfo;
 
           if (param.mergeMappings && param.split) {
               // Pass context (queryLen) to weak mapping filter
@@ -1010,7 +1026,18 @@ namespace skch
               mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
           }*/
 
-          return {std::move(mappings), std::move(maximallyMergedMappings)};
+          // Return results with chain info
+          result.nonMergedMappings = std::move(mappings);
+          result.mergedMappings = std::move(maximallyMergedMappings);
+          
+          // For non-merged mappings, each is its own chain
+          result.nonMergedChainInfo.resize(result.nonMergedMappings.size());
+          for (size_t i = 0; i < result.nonMergedMappings.size(); ++i) {
+              result.nonMergedChainInfo[i] = {static_cast<uint32_t>(i), 1, 1};
+          }
+          result.mergedChainInfo = std::move(chainInfo);
+          
+          return result;
       }
 
     public:
