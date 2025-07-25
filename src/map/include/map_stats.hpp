@@ -36,6 +36,7 @@
 #include "common/kseq.h"
 #include "common/prettyprint.hpp"
 #include "common/seqiter.hpp"
+#include "htslib/faidx.h"
 
 namespace skch
 {
@@ -343,46 +344,79 @@ namespace skch
       if (num_threads == 0) num_threads = 1;
       
       std::cerr << "[wfmash::auto-identity] Using " << num_threads << " threads for k-mer extraction" << std::endl;
+      
+      // First, count total sequences to process
+      size_t total_sequences = 0;
+      for (const auto& [name, id] : idManager.getSequenceNameToIdMap()) {
+        total_sequences++;
+      }
+      std::cerr << "[wfmash::auto-identity] Total sequences in idManager: " << total_sequences << std::endl;
 
       // Process sequences in parallel using GroupedStreamingMinHash
       GroupedStreamingMinHash query_grouped_sketch(estimation_sketch_size, 0);
       GroupedStreamingMinHash target_grouped_sketch(estimation_sketch_size, 0);
       
-      // Collect all sequences to process
-      struct SeqInfo {
+      // Collect sequence names to process (NOT the sequences themselves)
+      struct SeqToProcess {
         std::string name;
-        std::string seq;
+        std::string file;
         bool is_query;
       };
-      std::vector<SeqInfo> all_sequences;
+      std::vector<SeqToProcess> sequences_to_process;
       
-      // Collect query sequences
+      // Get sequence names from idManager
+      const auto& seqMap = idManager.getSequenceNameToIdMap();
+      std::unordered_set<std::string> valid_names;
+      for (const auto& [name, id] : seqMap) {
+        valid_names.insert(name);
+      }
+      
+      // Collect query sequence names
       for (const auto& file : params.querySequences) {
-        std::unordered_set<std::string> keep_seq;
-        std::string keep_prefix = "";
-        seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          const auto& seqMap = idManager.getSequenceNameToIdMap();
-          if (seqMap.find(name) != seqMap.end()) {
-            all_sequences.push_back({name, seq, true});
+        faidx_t* fai = fai_load(file.c_str());
+        if (!fai) {
+          std::cerr << "[wfmash::auto-identity] Warning: Failed to load FASTA index: " << file << std::endl;
+          continue;
+        }
+        
+        int nseq = faidx_nseq(fai);
+        for (int i = 0; i < nseq; i++) {
+          const char* seqname = faidx_iseq(fai, i);
+          if (seqname && valid_names.count(seqname) > 0) {
+            sequences_to_process.push_back({seqname, file, true});
           }
-        });
+        }
+        fai_destroy(fai);
       }
       
-      // Collect target sequences
+      // Collect target sequence names
       for (const auto& file : params.refSequences) {
-        std::unordered_set<std::string> keep_seq;
-        std::string keep_prefix = "";
-        seqiter::for_each_seq_in_file(file, keep_seq, keep_prefix, [&](const std::string& name, const std::string& seq) {
-          const auto& seqMap = idManager.getSequenceNameToIdMap();
-          if (seqMap.find(name) != seqMap.end()) {
-            all_sequences.push_back({name, seq, false});
+        faidx_t* fai = fai_load(file.c_str());
+        if (!fai) {
+          std::cerr << "[wfmash::auto-identity] Warning: Failed to load FASTA index: " << file << std::endl;
+          continue;
+        }
+        
+        int nseq = faidx_nseq(fai);
+        for (int i = 0; i < nseq; i++) {
+          const char* seqname = faidx_iseq(fai, i);
+          if (seqname && valid_names.count(seqname) > 0) {
+            sequences_to_process.push_back({seqname, file, false});
           }
-        });
+        }
+        fai_destroy(fai);
       }
+      
+      std::cerr << "[wfmash::auto-identity] Sequences to process: " << sequences_to_process.size() 
+                << " (query: " << std::count_if(sequences_to_process.begin(), sequences_to_process.end(), 
+                                                [](const SeqToProcess& s) { return s.is_query; })
+                << ", target: " << std::count_if(sequences_to_process.begin(), sequences_to_process.end(),
+                                                  [](const SeqToProcess& s) { return !s.is_query; })
+                << ")" << std::endl;
       
       // Create progress meter for ANI sketching
       progress_meter::ProgressMeter ani_progress(
-          all_sequences.size(),
+          sequences_to_process.size(),
           "[wfmash::auto-identity] sketching",
           params.use_progress_bar);
       
@@ -390,22 +424,58 @@ namespace skch
       tf::Executor executor(num_threads);
       tf::Taskflow taskflow;
       
-      // Process sequences in parallel
-      taskflow.for_each_index(size_t(0), all_sequences.size(), size_t(1), [&](size_t i) {
-        const auto& seq_info = all_sequences[i];
+      // Create a work queue and atomic index for thread-safe processing
+      std::atomic<size_t> seq_index(0);
+      std::atomic<size_t> sequences_processed(0);
+      
+      // Process sequences dynamically using a thread pool pattern
+      auto process_sequences = [&]() {
+        // Thread-local FASTA index
+        thread_local std::map<std::string, faidx_t*> fai_cache;
         
-        try {
-          const auto& seqMap = idManager.getSequenceNameToIdMap();
-          auto it = seqMap.find(seq_info.name);
-          if (it != seqMap.end()) {
+        while (true) {
+          // Get next sequence to process
+          size_t idx = seq_index.fetch_add(1);
+          if (idx >= sequences_to_process.size()) break;
+          
+          const auto& seq_info = sequences_to_process[idx];
+          
+          try {
+            // Get or create faidx for this file
+            faidx_t* fai = nullptr;
+            auto fai_it = fai_cache.find(seq_info.file);
+            if (fai_it == fai_cache.end()) {
+              fai = fai_load(seq_info.file.c_str());
+              if (!fai) {
+                std::cerr << "[wfmash::auto-identity] Error loading FASTA: " << seq_info.file << std::endl;
+                continue;
+              }
+              fai_cache[seq_info.file] = fai;
+            } else {
+              fai = fai_it->second;
+            }
+            
+            // Get sequence info from idManager
+            auto it = seqMap.find(seq_info.name);
+            if (it == seqMap.end()) continue;
+            
             seqno_t seqId = it->second;
             int groupId = idManager.getRefGroup(seqId);
+            
+            // Fetch sequence data
+            int seq_len;
+            char* seq_data = faidx_fetch_seq(fai, seq_info.name.c_str(), 0, INT_MAX, &seq_len);
+            if (!seq_data) {
+              std::cerr << "[wfmash::auto-identity] Warning: Failed to fetch sequence " 
+                        << seq_info.name << std::endl;
+              continue;
+            }
             
             // Process the sequence using GroupedStreamingMinHash
             if (seq_info.is_query) {
               query_grouped_sketch.processSequence(
-                  seq_info.seq.c_str(),
-                  seq_info.seq.length(),
+                  seq_data,
+                  seq_len,
                   seqId,
                   groupId,
                   estimation_k,
@@ -414,8 +484,8 @@ namespace skch
               query_seq_count++;
             } else {
               target_grouped_sketch.processSequence(
-                  seq_info.seq.c_str(),
-                  seq_info.seq.length(),
+                  seq_data,
+                  seq_len,
                   seqId,
                   groupId,
                   estimation_k,
@@ -423,14 +493,33 @@ namespace skch
                   nullptr);
               target_seq_count++;
             }
+            
+            free(seq_data);
+            
+          } catch (const std::exception& e) {
+            std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" 
+                      << seq_info.name << "': " << e.what() << std::endl;
           }
-        } catch (const std::exception& e) {
-          std::cerr << "[wfmash::auto-identity] Warning: Failed to process sequence '" 
-                    << seq_info.name << "': " << e.what() << std::endl;
+          
+          ani_progress.increment(1);
+          
+          // Log progress periodically
+          size_t processed = sequences_processed.fetch_add(1) + 1;
+          if (processed % 100 == 0) {
+            std::cerr << "[wfmash::auto-identity] Processed " << processed << "/" << sequences_to_process.size() << " sequences" << std::endl;
+          }
         }
         
-        ani_progress.increment(1);
-      });
+        // Clean up thread-local faidx
+        for (auto& [file, fai] : fai_cache) {
+          if (fai) fai_destroy(fai);
+        }
+      };
+      
+      // Create tasks for each thread
+      for (int i = 0; i < num_threads; i++) {
+        taskflow.emplace(process_sequences);
+      }
       
       // Execute the taskflow
       executor.run(taskflow).wait();

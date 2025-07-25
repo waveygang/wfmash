@@ -165,18 +165,18 @@ public:
             }
         }
 
-        // Create working copy of sequence
-        std::vector<char> seqCopy(seq, seq + len);
-        CommonFunc::makeUpperCaseAndValidDNA(seqCopy.data(), len);
-
-        // Buffer for reverse complement
+        // Buffer for current k-mer (small, reusable)
+        std::vector<char> kmerBuf(kmerSize);
         std::vector<char> seqRev(kmerSize);
 
         // Track ambiguous k-mers
         int ambig_kmer_count = 0;
-        for (int i = kmerSize - 1; i >= 0; i--) {
-            if (seqCopy[i] == 'N') {
-                ambig_kmer_count = i + 1;
+        
+        // Check initial k-mer for N's
+        for (int j = 0; j < kmerSize && j < len; j++) {
+            char c = std::toupper(seq[j]);
+            if (c != 'A' && c != 'C' && c != 'G' && c != 'T') {
+                ambig_kmer_count = kmerSize;
                 break;
             }
         }
@@ -186,18 +186,24 @@ public:
             if (progress) progress->increment(1);
 
             // Check for N at the end of current k-mer
-            if (seqCopy[i + kmerSize - 1] == 'N') {
+            char endChar = std::toupper(seq[i + kmerSize - 1]);
+            if (endChar != 'A' && endChar != 'C' && endChar != 'G' && endChar != 'T') {
                 ambig_kmer_count = kmerSize;
             }
 
             if (ambig_kmer_count == 0) {
+                // Copy and uppercase k-mer
+                for (int j = 0; j < kmerSize; j++) {
+                    kmerBuf[j] = std::toupper(seq[i + j]);
+                }
+                
                 // Hash forward k-mer
-                hash_t hashFwd = CommonFunc::getHash(seqCopy.data() + i, kmerSize);
+                hash_t hashFwd = CommonFunc::getHash(kmerBuf.data(), kmerSize);
                 hash_t hashBwd = std::numeric_limits<hash_t>::max();
 
                 // Hash reverse complement for DNA
                 if (alphabetSize == 4) {
-                    CommonFunc::reverseComplement(seqCopy.data() + i, seqRev.data(), kmerSize);
+                    CommonFunc::reverseComplement(kmerBuf.data(), seqRev.data(), kmerSize);
                     hashBwd = CommonFunc::getHash(seqRev.data(), kmerSize);
                 }
 
