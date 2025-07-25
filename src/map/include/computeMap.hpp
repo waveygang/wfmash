@@ -25,6 +25,7 @@ namespace fs = std::filesystem;
 #include <unordered_set>
 #include <mutex>
 #include <thread>
+#include <chrono>
 #include <sstream>
 #include "taskflow/taskflow.hpp"
 
@@ -618,6 +619,12 @@ namespace skch
 
                           OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
                           
+                          // Add a quick log when starting filtering for large sequences
+                          if (input->len > 10000000) {  // 10Mbp
+                              std::cerr << "[wfmash::mashmap] Filtering mappings for " << queryName 
+                                        << " (" << output->results.size() << " fragments)..." << std::endl;
+                          }
+                          
                           auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
                                                   scaffold_progress, scaffold_total_work, scaffold_completed_work);
 
@@ -677,10 +684,23 @@ namespace skch
               // Immediately finish mapping progress when queries are done
               progress->finish();
               
-              // If scaffolding is enabled, log a simple message
+              // Let user know we're processing results
+              std::cerr << "[wfmash::mashmap] Post-processing mappings";
               if (param.scaffold_gap > 0) {
-                  std::cerr << "[wfmash::mashmap] Scaffolding mappings..." << std::endl;
+                  std::cerr << " (including scaffold filtering)";
               }
+              std::cerr << "..." << std::endl;
+              
+              // Wait for all tasks to complete
+              std::chrono::milliseconds wait_time(100);
+              while (executor.num_topologies() > 0) {
+                  std::this_thread::sleep_for(wait_time);
+              }
+              
+              auto elapsed = progress->elapsed();
+              std::cerr << "[wfmash::mashmap] Mapped query in " 
+                        << std::fixed << std::setprecision(1) << elapsed << "s"
+                        << ", results saved to: " << param.outFileName << std::endl;
               
           }
 
