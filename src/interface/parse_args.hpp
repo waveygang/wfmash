@@ -78,7 +78,7 @@ void parse_args(int argc,
     args::Flag no_filter(filtering_opts, "", "disable all filtering", {'f', "no-filter"});
     args::Flag no_merge(filtering_opts, "", "keep all fragment mappings", {'M', "no-merge"});
     args::Flag one_to_one(filtering_opts, "", "best mapping per query AND target", {'o', "one-to-one"});
-    args::ValueFlag<double> overlap_threshold(filtering_opts, "FLOAT", "max overlap ratio [1.0]", {'O', "overlap"});
+    args::ValueFlag<double> overlap_threshold(filtering_opts, "FLOAT", "max overlap ratio [0.95]", {'O', "overlap"});
     args::ValueFlag<double> map_sparsification(filtering_opts, "FLOAT", "keep this fraction of mappings [1.0]", {'x', "sparsify"});
     args::ValueFlag<std::string> hg_filter(filtering_opts, "n,Δ,conf", "hypergeometric filter [1.0,0.0,99.9]", {"hg-filter"});
     args::ValueFlag<int> min_hits(filtering_opts, "INT", "min hits for L1 filtering [3]", {'H', "l1-hits"});
@@ -475,7 +475,7 @@ void parse_args(int argc,
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
     } else {
-        map_parameters.overlap_threshold = 1.0;
+        map_parameters.overlap_threshold = 0.95;
     }
 
     if (kmer_size) {
