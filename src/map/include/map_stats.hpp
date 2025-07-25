@@ -335,7 +335,7 @@ namespace skch
       // Maps to maintain MinHash sketches per group
       std::map<int, std::vector<hash_t>> query_group_sketches;
       std::map<int, std::vector<hash_t>> target_group_sketches;
-      std::mutex sketch_mutex;
+      std::mutex sketch_merge_mutex;
       std::atomic<int> query_seq_count(0);
       std::atomic<int> target_seq_count(0);
 
@@ -351,18 +351,17 @@ namespace skch
         total_sequences++;
       }
       std::cerr << "[wfmash::auto-identity] Total sequences in idManager: " << total_sequences << std::endl;
-
-      // Process sequences in parallel using GroupedStreamingMinHash
-      GroupedStreamingMinHash query_grouped_sketch(estimation_sketch_size, 0);
-      GroupedStreamingMinHash target_grouped_sketch(estimation_sketch_size, 0);
       
       // Collect sequence names to process (NOT the sequences themselves)
       struct SeqToProcess {
         std::string name;
         std::string file;
         bool is_query;
+        bool is_target;
       };
-      std::vector<SeqToProcess> sequences_to_process;
+      
+      // Use a map to track unique sequences and their roles
+      std::unordered_map<std::string, SeqToProcess> unique_sequences;
       
       // Get sequence names from idManager
       const auto& seqMap = idManager.getSequenceNameToIdMap();
@@ -383,7 +382,10 @@ namespace skch
         for (int i = 0; i < nseq; i++) {
           const char* seqname = faidx_meta_iseq(meta, i);
           if (seqname && valid_names.count(seqname) > 0) {
-            sequences_to_process.push_back({seqname, file, true});
+            auto& seq_info = unique_sequences[seqname];
+            seq_info.name = seqname;
+            seq_info.file = file;
+            seq_info.is_query = true;
           }
         }
         faidx_meta_destroy(meta);
@@ -401,18 +403,34 @@ namespace skch
         for (int i = 0; i < nseq; i++) {
           const char* seqname = faidx_meta_iseq(meta, i);
           if (seqname && valid_names.count(seqname) > 0) {
-            sequences_to_process.push_back({seqname, file, false});
+            auto& seq_info = unique_sequences[seqname];
+            seq_info.name = seqname;
+            if (seq_info.file.empty()) seq_info.file = file;  // Use first file found
+            seq_info.is_target = true;
           }
         }
         faidx_meta_destroy(meta);
       }
       
-      std::cerr << "[wfmash::auto-identity] Sequences to process: " << sequences_to_process.size() 
-                << " (query: " << std::count_if(sequences_to_process.begin(), sequences_to_process.end(), 
-                                                [](const SeqToProcess& s) { return s.is_query; })
-                << ", target: " << std::count_if(sequences_to_process.begin(), sequences_to_process.end(),
-                                                  [](const SeqToProcess& s) { return !s.is_query; })
-                << ")" << std::endl;
+      // Convert map to vector for processing
+      std::vector<SeqToProcess> sequences_to_process;
+      sequences_to_process.reserve(unique_sequences.size());
+      for (const auto& [name, info] : unique_sequences) {
+        sequences_to_process.push_back(info);
+      }
+      
+      // Count different types of sequences
+      size_t query_only = 0, target_only = 0, both = 0;
+      for (const auto& seq : sequences_to_process) {
+        if (seq.is_query && seq.is_target) both++;
+        else if (seq.is_query) query_only++;
+        else if (seq.is_target) target_only++;
+      }
+      
+      std::cerr << "[wfmash::auto-identity] Unique sequences to sketch: " << sequences_to_process.size() 
+                << " (query-only: " << query_only
+                << ", target-only: " << target_only
+                << ", both: " << both << ")" << std::endl;
       
       // Create progress meter for ANI sketching
       progress_meter::ProgressMeter ani_progress(
@@ -461,7 +479,7 @@ namespace skch
           return reader;
         };
         
-        // Process each sequence in parallel
+        // Process each sequence in parallel with thread-local sketches
         for (const auto& seq_info : sequences_to_process) {
           sf.emplace([&, seq_info]() {
             try {
@@ -493,30 +511,77 @@ namespace skch
                 return;
               }
               
-              // Process the sequence using GroupedStreamingMinHash
-              if (seq_info.is_query) {
-                query_grouped_sketch.processSequence(
-                    seq_data,
-                    seq_len,
-                    seqId,
-                    groupId,
-                    estimation_k,
-                    4,  // alphabetSize for DNA
-                    nullptr);
-                query_seq_count++;
-              } else {
-                target_grouped_sketch.processSequence(
-                    seq_data,
-                    seq_len,
-                    seqId,
-                    groupId,
-                    estimation_k,
-                    4,  // alphabetSize for DNA
-                    nullptr);
-                target_seq_count++;
+              // Use lock-free streaming MinHash (no windowSize needed for pure MinHash)
+              StreamingMinHash local_sketch(estimation_sketch_size, 0);
+              
+              // Process all k-mers in the sequence
+              std::vector<char> kmerBuf(estimation_k);
+              std::vector<char> seqRev(estimation_k);
+              int ambig_kmer_count = 0;
+              
+              // Check initial k-mer for N's
+              for (int j = 0; j < estimation_k && j < seq_len; j++) {
+                char c = std::toupper(seq_data[j]);
+                if (c != 'A' && c != 'C' && c != 'G' && c != 'T') {
+                  ambig_kmer_count = estimation_k;
+                  break;
+                }
+              }
+              
+              // Process all k-mers
+              for (offset_t i = 0; i <= (offset_t)seq_len - estimation_k; i++) {
+                // Check for N at the end of current k-mer
+                char endChar = std::toupper(seq_data[i + estimation_k - 1]);
+                if (endChar != 'A' && endChar != 'C' && endChar != 'G' && endChar != 'T') {
+                  ambig_kmer_count = estimation_k;
+                }
+                
+                if (ambig_kmer_count == 0) {
+                  // Copy and uppercase k-mer
+                  for (int j = 0; j < estimation_k; j++) {
+                    kmerBuf[j] = std::toupper(seq_data[i + j]);
+                  }
+                  
+                  // Hash forward k-mer
+                  hash_t hashFwd = CommonFunc::getHash(kmerBuf.data(), estimation_k);
+                  hash_t hashBwd = std::numeric_limits<hash_t>::max();
+                  
+                  // Hash reverse complement for DNA
+                  CommonFunc::reverseComplement(kmerBuf.data(), seqRev.data(), estimation_k);
+                  hashBwd = CommonFunc::getHash(seqRev.data(), estimation_k);
+                  
+                  // Use canonical k-mer (minimum of forward and reverse)
+                  if (hashFwd != hashBwd) {
+                    hash_t canonicalHash = std::min(hashFwd, hashBwd);
+                    local_sketch.add_unsafe(canonicalHash);  // No lock needed for local sketch
+                  }
+                }
+                
+                if (ambig_kmer_count > 0) {
+                  ambig_kmer_count--;
+                }
               }
               
               free(seq_data);
+              
+              // Get the final sketch
+              auto sketch = local_sketch.getSketch();
+              
+              // Merge into global sketches with minimal locking
+              {
+                std::lock_guard<std::mutex> lock(sketch_merge_mutex);
+                if (seq_info.is_query) {
+                  auto& group_sketch = query_group_sketches[groupId];
+                  group_sketch.insert(group_sketch.end(), sketch.begin(), sketch.end());
+                  query_seq_count++;
+                }
+                if (seq_info.is_target) {
+                  auto& group_sketch = target_group_sketches[groupId];
+                  group_sketch.insert(group_sketch.end(), sketch.begin(), sketch.end());
+                  target_seq_count++;
+                }
+              }
+              
               ani_progress.increment(1);
               
             } catch (const std::exception& e) {
@@ -538,18 +603,6 @@ namespace skch
       executor.run(taskflow).wait();
       
       ani_progress.finish();
-      
-      // Get the final sketches from GroupedStreamingMinHash
-      auto query_sketches = query_grouped_sketch.getAllGroupSketches();
-      auto target_sketches = target_grouped_sketch.getAllGroupSketches();
-      
-      // Convert to the expected format
-      for (const auto& [groupId, sketch] : query_sketches) {
-        query_group_sketches[groupId] = sketch;
-      }
-      for (const auto& [groupId, sketch] : target_sketches) {
-        target_group_sketches[groupId] = sketch;
-      }
 
       std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count 
                 << " query sequences into " << query_group_sketches.size() << " groups" << std::endl;

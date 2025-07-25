@@ -72,13 +72,21 @@ public:
     }
 
     /**
-     * @brief Add a hash value to the sketch
+     * @brief Add a hash value to the sketch (thread-safe)
      * @param hash The hash value to add
      * @return true if the hash was added (is in top-k), false otherwise
      */
     bool add(hash_t hash) {
         std::lock_guard<std::mutex> lock(heapMutex);
-        
+        return add_unsafe(hash);
+    }
+    
+    /**
+     * @brief Add a hash value to the sketch (NOT thread-safe, for single-threaded use)
+     * @param hash The hash value to add
+     * @return true if the hash was added (is in top-k), false otherwise
+     */
+    bool add_unsafe(hash_t hash) {
         if (maxHeap.size() < sketchSize) {
             maxHeap.push(hash);
             return true;
