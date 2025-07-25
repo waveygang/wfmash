@@ -622,14 +622,17 @@ namespace skch
                           // Add timing and progress info for filtering phase
                           auto filter_start = std::chrono::high_resolution_clock::now();
                           
-                          // Log for all sequences during filtering, with more detail for large ones
-                          std::cerr << "[wfmash::mashmap] Filtering " << output->results.size() 
-                                    << " mappings for " << queryName 
-                                    << " (" << input->len << "bp)";
-                          if (param.scaffold_gap > 0) {
-                              std::cerr << " [scaffold filtering enabled]";
+                          // Only log during post-processing phase (after mapping is complete)
+                          if (progress->is_finished.load()) {
+                              // Log for all sequences during filtering, with more detail for large ones
+                              std::cerr << "[wfmash::mashmap] Filtering " << output->results.size() 
+                                        << " mappings for " << queryName 
+                                        << " (" << input->len << "bp)";
+                              if (param.scaffold_gap > 0) {
+                                  std::cerr << " [scaffold filtering enabled]";
+                              }
+                              std::cerr << "..." << std::endl;
                           }
-                          std::cerr << "..." << std::endl;
                           
                           auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
                                                   scaffold_progress, scaffold_total_work, scaffold_completed_work);
@@ -637,8 +640,8 @@ namespace skch
                           auto filter_end = std::chrono::high_resolution_clock::now();
                           auto filter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(filter_end - filter_start);
                           
-                          // Report long filtering times
-                          if (filter_duration.count() > 1000) {
+                          // Report long filtering times (only during post-processing)
+                          if (progress->is_finished.load() && filter_duration.count() > 1000) {
                               std::cerr << "[wfmash::mashmap] Filtering " << queryName 
                                         << " took " << std::fixed << std::setprecision(1) 
                                         << filter_duration.count() / 1000.0 << "s" << std::endl;
