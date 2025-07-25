@@ -65,7 +65,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani25-5)", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani25)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
@@ -373,9 +373,9 @@ void parse_args(int argc,
             }
         }
     } else {
-        // No -p flag provided, use ani25-5 by default
+        // No -p flag provided, use ani25 by default
         map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
-        // auto_pct_identity, ani_percentile=25, ani_adjustment=-5.0 already set in Parameters struct
+        // auto_pct_identity, ani_percentile=25, ani_adjustment=0.0 already set in Parameters struct
     }
 
     if (block_length) {
@@ -600,6 +600,7 @@ void parse_args(int argc,
         const int64_t ss = sketch_size && args::get(sketch_size) >= 0 ? args::get(sketch_size) : -1;
         if (ss > 0) {
             map_parameters.sketchSize = ss;
+            map_parameters.sketch_size_manually_set = true;
         } else {
             const double md = 1 - map_parameters.percentageIdentity;
             double dens = 0.02 * (1 + (md / 0.1));

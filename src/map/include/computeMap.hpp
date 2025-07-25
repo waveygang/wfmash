@@ -619,14 +619,30 @@ namespace skch
 
                           OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
                           
-                          // Add a quick log when starting filtering for large sequences
-                          if (input->len > 10000000) {  // 10Mbp
-                              std::cerr << "[wfmash::mashmap] Filtering mappings for " << queryName 
-                                        << " (" << output->results.size() << " fragments)..." << std::endl;
+                          // Add timing and progress info for filtering phase
+                          auto filter_start = std::chrono::high_resolution_clock::now();
+                          
+                          // Log for all sequences during filtering, with more detail for large ones
+                          std::cerr << "[wfmash::mashmap] Filtering " << output->results.size() 
+                                    << " mappings for " << queryName 
+                                    << " (" << input->len << "bp)";
+                          if (param.scaffold_gap > 0) {
+                              std::cerr << " [scaffold filtering enabled]";
                           }
+                          std::cerr << "..." << std::endl;
                           
                           auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
                                                   scaffold_progress, scaffold_total_work, scaffold_completed_work);
+                          
+                          auto filter_end = std::chrono::high_resolution_clock::now();
+                          auto filter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(filter_end - filter_start);
+                          
+                          // Report long filtering times
+                          if (filter_duration.count() > 1000) {
+                              std::cerr << "[wfmash::mashmap] Filtering " << queryName 
+                                        << " took " << std::fixed << std::setprecision(1) 
+                                        << filter_duration.count() / 1000.0 << "s" << std::endl;
+                          }
 
                           auto& mappings = param.mergeMappings && param.split ?
                                 filteredResult.mergedMappings : filteredResult.nonMergedMappings;
@@ -655,14 +671,24 @@ namespace skch
                                                     &combinedMappings,
                                                     &combinedMappings_mutex]() {
                   if (param.filterMode == filter::ONETOONE) {
+                      auto merge_start = std::chrono::high_resolution_clock::now();
+                      std::cerr << "[wfmash::mashmap] Starting merge of subset results..." << std::endl;
+                      
                       std::lock_guard<std::mutex> lock(combinedMappings_mutex);
+                      size_t total_merged = 0;
                       for (auto& [querySeqId, mappings] : *subsetMappings) {
+                          total_merged += mappings.size();
                           combinedMappings[querySeqId].insert(
                               combinedMappings[querySeqId].end(),
                               std::make_move_iterator(mappings.begin()),
                               std::make_move_iterator(mappings.end())
                               );
                       }
+                      
+                      auto merge_end = std::chrono::high_resolution_clock::now();
+                      auto merge_duration = std::chrono::duration_cast<std::chrono::seconds>(merge_end - merge_start);
+                      std::cerr << "[wfmash::mashmap] Merged " << total_merged 
+                                << " mappings in " << merge_duration.count() << "s" << std::endl;
                   }
               }).name("merge_results");
 
@@ -679,17 +705,33 @@ namespace skch
               processQueries_task.precede(merge_task);
               merge_task.precede(cleanup_task);
 
-              executor.run(*subset_flow).wait();
-        
-              // Immediately finish mapping progress when queries are done
-              progress->finish();
+              // Create a task to monitor mapping completion
+              auto mapping_complete = std::make_shared<std::atomic<bool>>(false);
+              auto monitor_task = std::make_unique<std::thread>([progress, mapping_complete, this]() {
+                  while (!mapping_complete->load()) {
+                      if (progress->is_finished.load()) {
+                          // Mapping phase complete, notify user immediately
+                          std::cerr << "[wfmash::mashmap] Mapping phase complete, starting post-processing";
+                          if (param.scaffold_gap > 0) {
+                              std::cerr << " (including scaffold filtering)";
+                          }
+                          std::cerr << "..." << std::endl;
+                          break;
+                      }
+                      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                  }
+              });
               
-              // Let user know we're processing results
-              std::cerr << "[wfmash::mashmap] Post-processing mappings";
-              if (param.scaffold_gap > 0) {
-                  std::cerr << " (including scaffold filtering)";
+              executor.run(*subset_flow).wait();
+              mapping_complete->store(true);
+              if (monitor_task->joinable()) {
+                  monitor_task->join();
               }
-              std::cerr << "..." << std::endl;
+              
+              // Progress is already finished by the monitor thread
+              if (!progress->is_finished.load()) {
+                  progress->finish();
+              }
               
               // Wait for all tasks to complete
               std::chrono::milliseconds wait_time(100);
@@ -697,10 +739,8 @@ namespace skch
                   std::this_thread::sleep_for(wait_time);
               }
               
-              auto elapsed = progress->elapsed();
-              std::cerr << "[wfmash::mashmap] Mapped query in " 
-                        << std::fixed << std::setprecision(1) << elapsed << "s"
-                        << ", results saved to: " << param.outFileName << std::endl;
+              std::cerr << "[wfmash::mashmap] Subset processing complete, results saved to: " 
+                        << param.outFileName << std::endl;
               
           }
 

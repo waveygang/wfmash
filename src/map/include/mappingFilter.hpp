@@ -841,8 +841,9 @@ namespace skch
     {
         if (param.scaffold_gap <= 0) return;
         
-        // Skip scaffold progress tracking
-        
+        // Add timing for expensive scaffold operations
+        auto scaffold_start = std::chrono::high_resolution_clock::now();
+        size_t initial_mappings = readMappings.size();
 
         // Phase 1: Anchor Identification - Modified approach
         MappingResultsVector_t scaffoldMappings = readMappings;
@@ -852,8 +853,17 @@ namespace skch
         // Step 1: Keep a copy of original mappings before merging
         MappingResultsVector_t originalMappings = scaffoldMappings;
         
-        // Step 2: Merge to identify chains
+        // Step 2: Merge to identify chains (this is expensive)
+        auto merge_start = std::chrono::high_resolution_clock::now();
         auto mergedChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
+        auto merge_end = std::chrono::high_resolution_clock::now();
+        auto merge_duration = std::chrono::duration_cast<std::chrono::milliseconds>(merge_end - merge_start);
+        
+        if (merge_duration.count() > 500) {
+            std::cerr << "[wfmash::scaffold] Merging " << initial_mappings 
+                      << " mappings took " << std::fixed << std::setprecision(1) 
+                      << merge_duration.count() / 1000.0 << "s" << std::endl;
+        }
         
         // Step 3: Filter merged chains by length
         mergedChains.erase(
@@ -989,6 +999,17 @@ namespace skch
         }
         
         readMappings = std::move(keepers);
+        
+        // Report total scaffold filtering time if significant
+        auto scaffold_end = std::chrono::high_resolution_clock::now();
+        auto scaffold_duration = std::chrono::duration_cast<std::chrono::milliseconds>(scaffold_end - scaffold_start);
+        
+        if (scaffold_duration.count() > 1000) {
+            std::cerr << "[wfmash::scaffold] Total scaffold filtering: " 
+                      << initial_mappings << " → " << readMappings.size() 
+                      << " mappings in " << std::fixed << std::setprecision(1) 
+                      << scaffold_duration.count() / 1000.0 << "s" << std::endl;
+        }
     }
 
     /**

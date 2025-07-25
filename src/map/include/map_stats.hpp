@@ -326,8 +326,8 @@ namespace skch
       // Use k=21 to match Mash defaults for genome comparison
       // This provides good sensitivity while avoiding too many random matches
       const int estimation_k = 21;
-      // Use configurable sketch size for ANI estimation
-      const int estimation_sketch_size = params.ani_sketch_size;
+      // Use 4096 elements for accurate ANI estimation at lower identities
+      const int estimation_sketch_size = 4096;
 
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;
@@ -654,11 +654,25 @@ namespace skch
       std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count 
                 << " target sequences into " << target_group_sketch_vectors.size() << " groups" << std::endl;
 
-      std::vector<double> all_anis;
+      // Compute total length for each group
+      std::unordered_map<int, uint64_t> group_lengths;
+      for (const auto& [name, id] : idManager.getSequenceNameToIdMap()) {
+        int groupId = idManager.getRefGroup(id);
+        uint64_t seqLen = idManager.getSequenceLength(id);
+        group_lengths[groupId] += seqLen;
+      }
+
+      // Store ANI values with their weights (product of group lengths)
+      std::vector<std::pair<double, uint64_t>> weighted_anis; // (ANI, weight)
       int comparison_count = 0;
 
       for (const auto& q_pair : query_group_sketch_vectors) {
         for (const auto& t_pair : target_group_sketch_vectors) {
+          // Skip self-comparisons (same group ID)
+          if (q_pair.first == t_pair.first) {
+            continue; // Skip comparing a group to itself
+          }
+          
           // Self-comparison logic for all-vs-all mode
           bool is_self_mode = (&params.querySequences == &params.refSequences);
           if (is_self_mode && q_pair.first > t_pair.first) {
@@ -693,41 +707,76 @@ namespace skch
           
           double mash_dist = j2md(jaccard, estimation_k);
           double ani = 1.0 - mash_dist;
-          all_anis.push_back(ani);
+          
+          // Weight is the product of both group lengths
+          uint64_t weight = group_lengths[q_pair.first] * group_lengths[t_pair.first];
+          weighted_anis.push_back({ani, weight});
           
           comparison_count++;
           std::cerr << "[wfmash::auto-identity] Group " << q_pair.first << " vs " << t_pair.first 
                     << ": " << intersection_count << "/" << std::min(q_sketch.size(), t_sketch.size()) 
                     << " sketches overlap, Jaccard=" << std::fixed << std::setprecision(4) << jaccard 
-                    << ", ANI=" << std::fixed << std::setprecision(2) << ani * 100 << "%" << std::endl;
+                    << ", ANI=" << std::fixed << std::setprecision(2) << ani * 100 << "%"
+                    << " (weight=" << weight << ")" << std::endl;
         }
       }
 
-      std::cerr << "[wfmash::auto-identity] Performed " << comparison_count << " group comparisons" << std::endl;
+      // Count skipped self-comparisons
+      int self_comparisons = 0;
+      for (const auto& q_pair : query_group_sketch_vectors) {
+        if (target_group_sketch_vectors.count(q_pair.first) > 0) {
+          self_comparisons++;
+        }
+      }
+      
+      std::cerr << "[wfmash::auto-identity] Performed " << comparison_count << " group comparisons";
+      if (self_comparisons > 0) {
+        std::cerr << " (skipped " << self_comparisons << " self-comparisons)";
+      }
+      std::cerr << std::endl;
 
-      if (all_anis.empty()) {
+      if (weighted_anis.empty()) {
         std::cerr << "[wfmash::auto-identity] Warning: No k-mer overlap found between any query and target groups. Falling back to default identity." << std::endl;
         return skch::fixed::percentage_identity;
       }
 
-      // Sort ANI values to compute percentiles
-      std::sort(all_anis.begin(), all_anis.end());
+      // Sort by ANI value for weighted percentile calculation
+      std::sort(weighted_anis.begin(), weighted_anis.end(), 
+                [](const auto& a, const auto& b) { return a.first < b.first; });
       
-      // Calculate the requested percentile
-      size_t percentile_idx = (params.ani_percentile * all_anis.size()) / 100;
-      if (percentile_idx >= all_anis.size()) {
-        percentile_idx = all_anis.size() - 1;
+      // Calculate total weight
+      uint64_t total_weight = 0;
+      for (const auto& [ani, weight] : weighted_anis) {
+        total_weight += weight;
+      }
+      
+      // Calculate weighted percentile
+      uint64_t target_weight = (params.ani_percentile * total_weight) / 100;
+      uint64_t cumulative_weight = 0;
+      double selected_ani = weighted_anis.back().first; // default to max if not found
+      
+      for (const auto& [ani, weight] : weighted_anis) {
+        cumulative_weight += weight;
+        if (cumulative_weight >= target_weight) {
+          selected_ani = ani;
+          break;
+        }
       }
       
       // Apply adjustment
-      double selected_ani = all_anis[percentile_idx];
       double adjusted_ani = selected_ani + (params.ani_adjustment / 100.0);
       
       // Clamp to valid range [0, 1]
       if (adjusted_ani < 0.0) adjusted_ani = 0.0;
       if (adjusted_ani > 1.0) adjusted_ani = 1.0;
       
-      // Log the distribution of ANI values
+      // Extract just ANI values for simple statistics
+      std::vector<double> all_anis;
+      for (const auto& [ani, weight] : weighted_anis) {
+        all_anis.push_back(ani);
+      }
+      
+      // Log the distribution of ANI values (unweighted for reference)
       std::cerr << "[wfmash::auto-identity] ANI distribution: min=" 
                 << std::fixed << std::setprecision(2) << all_anis.front() * 100 << "%, "
                 << "25th percentile=" << all_anis[all_anis.size() / 4] * 100 << "%, "
@@ -736,7 +785,7 @@ namespace skch
                 << "max=" << all_anis.back() * 100 << "%" << std::endl;
       
       std::cerr << "[wfmash::auto-identity] Selected ani" << params.ani_percentile 
-                << " (" << params.ani_percentile << "th percentile) = " 
+                << " (" << params.ani_percentile << "th length-weighted percentile) = " 
                 << std::fixed << std::setprecision(2) << selected_ani * 100 << "%";
       
       if (params.ani_adjustment != 0) {

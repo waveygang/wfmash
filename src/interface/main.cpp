@@ -82,6 +82,24 @@ int main(int argc, char** argv) {
                 // Update the parameters that the rest of the program will use.
                 map_parameters.percentageIdentity = estimated_identity;
                 
+                // Recalculate sketch size based on the new identity threshold
+                // Only if sketch size was auto-calculated (not manually specified with -s)
+                if (!map_parameters.sketch_size_manually_set) {
+                    const double md = 1 - map_parameters.percentageIdentity;
+                    double dens = 0.02 * (1 + (md / 0.1));
+                    int old_sketch_size = map_parameters.sketchSize;
+                    map_parameters.sketchSize = dens * (map_parameters.windowLength - map_parameters.kmerSize);
+                    
+                    // Ensure sketch size doesn't exceed window size
+                    if (map_parameters.sketchSize > map_parameters.windowLength) {
+                        map_parameters.sketchSize = map_parameters.windowLength;
+                    }
+                    
+                    std::cerr << "[wfmash] Updated sketch size from " << old_sketch_size 
+                              << " to " << map_parameters.sketchSize 
+                              << " based on estimated identity" << std::endl;
+                }
+                
                 std::cerr << "[wfmash] Using estimated identity cutoff: " 
                           << std::fixed << std::setprecision(2) << estimated_identity * 100 << "%" << std::endl;
             } catch (const std::exception& e) {
@@ -94,6 +112,20 @@ int main(int argc, char** argv) {
         }
 
         skch::printCmdOptions(map_parameters);
+        
+        // Log final parameters after ANI estimation
+        int minimum_hits = std::max(map_parameters.minimum_hits, 
+                                   skch::Stat::estimateMinimumHitsRelaxed(map_parameters.sketchSize, 
+                                                                          map_parameters.kmerSize, 
+                                                                          map_parameters.percentageIdentity, 
+                                                                          skch::fixed::confidence_interval));
+        
+        std::cerr << "[wfmash] Final parameters: identity=" << std::fixed << std::setprecision(1) 
+                  << map_parameters.percentageIdentity * 100 << "%, "
+                  << "sketchSize=" << map_parameters.sketchSize << ", "
+                  << "minimumHits=" << minimum_hits << ", "
+                  << "windowLength=" << map_parameters.windowLength << ", "
+                  << "kmerSize=" << map_parameters.kmerSize << std::endl;
 
         auto t0 = skch::Time::now();
 
