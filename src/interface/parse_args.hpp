@@ -66,6 +66,7 @@ void parse_args(int argc,
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
     args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani25-5)", {'p', "map-pct-id"});
+    args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
@@ -118,6 +119,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "temp file directory [pwd]", {'B', "tmp-base"});
     args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
     args::Flag quiet(system_opts, "", "disable progress output", {"quiet"});
+    args::Flag streaming_minhash(system_opts, "", "use streaming MinHash algorithm (experimental)", {"streaming-minhash"});
     args::Flag version(system_opts, "", "version info", {'v', "version"});
     args::HelpFlag help(system_opts, "", "show help", {'h', "help"});
 
@@ -157,6 +159,11 @@ void parse_args(int argc,
 
     map_parameters.use_progress_bar = !args::get(quiet);
     align_parameters.use_progress_bar = !args::get(quiet);
+    map_parameters.use_streaming_minhash = args::get(streaming_minhash);
+    
+    if (ani_sketch_size) {
+        map_parameters.ani_sketch_size = args::get(ani_sketch_size);
+    }
 
     if (skip_prefix) {
         map_parameters.prefix_delim = args::get(skip_prefix);

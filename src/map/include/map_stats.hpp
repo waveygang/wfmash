@@ -28,6 +28,7 @@
 #include "map/include/map_parameters.hpp"
 #include "map/include/sequenceIds.hpp"
 #include "map/include/commonFunc.hpp"
+#include "map/include/streamingMinHash.hpp"
 
 //External includes
 #include "common/murmur3.h"
@@ -274,22 +275,25 @@ namespace skch
      */
     inline void update_minhash_sketch(const std::string& seq, std::vector<hash_t>& sketch, int k, int sketch_size) {
       if ((int)seq.length() < k) return;
-
+      
+      // Use streaming MinHash for efficiency
+      StreamingMinHash minhash(sketch_size, 0); // windowSize not used for pure MinHash
+      
+      // Add existing sketch values
+      for (hash_t h : sketch) {
+        minhash.add(h);
+      }
+      
       char* seq_data = const_cast<char*>(seq.c_str());
+      
+      // Process all k-mers
       for (offset_t i = 0; i <= (offset_t)seq.length() - k; ++i) {
         hash_t hash = CommonFunc::getHash(seq_data + i, k);
-        
-        // If sketch isn't full or this hash is smaller than the largest in sketch
-        if ((int)sketch.size() < sketch_size) {
-          sketch.push_back(hash);
-          std::push_heap(sketch.begin(), sketch.end()); // Max heap
-        } else if (hash < sketch.front()) {
-          // Replace largest hash with this smaller one
-          std::pop_heap(sketch.begin(), sketch.end());
-          sketch.back() = hash;
-          std::push_heap(sketch.begin(), sketch.end());
-        }
+        minhash.add(hash);
       }
+      
+      // Get updated sketch
+      sketch = minhash.getSketch();
     }
 
     /**
@@ -320,8 +324,8 @@ namespace skch
       // Use k=21 to match Mash defaults for genome comparison
       // This provides good sensitivity while avoiding too many random matches
       const int estimation_k = 21;
-      // Use 1000 for reasonable accuracy while keeping memory usage sane
-      const int estimation_sketch_size = 1000;
+      // Use configurable sketch size for ANI estimation
+      const int estimation_sketch_size = params.ani_sketch_size;
 
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;

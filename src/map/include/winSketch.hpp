@@ -435,16 +435,31 @@ namespace skch
         MI_Type* thread_output = new MI_Type();
 
         //Compute minmers in reference sequence
-        skch::CommonFunc::addMinmers(
-                *thread_output, 
-                &(input->seq[0u]), 
-                input->len, 
-                param.kmerSize, 
-                param.windowLength, 
-                param.alphabetSize, 
-                param.sketchSize,
-                input->seqId,
-                progress);
+        if (param.use_streaming_minhash && param.sketchSize > 0) {
+            // Use streaming MinHash for sketch computation
+            skch::CommonFunc::sketchSequenceStreaming(
+                    *thread_output,
+                    &(input->seq[0u]),
+                    input->len,
+                    param.kmerSize,
+                    param.alphabetSize,
+                    param.sketchSize,
+                    param.windowLength,
+                    input->seqId,
+                    progress);
+        } else {
+            // Use traditional windowed minimizers
+            skch::CommonFunc::addMinmers(
+                    *thread_output, 
+                    &(input->seq[0u]), 
+                    input->len, 
+                    param.kmerSize, 
+                    param.windowLength, 
+                    param.alphabetSize, 
+                    param.sketchSize,
+                    input->seqId,
+                    progress);
+        }
 
         return thread_output;
       }
