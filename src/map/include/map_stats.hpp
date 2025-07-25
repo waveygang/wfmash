@@ -332,10 +332,15 @@ namespace skch
       std::cerr << "[wfmash::auto-identity] Starting identity estimation with k=" << estimation_k 
                 << ", sketch_size=" << estimation_sketch_size << std::endl;
 
-      // Maps to maintain MinHash sketches per group
-      std::map<int, std::vector<hash_t>> query_group_sketches;
-      std::map<int, std::vector<hash_t>> target_group_sketches;
-      std::mutex sketch_merge_mutex;
+      // Maps to maintain MinHash sketches per group with per-group mutexes
+      struct GroupSketch {
+        StreamingMinHash sketch;
+        std::mutex mutex;
+        GroupSketch(size_t sketch_size) : sketch(sketch_size, 0) {}
+      };
+      std::map<int, std::unique_ptr<GroupSketch>> query_group_sketches;
+      std::map<int, std::unique_ptr<GroupSketch>> target_group_sketches;
+      std::mutex sketch_map_mutex;  // Only for creating new groups
       std::atomic<int> query_seq_count(0);
       std::atomic<int> target_seq_count(0);
 
@@ -567,19 +572,39 @@ namespace skch
               // Get the final sketch
               auto sketch = local_sketch.getSketch();
               
-              // Merge into global sketches with minimal locking
-              {
-                std::lock_guard<std::mutex> lock(sketch_merge_mutex);
-                if (seq_info.is_query) {
-                  auto& group_sketch = query_group_sketches[groupId];
-                  group_sketch.insert(group_sketch.end(), sketch.begin(), sketch.end());
-                  query_seq_count++;
+              // Merge into group sketches with per-group locking
+              if (seq_info.is_query) {
+                // Ensure group exists
+                {
+                  std::lock_guard<std::mutex> lock(sketch_map_mutex);
+                  if (query_group_sketches.find(groupId) == query_group_sketches.end()) {
+                    query_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
+                  }
                 }
-                if (seq_info.is_target) {
-                  auto& group_sketch = target_group_sketches[groupId];
-                  group_sketch.insert(group_sketch.end(), sketch.begin(), sketch.end());
-                  target_seq_count++;
+                
+                // Lock only this group's sketch
+                std::lock_guard<std::mutex> lock(query_group_sketches[groupId]->mutex);
+                for (hash_t h : sketch) {
+                  query_group_sketches[groupId]->sketch.add_unsafe(h);
                 }
+                query_seq_count++;
+              }
+              
+              if (seq_info.is_target) {
+                // Ensure group exists
+                {
+                  std::lock_guard<std::mutex> lock(sketch_map_mutex);
+                  if (target_group_sketches.find(groupId) == target_group_sketches.end()) {
+                    target_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
+                  }
+                }
+                
+                // Lock only this group's sketch
+                std::lock_guard<std::mutex> lock(target_group_sketches[groupId]->mutex);
+                for (hash_t h : sketch) {
+                  target_group_sketches[groupId]->sketch.add_unsafe(h);
+                }
+                target_seq_count++;
               }
               
               ani_progress.increment(1);
@@ -604,33 +629,36 @@ namespace skch
       
       ani_progress.finish();
 
-      std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count 
-                << " query sequences into " << query_group_sketches.size() << " groups" << std::endl;
-      std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count 
-                << " target sequences into " << target_group_sketches.size() << " groups" << std::endl;
-
       if (query_seq_count == 0 || target_seq_count == 0) {
         std::cerr << "[wfmash::auto-identity] Warning: No sequences found in FAI files. " 
                   << "Make sure .fai index files exist (run 'samtools faidx' on your FASTA files)" << std::endl;
         return skch::fixed::percentage_identity;
       }
 
-      // Finalize sketches for each group
+      // Convert sketches to vectors for comparison
       std::cerr << "[wfmash::auto-identity] Finalizing MinHash sketches..." << std::endl;
       
-      for (auto& [groupId, sketch] : query_group_sketches) {
-        finalize_minhash_sketch(sketch, estimation_sketch_size);
+      std::map<int, std::vector<hash_t>> query_group_sketch_vectors;
+      std::map<int, std::vector<hash_t>> target_group_sketch_vectors;
+      
+      for (auto& [groupId, groupSketch] : query_group_sketches) {
+        query_group_sketch_vectors[groupId] = groupSketch->sketch.getSketch();
       }
       
-      for (auto& [groupId, sketch] : target_group_sketches) {
-        finalize_minhash_sketch(sketch, estimation_sketch_size);
+      for (auto& [groupId, groupSketch] : target_group_sketches) {
+        target_group_sketch_vectors[groupId] = groupSketch->sketch.getSketch();
       }
+      
+      std::cerr << "[wfmash::auto-identity] Processed " << query_seq_count 
+                << " query sequences into " << query_group_sketch_vectors.size() << " groups" << std::endl;
+      std::cerr << "[wfmash::auto-identity] Processed " << target_seq_count 
+                << " target sequences into " << target_group_sketch_vectors.size() << " groups" << std::endl;
 
       std::vector<double> all_anis;
       int comparison_count = 0;
 
-      for (const auto& q_pair : query_group_sketches) {
-        for (const auto& t_pair : target_group_sketches) {
+      for (const auto& q_pair : query_group_sketch_vectors) {
+        for (const auto& t_pair : target_group_sketch_vectors) {
           // Self-comparison logic for all-vs-all mode
           bool is_self_mode = (&params.querySequences == &params.refSequences);
           if (is_self_mode && q_pair.first > t_pair.first) {
