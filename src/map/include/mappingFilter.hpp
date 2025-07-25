@@ -522,8 +522,13 @@ namespace skch
             size_t frag_start = i;
             while(frag_start <= j) {
                 size_t frag_end = frag_start;
-                while(frag_end + 1 <= j && 
-                      (readMappings[frag_end+1].queryEndPos() - readMappings[frag_start].queryStartPos < param.max_mapping_length)) {
+                while(frag_end + 1 <= j) {
+                    // Check both query and reference spans to prevent huge mappings
+                    offset_t query_span = readMappings[frag_end+1].queryEndPos() - readMappings[frag_start].queryStartPos;
+                    offset_t ref_span = readMappings[frag_end+1].refEndPos() - readMappings[frag_start].refStartPos;
+                    if (std::max(query_span, ref_span) >= param.max_mapping_length) {
+                        break;
+                    }
                     frag_end++;
                 }
                 
@@ -684,8 +689,13 @@ namespace skch
             size_t frag_start = i;
             while(frag_start <= j) {
                 size_t frag_end = frag_start;
-                while(frag_end + 1 <= j && 
-                      (readMappings[frag_end+1].queryEndPos() - readMappings[frag_start].queryStartPos < param.max_mapping_length)) {
+                while(frag_end + 1 <= j) {
+                    // Check both query and reference spans to prevent huge mappings
+                    offset_t query_span = readMappings[frag_end+1].queryEndPos() - readMappings[frag_start].queryStartPos;
+                    offset_t ref_span = readMappings[frag_end+1].refEndPos() - readMappings[frag_start].refStartPos;
+                    if (std::max(query_span, ref_span) >= param.max_mapping_length) {
+                        break;
+                    }
                     frag_end++;
                 }
                 
