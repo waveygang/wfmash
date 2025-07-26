@@ -437,6 +437,33 @@ namespace skch
                 << ", target-only: " << target_only
                 << ", both: " << both << ")" << std::endl;
       
+      // Pre-allocate all group sketches to avoid memory growth during sketching
+      std::cerr << "[wfmash::auto-identity] Pre-allocating sketches for all groups..." << std::endl;
+      
+      // First pass: identify all groups that will be needed
+      std::set<int> all_query_groups, all_target_groups;
+      for (const auto& seq_info : sequences_to_process) {
+        auto it = seqMap.find(seq_info.name);
+        if (it != seqMap.end()) {
+          seqno_t seqId = it->second;
+          int groupId = idManager.getRefGroup(seqId);
+          if (seq_info.is_query) all_query_groups.insert(groupId);
+          if (seq_info.is_target) all_target_groups.insert(groupId);
+        }
+      }
+      
+      // Pre-allocate sketches for all groups
+      for (int groupId : all_query_groups) {
+        query_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
+      }
+      for (int groupId : all_target_groups) {
+        target_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
+      }
+      
+      std::cerr << "[wfmash::auto-identity] Pre-allocated " << query_group_sketches.size() 
+                << " query group sketches and " << target_group_sketches.size() 
+                << " target group sketches" << std::endl;
+      
       // Create progress meter for ANI sketching
       progress_meter::ProgressMeter ani_progress(
           sequences_to_process.size(),
@@ -492,6 +519,11 @@ namespace skch
         for (const auto& seq_info : sequences_to_process) {
           sf.emplace([&, seq_info]() {
             try {
+              // Thread-local worker sketch that gets reused for all sequences processed by this thread
+              thread_local StreamingMinHash worker_sketch(estimation_sketch_size, 0);
+              // Reset the sketch by reassigning
+              worker_sketch = StreamingMinHash(estimation_sketch_size, 0);
+              
               auto meta_it = file_metas.find(seq_info.file);
               if (meta_it == file_metas.end()) return;
               
@@ -520,12 +552,10 @@ namespace skch
                 return;
               }
               
-              // Use lock-free streaming MinHash (no windowSize needed for pure MinHash)
-              StreamingMinHash local_sketch(estimation_sketch_size, 0);
-              
               // Process all k-mers in the sequence
-              std::vector<char> kmerBuf(estimation_k);
-              std::vector<char> seqRev(estimation_k);
+              // Use thread-local buffers to avoid allocations
+              thread_local std::vector<char> kmerBuf(estimation_k);
+              thread_local std::vector<char> seqRev(estimation_k);
               int ambig_kmer_count = 0;
               
               // Check initial k-mer for N's
@@ -562,7 +592,7 @@ namespace skch
                   // Use canonical k-mer (minimum of forward and reverse)
                   if (hashFwd != hashBwd) {
                     hash_t canonicalHash = std::min(hashFwd, hashBwd);
-                    local_sketch.add_unsafe(canonicalHash);  // No lock needed for local sketch
+                    worker_sketch.add_unsafe(canonicalHash);  // No lock needed for thread-local sketch
                   }
                 }
                 
@@ -573,20 +603,12 @@ namespace skch
               
               free(seq_data);
               
-              // Get the final sketch
-              auto sketch = local_sketch.getSketch();
+              // Get the final sketch from the worker
+              auto sketch = worker_sketch.getSketch();
               
               // Merge into group sketches with per-group locking
               if (seq_info.is_query) {
-                // Ensure group exists
-                {
-                  std::lock_guard<std::mutex> lock(sketch_map_mutex);
-                  if (query_group_sketches.find(groupId) == query_group_sketches.end()) {
-                    query_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
-                  }
-                }
-                
-                // Lock only this group's sketch
+                // Lock only this group's sketch (already pre-allocated)
                 std::lock_guard<std::mutex> lock(query_group_sketches[groupId]->mutex);
                 for (hash_t h : sketch) {
                   query_group_sketches[groupId]->sketch.add_unsafe(h);
@@ -595,15 +617,7 @@ namespace skch
               }
               
               if (seq_info.is_target) {
-                // Ensure group exists
-                {
-                  std::lock_guard<std::mutex> lock(sketch_map_mutex);
-                  if (target_group_sketches.find(groupId) == target_group_sketches.end()) {
-                    target_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
-                  }
-                }
-                
-                // Lock only this group's sketch
+                // Lock only this group's sketch (already pre-allocated)
                 std::lock_guard<std::mutex> lock(target_group_sketches[groupId]->mutex);
                 for (hash_t h : sketch) {
                   target_group_sketches[groupId]->sketch.add_unsafe(h);
