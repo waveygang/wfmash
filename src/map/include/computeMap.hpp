@@ -809,6 +809,12 @@ namespace skch
               
               executor.run(final_flow).wait();
           }
+          
+          // Explicitly clear combinedMappings to free memory before alignment phase
+          combinedMappings.clear();
+          
+          // Force deallocation by swapping with empty container
+          std::unordered_map<seqno_t, MappingResultsVector_t>().swap(combinedMappings);
       }
 
       /**

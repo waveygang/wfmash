@@ -15,6 +15,9 @@
 #include <cstdio>
 #include <iomanip>
 #include <memory>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 #include "map/include/computeMap.hpp"
 #include "map/include/parseCmdArgs.hpp"
@@ -155,6 +158,11 @@ int main(int argc, char** argv) {
         if (yeet_parameters.approx_mapping) {
             return 0;
         }
+        
+        // Trim memory after mapping phase to release unused memory back to OS
+        #ifdef __GLIBC__
+        malloc_trim(0);
+        #endif
      }
 
     align::printCmdOptions(align_parameters);

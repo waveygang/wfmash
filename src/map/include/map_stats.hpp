@@ -437,6 +437,33 @@ namespace skch
                 << ", target-only: " << target_only
                 << ", both: " << both << ")" << std::endl;
       
+      // Pre-allocate all group sketches to avoid memory growth during sketching
+      std::cerr << "[wfmash::auto-identity] Pre-allocating sketches for all groups..." << std::endl;
+      
+      // First pass: identify all groups that will be needed
+      std::set<int> all_query_groups, all_target_groups;
+      for (const auto& seq_info : sequences_to_process) {
+        auto it = seqMap.find(seq_info.name);
+        if (it != seqMap.end()) {
+          seqno_t seqId = it->second;
+          int groupId = idManager.getRefGroup(seqId);
+          if (seq_info.is_query) all_query_groups.insert(groupId);
+          if (seq_info.is_target) all_target_groups.insert(groupId);
+        }
+      }
+      
+      // Pre-allocate sketches for all groups
+      for (int groupId : all_query_groups) {
+        query_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
+      }
+      for (int groupId : all_target_groups) {
+        target_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
+      }
+      
+      std::cerr << "[wfmash::auto-identity] Pre-allocated " << query_group_sketches.size() 
+                << " query group sketches and " << target_group_sketches.size() 
+                << " target group sketches" << std::endl;
+      
       // Create progress meter for ANI sketching
       progress_meter::ProgressMeter ani_progress(
           sequences_to_process.size(),
@@ -492,6 +519,11 @@ namespace skch
         for (const auto& seq_info : sequences_to_process) {
           sf.emplace([&, seq_info]() {
             try {
+              // Thread-local worker sketch that gets reused for all sequences processed by this thread
+              thread_local StreamingMinHash worker_sketch(estimation_sketch_size, 0);
+              // Reset the sketch by reassigning
+              worker_sketch = StreamingMinHash(estimation_sketch_size, 0);
+              
               auto meta_it = file_metas.find(seq_info.file);
               if (meta_it == file_metas.end()) return;
               
@@ -520,12 +552,10 @@ namespace skch
                 return;
               }
               
-              // Use lock-free streaming MinHash (no windowSize needed for pure MinHash)
-              StreamingMinHash local_sketch(estimation_sketch_size, 0);
-              
               // Process all k-mers in the sequence
-              std::vector<char> kmerBuf(estimation_k);
-              std::vector<char> seqRev(estimation_k);
+              // Use thread-local buffers to avoid allocations
+              thread_local std::vector<char> kmerBuf(estimation_k);
+              thread_local std::vector<char> seqRev(estimation_k);
               int ambig_kmer_count = 0;
               
               // Check initial k-mer for N's
@@ -562,7 +592,7 @@ namespace skch
                   // Use canonical k-mer (minimum of forward and reverse)
                   if (hashFwd != hashBwd) {
                     hash_t canonicalHash = std::min(hashFwd, hashBwd);
-                    local_sketch.add_unsafe(canonicalHash);  // No lock needed for local sketch
+                    worker_sketch.add_unsafe(canonicalHash);  // No lock needed for thread-local sketch
                   }
                 }
                 
@@ -573,20 +603,12 @@ namespace skch
               
               free(seq_data);
               
-              // Get the final sketch
-              auto sketch = local_sketch.getSketch();
+              // Get the final sketch from the worker
+              auto sketch = worker_sketch.getSketch();
               
               // Merge into group sketches with per-group locking
               if (seq_info.is_query) {
-                // Ensure group exists
-                {
-                  std::lock_guard<std::mutex> lock(sketch_map_mutex);
-                  if (query_group_sketches.find(groupId) == query_group_sketches.end()) {
-                    query_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
-                  }
-                }
-                
-                // Lock only this group's sketch
+                // Lock only this group's sketch (already pre-allocated)
                 std::lock_guard<std::mutex> lock(query_group_sketches[groupId]->mutex);
                 for (hash_t h : sketch) {
                   query_group_sketches[groupId]->sketch.add_unsafe(h);
@@ -595,15 +617,7 @@ namespace skch
               }
               
               if (seq_info.is_target) {
-                // Ensure group exists
-                {
-                  std::lock_guard<std::mutex> lock(sketch_map_mutex);
-                  if (target_group_sketches.find(groupId) == target_group_sketches.end()) {
-                    target_group_sketches[groupId] = std::make_unique<GroupSketch>(estimation_sketch_size);
-                  }
-                }
-                
-                // Lock only this group's sketch
+                // Lock only this group's sketch (already pre-allocated)
                 std::lock_guard<std::mutex> lock(target_group_sketches[groupId]->mutex);
                 for (hash_t h : sketch) {
                   target_group_sketches[groupId]->sketch.add_unsafe(h);
@@ -721,7 +735,9 @@ namespace skch
                     << ": " << intersection_count << "/" << std::min(q_sketch.size(), t_sketch.size()) 
                     << " sketches overlap, Jaccard=" << std::fixed << std::setprecision(4) << jaccard 
                     << ", ANI=" << std::fixed << std::setprecision(2) << ani * 100 << "%"
-                    << " (weight=" << weight << ")" << std::endl;
+                    << " (weight=" << weight << ")"
+                    << " [" << idManager.getGroupPrefix(q_pair.first) << " vs " << idManager.getGroupPrefix(t_pair.first) << "]"
+                    << std::endl;
         }
       }
 
@@ -744,28 +760,21 @@ namespace skch
         return skch::fixed::percentage_identity;
       }
 
-      // Sort by ANI value for weighted percentile calculation
-      std::sort(weighted_anis.begin(), weighted_anis.end(), 
-                [](const auto& a, const auto& b) { return a.first < b.first; });
-      
-      // Calculate total weight
-      uint64_t total_weight = 0;
+      // Extract just ANI values for unweighted calculation
+      std::vector<double> all_anis;
       for (const auto& [ani, weight] : weighted_anis) {
-        total_weight += weight;
+        all_anis.push_back(ani);
       }
       
-      // Calculate weighted percentile
-      uint64_t target_weight = (params.ani_percentile * total_weight) / 100;
-      uint64_t cumulative_weight = 0;
-      double selected_ani = weighted_anis.back().first; // default to max if not found
+      // Sort ANI values
+      std::sort(all_anis.begin(), all_anis.end());
       
-      for (const auto& [ani, weight] : weighted_anis) {
-        cumulative_weight += weight;
-        if (cumulative_weight >= target_weight) {
-          selected_ani = ani;
-          break;
-        }
+      // Calculate unweighted percentile
+      size_t target_index = (params.ani_percentile * all_anis.size()) / 100;
+      if (target_index >= all_anis.size()) {
+        target_index = all_anis.size() - 1;
       }
+      double selected_ani = all_anis[target_index];
       
       // Apply adjustment
       double adjusted_ani = selected_ani + (params.ani_adjustment / 100.0);
@@ -774,22 +783,21 @@ namespace skch
       if (adjusted_ani < 0.0) adjusted_ani = 0.0;
       if (adjusted_ani > 1.0) adjusted_ani = 1.0;
       
-      // Extract just ANI values for simple statistics
-      std::vector<double> all_anis;
-      for (const auto& [ani, weight] : weighted_anis) {
-        all_anis.push_back(ani);
-      }
+      // Calculate unweighted percentiles for display
+      double unweighted_25th = all_anis[all_anis.size() / 4];
+      double unweighted_50th = all_anis[all_anis.size() / 2];
+      double unweighted_75th = all_anis[(3 * all_anis.size()) / 4];
       
-      // Log the distribution of ANI values (unweighted for reference)
+      // Log ANI distribution
       std::cerr << "[wfmash::auto-identity] ANI distribution: min=" 
                 << std::fixed << std::setprecision(2) << all_anis.front() * 100 << "%, "
-                << "25th percentile=" << all_anis[all_anis.size() / 4] * 100 << "%, "
-                << "median=" << all_anis[all_anis.size() / 2] * 100 << "%, "
-                << "75th percentile=" << all_anis[(3 * all_anis.size()) / 4] * 100 << "%, "
+                << "25th percentile=" << unweighted_25th * 100 << "%, "
+                << "median=" << unweighted_50th * 100 << "%, "
+                << "75th percentile=" << unweighted_75th * 100 << "%, "
                 << "max=" << all_anis.back() * 100 << "%" << std::endl;
       
       std::cerr << "[wfmash::auto-identity] Selected ani" << params.ani_percentile 
-                << " (" << params.ani_percentile << "th length-weighted percentile) = " 
+                << " (" << params.ani_percentile << "th percentile) = " 
                 << std::fixed << std::setprecision(2) << selected_ani * 100 << "%";
       
       if (params.ani_adjustment != 0) {
