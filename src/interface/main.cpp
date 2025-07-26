@@ -13,9 +13,13 @@
 #include <chrono>
 #include <functional>
 #include <cstdio>
+#include <iomanip>
+#include <memory>
 
 #include "map/include/computeMap.hpp"
 #include "map/include/parseCmdArgs.hpp"
+#include "map/include/sequenceIds.hpp"
+#include "map/include/map_stats.hpp"
 
 #include "map/include/winSketch.hpp"
 
@@ -45,7 +49,83 @@ int main(int argc, char** argv) {
 
     //skch::parseandSave(argc, argv, cmd, parameters);
     if (!yeet_parameters.remapping) {
+        // Handle auto percentage identity estimation
+        if (map_parameters.auto_pct_identity) {
+            std::cerr << "[wfmash] ANI-based identity estimation enabled (ani" << map_parameters.ani_percentile;
+            if (map_parameters.ani_adjustment != 0) {
+                std::cerr << std::showpos << map_parameters.ani_adjustment << std::noshowpos;
+            }
+            std::cerr << ")..." << std::endl;
+
+            // Instantiate the SequenceIdManager here to get the correct grouping information.
+            // This is the single source of truth for grouping.
+            // Create target prefix vector, handling empty strings properly
+            std::vector<std::string> target_prefix_vec;
+            if (!map_parameters.target_prefix.empty()) {
+                target_prefix_vec.push_back(map_parameters.target_prefix);
+            }
+            
+            auto idManager = std::make_unique<skch::SequenceIdManager>(
+                map_parameters.querySequences,
+                map_parameters.refSequences,
+                map_parameters.query_prefix,
+                target_prefix_vec,
+                std::string(1, map_parameters.prefix_delim),
+                map_parameters.query_list,
+                map_parameters.target_list
+            );
+
+            try {
+                // Call the estimation function, which will respect the groups defined in the idManager.
+                double estimated_identity = skch::Stat::estimate_identity_for_groups(map_parameters, *idManager);
+                
+                // Update the parameters that the rest of the program will use.
+                map_parameters.percentageIdentity = estimated_identity;
+                
+                // Recalculate sketch size based on the new identity threshold
+                // Only if sketch size was auto-calculated (not manually specified with -s)
+                if (!map_parameters.sketch_size_manually_set) {
+                    const double md = 1 - map_parameters.percentageIdentity;
+                    double dens = 0.02 * (1 + (md / 0.1));
+                    int old_sketch_size = map_parameters.sketchSize;
+                    map_parameters.sketchSize = dens * (map_parameters.windowLength - map_parameters.kmerSize);
+                    
+                    // Ensure sketch size doesn't exceed window size
+                    if (map_parameters.sketchSize > map_parameters.windowLength) {
+                        map_parameters.sketchSize = map_parameters.windowLength;
+                    }
+                    
+                    std::cerr << "[wfmash] Updated sketch size from " << old_sketch_size 
+                              << " to " << map_parameters.sketchSize 
+                              << " based on estimated identity" << std::endl;
+                }
+                
+                std::cerr << "[wfmash] Using estimated identity cutoff: " 
+                          << std::fixed << std::setprecision(2) << estimated_identity * 100 << "%" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash] Error during identity estimation: " << e.what() << std::endl;
+                std::cerr << "[wfmash] Falling back to default identity threshold: " 
+                          << std::fixed << std::setprecision(2) << skch::fixed::percentage_identity * 100 << "%" << std::endl;
+                map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+                map_parameters.auto_pct_identity = false;
+            }
+        }
+
         skch::printCmdOptions(map_parameters);
+        
+        // Log final parameters after ANI estimation
+        int minimum_hits = std::max(map_parameters.minimum_hits, 
+                                   skch::Stat::estimateMinimumHitsRelaxed(map_parameters.sketchSize, 
+                                                                          map_parameters.kmerSize, 
+                                                                          map_parameters.percentageIdentity, 
+                                                                          skch::fixed::confidence_interval));
+        
+        std::cerr << "[wfmash] Final parameters: identity=" << std::fixed << std::setprecision(1) 
+                  << map_parameters.percentageIdentity * 100 << "%, "
+                  << "sketchSize=" << map_parameters.sketchSize << ", "
+                  << "minimumHits=" << minimum_hits << ", "
+                  << "windowLength=" << map_parameters.windowLength << ", "
+                  << "kmerSize=" << map_parameters.kmerSize << std::endl;
 
         auto t0 = skch::Time::now();
 

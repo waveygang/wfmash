@@ -69,9 +69,10 @@ namespace skch
     }
 
     /**
-     * @brief Report final read mappings to output stream
+     * @brief Report final read mappings to output stream with chain information
      */
-    static void reportReadMappings(MappingResultsVector_t &readMappings, 
+    static void reportReadMappings(MappingResultsVector_t &readMappings,
+                                  const ChainInfoVector_t &chainInfo,
                                   const std::string &queryName,
                                   std::ostream &outstrm,
                                   const SequenceIdManager& idManager,
@@ -79,24 +80,25 @@ namespace skch
                                   std::function<void(const MappingResult&)> processMappingResults = nullptr,
                                   offset_t queryLen = 0)
     {
-      // TODO: Sort by splitMappingId which doesn't exist in compact struct
-      // For now, just sort by query position
-      std::sort(readMappings.begin(), readMappings.end(),
-          [](const MappingResult &a, const MappingResult &b) {
-              return a.queryStartPos < b.queryStartPos;
+      // Sort mappings and chain info together by query position
+      std::vector<size_t> indices(readMappings.size());
+      std::iota(indices.begin(), indices.end(), 0);
+      std::sort(indices.begin(), indices.end(),
+          [&readMappings](size_t a, size_t b) {
+              return readMappings[a].queryStartPos < readMappings[b].queryStartPos;
           });
 
-      // Chain assignment would require external storage for splitMappingId, chain_pos, chain_length
-      // Skipping for now in the compact implementation
-
-      //Print the results
-      for(auto &e : readMappings)
+      // Print the results
+      for(size_t idx : indices)
       {
+        auto &e = readMappings[idx];
+        auto &chain = chainInfo[idx];
+        
         float fakeMapQ = e.getNucIdentity() == 1 ? 255 : std::round(-10.0 * std::log10(1-(e.getNucIdentity())));
         std::string sep = param.legacy_output ? " " : "\t";
 
-        outstrm  << queryName // querySeqId not in compact struct
-                 << sep << queryLen // Pass as parameter
+        outstrm  << queryName
+                 << sep << queryLen
                  << sep << e.queryStartPos
                  << sep << e.queryEndPos() - (param.legacy_output ? 1 : 0)
                  << sep << (e.strand() == strnd::FWD ? "+" : "-")
@@ -114,9 +116,9 @@ namespace skch
                    << sep << "kc:f:" << e.getKmerComplexity();
           if (!param.mergeMappings) 
           {
-            outstrm << sep << "jc:f:" << 0.0; // sketchSize not available
+            outstrm << sep << "jc:f:" << 0.0;
           } else {
-            outstrm << sep << "ch:Z:" << 0 << "." << 1 << "." << 1; // chain info not available
+            outstrm << sep << "ch:Z:" << chain.chainId << "." << chain.chainPos << "." << chain.chainLen;
           }
         } else
         {
@@ -129,10 +131,32 @@ namespace skch
         outstrm << "\n";
 #endif
 
-        //User defined processing of the results
+        // User defined processing of the results
         if(processMappingResults != nullptr)
           processMappingResults(e);
       }
+    }
+
+    /**
+     * @brief Report final read mappings to output stream (legacy interface without chain info)
+     */
+    static void reportReadMappings(MappingResultsVector_t &readMappings, 
+                                  const std::string &queryName,
+                                  std::ostream &outstrm,
+                                  const SequenceIdManager& idManager,
+                                  const Parameters& param,
+                                  std::function<void(const MappingResult&)> processMappingResults = nullptr,
+                                  offset_t queryLen = 0)
+    {
+      // Create default chain info - each mapping is its own chain
+      ChainInfoVector_t defaultChainInfo(readMappings.size());
+      for (size_t i = 0; i < readMappings.size(); ++i) {
+        defaultChainInfo[i] = {static_cast<uint32_t>(i), 1, 1};
+      }
+      
+      // Call the version with chain info
+      reportReadMappings(readMappings, defaultChainInfo, queryName, outstrm, 
+                        idManager, param, processMappingResults, queryLen);
     }
 
     /**

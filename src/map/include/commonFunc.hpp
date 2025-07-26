@@ -24,6 +24,7 @@
 #include "common/murmur3.h"
 #include "common/prettyprint.hpp"
 #include "common/ankerl/unordered_dense.hpp"
+#include "map/include/streamingMinHash.hpp"
 
 #include "assert.h"
 
@@ -321,6 +322,109 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
           return;
         }
 
+        /**
+         * @brief       Compute sketch using efficient streaming MinHash
+         * @param[out]  minmerIndex     container storing sketched Kmers
+         * @param[in]   seq             pointer to input sequence
+         * @param[in]   len             length of input sequence
+         * @param[in]   kmerSize
+         * @param[in]   alphabetSize
+         * @param[in]   sketchSize      sketch size (number of minimizers)
+         * @param[in]   windowSize      window size (for position tracking)
+         * @param[in]   seqCounter      current sequence number
+         * @param[in]   progress        progress meter
+         */
+        template <typename T>
+        inline void sketchSequenceStreaming(
+            std::vector<T> &minmerIndex,
+            char* seq,
+            offset_t len,
+            int kmerSize,
+            int alphabetSize,
+            int sketchSize,
+            int windowSize,
+            seqno_t seqCounter,
+            progress_meter::ProgressMeter* progress = nullptr)
+        {
+            makeUpperCaseAndValidDNA(seq, len);
+            
+            // Pure MinHash - sketch size is the number of minimum hashes we keep
+            StreamingMinHash sketch(sketchSize, windowSize);
+            
+            // Buffer for reverse complement
+            std::unique_ptr<char[]> seqRev(new char[kmerSize]);
+            
+            // Track ambiguous k-mers
+            int ambig_kmer_count = 0;
+            for (int i = kmerSize - 1; i >= 0; i--) {
+                if (seq[i] == 'N') {
+                    ambig_kmer_count = i + 1;
+                    break;
+                }
+            }
+            
+            // Track first occurrence position for each hash
+            std::unordered_map<hash_t, offset_t> hashFirstPos;
+            
+            // Process all k-mers and build MinHash sketch
+            for (offset_t i = 0; i <= len - kmerSize; i++) {
+                if (progress) progress->increment(1);
+                
+                // Check for N at the end of current k-mer
+                if (seq[i + kmerSize - 1] == 'N') {
+                    ambig_kmer_count = kmerSize;
+                }
+                
+                if (ambig_kmer_count == 0) {
+                    // Hash forward k-mer
+                    hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize);
+                    hash_t hashBwd = std::numeric_limits<hash_t>::max();
+                    
+                    // Hash reverse complement for DNA
+                    if (alphabetSize == 4) {
+                        CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
+                        hashBwd = CommonFunc::getHash(seqRev.get(), kmerSize);
+                    }
+                    
+                    // Use canonical k-mer
+                    if (hashFwd != hashBwd) {
+                        hash_t canonicalHash = std::min(hashFwd, hashBwd);
+                        
+                        // Track first position where we saw this hash
+                        if (hashFirstPos.find(canonicalHash) == hashFirstPos.end()) {
+                            hashFirstPos[canonicalHash] = i;
+                        }
+                        
+                        // Add to MinHash sketch
+                        sketch.add(canonicalHash);
+                    }
+                }
+                
+                if (ambig_kmer_count > 0) {
+                    ambig_kmer_count--;
+                }
+            }
+            
+            // Convert MinHash sketch to MinmerInfo objects
+            // Each hash in the sketch gets ONE entry at its first position
+            auto finalSketch = sketch.getSketch();
+            for (hash_t hash : finalSketch) {
+                if (hashFirstPos.find(hash) != hashFirstPos.end()) {
+                    offset_t pos = hashFirstPos[hash];
+                    minmerIndex.push_back(MinmerInfo{
+                        hash,
+                        pos,                    // wpos
+                        pos + windowSize,       // wpos_end (using windowSize as the span)
+                        seqCounter,
+                        strnd::FWD             // Simplified: not tracking strand
+                    });
+                }
+            }
+            
+            // Sort by position
+            std::sort(minmerIndex.begin(), minmerIndex.end(),
+                [](const T& a, const T& b) { return a.wpos < b.wpos; });
+        }
 
         /**
          * @brief       Compute winnowed minmers from a given sequence and add to the index

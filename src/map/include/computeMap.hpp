@@ -18,12 +18,14 @@
 #include <numeric>
 #include <iostream>
 #include <filesystem>
+#include <map>
 namespace fs = std::filesystem;
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
 #include <mutex>
 #include <thread>
+#include <chrono>
 #include <sstream>
 #include "taskflow/taskflow.hpp"
 
@@ -617,12 +619,38 @@ namespace skch
 
                           OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
                           
-                          auto [nonMergedMappings, mergedMappings] = 
-                              filterSubsetMappings(output->results, output->progress, seqId, input->len,
+                          // Add timing and progress info for filtering phase
+                          auto filter_start = std::chrono::high_resolution_clock::now();
+                          
+                          // Only log during post-processing phase (after mapping is complete)
+                          if (progress->is_finished.load()) {
+                              // Log for all sequences during filtering, with more detail for large ones
+                              std::cerr << "[wfmash::mashmap] Filtering " << output->results.size() 
+                                        << " mappings for " << queryName 
+                                        << " (" << input->len << "bp)";
+                              if (param.scaffold_gap > 0) {
+                                  std::cerr << " [scaffold filtering enabled]";
+                              }
+                              std::cerr << "..." << std::endl;
+                          }
+                          
+                          auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
                                                   scaffold_progress, scaffold_total_work, scaffold_completed_work);
+                          
+                          auto filter_end = std::chrono::high_resolution_clock::now();
+                          auto filter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(filter_end - filter_start);
+                          
+                          // Report long filtering times (only during post-processing)
+                          if (progress->is_finished.load() && filter_duration.count() > 1000) {
+                              std::cerr << "[wfmash::mashmap] Filtering " << queryName 
+                                        << " took " << std::fixed << std::setprecision(1) 
+                                        << filter_duration.count() / 1000.0 << "s" << std::endl;
+                          }
 
                           auto& mappings = param.mergeMappings && param.split ?
-                                mergedMappings : nonMergedMappings;
+                                filteredResult.mergedMappings : filteredResult.nonMergedMappings;
+                          auto& chainInfo = param.mergeMappings && param.split ?
+                                filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
 
                           if (param.filterMode == filter::ONETOONE) {
                               std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
@@ -633,7 +661,7 @@ namespace skch
                               );
                           } else {
                               std::lock_guard<std::mutex> lock(*outstream_mutex);
-                              OutputHandler::reportReadMappings(mappings, queryName, *outstream, *idManager, param, processMappingResults, input->len);
+                              OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *outstream, *idManager, param, processMappingResults, input->len);
                           }
                       }).name("query_" + queryName);
                   }
@@ -646,14 +674,24 @@ namespace skch
                                                     &combinedMappings,
                                                     &combinedMappings_mutex]() {
                   if (param.filterMode == filter::ONETOONE) {
+                      auto merge_start = std::chrono::high_resolution_clock::now();
+                      std::cerr << "[wfmash::mashmap] Starting merge of subset results..." << std::endl;
+                      
                       std::lock_guard<std::mutex> lock(combinedMappings_mutex);
+                      size_t total_merged = 0;
                       for (auto& [querySeqId, mappings] : *subsetMappings) {
+                          total_merged += mappings.size();
                           combinedMappings[querySeqId].insert(
                               combinedMappings[querySeqId].end(),
                               std::make_move_iterator(mappings.begin()),
                               std::make_move_iterator(mappings.end())
                               );
                       }
+                      
+                      auto merge_end = std::chrono::high_resolution_clock::now();
+                      auto merge_duration = std::chrono::duration_cast<std::chrono::seconds>(merge_end - merge_start);
+                      std::cerr << "[wfmash::mashmap] Merged " << total_merged 
+                                << " mappings in " << merge_duration.count() << "s" << std::endl;
                   }
               }).name("merge_results");
 
@@ -670,15 +708,42 @@ namespace skch
               processQueries_task.precede(merge_task);
               merge_task.precede(cleanup_task);
 
-              executor.run(*subset_flow).wait();
-        
-              // Immediately finish mapping progress when queries are done
-              progress->finish();
+              // Create a task to monitor mapping completion
+              auto mapping_complete = std::make_shared<std::atomic<bool>>(false);
+              auto monitor_task = std::make_unique<std::thread>([progress, mapping_complete, this]() {
+                  while (!mapping_complete->load()) {
+                      if (progress->is_finished.load()) {
+                          // Mapping phase complete, notify user immediately
+                          std::cerr << "[wfmash::mashmap] Mapping phase complete, starting post-processing";
+                          if (param.scaffold_gap > 0) {
+                              std::cerr << " (including scaffold filtering)";
+                          }
+                          std::cerr << "..." << std::endl;
+                          break;
+                      }
+                      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                  }
+              });
               
-              // If scaffolding is enabled, log a simple message
-              if (param.scaffold_gap > 0) {
-                  std::cerr << "[wfmash::mashmap] Scaffolding mappings..." << std::endl;
+              executor.run(*subset_flow).wait();
+              mapping_complete->store(true);
+              if (monitor_task->joinable()) {
+                  monitor_task->join();
               }
+              
+              // Progress is already finished by the monitor thread
+              if (!progress->is_finished.load()) {
+                  progress->finish();
+              }
+              
+              // Wait for all tasks to complete
+              std::chrono::milliseconds wait_time(100);
+              while (executor.num_topologies() > 0) {
+                  std::this_thread::sleep_for(wait_time);
+              }
+              
+              std::cerr << "[wfmash::mashmap] Subset processing complete, results saved to: " 
+                        << param.outFileName << std::endl;
               
           }
 
@@ -935,9 +1000,19 @@ namespace skch
       }
 
       /**
+       * @brief Result structure for filtered mappings with chain info
+       */
+      struct FilteredMappingsResult {
+          MappingResultsVector_t nonMergedMappings;
+          MappingResultsVector_t mergedMappings;
+          ChainInfoVector_t nonMergedChainInfo;
+          ChainInfoVector_t mergedChainInfo;
+      };
+
+      /**
        * @brief Filter mappings for a subset before aggregation
        */
-      std::pair<MappingResultsVector_t, MappingResultsVector_t> filterSubsetMappings(
+      FilteredMappingsResult filterSubsetMappings(
           MappingResultsVector_t& mappings, 
           progress_meter::ProgressMeter& progress,
           seqno_t querySeqId,
@@ -946,12 +1021,16 @@ namespace skch
           std::shared_ptr<std::atomic<size_t>> scaffold_total_work,
           std::shared_ptr<std::atomic<size_t>> scaffold_completed_work)
       {
-          if (mappings.empty()) return {MappingResultsVector_t(), MappingResultsVector_t()};
+          FilteredMappingsResult result;
+          
+          if (mappings.empty()) return result;
 
           MappingResultsVector_t rawMappings = mappings;
           
-          // Pass context to the merge function
-          auto maximallyMergedMappings = FilterUtils::mergeMappingsInRange(mappings, param.chain_gap, param, progress, querySeqId, queryLen);
+          // Pass context to the merge function - now returns mappings with chain info
+          auto mappingsWithChains = FilterUtils::mergeMappingsInRangeWithChains(mappings, param.chain_gap, param, progress, querySeqId, queryLen);
+          auto& maximallyMergedMappings = mappingsWithChains.mappings;
+          auto& chainInfo = mappingsWithChains.chainInfo;
 
           if (param.mergeMappings && param.split) {
               // Pass context (queryLen) to weak mapping filter
@@ -1010,7 +1089,18 @@ namespace skch
               mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
           }*/
 
-          return {std::move(mappings), std::move(maximallyMergedMappings)};
+          // Return results with chain info
+          result.nonMergedMappings = std::move(mappings);
+          result.mergedMappings = std::move(maximallyMergedMappings);
+          
+          // For non-merged mappings, each is its own chain
+          result.nonMergedChainInfo.resize(result.nonMergedMappings.size());
+          for (size_t i = 0; i < result.nonMergedMappings.size(); ++i) {
+              result.nonMergedChainInfo[i] = {static_cast<uint32_t>(i), 1, 1};
+          }
+          result.mergedChainInfo = std::move(chainInfo);
+          
+          return result;
       }
 
     public:

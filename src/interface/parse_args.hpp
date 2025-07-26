@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <limits.h>
+#include <regex>
 
 #include "common/args.hxx"
 
@@ -64,7 +65,8 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<float> map_pct_identity(mapping_opts, "FLOAT", "minimum identity % [70]", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani25-5)", {'p', "map-pct-id"});
+    args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
@@ -76,7 +78,7 @@ void parse_args(int argc,
     args::Flag no_filter(filtering_opts, "", "disable all filtering", {'f', "no-filter"});
     args::Flag no_merge(filtering_opts, "", "keep all fragment mappings", {'M', "no-merge"});
     args::Flag one_to_one(filtering_opts, "", "best mapping per query AND target", {'o', "one-to-one"});
-    args::ValueFlag<double> overlap_threshold(filtering_opts, "FLOAT", "max overlap ratio [1.0]", {'O', "overlap"});
+    args::ValueFlag<double> overlap_threshold(filtering_opts, "FLOAT", "max overlap ratio [0.95]", {'O', "overlap"});
     args::ValueFlag<double> map_sparsification(filtering_opts, "FLOAT", "keep this fraction of mappings [1.0]", {'x', "sparsify"});
     args::ValueFlag<std::string> hg_filter(filtering_opts, "n,Δ,conf", "hypergeometric filter [1.0,0.0,99.9]", {"hg-filter"});
     args::ValueFlag<int> min_hits(filtering_opts, "INT", "min hits for L1 filtering [3]", {'H', "l1-hits"});
@@ -117,6 +119,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> tmp_base(system_opts, "PATH", "temp file directory [pwd]", {'B', "tmp-base"});
     args::Flag keep_temp_files(system_opts, "", "retain temporary files", {'Z', "keep-temp"});
     args::Flag quiet(system_opts, "", "disable progress output", {"quiet"});
+    args::Flag streaming_minhash(system_opts, "", "use streaming MinHash algorithm (experimental)", {"streaming-minhash"});
     args::Flag version(system_opts, "", "version info", {'v', "version"});
     args::HelpFlag help(system_opts, "", "show help", {'h', "help"});
 
@@ -156,6 +159,11 @@ void parse_args(int argc,
 
     map_parameters.use_progress_bar = !args::get(quiet);
     align_parameters.use_progress_bar = !args::get(quiet);
+    map_parameters.use_streaming_minhash = args::get(streaming_minhash);
+    
+    if (ani_sketch_size) {
+        map_parameters.ani_sketch_size = args::get(ani_sketch_size);
+    }
 
     if (skip_prefix) {
         map_parameters.prefix_delim = args::get(skip_prefix);
@@ -317,13 +325,57 @@ void parse_args(int argc,
     }
 
     if (map_pct_identity) {
-        if (args::get(map_pct_identity) < 50) {
-            std::cerr << "[wfmash] ERROR, skch::parseandSave, minimum nucleotide identity requirement should be >= 50\%." << std::endl;
-            exit(1);
+        std::string pct_id_str = args::get(map_pct_identity);
+        
+        // Check if it's an ANI preset (e.g., ani25, ani50-10, ani75+5)
+        std::regex ani_pattern("^ani(\\d+)([+-]\\d+)?$");
+        std::smatch matches;
+        
+        if (std::regex_match(pct_id_str, matches, ani_pattern)) {
+            map_parameters.auto_pct_identity = true;
+            map_parameters.ani_percentile = std::stoi(matches[1]);
+            
+            // Validate percentile
+            if (map_parameters.ani_percentile < 1 || map_parameters.ani_percentile > 99) {
+                std::cerr << "[wfmash] ERROR: ANI percentile must be between 1 and 99, got: " 
+                          << map_parameters.ani_percentile << std::endl;
+                exit(1);
+            }
+            
+            // Parse adjustment if present
+            if (matches[2].matched) {
+                map_parameters.ani_adjustment = std::stof(matches[2].str());
+            } else {
+                map_parameters.ani_adjustment = 0.0;
+            }
+            
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
+        } else if (pct_id_str == "auto") {
+            // Legacy support for "auto" = ani25
+            map_parameters.auto_pct_identity = true;
+            map_parameters.ani_percentile = 25;
+            map_parameters.ani_adjustment = 0.0;
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+        } else {
+            // Try to parse as a float percentage
+            try {
+                float pct_id = std::stof(pct_id_str);
+                if (pct_id < 50) {
+                    std::cerr << "[wfmash] ERROR: minimum nucleotide identity requirement should be >= 50%." << std::endl;
+                    exit(1);
+                }
+                map_parameters.percentageIdentity = pct_id / 100.0; // scale to [0,1]
+                map_parameters.auto_pct_identity = false;
+            } catch (const std::exception& e) {
+                std::cerr << "[wfmash] ERROR: Invalid value for -p/--map-pct-id: " << pct_id_str << std::endl;
+                std::cerr << "[wfmash] Expected a float value or ANI preset (e.g., ani25, ani50-10, ani75+5)" << std::endl;
+                exit(1);
+            }
         }
-        map_parameters.percentageIdentity = (float) (args::get(map_pct_identity)/100.0); // scale to [0,1]
     } else {
-        map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+        // No -p flag provided, use ani25 by default
+        map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
+        // auto_pct_identity, ani_percentile=25, ani_adjustment=0.0 already set in Parameters struct
     }
 
     if (block_length) {
@@ -423,7 +475,7 @@ void parse_args(int argc,
     if (overlap_threshold) {
         map_parameters.overlap_threshold = args::get(overlap_threshold);
     } else {
-        map_parameters.overlap_threshold = 1.0;
+        map_parameters.overlap_threshold = 0.95;
     }
 
     if (kmer_size) {
@@ -548,6 +600,7 @@ void parse_args(int argc,
         const int64_t ss = sketch_size && args::get(sketch_size) >= 0 ? args::get(sketch_size) : -1;
         if (ss > 0) {
             map_parameters.sketchSize = ss;
+            map_parameters.sketch_size_manually_set = true;
         } else {
             const double md = 1 - map_parameters.percentageIdentity;
             double dens = 0.02 * (1 + (md / 0.1));
@@ -758,7 +811,19 @@ void parse_args(int argc,
               << ", D=" << map_parameters.scaffold_max_deviation
               << ", S=" << (map_parameters.scaffold_min_length / map_parameters.windowLength)
               << ", n=" << map_parameters.numMappingsForSegment
-              << ", p=" << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%"
+              << ", p=";
+    
+    // Show the ANI preset if auto_pct_identity is enabled
+    if (map_parameters.auto_pct_identity) {
+        std::cerr << "ani" << map_parameters.ani_percentile;
+        if (map_parameters.ani_adjustment != 0) {
+            std::cerr << std::showpos << map_parameters.ani_adjustment << std::noshowpos;
+        }
+    } else {
+        std::cerr << std::fixed << std::setprecision(0) << map_parameters.percentageIdentity * 100 << "%";
+    }
+    
+    std::cerr
               << ", t=" << map_parameters.threads
               << ", b=" << map_parameters.index_by_size << std::endl;
     std::cerr << "[wfmash] Filters: " << (map_parameters.skip_self ? "skip-self" : "no-skip-self")
