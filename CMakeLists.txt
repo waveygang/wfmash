@@ -35,6 +35,7 @@ option(PROFILER "Enable profiling" OFF)
 option(ASAN "Use address sanitiser (Debug build only)" OFF)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
+option(VENDOR_HTSLIB "Download and build htslib instead of using system version" OFF)
 
 if (NOT DISABLE_LTO)
   include(CheckIPOSupported) # adds lto
@@ -138,11 +139,52 @@ else()
   set_target_properties(wfa2cpp_static PROPERTIES EXCLUDE_FROM_ALL 1)
 endif()
 
+# Vendor htslib if requested
+if (VENDOR_HTSLIB)
+  message(STATUS "Vendoring htslib - downloading and building from source")
+  
+  ExternalProject_Add(vendored_htslib
+    URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendored_htslib
+    CONFIGURE_COMMAND ./configure 
+      --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendored_htslib 
+      --disable-libcurl 
+      --disable-s3 
+      --disable-gcs 
+      --disable-plugins
+      --enable-static
+      $<$<BOOL:${BUILD_STATIC}>:--disable-shared>
+    BUILD_COMMAND $(MAKE)
+    INSTALL_COMMAND $(MAKE) install
+    BUILD_IN_SOURCE 1
+  )
+  
+  # Set variables for vendored htslib
+  set(HTSLIB_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/vendored_htslib/include)
+  set(HTSLIB_LIBRARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/vendored_htslib/lib)
+  
+  if (BUILD_STATIC)
+    set(HTSLIB_LIBRARIES ${HTSLIB_LIBRARY_DIR}/libhts.a)
+  else()
+    set(HTSLIB_LIBRARIES ${HTSLIB_LIBRARY_DIR}/libhts.so)
+  endif()
+  
+  # Create an interface library for htslib
+  add_library(htslib_vendored INTERFACE)
+  add_dependencies(htslib_vendored vendored_htslib)
+  target_include_directories(htslib_vendored INTERFACE ${HTSLIB_INCLUDE_DIR})
+  target_link_libraries(htslib_vendored INTERFACE ${HTSLIB_LIBRARIES})
+  
+  message(STATUS "Vendored htslib will be installed to: ${CMAKE_CURRENT_BINARY_DIR}/vendored_htslib")
+endif()
+
 if (BUILD_DEPS)
   ExternalProject_Add(htslib
     URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/htslib
-    CONFIGURE_COMMAND autoreconf -i && ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/htslib --disable-libcurl --disable-s3
+    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/htslib --disable-libcurl --disable-s3
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND $(MAKE) install
     BUILD_IN_SOURCE 1
@@ -150,6 +192,7 @@ if (BUILD_DEPS)
 
   ExternalProject_Add(gsl
     URL https://mirror.ibcp.fr/pub/gnu/gsl/gsl-2.8.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gsl
     CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gsl
     BUILD_COMMAND $(MAKE)
@@ -159,6 +202,7 @@ if (BUILD_DEPS)
 
   ExternalProject_Add(libdeflate
     URL https://github.com/ebiggers/libdeflate/releases/download/v1.20/libdeflate-1.20.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libdeflate
     CMAKE_ARGS
       -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/libdeflate
@@ -174,6 +218,11 @@ endif()
 add_executable(wfmash
   src/common/utils.cpp
   src/interface/main.cpp)
+
+# Add dependency on vendored htslib if using it
+if (VENDOR_HTSLIB)
+  add_dependencies(wfmash vendored_htslib)
+endif()
 
 if (BUILD_DEPS)
   target_include_directories(wfmash PRIVATE
@@ -199,12 +248,22 @@ else()
   #  ${LIBDEFLATE_INCLUDE_DIR}
   #)
 
-  target_link_libraries(wfmash
-    gsl
-    gslcblas
-    hts
-    deflate
-  )
+  if (VENDOR_HTSLIB)
+    target_include_directories(wfmash PRIVATE ${HTSLIB_INCLUDE_DIR})
+    target_link_libraries(wfmash
+      gsl
+      gslcblas
+      ${HTSLIB_LIBRARIES}
+      deflate
+    )
+  else()
+    target_link_libraries(wfmash
+      gsl
+      gslcblas
+      hts
+      deflate
+    )
+  endif()
 endif()
 
 target_include_directories(wfmash PRIVATE

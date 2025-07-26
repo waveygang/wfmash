@@ -288,6 +288,22 @@ cmake -H. -Bbuild -DBUILD_DEPS=ON && cmake --build build -- -j 8
 
 This will download and build the necessary external dependencies.
 
+### Building with Vendored htslib
+
+If your system doesn't have htslib installed (libhts-dev package), you can use the `VENDOR_HTSLIB` option to download and build htslib automatically:
+
+```sh
+cmake -H. -Bbuild -DVENDOR_HTSLIB=ON && cmake --build build -- -j 8
+```
+
+This option:
+- Downloads htslib 1.20 from the official GitHub releases
+- Builds it with minimal dependencies (no libcurl, S3, or GCS support)
+- Links wfmash against the vendored htslib library
+- Works with both shared and static builds (`-DBUILD_STATIC=ON`)
+
+This is particularly useful for building on systems where htslib is not available through the package manager or when you need a specific version of htslib.
+
 ### Building a Static Binary
 
 To build a static binary, use the `BUILD_STATIC` option:
