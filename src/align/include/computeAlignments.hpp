@@ -334,10 +334,16 @@ void computeAlignmentsTaskflow() {
     std::atomic<uint64_t> total_alignments_processed(0);
     std::atomic<uint64_t> processed_alignment_length(0);
 
-    // Read all mapping records upfront
-    std::vector<std::string> mapping_records;
+    // Store file offsets instead of full records
+    struct MappingOffset {
+        std::streampos offset;
+        uint64_t query_length;
+        uint64_t target_length;
+    };
+    std::vector<MappingOffset> mapping_offsets;
     uint64_t total_query_length = 0;
     uint64_t total_target_length = 0;
+    
     {
         std::ifstream mappingListStream(param.mashmapPafFile);
         if (!mappingListStream.is_open()) {
@@ -347,22 +353,29 @@ void computeAlignmentsTaskflow() {
 
         std::string mappingRecordLine;
         MappingBoundaryRow currentRecord;
+        std::streampos current_pos = mappingListStream.tellg();
 
         while(std::getline(mappingListStream, mappingRecordLine)) {
             if (!mappingRecordLine.empty()) {
                 try {
                     parseMashmapRow(mappingRecordLine, currentRecord, param.target_padding, param.query_padding);
-                    total_query_length += currentRecord.qEndPos - currentRecord.qStartPos;
-                    total_target_length += currentRecord.rEndPos - currentRecord.rStartPos;
-                    mapping_records.push_back(std::move(mappingRecordLine));
+                    uint64_t qlen = currentRecord.qEndPos - currentRecord.qStartPos;
+                    uint64_t tlen = currentRecord.rEndPos - currentRecord.rStartPos;
+                    
+                    total_query_length += qlen;
+                    total_target_length += tlen;
+                    
+                    // Store offset and lengths
+                    mapping_offsets.push_back({current_pos, qlen, tlen});
                 } catch (const std::exception& e) {
                     std::cerr << "[wfmash::align] Warning: Skipping invalid record: " << e.what() << std::endl;
                 }
             }
+            current_pos = mappingListStream.tellg();
         }
     }
 
-    std::cerr << "[wfmash::align] Found " << mapping_records.size()
+    std::cerr << "[wfmash::align] Found " << mapping_offsets.size()
               << " mapping records for alignment ("
               << total_query_length << " query bp, "
               << total_target_length << " target bp)" << std::endl;
@@ -383,20 +396,40 @@ void computeAlignmentsTaskflow() {
 
     // Using for_each with iterators and DynamicPartitioner for better load balancing
     taskflow.for_each(
-        mapping_records.begin(),
-        mapping_records.end(),
-        [&](const std::string& record) {
-            processMappingRecord(
-                record,
-                ref_meta,
-                query_meta,
-                param,
-                total_alignments_processed,
-                processed_alignment_length,
-                progress,
-                output_mutex,
-                outstream
-            );
+        mapping_offsets.begin(),
+        mapping_offsets.end(),
+        [&](const MappingOffset& offset) {
+            // Thread-local file handle for efficient reading
+            thread_local std::ifstream tl_file;
+            thread_local bool tl_file_opened = false;
+            
+            if (!tl_file_opened) {
+                tl_file.open(param.mashmapPafFile);
+                if (!tl_file.is_open()) {
+                    std::cerr << "[wfmash::align] Error: Could not open mapping file for reading" << std::endl;
+                    return;
+                }
+                tl_file_opened = true;
+            }
+            
+            // Read the record from file
+            std::string record;
+            tl_file.seekg(offset.offset);
+            std::getline(tl_file, record);
+            
+            if (!record.empty()) {
+                processMappingRecord(
+                    record,
+                    ref_meta,
+                    query_meta,
+                    param,
+                    total_alignments_processed,
+                    processed_alignment_length,
+                    progress,
+                    output_mutex,
+                    outstream
+                );
+            }
         },
         tf::DynamicPartitioner()
     );
