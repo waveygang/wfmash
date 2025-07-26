@@ -22,6 +22,7 @@ private:
     std::vector<std::string> allPrefixes;
     std::string prefixDelim;
     seqno_t nextId = 0;
+    std::unordered_map<int, std::string> groupIdToPrefix;
 
 public:
     SequenceIdManager(const std::vector<std::string>& queryFiles,
@@ -270,6 +271,14 @@ public:
         throw std::runtime_error("Invalid sequence ID: " + std::to_string(seqId));
     }
 
+    std::string getGroupPrefix(int groupId) const {
+        auto it = groupIdToPrefix.find(groupId);
+        if (it != groupIdToPrefix.end()) {
+            return it->second;
+        }
+        return "group" + std::to_string(groupId);
+    }
+
 private:
 
     void buildRefGroups() {
@@ -317,6 +326,7 @@ private:
 
             if (groupMap.find(groupKey) == groupMap.end()) {
                 groupMap[groupKey] = ++currentGroup;
+                groupIdToPrefix[currentGroup] = groupKey;
             }
             metadata[originalIndex].groupId = groupMap[groupKey];
         }

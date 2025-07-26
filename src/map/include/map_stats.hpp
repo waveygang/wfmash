@@ -721,7 +721,9 @@ namespace skch
                     << ": " << intersection_count << "/" << std::min(q_sketch.size(), t_sketch.size()) 
                     << " sketches overlap, Jaccard=" << std::fixed << std::setprecision(4) << jaccard 
                     << ", ANI=" << std::fixed << std::setprecision(2) << ani * 100 << "%"
-                    << " (weight=" << weight << ")" << std::endl;
+                    << " (weight=" << weight << ")"
+                    << " [" << idManager.getGroupPrefix(q_pair.first) << " vs " << idManager.getGroupPrefix(t_pair.first) << "]"
+                    << std::endl;
         }
       }
 
