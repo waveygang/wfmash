@@ -746,28 +746,21 @@ namespace skch
         return skch::fixed::percentage_identity;
       }
 
-      // Sort by ANI value for weighted percentile calculation
-      std::sort(weighted_anis.begin(), weighted_anis.end(), 
-                [](const auto& a, const auto& b) { return a.first < b.first; });
-      
-      // Calculate total weight
-      uint64_t total_weight = 0;
+      // Extract just ANI values for unweighted calculation
+      std::vector<double> all_anis;
       for (const auto& [ani, weight] : weighted_anis) {
-        total_weight += weight;
+        all_anis.push_back(ani);
       }
       
-      // Calculate weighted percentile
-      uint64_t target_weight = (params.ani_percentile * total_weight) / 100;
-      uint64_t cumulative_weight = 0;
-      double selected_ani = weighted_anis.back().first; // default to max if not found
+      // Sort ANI values
+      std::sort(all_anis.begin(), all_anis.end());
       
-      for (const auto& [ani, weight] : weighted_anis) {
-        cumulative_weight += weight;
-        if (cumulative_weight >= target_weight) {
-          selected_ani = ani;
-          break;
-        }
+      // Calculate unweighted percentile
+      size_t target_index = (params.ani_percentile * all_anis.size()) / 100;
+      if (target_index >= all_anis.size()) {
+        target_index = all_anis.size() - 1;
       }
+      double selected_ani = all_anis[target_index];
       
       // Apply adjustment
       double adjusted_ani = selected_ani + (params.ani_adjustment / 100.0);
@@ -776,22 +769,21 @@ namespace skch
       if (adjusted_ani < 0.0) adjusted_ani = 0.0;
       if (adjusted_ani > 1.0) adjusted_ani = 1.0;
       
-      // Extract just ANI values for simple statistics
-      std::vector<double> all_anis;
-      for (const auto& [ani, weight] : weighted_anis) {
-        all_anis.push_back(ani);
-      }
+      // Calculate unweighted percentiles for display
+      double unweighted_25th = all_anis[all_anis.size() / 4];
+      double unweighted_50th = all_anis[all_anis.size() / 2];
+      double unweighted_75th = all_anis[(3 * all_anis.size()) / 4];
       
-      // Log the distribution of ANI values (unweighted for reference)
+      // Log ANI distribution
       std::cerr << "[wfmash::auto-identity] ANI distribution: min=" 
                 << std::fixed << std::setprecision(2) << all_anis.front() * 100 << "%, "
-                << "25th percentile=" << all_anis[all_anis.size() / 4] * 100 << "%, "
-                << "median=" << all_anis[all_anis.size() / 2] * 100 << "%, "
-                << "75th percentile=" << all_anis[(3 * all_anis.size()) / 4] * 100 << "%, "
+                << "25th percentile=" << unweighted_25th * 100 << "%, "
+                << "median=" << unweighted_50th * 100 << "%, "
+                << "75th percentile=" << unweighted_75th * 100 << "%, "
                 << "max=" << all_anis.back() * 100 << "%" << std::endl;
       
       std::cerr << "[wfmash::auto-identity] Selected ani" << params.ani_percentile 
-                << " (" << params.ani_percentile << "th length-weighted percentile) = " 
+                << " (" << params.ani_percentile << "th percentile) = " 
                 << std::fixed << std::setprecision(2) << selected_ani * 100 << "%";
       
       if (params.ani_adjustment != 0) {
