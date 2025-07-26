@@ -472,16 +472,20 @@ namespace skch
           }
         }
         
-        // Function to get thread-local reader (exact pattern from computeMap)
-        auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
-          thread_local faidx_reader_t* reader = nullptr;
-          if (reader == nullptr) {
-            reader = faidx_reader_create(meta);
+        // Function to get thread-local reader (per-file, per-thread)
+        auto getThreadLocalReader = [&](faidx_meta_t* meta, const std::string& filename) -> faidx_reader_t* {
+          thread_local std::map<std::string, faidx_reader_t*> readers;
+          
+          auto it = readers.find(filename);
+          if (it == readers.end() || it->second == nullptr) {
+            faidx_reader_t* reader = faidx_reader_create(meta);
             if (!reader) {
-              throw std::runtime_error("Failed to create thread-local reader");
+              throw std::runtime_error("Failed to create thread-local reader for " + filename);
             }
+            readers[filename] = reader;
+            return reader;
           }
-          return reader;
+          return it->second;
         };
         
         // Process each sequence in parallel with thread-local sketches
@@ -492,7 +496,7 @@ namespace skch
               if (meta_it == file_metas.end()) return;
               
               faidx_meta_t* meta = meta_it->second;
-              faidx_reader_t* reader = getThreadLocalReader(meta);
+              faidx_reader_t* reader = getThreadLocalReader(meta, seq_info.file);
               
               // Get sequence info from idManager
               auto it = seqMap.find(seq_info.name);
