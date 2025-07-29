@@ -39,32 +39,32 @@ struct Parameters
     int alphabetSize;                                 //alphabet size
     offset_t referenceSize;                           //Approximate reference size
     float percentageIdentity;                         //user defined threshold for good similarity
-    bool stage2_full_scan;                            //Instead of using the best intersection for a given candidate region, compute the minhash for every position in the window
-    bool stage1_topANI_filter;                        //Use the ANI filter in stage 1
+    bool stage2_full_scan = false;                    //Instead of using the best intersection for a given candidate region, compute the minhash for every position in the window
+    bool stage1_topANI_filter = false;                //Use the ANI filter in stage 1
     float ANIDiff;                                    //ANI distance threshold below best mapping to retain in stage 1 filtering
     float ANIDiffConf;                                //Confidence of stage 1 ANI filtering threshold
     int filterMode;                                   //filtering mode in mashmap
     uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment
     uint32_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
-    bool dropRand;                                    //drop mappings w/ same score until only numMappingsForSegment remain
+    bool dropRand = false;                            //drop mappings w/ same score until only numMappingsForSegment remain
     int threads;                                      //execution thread count
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
     stdfs::path indexFilename;                        //output file name of index
-    bool overwrite_index;                             //overwrite index if it exists
-    bool create_index_only;                           //only create index and exit
-    bool split;                                       //Split read mapping (done if this is true)
-    bool lower_triangular;                            // set to true if we should filter out half of the mappings
-    bool skip_self;                                   //skip self mappings
-    bool skip_prefix;                                 //skip mappings to sequences with the same prefix
+    bool overwrite_index = false;                     //overwrite index if it exists
+    bool create_index_only = false;                   //only create index and exit
+    bool split = false;                               //Split read mapping (done if this is true)
+    bool lower_triangular = false;                    // set to true if we should filter out half of the mappings
+    bool skip_self = false;                           //skip self mappings
+    bool skip_prefix = false;                         //skip mappings to sequences with the same prefix
     char prefix_delim;                                //the prefix delimiter
     std::string target_list;                          //file containing list of target sequences
     std::string target_prefix;                        //prefix for target sequences to use
-    bool mergeMappings;                               //if we should merge consecutive segment mappings
-    bool keep_low_pct_id;                             //true if we should keep mappings whose estimated identity < percentageIdentity
-    bool report_ANI_percentage;                       //true if ANI should be in [0,100] as opposed to [0,1] (this is necessary for wfmash
-    bool filterLengthMismatches;                      //true if filtering out length mismatches
+    bool mergeMappings = false;                       //if we should merge consecutive segment mappings
+    bool keep_low_pct_id = false;                     //true if we should keep mappings whose estimated identity < percentageIdentity
+    bool report_ANI_percentage = false;               //true if ANI should be in [0,100] as opposed to [0,1] (this is necessary for wfmash
+    bool filterLengthMismatches = false;              //true if filtering out length mismatches
     float kmerComplexityThreshold;                    //minimum kmer complexity to consider (default 0)
 
     std::string query_list;                           // file containing list of query sequence names
@@ -74,11 +74,11 @@ struct Parameters
     double hgNumerator = 1.0;                         // Numerator for the hypergeometric filter's Jaccard similarity calculation
     uint64_t totalReferenceSize = 0;                  // Total size of all reference sequences
     uint64_t estimatedUniqueKmers = 0;                // Estimate of total unique k-mers
-    bool use_spaced_seeds;                            //
+    bool use_spaced_seeds = false;                    //
     ales_params spaced_seed_params;                   //
     double spaced_seed_sensitivity;                   //
     std::vector<ales::spaced_seed> spaced_seeds;      //
-    bool world_minimizers;
+    bool world_minimizers = false;
     uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
     double overlap_threshold;                         // minimum overlap for a mapping to be considered
     int64_t scaffold_max_deviation;                  // max diagonal deviation from scaffold chains
@@ -86,7 +86,7 @@ struct Parameters
     int64_t scaffold_min_length = 50000;            // minimum scaffold block length
     std::string scaffold_output_file;               // optional file to output scaffold mappings
     
-    bool legacy_output;
+    bool legacy_output = false;
     //std::unordered_set<std::string> high_freq_kmers;  //
     int64_t index_by_size = std::numeric_limits<int64_t>::max();  // Target total size of sequences for each index subset
     int minimum_hits = -1;  // Minimum number of hits required for L1 filtering (-1 means auto)
