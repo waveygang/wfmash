@@ -503,15 +503,25 @@ namespace skch
                       exit(1);
                   }
                   
+                  // Thread-local reader wrapper that ensures cleanup
+                  struct ReaderWrapper {
+                      faidx_reader_t* reader = nullptr;
+                      ~ReaderWrapper() {
+                          if (reader) {
+                              faidx_reader_destroy(reader);
+                          }
+                      }
+                  };
+                  
                   auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
-                      thread_local faidx_reader_t* reader = nullptr;
-                      if (reader == nullptr) {
-                          reader = faidx_reader_create(meta);
-                          if (!reader) {
+                      thread_local ReaderWrapper wrapper;
+                      if (wrapper.reader == nullptr) {
+                          wrapper.reader = faidx_reader_create(meta);
+                          if (!wrapper.reader) {
                               throw std::runtime_error("Failed to create thread-local reader");
                           }
                       }
-                      return reader;
+                      return wrapper.reader;
                   };
                   
                   for (const auto& queryName : querySequenceNames) {

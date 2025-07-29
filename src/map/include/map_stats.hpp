@@ -499,17 +499,29 @@ namespace skch
           }
         }
         
+        // Thread-local reader map wrapper that ensures cleanup
+        struct ReaderMapWrapper {
+          std::map<std::string, faidx_reader_t*> readers;
+          ~ReaderMapWrapper() {
+            for (auto& [filename, reader] : readers) {
+              if (reader) {
+                faidx_reader_destroy(reader);
+              }
+            }
+          }
+        };
+        
         // Function to get thread-local reader (per-file, per-thread)
         auto getThreadLocalReader = [&](faidx_meta_t* meta, const std::string& filename) -> faidx_reader_t* {
-          thread_local std::map<std::string, faidx_reader_t*> readers;
+          thread_local ReaderMapWrapper reader_map;
           
-          auto it = readers.find(filename);
-          if (it == readers.end() || it->second == nullptr) {
+          auto it = reader_map.readers.find(filename);
+          if (it == reader_map.readers.end() || it->second == nullptr) {
             faidx_reader_t* reader = faidx_reader_create(meta);
             if (!reader) {
               throw std::runtime_error("Failed to create thread-local reader for " + filename);
             }
-            readers[filename] = reader;
+            reader_map.readers[filename] = reader;
             return reader;
           }
           return it->second;
