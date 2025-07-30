@@ -36,6 +36,15 @@ option(ASAN "Use address sanitiser (Debug build only)" OFF)
 option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
 option(VENDOR_HTSLIB "Download and build htslib instead of using system version" OFF)
+option(VENDOR_EVERYTHING "Download and build all dependencies (enables BUILD_STATIC and VENDOR_HTSLIB)" OFF)
+
+# Enable static build and htslib vendoring when VENDOR_EVERYTHING is ON
+if (VENDOR_EVERYTHING)
+  set(BUILD_STATIC ON CACHE BOOL "Build static binary" FORCE)
+  set(VENDOR_HTSLIB ON CACHE BOOL "Download and build htslib instead of using system version" FORCE)
+  set(BUILD_DEPS ON CACHE BOOL "Build external dependencies" FORCE)
+  message(STATUS "VENDOR_EVERYTHING enabled - forcing BUILD_STATIC=ON, VENDOR_HTSLIB=ON, BUILD_DEPS=ON")
+endif()
 
 if (NOT DISABLE_LTO)
   include(CheckIPOSupported) # adds lto
@@ -49,7 +58,12 @@ endif()
 if (BUILD_STATIC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
   set(BUILD_SHARED_LIBS OFF)
-  set(CMAKE_EXE_LINKER_FLAGS "-static")
+  # Use -static-libgcc -static-libstdc++ instead of full -static for better compatibility
+  if (VENDOR_EVERYTHING)
+    set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
+  else()
+    set(CMAKE_EXE_LINKER_FLAGS "-static")
+  endif()
   set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
 else ()
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -57,9 +71,14 @@ endif ()
 
 find_package(PkgConfig REQUIRED)
 # include(FindCURL) # for htslib?
-find_package(ZLIB REQUIRED)
-find_package(BZip2 REQUIRED)
-find_package(LibLZMA REQUIRED)
+
+# When vendoring everything, we'll build these ourselves
+if (NOT VENDOR_EVERYTHING)
+  find_package(ZLIB REQUIRED)
+  find_package(BZip2 REQUIRED)
+  find_package(LibLZMA REQUIRED)
+endif()
+
 find_package(Threads REQUIRED)
 find_package(OpenMP REQUIRED)
 
@@ -180,6 +199,43 @@ if (VENDOR_HTSLIB)
 endif()
 
 if (BUILD_DEPS)
+  # Build core system libraries when vendoring everything
+  if (VENDOR_EVERYTHING)
+    ExternalProject_Add(zlib_vendor
+      URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/zlib
+      CMAKE_ARGS
+        -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/zlib
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      BUILD_COMMAND cmake --build . --config Release
+      INSTALL_COMMAND cmake --install . --config Release
+    )
+
+    ExternalProject_Add(bzip2_vendor
+      URL https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/bzip2
+      CONFIGURE_COMMAND ""
+      BUILD_COMMAND $(MAKE) -f Makefile libbz2.a CC=${CMAKE_C_COMPILER} CFLAGS=-fPIC
+      INSTALL_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/bzip2/lib ${CMAKE_CURRENT_BINARY_DIR}/bzip2/include && 
+                      cp libbz2.a ${CMAKE_CURRENT_BINARY_DIR}/bzip2/lib/ && 
+                      cp bzlib.h ${CMAKE_CURRENT_BINARY_DIR}/bzip2/include/
+      BUILD_IN_SOURCE 1
+    )
+
+    ExternalProject_Add(xz_vendor
+      URL https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.gz
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/xz
+      CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/xz --enable-static --disable-shared --disable-doc
+      BUILD_COMMAND $(MAKE)
+      INSTALL_COMMAND $(MAKE) install
+      BUILD_IN_SOURCE 1
+    )
+  endif()
+
   ExternalProject_Add(htslib
     URL https://github.com/samtools/htslib/releases/download/1.20/htslib-1.20.tar.bz2
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
@@ -194,7 +250,7 @@ if (BUILD_DEPS)
     URL https://mirror.ibcp.fr/pub/gnu/gsl/gsl-2.8.tar.gz
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gsl
-    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gsl
+    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/gsl --enable-static --disable-shared
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND $(MAKE) install
     BUILD_IN_SOURCE 1
@@ -207,17 +263,27 @@ if (BUILD_DEPS)
     CMAKE_ARGS
       -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/libdeflate
       -DCMAKE_BUILD_TYPE=Release
+      -DLIBDEFLATE_BUILD_STATIC_LIB=ON
+      -DLIBDEFLATE_BUILD_SHARED_LIB=OFF
     BUILD_COMMAND cmake --build . --config Release
     INSTALL_COMMAND cmake --install . --config Release
     BUILD_IN_SOURCE 1
   )
 
-  add_dependencies(wfmash htslib gsl libdeflate)
 endif()
 
 add_executable(wfmash
   src/common/utils.cpp
   src/interface/main.cpp)
+
+# Add dependencies after target creation
+if (BUILD_DEPS)
+  if (VENDOR_EVERYTHING)
+    add_dependencies(wfmash zlib_vendor bzip2_vendor xz_vendor htslib gsl libdeflate)
+  else()
+    add_dependencies(wfmash htslib gsl libdeflate)
+  endif()
+endif()
 
 # Add dependency on vendored htslib if using it
 if (VENDOR_HTSLIB)
@@ -225,18 +291,39 @@ if (VENDOR_HTSLIB)
 endif()
 
 if (BUILD_DEPS)
-  target_include_directories(wfmash PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}/htslib/include
-    ${CMAKE_CURRENT_BINARY_DIR}/gsl/include
-    ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/include
-  )
+  if (VENDOR_EVERYTHING)
+    target_include_directories(wfmash PRIVATE
+      ${CMAKE_CURRENT_BINARY_DIR}/htslib/include
+      ${CMAKE_CURRENT_BINARY_DIR}/gsl/include
+      ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/include
+      ${CMAKE_CURRENT_BINARY_DIR}/zlib/include
+      ${CMAKE_CURRENT_BINARY_DIR}/bzip2/include
+      ${CMAKE_CURRENT_BINARY_DIR}/xz/include
+    )
 
-  target_link_libraries(wfmash
-    ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgsl.a
-    ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgslcblas.a
-    ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
-    ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib/libdeflate.a
-  )
+    target_link_libraries(wfmash
+      ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgsl.a
+      ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgslcblas.a
+      ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
+      ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib64/libdeflate.a
+      ${CMAKE_CURRENT_BINARY_DIR}/zlib/lib/libz.a
+      ${CMAKE_CURRENT_BINARY_DIR}/bzip2/lib/libbz2.a
+      ${CMAKE_CURRENT_BINARY_DIR}/xz/lib/liblzma.a
+    )
+  else()
+    target_include_directories(wfmash PRIVATE
+      ${CMAKE_CURRENT_BINARY_DIR}/htslib/include
+      ${CMAKE_CURRENT_BINARY_DIR}/gsl/include
+      ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/include
+    )
+
+    target_link_libraries(wfmash
+      ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgsl.a
+      ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgslcblas.a
+      ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
+      ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib/libdeflate.a
+    )
+  endif()
 else()
   #find_package(HTSLIB REQUIRED)
   #find_package(GSL REQUIRED)
@@ -248,7 +335,9 @@ else()
   #  ${LIBDEFLATE_INCLUDE_DIR}
   #)
 
-  if (VENDOR_HTSLIB)
+  if (VENDOR_EVERYTHING)
+    # All libraries are built from source, don't use system libs
+  elseif (VENDOR_HTSLIB)
     target_include_directories(wfmash PRIVATE ${HTSLIB_INCLUDE_DIR})
     target_link_libraries(wfmash
       gsl
@@ -278,11 +367,17 @@ target_link_libraries(wfmash
   m
   pthread
   rt
-  lzma
-  bz2
-  z
   Threads::Threads
 )
+
+# Only link system compression libraries if not vendoring everything
+if (NOT VENDOR_EVERYTHING)
+  target_link_libraries(wfmash
+    lzma
+    bz2
+    z
+  )
+endif()
 
 if (PROFILER)
   target_link_libraries(wfmash profiler)
