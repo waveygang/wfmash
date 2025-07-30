@@ -58,12 +58,8 @@ endif()
 if (BUILD_STATIC)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
   set(BUILD_SHARED_LIBS OFF)
-  # Use -static-libgcc -static-libstdc++ instead of full -static for better compatibility
-  if (VENDOR_EVERYTHING)
-    set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
-  else()
-    set(CMAKE_EXE_LINKER_FLAGS "-static")
-  endif()
+  # Use static linking for C++ stdlib and custom libraries, but allow dynamic system libs
+  set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
   set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
 else ()
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -77,6 +73,22 @@ if (NOT VENDOR_EVERYTHING)
   find_package(ZLIB REQUIRED)
   find_package(BZip2 REQUIRED)
   find_package(LibLZMA REQUIRED)
+endif()
+
+# Handle static pthread linking properly
+if (BUILD_STATIC)
+  set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+  set(CMAKE_HAVE_THREADS_LIBRARY 1)
+  set(CMAKE_USE_WIN32_THREADS_INIT 0)
+  set(CMAKE_USE_PTHREADS_INIT 1)
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  
+  # Handle static OpenMP linking
+  set(OpenMP_C_FLAGS "-fopenmp")
+  set(OpenMP_CXX_FLAGS "-fopenmp")
+  set(OpenMP_C_LIB_NAMES "gomp")
+  set(OpenMP_CXX_LIB_NAMES "gomp")
+  set(OpenMP_gomp_LIBRARY "/usr/lib/gcc/x86_64-redhat-linux/11/libgomp.a")
 endif()
 
 find_package(Threads REQUIRED)
