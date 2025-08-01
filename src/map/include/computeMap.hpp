@@ -875,8 +875,10 @@ namespace skch
               });
           }
           
-          executor.run(batchTaskflow).wait();
-          
+          size_t fragThreads = std::max<size_t>(1, param.threads);
+	  tf::Executor fragmentExecutor(fragThreads);
+	  fragmentExecutor.run(batchTaskflow).wait();
+
           // Post-process and output results
           finalizeQueryResults(queryData, allMappings, progress, subsetMappings, subsetMappings_mutex, outstream);
       }
