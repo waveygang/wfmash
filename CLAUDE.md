@@ -1,116 +1,132 @@
-# CLAUDE.md - Memory Optimization Implementation Guide
+# CLAUDE.md - wfmash Development and Testing Guide
 
-## Project Overview
-This document tracks the implementation of memory-efficient mapping structures in wfmash to replace the large MappingResult struct (240+ bytes) with a compact MinimalMapping struct (32 bytes).
+## Build Instructions
 
-## Stable Baseline Revision
-**Git SHA**: 8de04614196f34ca4189ccf61814e2d82ddaae58
-**Date**: 2025-07-22
-**Description**: Last stable revision before memory optimization changes. Use this for baseline generation and comparison.
+### Prerequisites
+- CMake (version 3.12 or higher)
+- C++ compiler with C++17 support
+- zlib development libraries
 
-## Implementation Strategy: "Rip and Replace"
-The strategy is to perform a direct swap of the primary mapping object, then use compiler errors as a precise to-do list for adapting the surrounding code.
+### Building wfmash
+```bash
+# Create build directory
+mkdir -p build
+cd build
 
-### Core Principles
-1. **Never expand compressed mappings unless absolutely necessary** - Only expand for complex algorithms or final output
-2. **Use expand/compress wrappers** - Don't rewrite complex algorithms; wrap them with conversion functions
-3. **Trust the compiler** - Compilation errors after the initial change are your roadmap
+# Configure with CMake
+cmake ..
 
-## Key Data Structures
+# Build (use -j for parallel compilation)
+make -j4
 
-### MinimalMapping (32 bytes)
-```cpp
-struct MinimalMapping {
-    uint32_t ref_seqId;         // 4 bytes
-    uint32_t ref_pos;           // 4 bytes  
-    uint32_t query_pos;         // 4 bytes
-    uint32_t length;            // 4 bytes
-    uint32_t n_merged;          // 4 bytes
-    uint32_t conservedSketches; // 4 bytes
-    uint16_t identity;          // 2 bytes (scaled 0-10000)
-    uint8_t  flags;             // 1 byte (strand, discard, overlapped)
-    uint8_t  kmerComplexity;    // 1 byte (scaled 0-100)
-};
+# The binary will be in build/bin/wfmash
 ```
 
-### Conversion Functions
-- `compressMapping(const FullMapping&) -> MinimalMapping`
-- `expandMapping(const MinimalMapping&, seqno_t querySeqId, offset_t queryLen) -> FullMapping`
-
-## Pipeline Stages & Testing
-
-### 1. Raw Mappings (L2 Mapping)
-- **Function**: `doL2Mapping` in `computeMap.hpp`
-- **Test**: `wfmash -m -t 8 -M -f none -S 0 cerevisiae.chrV.fa.gz > baseline.raw.paf`
-- **Purpose**: Tests initial mapping generation and compression
-
-### 2. Merged Mappings (Union-Find)
-- **Function**: `mergeMappingsInRange` in `mappingFilter.hpp`
-- **Test**: `wfmash -m -t 8 -f none -S 0 cerevisiae.chrV.fa.gz > baseline.merged.paf`
-- **Purpose**: Tests the complex union-find merge algorithm
-- **Note**: Requires full mapping data; must use expand-execute-compress pattern
-
-### 3. Scaffold Filtering
-- **Function**: `filterByScaffolds` in `mappingFilter.hpp`
-- **Test**: Part of full pipeline test
-- **Purpose**: Identifies large syntenic blocks
-- **Note**: Complex two-tier filtering; requires full mapping data
-
-### 4. Full Pipeline
-- **Test**: `wfmash -m -t 8 cerevisiae.chrV.fa.gz > baseline.full.paf`
-- **Purpose**: Final acceptance test of all components
-
-## Implementation Checklist
-
-### Phase 1: Core Structure Changes
-1. Create `src/map/include/compact_mapping.hpp` with MinimalMapping and conversion functions
-2. Modify `base_types.hpp`: rename MappingResult to FullMapping, redefine MappingResultsVector_t
-3. Update `computeMap.hpp`: compress mappings at creation
-4. Update `mappingOutput.hpp`: expand mappings for reporting
-
-### Phase 2: Fix Compilation Errors
-For each error where MinimalMapping lacks required fields:
-1. Create temporary FullMappingResultsVector_t at function entry
-2. Expand all MinimalMappings to FullMappings
-3. Run existing algorithm unchanged on full mappings
-4. Compress results back to MinimalMappings
-
-### Key Functions Requiring Wrappers
-- `mergeMappingsInRange` - Complex union-find algorithm
-- `filterByScaffolds` - Two-tier syntenic filtering
-- `filterByGroup` - Plane-sweep filtering
-- Any sorting functions using fields not in MinimalMapping
+### Clean Build
+```bash
+rm -rf build
+mkdir build
+cd build
+cmake ..
+make -j4
+```
 
 ## Testing Protocol
 
-### Before Any Changes
-Generate all baselines:
+### Test Data
+The primary test file is `cerevisiae.chrV.fa.gz` which should be in the project root.
+
+### Test Commands
+
+#### 1. Raw Mappings (L2 Mapping)
+Tests initial mapping generation without merging or filtering:
 ```bash
-# Raw mappings (no merging, no filtering)
 wfmash -m -t 8 -M -f none -S 0 cerevisiae.chrV.fa.gz > baseline.raw.paf
+```
 
-# Merged mappings (merging only, no filtering)
+#### 2. Merged Mappings (Union-Find)
+Tests the mapping merge algorithm without filtering:
+```bash
 wfmash -m -t 8 -f none -S 0 cerevisiae.chrV.fa.gz > baseline.merged.paf
+```
 
-# Full pipeline (all processing)
+#### 3. Full Pipeline
+Tests complete mapping pipeline with all processing:
+```bash
 wfmash -m -t 8 cerevisiae.chrV.fa.gz > baseline.full.paf
 ```
 
-### After Each Change
-1. Generate current outputs with same commands
-2. Check in order: raw → merged → full
-3. First failure indicates which stage broke
+### CTest Integration
+If CTest is configured, you can run tests with:
+```bash
+cd build
+ctest
+```
 
-## Memory Impact
-- Original MappingResult: 240+ bytes per mapping
-- MinimalMapping: 32 bytes per mapping
-- Expected reduction: ~87% memory usage for mapping storage
+## Comparing Outputs
 
-## Critical Warnings
-1. Do NOT modify the union-find merge algorithm - it's too complex
-2. Do NOT modify the scaffold filtering logic - it uses two-tier filtering
-3. Always pass querySeqId and queryLen when expanding mappings
-4. The ScaffoldIndex mentioned in MAP_COMPACT.md is a separate optimization - ignore for now
+### PAF Format Comparison
+When comparing PAF outputs after changes:
+```bash
+# Sort and compare outputs (PAF columns can vary in order)
+sort baseline.full.paf > baseline.sorted.paf
+sort current.full.paf > current.sorted.paf
+diff baseline.sorted.paf current.sorted.paf
+```
 
-## Status Updates
-- 2025-07-22: Initial documentation created, stable baseline recorded
+### Key Fields to Check
+- Query and target sequence names
+- Start and end positions
+- Strand orientation
+- Mapping quality/identity scores
+
+## Common Issues
+
+### Missing Test Data
+If `cerevisiae.chrV.fa.gz` is missing, download from:
+```bash
+# Example command to download test data
+wget [URL_TO_TEST_DATA]/cerevisiae.chrV.fa.gz
+```
+
+### Memory Testing
+For memory usage analysis:
+```bash
+# Run with valgrind
+valgrind --tool=massif ./build/bin/wfmash -m -t 8 cerevisiae.chrV.fa.gz > /dev/null
+ms_print massif.out.[PID]
+```
+
+## Development Workflow
+
+### Creating Feature Branches
+```bash
+# Create new branch from current branch
+git checkout -b feature-name
+
+# Make changes and test
+# ... edit files ...
+make -j4
+# ... run tests ...
+
+# Commit changes
+git add -p  # Interactive staging
+git commit -m "Descriptive commit message"
+```
+
+### Testing Changes
+After making changes:
+1. Rebuild: `cd build && make -j4`
+2. Run basic test: `./bin/wfmash -m -t 8 cerevisiae.chrV.fa.gz > test.paf`
+3. Compare output: `diff baseline.full.paf test.paf`
+
+## Current Work
+
+### Recent Fixes
+- **stdout mapping truncation**: Fixed issue where mapping output was truncated when writing to stdout due to repeated opening/closing of stdout for each reference subset (branch: `fix-stdout-mapping-truncation`)
+
+### Git Workflow Pattern
+Always checkpoint work in git commits with distinct changesets:
+1. Work on single, focused changes
+2. Commit to local non-main branches with descriptive names
+3. Write clear commit messages explaining what and why
