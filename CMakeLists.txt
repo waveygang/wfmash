@@ -21,8 +21,8 @@ enable_testing()
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
 
-set(CMAKE_CXX_STANDARD 17)
-# set(CMAKE_CXX_STANDARD 20) # because of sequenceIds.hpp:101:23: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
+#set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20) # because of sequenceIds.hpp:101:23: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Falling back to different standard is not allowed.
 set(CMAKE_CXX_EXTENSIONS OFF)  # Make sure no compiler-specific features are used.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

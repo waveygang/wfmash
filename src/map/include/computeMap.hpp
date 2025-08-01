@@ -1,6 +1,6 @@
 /**
  * @file    computeMap.hpp
- * @brief   Main Map class that implements the sequence mapping logic
+ * @brief   Main Map class that implements the sequence mapping logic with performance optimizations
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
@@ -27,6 +27,8 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <chrono>
 #include <sstream>
+#include <semaphore>
+#include <memory_resource>
 #include "taskflow/taskflow.hpp"
 
 // Include the reentrant FASTA/BGZF index implementation
@@ -55,7 +57,7 @@ namespace skch
 {
   /**
    * @class     skch::Map
-   * @brief     L1 and L2 mapping stages
+   * @brief     L1 and L2 mapping stages with performance optimizations
    */
   class Map
   {
@@ -99,43 +101,129 @@ namespace skch
       using FilterUtils = MappingFilterUtils;
       using OutputHandler = MappingOutput;
 
-    void processFragment(const FragmentData& fragment, 
-                         std::vector<IntervalPoint>& intervalPoints,
-                         std::vector<L1_candidateLocus_t>& l1Mappings,
-                         MappingResultsVector_t& l2Mappings,
-                         QueryMetaData<MinVec_Type>& Q,
-                         std::vector<MappingResult>& thread_local_results) {
-        
-        intervalPoints.clear();
-        l1Mappings.clear();
-        l2Mappings.clear();
-        thread_local_results.clear();
+      // Performance optimization: Configurable thresholds
+      static constexpr size_t SMALL_QUERY_THRESHOLD = 100;  // fragments
+      static constexpr size_t FRAGMENT_BATCH_SIZE = 16;     // fragments per batch
+      static constexpr std::ptrdiff_t MAX_CONCURRENT_QUERIES = 8; // max queries in flight
+      static constexpr size_t MEMORY_POOL_SIZE = 64 * 1024 * 1024; // 64MB per thread
 
-        Q.seq = const_cast<char*>(fragment.seq);
-        Q.len = fragment.len;
-        Q.fullLen = fragment.fullLen;
-        Q.seqId = fragment.seqId;
-        Q.seqName = fragment.seqName;
-        Q.refGroup = fragment.refGroup;
+      // Structure to hold fragment processing context with pre-allocated memory
+      struct FragmentContext {
+          std::vector<IntervalPoint> intervalPoints;
+          std::vector<L1_candidateLocus_t> l1Mappings;
+          MappingResultsVector_t l2Mappings;
+          QueryMetaData<MinVec_Type> Q;
+          std::vector<MappingResult> results;
+          
+          // Pre-allocate capacity for better performance
+          FragmentContext() {
+              intervalPoints.reserve(1000);
+              l1Mappings.reserve(100);
+              l2Mappings.reserve(100);
+              results.reserve(500);
+          }
+          
+          void clear() {
+              intervalPoints.clear();
+              l1Mappings.clear();
+              l2Mappings.clear();
+              results.clear();
+          }
+      };
 
-        mapSingleQueryFrag(Q, intervalPoints, l1Mappings, l2Mappings);
+      // Thread-local memory pool for fragment contexts
+      static thread_local std::unique_ptr<FragmentContext> tls_fragmentContext;
+      
+      // Semaphore for stream processing control
+      std::counting_semaphore<MAX_CONCURRENT_QUERIES> queryProcessingSemaphore{MAX_CONCURRENT_QUERIES};
 
-        std::for_each(l2Mappings.begin(), l2Mappings.end(), [&](MappingResult &e){
-            // For compact struct: adjust query start position to be relative to full sequence
-            e.queryStartPos += fragment.fragmentIndex * param.windowLength;
-            // blockLength remains as fragment length (already set during mapping creation)
-        });
+      // Batch of fragments for processing
+      struct FragmentBatch {
+          std::vector<FragmentData> fragments;
+          MappingResultsVector_t results;
+          
+          void reserve(size_t size) {
+              fragments.reserve(size);
+              results.reserve(size * 10); // Estimate 10 mappings per fragment
+          }
+      };
 
-        if (!l2Mappings.empty()) {
-            thread_local_results.insert(thread_local_results.end(), 
-                                       l2Mappings.begin(), 
-                                       l2Mappings.end());
-        }
-        
-        if (fragment.output) {
-            fragment.output->progress.increment(fragment.len);
-        }
-    }
+      void processFragment(const FragmentData& fragment, FragmentContext& ctx) {
+          ctx.intervalPoints.clear();
+          ctx.l1Mappings.clear();
+          ctx.l2Mappings.clear();
+          ctx.results.clear();
+
+          ctx.Q.seq = const_cast<char*>(fragment.seq);
+          ctx.Q.len = fragment.len;
+          ctx.Q.fullLen = fragment.fullLen;
+          ctx.Q.seqId = fragment.seqId;
+          ctx.Q.seqName = fragment.seqName;
+          ctx.Q.refGroup = fragment.refGroup;
+
+          mapSingleQueryFrag(ctx.Q, ctx.intervalPoints, ctx.l1Mappings, ctx.l2Mappings);
+
+          std::for_each(ctx.l2Mappings.begin(), ctx.l2Mappings.end(), [&](MappingResult &e){
+              // For compact struct: adjust query start position to be relative to full sequence
+              e.queryStartPos += fragment.fragmentIndex * param.windowLength;
+              // blockLength remains as fragment length (already set during mapping creation)
+          });
+
+          if (!ctx.l2Mappings.empty()) {
+              ctx.results.insert(ctx.results.end(), 
+                                std::make_move_iterator(ctx.l2Mappings.begin()), 
+                                std::make_move_iterator(ctx.l2Mappings.end()));
+          }
+          
+          if (fragment.output) {
+              fragment.output->progress.increment(fragment.len);
+          }
+      }
+
+      // Process a batch of fragments
+      void processFragmentBatch(const FragmentBatch& batch, FragmentContext& ctx,
+                               std::shared_ptr<progress_meter::ProgressMeter> progress) {
+          for (const auto& fragment : batch.fragments) {
+              ctx.clear();
+              
+              ctx.Q.seq = const_cast<char*>(fragment.seq);
+              ctx.Q.len = fragment.len;
+              ctx.Q.fullLen = fragment.fullLen;
+              ctx.Q.seqId = fragment.seqId;
+              ctx.Q.seqName = fragment.seqName;
+              ctx.Q.refGroup = fragment.refGroup;
+
+              mapSingleQueryFrag(ctx.Q, ctx.intervalPoints, ctx.l1Mappings, ctx.l2Mappings);
+
+              std::for_each(ctx.l2Mappings.begin(), ctx.l2Mappings.end(), [&](MappingResult &e){
+                  e.queryStartPos += fragment.fragmentIndex * param.windowLength;
+              });
+
+              if (!ctx.l2Mappings.empty()) {
+                  ctx.results.reserve(ctx.results.size() + ctx.l2Mappings.size());
+                  ctx.results.insert(ctx.results.end(), 
+                                    std::make_move_iterator(ctx.l2Mappings.begin()), 
+                                    std::make_move_iterator(ctx.l2Mappings.end()));
+              }
+              
+              progress->increment(fragment.len);
+          }
+      }
+
+      // Structure to hold query processing results
+      struct QueryResults {
+          std::string queryName;
+          seqno_t seqId;
+          std::string sequence;
+          MappingResultsVector_t mappings;
+          int refGroup;
+          offset_t queryLen;
+          size_t fragmentCount;
+          
+          QueryResults() {
+              mappings.reserve(1000); // Pre-allocate for typical case
+          }
+      };
       
     public:
 
@@ -328,8 +416,7 @@ namespace skch
 
       void mapQuery() {
           tf::Executor executor(param.threads);
-          tf::Taskflow taskflow;
-
+          
           std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
           std::mutex combinedMappings_mutex;
 
@@ -402,8 +489,9 @@ namespace skch
                   continue;
               }
               
-              auto subset_flow = std::make_shared<tf::Taskflow>();
-
+              // Build index for this subset
+              buildIndexForSubset(target_subset, subset_idx, target_subsets.size());
+              
               uint64_t subset_query_length = 0;
               for (const auto& queryName : querySequenceNames) {
                   subset_query_length += idManager->getSequenceLength(idManager->getSequenceId(queryName));
@@ -413,75 +501,12 @@ namespace skch
                   subset_query_length,
                   "[wfmash::mashmap] mapping ",
                   param.use_progress_bar
-                  );
-
-              auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
-                  if (!param.indexFilename.empty()) {
-                      std::string indexFilename = param.indexFilename.string();
-                      static std::ifstream indexStream;
-                      static bool index_opened = false;
-                      static size_t file_subset_count = 0;
-                      
-                      if (!index_opened) {
-                          indexStream.open(indexFilename, std::ios::binary);
-                          if (!indexStream) {
-                              std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
-                              exit(1);
-                          }
-                          
-                          uint64_t magic_number = 0;
-                          indexStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
-                          if (magic_number != 0xDEADBEEFCAFEBABE) {
-                              std::cerr << "Error: Invalid index file format (wrong magic number)" << std::endl;
-                              exit(1);
-                          }
-                          
-                          size_t batch_idx, total_batches;
-                          indexStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
-                          indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
-                          
-                          file_subset_count = total_batches;
-                          std::cerr << "[wfmash::mashmap] Index file contains " << file_subset_count 
-                                    << " subsets" << std::endl;
-                          
-                          int64_t batch_size = 0;
-                          indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
-                          if (batch_size > 0) {
-                              param.index_by_size = batch_size;
-                              std::cerr << "[wfmash::mashmap] Using batch size " << batch_size 
-                                        << " from index" << std::endl;
-                          }
-                          
-                          indexStream.seekg(0, std::ios::beg);
-                          index_opened = true;
-                      }
-                      
-                      refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
-                      size_t seq_count = refSketch->getSequenceCount();
-                  } else {
-                      auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
-                          100,
-                          "[wfmash::mashmap] indexing",
-                          param.use_progress_bar);
-                  
-                      if (!sketch_index_progress->is_finished.load()) {
-                          sketch_index_progress->reset_timer();
-                      }
-                      
-                      refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
-                  }
-              }).name("build_index_" + std::to_string(subset_idx));
+              );
 
               auto subsetMappings = std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
               auto subsetMappings_mutex = std::make_shared<std::mutex>();
 
               auto outstream = std::make_shared<std::ofstream>();
-              auto outstream_mutex = std::make_shared<std::mutex>();
-              
-              // Scaffold progress tracking - simplified
-              auto scaffold_progress = std::shared_ptr<progress_meter::ProgressMeter>(nullptr);
-              auto scaffold_total_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
-              auto scaffold_completed_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
               
               if (param.filterMode != filter::ONETOONE) {
                   bool append = subset_idx > 0;
@@ -492,269 +517,40 @@ namespace skch
                   }
               }
 
-              auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
-                                                           outstream, outstream_mutex, scaffold_progress,
-                                                           scaffold_total_work, scaffold_completed_work, subset_flow](tf::Subflow& sf) {
-                  const auto& fileName = param.querySequences[0];
-    
-                  faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
-                  if (!query_meta) {
-                      std::cerr << "Error: Failed to load query FASTA index: " << fileName << std::endl;
-                      exit(1);
-                  }
-                  
-                  // Thread-local reader wrapper that ensures cleanup
-                  struct ReaderWrapper {
-                      faidx_reader_t* reader = nullptr;
-                      ~ReaderWrapper() {
-                          if (reader) {
-                              faidx_reader_destroy(reader);
-                          }
-                      }
-                  };
-                  
-                  auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
-                      thread_local ReaderWrapper wrapper;
-                      if (wrapper.reader == nullptr) {
-                          wrapper.reader = faidx_reader_create(meta);
-                          if (!wrapper.reader) {
-                              throw std::runtime_error("Failed to create thread-local reader");
-                          }
-                      }
-                      return wrapper.reader;
-                  };
-                  
-                  for (const auto& queryName : querySequenceNames) {
-                      faidx_reader_t* reader = getThreadLocalReader(query_meta);
-                      
-                      hts_pos_t seq_len;
-                      hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
-                      if (seq_total_len <= 0) {
-                          std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
-                          continue;
-                      }
-                      
-                      char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
-                      if (!seq_data) {
-                          std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
-                          continue;
-                      }
-                      
-                      std::string sequence(seq_data, seq_len);
-                      free(seq_data);
-            
-                      auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress,
-                                                    scaffold_total_work, scaffold_completed_work](tf::Subflow& query_sf) {
-                          seqno_t seqId = idManager->getSequenceId(queryName);
-                          auto input = std::make_shared<InputSeqProgContainer>(
-                              sequence, queryName, seqId, *progress);
-                          auto output = std::make_shared<QueryMappingOutput>(
-                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
-            
-                          int refGroup = idManager->getRefGroup(seqId);
-                          int noOverlapFragmentCount = input->len / param.windowLength;
-
-                          std::mutex results_mutex;
-
-                          // Regular fragments
-                          for(int i = 0; i < noOverlapFragmentCount; i++) {
-                              query_sf.emplace([&, i]() {
-                                  std::vector<MappingResult> all_fragment_results;
-                                  auto fragment = std::make_shared<FragmentData>(
-                                      &(sequence)[0u] + i * param.windowLength,
-                                      static_cast<int>(param.windowLength),
-                                      static_cast<int>(input->len),
-                                      seqId,
-                                      queryName,
-                                      refGroup,
-                                      i,
-                                      output
-                                  );
-
-                                  static std::once_flag first_fragment;
-                                  std::call_once(first_fragment, [&output]() {
-                                      output->progress.reset_timer();
-                                  });
-                                  
-                                  std::vector<IntervalPoint> intervalPoints;
-                                  std::vector<L1_candidateLocus_t> l1Mappings;
-                                  MappingResultsVector_t l2Mappings;
-                                  QueryMetaData<MinVec_Type> Q;
-                                  processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
-                                  
-                                  if (!all_fragment_results.empty()) {
-                                      std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.insert(
-                                          output->results.end(),
-                                          all_fragment_results.begin(),
-                                          all_fragment_results.end()
-                                      );
-                                  }
-                              });
-                          }
-
-                          // Handle final fragment if needed
-                          if (noOverlapFragmentCount >= 1 && input->len % param.windowLength != 0) {
-                              query_sf.emplace([&]() {
-                                  std::vector<MappingResult> all_fragment_results;
-                                  auto fragment = std::make_shared<FragmentData>(
-                                      &(sequence)[0u] + input->len - param.windowLength,
-                                      static_cast<int>(param.windowLength),
-                                      static_cast<int>(input->len),
-                                      seqId,
-                                      queryName,
-                                      refGroup,
-                                      noOverlapFragmentCount,
-                                      output
-                                  );
-
-                                  std::vector<IntervalPoint> intervalPoints;
-                                  std::vector<L1_candidateLocus_t> l1Mappings;
-                                  MappingResultsVector_t l2Mappings;
-                                  QueryMetaData<MinVec_Type> Q;
-                                  processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
-                                  
-                                  if (!all_fragment_results.empty()) {
-                                      std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.insert(
-                                          output->results.end(),
-                                          all_fragment_results.begin(),
-                                          all_fragment_results.end()
-                                      );
-                                  }
-                              });
-                          }
-
-                          query_sf.join();
-
-                          OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
-                          
-                          // Add timing and progress info for filtering phase
-                          auto filter_start = std::chrono::high_resolution_clock::now();
-                          
-                          // Only log during post-processing phase (after mapping is complete)
-                          if (progress->is_finished.load()) {
-                              // Log for all sequences during filtering, with more detail for large ones
-                              std::cerr << "[wfmash::mashmap] Filtering " << output->results.size() 
-                                        << " mappings for " << queryName 
-                                        << " (" << input->len << "bp)";
-                              if (param.scaffold_gap > 0) {
-                                  std::cerr << " [scaffold filtering enabled]";
-                              }
-                              std::cerr << "..." << std::endl;
-                          }
-                          
-                          auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
-                                                  scaffold_progress, scaffold_total_work, scaffold_completed_work);
-                          
-                          auto filter_end = std::chrono::high_resolution_clock::now();
-                          auto filter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(filter_end - filter_start);
-                          
-                          // Report long filtering times (only during post-processing)
-                          if (progress->is_finished.load() && filter_duration.count() > 1000) {
-                              std::cerr << "[wfmash::mashmap] Filtering " << queryName 
-                                        << " took " << std::fixed << std::setprecision(1) 
-                                        << filter_duration.count() / 1000.0 << "s" << std::endl;
-                          }
-
-                          auto& mappings = param.mergeMappings && param.split ?
-                                filteredResult.mergedMappings : filteredResult.nonMergedMappings;
-                          auto& chainInfo = param.mergeMappings && param.split ?
-                                filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
-
-                          if (param.filterMode == filter::ONETOONE) {
-                              std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
-                              (*subsetMappings)[seqId].insert(
-                                  (*subsetMappings)[seqId].end(),
-                                  std::make_move_iterator(mappings.begin()),
-                                  std::make_move_iterator(mappings.end())
-                              );
-                          } else {
-                              std::lock_guard<std::mutex> lock(*outstream_mutex);
-                              OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *outstream, *idManager, param, processMappingResults, input->len);
-                          }
-                      }).name("query_" + queryName);
-                  }
-                  
-                  faidx_meta_destroy(query_meta);
-              }).name("process_queries");
-
-              auto merge_task = subset_flow->emplace([this,
-                                                    subsetMappings,
-                                                    &combinedMappings,
-                                                    &combinedMappings_mutex]() {
-                  if (param.filterMode == filter::ONETOONE) {
-                      auto merge_start = std::chrono::high_resolution_clock::now();
-                      std::cerr << "[wfmash::mashmap] Starting merge of subset results..." << std::endl;
-                      
-                      std::lock_guard<std::mutex> lock(combinedMappings_mutex);
-                      size_t total_merged = 0;
-                      for (auto& [querySeqId, mappings] : *subsetMappings) {
-                          total_merged += mappings.size();
-                          combinedMappings[querySeqId].insert(
-                              combinedMappings[querySeqId].end(),
-                              std::make_move_iterator(mappings.begin()),
-                              std::make_move_iterator(mappings.end())
-                              );
-                      }
-                      
-                      auto merge_end = std::chrono::high_resolution_clock::now();
-                      auto merge_duration = std::chrono::duration_cast<std::chrono::seconds>(merge_end - merge_start);
-                      std::cerr << "[wfmash::mashmap] Merged " << total_merged 
-                                << " mappings in " << merge_duration.count() << "s" << std::endl;
-                  }
-              }).name("merge_results");
-
-              auto cleanup_task = subset_flow->emplace([this, outstream]() {
-                  if (param.filterMode != filter::ONETOONE && outstream->is_open()) {
-                      outstream->close();
-                  }
-                  
-                  delete refSketch;
-                  refSketch = nullptr;
-              }).name("cleanup");
-
-              buildIndex_task.precede(processQueries_task);
-              processQueries_task.precede(merge_task);
-              merge_task.precede(cleanup_task);
-
-              // Create a task to monitor mapping completion
-              auto mapping_complete = std::make_shared<std::atomic<bool>>(false);
-              auto monitor_task = std::make_unique<std::thread>([progress, mapping_complete, this]() {
-                  while (!mapping_complete->load()) {
-                      if (progress->is_finished.load()) {
-                          // Mapping phase complete, notify user immediately
-                          std::cerr << "[wfmash::mashmap] Mapping phase complete, starting post-processing";
-                          if (param.scaffold_gap > 0) {
-                              std::cerr << " (including scaffold filtering)";
-                          }
-                          std::cerr << "..." << std::endl;
-                          break;
-                      }
-                      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                  }
-              });
+              // Process all queries for this subset with optimized strategy
+              processQueriesForSubsetOptimized(executor, progress, subsetMappings, subsetMappings_mutex, outstream);
               
-              executor.run(*subset_flow).wait();
-              mapping_complete->store(true);
-              if (monitor_task->joinable()) {
-                  monitor_task->join();
+              // Wait for mapping to complete and notify user
+              progress->finish();
+              std::cerr << "[wfmash::mashmap] Mapping phase complete, starting post-processing";
+              if (param.scaffold_gap > 0) {
+                  std::cerr << " (including scaffold filtering)";
+              }
+              std::cerr << "..." << std::endl;
+              
+              // Merge results if needed
+              if (param.filterMode == filter::ONETOONE) {
+                  std::lock_guard<std::mutex> lock(combinedMappings_mutex);
+                  for (auto& [querySeqId, mappings] : *subsetMappings) {
+                      combinedMappings[querySeqId].insert(
+                          combinedMappings[querySeqId].end(),
+                          std::make_move_iterator(mappings.begin()),
+                          std::make_move_iterator(mappings.end())
+                      );
+                  }
               }
               
-              // Progress is already finished by the monitor thread
-              if (!progress->is_finished.load()) {
-                  progress->finish();
+              // Cleanup
+              if (param.filterMode != filter::ONETOONE && outstream->is_open()) {
+                  outstream->flush();
+                  outstream->close();
               }
               
-              // Wait for all tasks to complete
-              std::chrono::milliseconds wait_time(100);
-              while (executor.num_topologies() > 0) {
-                  std::this_thread::sleep_for(wait_time);
-              }
+              delete refSketch;
+              refSketch = nullptr;
               
-              std::cerr << "[wfmash::mashmap] Subset processing complete, results saved to: " 
-                        << param.outFileName << std::endl;
-              
+              std::cerr << "[wfmash::mashmap] Subset " << (subset_idx + 1) 
+                        << "/" << target_subsets.size() << " processing complete" << std::endl;
           }
 
           if (exit_after_indices) {
@@ -764,67 +560,471 @@ namespace skch
 
           // Final results processing for ONETOONE mode
           if (param.filterMode == filter::ONETOONE && !exit_after_indices) {
-              tf::Taskflow final_flow;
-              std::cerr << "[wfmash::mashmap] Processing final one-to-one filtering" << std::endl;
-              
-              auto final_task = final_flow.emplace([&]() {
-                  size_t total_mappings = 0;
-                  for (auto& [querySeqId, mappings] : combinedMappings) {
-                      total_mappings += mappings.size();
-                  }
-                  std::cerr << "[wfmash::mashmap] Processing " << total_mappings 
-                            << " mappings from " << combinedMappings.size() 
-                            << " queries for one-to-one filtering" << std::endl;
-                  
-                  std::unordered_map<seqno_t, MappingResultsVector_t> targetMappings;
-                  for (auto& [querySeqId, mappings] : combinedMappings) {
-                      for (auto& mapping : mappings) {
-                          targetMappings[mapping.refSeqId].push_back(mapping);
-                      }
-                  }
-                  
-                  auto filterProgress = std::make_shared<progress_meter::ProgressMeter>(
-                      targetMappings.size(), 
-                      "[wfmash::mashmap] One-to-one reference filtering",
-                      param.use_progress_bar);
-                  
-                  std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;
-                  for (auto& [targetSeqId, mappings] : targetMappings) {
-                      MappingResultsVector_t filteredMappings;
-                      FilterUtils::filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
-                                   true, *idManager, param, *filterProgress);
-                      
-                      // Group by query sequence - we already have querySeqId from combinedMappings
-                      for (auto& mapping : filteredMappings) {
-                          // Need to find querySeqId for this mapping
-                          // For now, store all in one group
-                          finalMappings[0].push_back(mapping);
-                      }
-                      filterProgress->increment(1);
-                  }
-                  filterProgress->finish();
-                  
-                  std::ofstream outstrm(param.outFileName);
-                  size_t final_mapping_count = 0;
-                  for (auto& [querySeqId, mappings] : finalMappings) {
-                      std::string queryName = idManager->getSequenceName(querySeqId);
-                      offset_t queryLen = idManager->getSequenceLength(querySeqId);
-                      OutputHandler::reportReadMappings(mappings, queryName, outstrm, *idManager, param, processMappingResults, queryLen);
-                      final_mapping_count += mappings.size();
-                  }
-                  
-                  std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
-                            << " mappings after one-to-one filtering" << std::endl;
-              });
-              
-              executor.run(final_flow).wait();
+              processFinalOneToOneResults(executor, combinedMappings);
           }
           
           // Explicitly clear combinedMappings to free memory before alignment phase
           combinedMappings.clear();
-          
-          // Force deallocation by swapping with empty container
           std::unordered_map<seqno_t, MappingResultsVector_t>().swap(combinedMappings);
+      }
+
+      void buildIndexForSubset(const std::vector<std::string>& target_subset, size_t subset_idx, size_t total_subsets) {
+          if (!param.indexFilename.empty()) {
+              std::string indexFilename = param.indexFilename.string();
+              static std::ifstream indexStream;
+              static bool index_opened = false;
+              static size_t file_subset_count = 0;
+              
+              if (!index_opened) {
+                  indexStream.open(indexFilename, std::ios::binary);
+                  if (!indexStream) {
+                      std::cerr << "Error: Unable to open index file for reading: " << indexFilename << std::endl;
+                      exit(1);
+                  }
+                  
+                  uint64_t magic_number = 0;
+                  indexStream.read(reinterpret_cast<char*>(&magic_number), sizeof(magic_number));
+                  if (magic_number != 0xDEADBEEFCAFEBABE) {
+                      std::cerr << "Error: Invalid index file format (wrong magic number)" << std::endl;
+                      exit(1);
+                  }
+                  
+                  size_t batch_idx, total_batches;
+                  indexStream.read(reinterpret_cast<char*>(&batch_idx), sizeof(batch_idx));
+                  indexStream.read(reinterpret_cast<char*>(&total_batches), sizeof(total_batches));
+                  
+                  file_subset_count = total_batches;
+                  std::cerr << "[wfmash::mashmap] Index file contains " << file_subset_count 
+                            << " subsets" << std::endl;
+                  
+                  int64_t batch_size = 0;
+                  indexStream.read(reinterpret_cast<char*>(&batch_size), sizeof(batch_size));
+                  if (batch_size > 0) {
+                      param.index_by_size = batch_size;
+                      std::cerr << "[wfmash::mashmap] Using batch size " << batch_size 
+                                << " from index" << std::endl;
+                  }
+                  
+                  indexStream.seekg(0, std::ios::beg);
+                  index_opened = true;
+              }
+              
+              refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
+          } else {
+              auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
+                  100,
+                  "[wfmash::mashmap] indexing",
+                  param.use_progress_bar);
+          
+              if (!sketch_index_progress->is_finished.load()) {
+                  sketch_index_progress->reset_timer();
+              }
+              
+              refSketch = new skch::Sketch(param, *idManager, target_subset, nullptr, sketch_index_progress);
+          }
+      }
+
+      // Optimized version with hybrid parallel strategy
+      void processQueriesForSubsetOptimized(tf::Executor& executor,
+                                          std::shared_ptr<progress_meter::ProgressMeter> progress,
+                                          std::shared_ptr<std::unordered_map<seqno_t, MappingResultsVector_t>> subsetMappings,
+                                          std::shared_ptr<std::mutex> subsetMappings_mutex,
+                                          std::shared_ptr<std::ofstream> outstream) {
+          
+          // Prepare all query tasks first
+          std::vector<QueryResults> allQueryResults;
+          allQueryResults.reserve(querySequenceNames.size());
+          
+          // Load all query sequences first (sequential I/O)
+          const auto& fileName = param.querySequences[0];
+          faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+          if (!query_meta) {
+              std::cerr << "Error: Failed to load query FASTA index: " << fileName << std::endl;
+              exit(1);
+          }
+          
+          // Create a single reader for sequential access
+          faidx_reader_t* reader = faidx_reader_create(query_meta);
+          if (!reader) {
+              std::cerr << "Error: Failed to create FASTA reader" << std::endl;
+              faidx_meta_destroy(query_meta);
+              exit(1);
+          }
+          
+          // Read all sequences sequentially
+          for (const auto& queryName : querySequenceNames) {
+              hts_pos_t seq_len;
+              hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
+              if (seq_total_len <= 0) {
+                  std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
+                  continue;
+              }
+              
+              char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
+              if (!seq_data) {
+                  std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
+                  continue;
+              }
+              
+              QueryResults qr;
+              qr.queryName = queryName;
+              qr.seqId = idManager->getSequenceId(queryName);
+              qr.sequence = std::string(seq_data, seq_len);
+              qr.refGroup = idManager->getRefGroup(qr.seqId);
+              qr.queryLen = seq_len;
+              qr.fragmentCount = (qr.queryLen / param.windowLength) + 
+                                ((qr.queryLen % param.windowLength != 0) ? 1 : 0);
+              allQueryResults.push_back(std::move(qr));
+              
+              free(seq_data);
+          }
+          
+          faidx_reader_destroy(reader);
+          faidx_meta_destroy(query_meta);
+          
+          // Sort queries by size (largest first) for better load balancing
+          std::sort(allQueryResults.begin(), allQueryResults.end(), 
+                   [](const QueryResults& a, const QueryResults& b) {
+                       return a.fragmentCount > b.fragmentCount;
+                   });
+          
+          // Process queries with stream control
+          tf::Taskflow taskflow;
+          
+          for (auto& queryData : allQueryResults) {
+              auto task = taskflow.emplace([this, &queryData, &executor, progress, subsetMappings, subsetMappings_mutex, outstream]() {
+                  // Stream control: acquire semaphore
+		  this->queryProcessingSemaphore.acquire();
+                  
+                  // Choose processing strategy based on query size
+                  if (queryData.fragmentCount < SMALL_QUERY_THRESHOLD) {
+                      // Small query: process serially
+                      processQuerySerial(queryData, progress, subsetMappings, subsetMappings_mutex, outstream);
+                  } else {
+                      // Large query: process fragments in parallel
+                      processQueryParallel(queryData, executor, progress, subsetMappings, subsetMappings_mutex, outstream);
+                  }
+                  
+                  // Release semaphore
+                  this->queryProcessingSemaphore.release();
+              });
+          }
+          
+          // Execute all query tasks
+          executor.run(taskflow).wait();
+      }
+
+      // Serial processing for small queries
+      void processQuerySerial(QueryResults& queryData,
+                            std::shared_ptr<progress_meter::ProgressMeter> progress,
+                            std::shared_ptr<std::unordered_map<seqno_t, MappingResultsVector_t>> subsetMappings,
+                            std::shared_ptr<std::mutex> subsetMappings_mutex,
+                            std::shared_ptr<std::ofstream> outstream) {
+          
+          // Get thread-local fragment context
+          if (!tls_fragmentContext) {
+              tls_fragmentContext = std::make_unique<FragmentContext>();
+          }
+          auto& fragmentCtx = *tls_fragmentContext;
+          
+          MappingResultsVector_t allMappings;
+          allMappings.reserve(queryData.fragmentCount * 10); // Estimate
+          
+          int noOverlapFragmentCount = queryData.queryLen / param.windowLength;
+          
+          // Process regular fragments
+          for(int i = 0; i < noOverlapFragmentCount; i++) {
+              FragmentData fragment(
+                  queryData.sequence.data() + i * param.windowLength,
+                  static_cast<int>(param.windowLength),
+                  static_cast<int>(queryData.queryLen),
+                  queryData.seqId,
+                  queryData.queryName,
+                  queryData.refGroup,
+                  i,
+                  nullptr
+              );
+              
+              processFragment(fragment, fragmentCtx);
+              
+              if (!fragmentCtx.results.empty()) {
+                  allMappings.insert(
+                      allMappings.end(),
+                      std::make_move_iterator(fragmentCtx.results.begin()),
+                      std::make_move_iterator(fragmentCtx.results.end())
+                  );
+              }
+              
+              progress->increment(param.windowLength);
+          }
+          
+          // Handle final fragment if needed
+          if (noOverlapFragmentCount >= 1 && queryData.queryLen % param.windowLength != 0) {
+              FragmentData fragment(
+                  queryData.sequence.data() + queryData.queryLen - param.windowLength,
+                  static_cast<int>(param.windowLength),
+                  static_cast<int>(queryData.queryLen),
+                  queryData.seqId,
+                  queryData.queryName,
+                  queryData.refGroup,
+                  noOverlapFragmentCount,
+                  nullptr
+              );
+              
+              processFragment(fragment, fragmentCtx);
+              
+              if (!fragmentCtx.results.empty()) {
+                  allMappings.insert(
+                      allMappings.end(),
+                      std::make_move_iterator(fragmentCtx.results.begin()),
+                      std::make_move_iterator(fragmentCtx.results.end())
+                  );
+              }
+              
+              progress->increment(queryData.queryLen % param.windowLength);
+          }
+          
+          // Post-process and output results
+          finalizeQueryResults(queryData, allMappings, progress, subsetMappings, subsetMappings_mutex, outstream);
+      }
+
+      // Parallel processing for large queries
+      void processQueryParallel(QueryResults& queryData,
+                              tf::Executor& executor,
+                              std::shared_ptr<progress_meter::ProgressMeter> progress,
+                              std::shared_ptr<std::unordered_map<seqno_t, MappingResultsVector_t>> subsetMappings,
+                              std::shared_ptr<std::mutex> subsetMappings_mutex,
+                              std::shared_ptr<std::ofstream> outstream) {
+          
+          // Create fragment batches
+          std::vector<FragmentBatch> batches;
+          int noOverlapFragmentCount = queryData.queryLen / param.windowLength;
+          size_t totalFragments = noOverlapFragmentCount;
+          if (noOverlapFragmentCount >= 1 && queryData.queryLen % param.windowLength != 0) {
+              totalFragments++;
+          }
+          
+          // Calculate number of batches
+          size_t numBatches = (totalFragments + FRAGMENT_BATCH_SIZE - 1) / FRAGMENT_BATCH_SIZE;
+          batches.resize(numBatches);
+          
+          // Distribute fragments to batches
+          size_t batchIdx = 0;
+          for(int i = 0; i < noOverlapFragmentCount; i++) {
+              FragmentData fragment(
+                  queryData.sequence.data() + i * param.windowLength,
+                  static_cast<int>(param.windowLength),
+                  static_cast<int>(queryData.queryLen),
+                  queryData.seqId,
+                  queryData.queryName,
+                  queryData.refGroup,
+                  i,
+                  nullptr
+              );
+              
+              batches[batchIdx].fragments.push_back(fragment);
+              if (batches[batchIdx].fragments.size() >= FRAGMENT_BATCH_SIZE) {
+                  batchIdx++;
+              }
+          }
+          
+          // Handle final fragment if needed
+          if (noOverlapFragmentCount >= 1 && queryData.queryLen % param.windowLength != 0) {
+              FragmentData fragment(
+                  queryData.sequence.data() + queryData.queryLen - param.windowLength,
+                  static_cast<int>(param.windowLength),
+                  static_cast<int>(queryData.queryLen),
+                  queryData.seqId,
+                  queryData.queryName,
+                  queryData.refGroup,
+                  noOverlapFragmentCount,
+                  nullptr
+              );
+              
+              if (batchIdx >= batches.size()) batchIdx = batches.size() - 1;
+              batches[batchIdx].fragments.push_back(fragment);
+          }
+          
+          // Process batches in parallel
+          tf::Taskflow batchTaskflow;
+          std::mutex results_mutex;
+          MappingResultsVector_t allMappings;
+          
+          for (auto& batch : batches) {
+              batch.reserve(batch.fragments.size());
+              
+              batchTaskflow.emplace([this, &batch, progress, &results_mutex, &allMappings]() {
+                  // Get thread-local fragment context
+                  if (!tls_fragmentContext) {
+                      tls_fragmentContext = std::make_unique<FragmentContext>();
+                  }
+                  auto& ctx = *tls_fragmentContext;
+                  
+                  // Process all fragments in batch
+                  processFragmentBatch(batch, ctx, progress);
+                  
+                  // Merge results
+                  if (!ctx.results.empty()) {
+                      std::lock_guard<std::mutex> lock(results_mutex);
+                      allMappings.insert(
+                          allMappings.end(),
+                          std::make_move_iterator(ctx.results.begin()),
+                          std::make_move_iterator(ctx.results.end())
+                      );
+                  }
+              });
+          }
+          
+          executor.run(batchTaskflow).wait();
+          
+          // Post-process and output results
+          finalizeQueryResults(queryData, allMappings, progress, subsetMappings, subsetMappings_mutex, outstream);
+      }
+
+      // Common finalization for query results
+      void finalizeQueryResults(QueryResults& queryData,
+                              MappingResultsVector_t& allMappings,
+                              std::shared_ptr<progress_meter::ProgressMeter> progress,
+                              std::shared_ptr<std::unordered_map<seqno_t, MappingResultsVector_t>> subsetMappings,
+                              std::shared_ptr<std::mutex> subsetMappings_mutex,
+                              std::shared_ptr<std::ofstream> outstream) {
+          
+          // Boundary sanity check
+          InputSeqProgContainer input(queryData.sequence, queryData.queryName, queryData.seqId, *progress);
+          OutputHandler::mappingBoundarySanityCheck(&input, allMappings, *idManager);
+          
+          // Filter results with timing for large sequences
+          auto filter_start = std::chrono::high_resolution_clock::now();
+          
+          // Log filtering info for large sequences
+          if (queryData.queryLen > 1000000) {
+              std::cerr << "[wfmash::mashmap] Filtering " << allMappings.size() 
+                        << " mappings for " << queryData.queryName 
+                        << " (" << queryData.queryLen << "bp)";
+              if (param.scaffold_gap > 0) {
+                  std::cerr << " [scaffold filtering enabled]";
+              }
+              std::cerr << "..." << std::endl;
+          }
+          
+          auto filteredResult = filterSubsetMappings(allMappings, *progress, queryData.seqId, queryData.queryLen,
+                                                   nullptr, nullptr, nullptr);
+          
+          auto filter_end = std::chrono::high_resolution_clock::now();
+          auto filter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(filter_end - filter_start);
+          
+          // Report long filtering times
+          if (filter_duration.count() > 1000) {
+              std::cerr << "[wfmash::mashmap] Filtering " << queryData.queryName 
+                        << " took " << std::fixed << std::setprecision(1) 
+                        << filter_duration.count() / 1000.0 << "s" << std::endl;
+          }
+          
+          auto& mappings = param.mergeMappings && param.split ?
+                filteredResult.mergedMappings : filteredResult.nonMergedMappings;
+          auto& chainInfo = param.mergeMappings && param.split ?
+                filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
+          
+          // Save or output results
+          if (param.filterMode == filter::ONETOONE) {
+              std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
+              (*subsetMappings)[queryData.seqId].insert(
+                  (*subsetMappings)[queryData.seqId].end(),
+                  std::make_move_iterator(mappings.begin()),
+                  std::make_move_iterator(mappings.end())
+              );
+          } else {
+              static std::mutex output_mutex;
+              std::lock_guard<std::mutex> lock(output_mutex);
+              
+              if (param.mergeMappings && param.split && !chainInfo.empty()) {
+                  OutputHandler::reportReadMappings(mappings, chainInfo, queryData.queryName, *outstream, 
+                                                  *idManager, param, processMappingResults, queryData.queryLen);
+              } else {
+                  OutputHandler::reportReadMappings(mappings, queryData.queryName, *outstream, 
+                                                  *idManager, param, processMappingResults, queryData.queryLen);
+              }
+              outstream->flush();
+          }
+      }
+
+      void processFinalOneToOneResults(tf::Executor& executor,
+                                     std::unordered_map<seqno_t, MappingResultsVector_t>& combinedMappings) {
+          std::cerr << "[wfmash::mashmap] Processing final one-to-one filtering" << std::endl;
+          
+          size_t total_mappings = 0;
+          for (auto& [querySeqId, mappings] : combinedMappings) {
+              total_mappings += mappings.size();
+          }
+          std::cerr << "[wfmash::mashmap] Processing " << total_mappings 
+                    << " mappings from " << combinedMappings.size() 
+                    << " queries for one-to-one filtering" << std::endl;
+          
+          // Structure to track query ID with each mapping for target-based filtering
+          struct MappingWithQuery {
+              MappingResult mapping;
+              seqno_t querySeqId;
+          };
+          
+          std::unordered_map<seqno_t, std::vector<MappingWithQuery>> targetMappings;
+          for (auto& [querySeqId, mappings] : combinedMappings) {
+              for (auto& mapping : mappings) {
+                  targetMappings[mapping.refSeqId].push_back({mapping, querySeqId});
+              }
+          }
+          
+          auto filterProgress = std::make_shared<progress_meter::ProgressMeter>(
+              targetMappings.size(), 
+              "[wfmash::mashmap] One-to-one reference filtering",
+              param.use_progress_bar);
+          
+          // After filtering, group back by query
+          std::unordered_map<seqno_t, MappingResultsVector_t> finalMappings;
+          
+          for (auto& [targetSeqId, mappingsWithQuery] : targetMappings) {
+              // Extract just the mappings for filtering
+              MappingResultsVector_t mappings;
+              mappings.reserve(mappingsWithQuery.size());
+              for (const auto& mwq : mappingsWithQuery) {
+                  mappings.push_back(mwq.mapping);
+              }
+              
+              MappingResultsVector_t filteredMappings;
+              FilterUtils::filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
+                           true, *idManager, param, *filterProgress);
+              
+              // Match filtered mappings back to their queries
+              for (const auto& filteredMapping : filteredMappings) {
+                  // Find which query this mapping came from
+                  for (const auto& mwq : mappingsWithQuery) {
+                      if (mwq.mapping.refSeqId == filteredMapping.refSeqId &&
+                          mwq.mapping.refStartPos == filteredMapping.refStartPos &&
+                          mwq.mapping.queryStartPos == filteredMapping.queryStartPos) {
+                          finalMappings[mwq.querySeqId].push_back(filteredMapping);
+                          break;
+                      }
+                  }
+              }
+              
+              filterProgress->increment(1);
+          }
+          filterProgress->finish();
+          
+          std::ofstream outstrm(param.outFileName);
+          size_t final_mapping_count = 0;
+          for (auto& [querySeqId, mappings] : finalMappings) {
+              std::string queryName = idManager->getSequenceName(querySeqId);
+              offset_t queryLen = idManager->getSequenceLength(querySeqId);
+              OutputHandler::reportReadMappings(mappings, queryName, outstrm, *idManager, param, processMappingResults, queryLen);
+              final_mapping_count += mappings.size();
+              if (final_mapping_count % 10000 == 0) {
+                  outstrm.flush();
+              }
+          }
+          outstrm.flush();
+          outstrm.close();
+          std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
+                    << " mappings after one-to-one filtering" << std::endl;
       }
 
       /**
@@ -874,10 +1074,6 @@ namespace skch
 
         std::sort(l2Mappings.begin(), l2Mappings.end(), [](const auto& a, const auto& b) 
             { return std::tie(a.refSeqId, a.refStartPos) < std::tie(b.refSeqId, b.refStartPos); });
-
-        // Chain tracking would require external storage
-        // int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
-        // Skipping chain assignment in compact implementation
 
 #ifdef ENABLE_TIME_PROFILE_L1_L2
         {
@@ -994,10 +1190,6 @@ namespace skch
                 res.setStrand(l2.strand);
                 res.setDiscard(false);
                 res.setOverlapped(false);
-                
-                // Fields that don't exist in compact struct:
-                // queryLen, querySeqId, refEndPos, queryEndPos are derived
-                // sketchSize, approxMatches, nucIdentityUpperBound, selfMapFilter not stored
               } 
               l2Mappings.push_back(res);
             }
@@ -1080,31 +1272,6 @@ namespace skch
                                            scaffold_progress, scaffold_total_work, scaffold_completed_work);
           }
 
-          // Build dense chain ID mapping
-          // splitMappingId tracking not available in compact struct
-          /*std::unordered_map<offset_t, offset_t> id_map;
-          offset_t next_id = 0;
-          
-          for (const auto& mapping : mappings) {
-              if (id_map.count(mapping.splitMappingId) == 0) {
-                  id_map[mapping.splitMappingId] = next_id++;
-              }
-          }
-          for (const auto& mapping : maximallyMergedMappings) {
-              if (id_map.count(mapping.splitMappingId) == 0) {
-                  id_map[mapping.splitMappingId] = next_id++;
-              }
-          }
-
-          offset_t base_id = maxChainIdSeen.fetch_add(id_map.size(), std::memory_order_relaxed);
-          
-          for (auto& mapping : mappings) {
-              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
-          }
-          for (auto& mapping : maximallyMergedMappings) {
-              mapping.splitMappingId = id_map[mapping.splitMappingId] + base_id;
-          }*/
-
           // Return results with chain info
           result.nonMergedMappings = std::move(mappings);
           result.mergedMappings = std::move(maximallyMergedMappings);
@@ -1128,6 +1295,9 @@ namespace skch
         OutputHandler::insertL2ResultsToVec(v, reportedL2Result);
       }
   };
+
+  // Initialize thread-local storage
+  thread_local std::unique_ptr<Map::FragmentContext> Map::tls_fragmentContext;
 }
 
 #endif // SKETCH_MAP_HPP
