@@ -333,6 +333,19 @@ namespace skch
           std::unordered_map<seqno_t, MappingResultsVector_t> combinedMappings;
           std::mutex combinedMappings_mutex;
 
+          // Check if output is stdout
+          bool is_stdout = (param.outFileName == "/dev/stdout" || param.outFileName == "-");
+          
+          // Open persistent output stream if not stdout
+          std::shared_ptr<std::ofstream> persistent_outstream;
+          if (param.filterMode != filter::ONETOONE && !is_stdout) {
+              persistent_outstream = std::make_shared<std::ofstream>(param.outFileName);
+              if (!persistent_outstream->is_open()) {
+                  std::cerr << "Error: Could not open output file for writing: " << param.outFileName << std::endl;
+                  exit(1);
+              }
+          }
+
           if (!param.indexFilename.empty() && !param.create_index_only) {
               std::ifstream indexStream(param.indexFilename.string(), std::ios::binary);
               if (!indexStream) {
@@ -475,26 +488,18 @@ namespace skch
               auto subsetMappings = std::make_shared<std::unordered_map<seqno_t, MappingResultsVector_t>>();
               auto subsetMappings_mutex = std::make_shared<std::mutex>();
 
-              auto outstream = std::make_shared<std::ofstream>();
+              // Remove the outstream creation here - we'll use persistent_outstream or cout
               auto outstream_mutex = std::make_shared<std::mutex>();
               
               // Scaffold progress tracking - simplified
               auto scaffold_progress = std::shared_ptr<progress_meter::ProgressMeter>(nullptr);
               auto scaffold_total_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
               auto scaffold_completed_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
-              
-              if (param.filterMode != filter::ONETOONE) {
-                  bool append = subset_idx > 0;
-                  outstream->open(param.outFileName, append ? std::ios::app : std::ios::out);
-                  if (!outstream->is_open()) {
-                      std::cerr << "Error: Could not open output file for writing: " << param.outFileName << std::endl;
-                      exit(1);
-                  }
-              }
 
               auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
-                                                           outstream, outstream_mutex, scaffold_progress,
-                                                           scaffold_total_work, scaffold_completed_work, subset_flow](tf::Subflow& sf) {
+                                                           outstream_mutex, persistent_outstream, is_stdout,
+                                                           scaffold_progress, scaffold_total_work, scaffold_completed_work, 
+                                                           subset_flow](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
@@ -671,7 +676,15 @@ namespace skch
                               );
                           } else {
                               std::lock_guard<std::mutex> lock(*outstream_mutex);
-                              OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *outstream, *idManager, param, processMappingResults, input->len);
+                              if (is_stdout) {
+                                  OutputHandler::reportReadMappings(mappings, chainInfo, queryName, std::cout, 
+                                                                  *idManager, param, processMappingResults, input->len);
+                                  std::cout.flush();
+                              } else {
+                                  OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *persistent_outstream, 
+                                                                  *idManager, param, processMappingResults, input->len);
+                                  persistent_outstream->flush();
+                              }
                           }
                       }).name("query_" + queryName);
                   }
@@ -705,9 +718,14 @@ namespace skch
                   }
               }).name("merge_results");
 
-              auto cleanup_task = subset_flow->emplace([this, outstream]() {
-                  if (param.filterMode != filter::ONETOONE && outstream->is_open()) {
-                      outstream->close();
+              auto cleanup_task = subset_flow->emplace([this, is_stdout, persistent_outstream]() {
+                  // Don't close stdout, just flush
+                  if (param.filterMode != filter::ONETOONE) {
+                      if (is_stdout) {
+                          std::cout.flush();
+                      } else if (persistent_outstream && persistent_outstream->is_open()) {
+                          persistent_outstream->flush();
+                      }
                   }
                   
                   delete refSketch;
@@ -757,6 +775,11 @@ namespace skch
               
           }
 
+          // Close the persistent stream at the very end
+          if (persistent_outstream && persistent_outstream->is_open()) {
+              persistent_outstream->close();
+          }
+
           if (exit_after_indices) {
               std::cerr << "[wfmash::mashmap] All indices created successfully. Exiting." << std::endl;
               exit(0);
@@ -794,23 +817,45 @@ namespace skch
                       FilterUtils::filterByGroup(mappings, filteredMappings, param.numMappingsForSegment - 1, 
                                    true, *idManager, param, *filterProgress);
                       
-                      // Group by query sequence - we already have querySeqId from combinedMappings
+                      // Put filtered mappings back by their query sequence
                       for (auto& mapping : filteredMappings) {
-                          // Need to find querySeqId for this mapping
-                          // For now, store all in one group
-                          finalMappings[0].push_back(mapping);
+                          // Find the original querySeqId for this mapping
+                          for (auto& [querySeqId, origMappings] : combinedMappings) {
+                              for (auto& origMapping : origMappings) {
+                                  if (origMapping.refSeqId == mapping.refSeqId &&
+                                      origMapping.refStartPos == mapping.refStartPos &&
+                                      origMapping.queryStartPos == mapping.queryStartPos) {
+                                      finalMappings[querySeqId].push_back(mapping);
+                                      break;
+                                  }
+                              }
+                          }
                       }
                       filterProgress->increment(1);
                   }
                   filterProgress->finish();
                   
-                  std::ofstream outstrm(param.outFileName);
+                  std::ofstream outstrm;
+                  if (!is_stdout) {
+                      outstrm.open(param.outFileName);
+                  }
                   size_t final_mapping_count = 0;
                   for (auto& [querySeqId, mappings] : finalMappings) {
                       std::string queryName = idManager->getSequenceName(querySeqId);
                       offset_t queryLen = idManager->getSequenceLength(querySeqId);
-                      OutputHandler::reportReadMappings(mappings, queryName, outstrm, *idManager, param, processMappingResults, queryLen);
+                      
+                      if (is_stdout) {
+                          OutputHandler::reportReadMappings(mappings, queryName, std::cout, *idManager, param, processMappingResults, queryLen);
+                      } else {
+                          OutputHandler::reportReadMappings(mappings, queryName, outstrm, *idManager, param, processMappingResults, queryLen);
+                      }
                       final_mapping_count += mappings.size();
+                  }
+                  
+                  if (!is_stdout) {
+                      outstrm.close();
+                  } else {
+                      std::cout.flush();
                   }
                   
                   std::cerr << "[wfmash::mashmap] Wrote " << final_mapping_count 
