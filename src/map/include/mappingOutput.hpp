@@ -130,6 +130,8 @@ namespace skch
 #else
         outstrm << "\n";
 #endif
+	
+	outstrm.flush();
 
         // User defined processing of the results
         if(processMappingResults != nullptr)
