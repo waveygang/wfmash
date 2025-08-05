@@ -373,9 +373,16 @@ void parse_args(int argc,
             }
         }
     } else {
-        // No -p flag provided, use ani25 by default
-        map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
-        // auto_pct_identity, ani_percentile=25, ani_adjustment=0.0 already set in Parameters struct
+        // No -p flag provided
+        if (input_mapping) {
+            // Alignment-only mode without -p: disable ANI estimation and identity filtering
+            map_parameters.auto_pct_identity = false;
+            map_parameters.percentageIdentity = 0.0;
+        } else {
+            // Full pipeline mode without -p: use ani25-5 by default
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
+            // auto_pct_identity=true, ani_percentile=25, ani_adjustment=-5.0 already set in Parameters struct
+        }
     }
 
     if (block_length) {
@@ -544,7 +551,20 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
-    align_parameters.min_identity = 0; // disabled
+    // Set alignment identity cutoff based on mode
+    if (yeet_parameters.remapping) {
+        // Alignment-only mode with -i
+        if (map_pct_identity) {
+            // -p was specified, use it (will be estimated later if it's an ANI preset)
+            align_parameters.min_identity = map_parameters.percentageIdentity;
+        } else {
+            // No -p specified with -i, use 0 (no filtering)
+            align_parameters.min_identity = 0;
+        }
+    } else {
+        // Full pipeline mode, use the mapping identity threshold
+        align_parameters.min_identity = map_parameters.percentageIdentity;
+    }
 
     args::ValueFlag<int> wflambda_segment_length(alignment_opts, "N", "WFlambda segment length [256]", {"wflambda-segment"});
     if (wflambda_segment_length) {
