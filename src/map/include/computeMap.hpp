@@ -538,34 +538,45 @@ namespace skch
                               return;
                           }
                           
-                          // Create a new reader for this task (simple approach)
-                          faidx_reader_t* reader = faidx_reader_create(query_meta);
-                          if (!reader) {
-                              std::cerr << "Error: Failed to create reader for " << queryName << std::endl;
-                              return;
+                          // Thread-local reader cache - each thread maintains its own reader
+                          thread_local faidx_reader_t* cached_reader = nullptr;
+                          thread_local faidx_meta_t* cached_meta = nullptr;
+                          
+                          // Create reader if not cached or metadata changed
+                          if (!cached_reader || cached_meta != query_meta) {
+                              if (cached_reader) {
+                                  faidx_reader_destroy(cached_reader);
+                              }
+                              cached_reader = faidx_reader_create(query_meta);
+                              cached_meta = query_meta;
+                              if (!cached_reader) {
+                                  std::cerr << "Error: Failed to create reader for " << queryName << std::endl;
+                                  return;
+                              }
                           }
+                          
+                          faidx_reader_t* reader = cached_reader;
                           
                           // Fetch sequence using pooled reader
                           hts_pos_t seq_len;
                           hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
                           if (seq_total_len <= 0) {
                               std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
-                              faidx_reader_destroy(reader);
+                              // Don't destroy cached reader
                               return;
                           }
                           
                           char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
                           if (!seq_data) {
                               std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
-                              faidx_reader_destroy(reader);
+                              // Don't destroy cached reader
                               return;
                           }
                           
                           std::string sequence(seq_data, seq_len);
                           free(seq_data);
                           
-                          // Done with reader for now
-                          faidx_reader_destroy(reader);
+                          // Reader is cached, don't destroy it
                           
                           seqno_t seqId = idManager->getSequenceId(queryName);
                           auto input = std::make_shared<InputSeqProgContainer>(
