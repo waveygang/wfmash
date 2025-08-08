@@ -27,6 +27,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <chrono>
 #include <sstream>
+#include <future>
 #include "taskflow/taskflow.hpp"
 
 // Include the reentrant FASTA/BGZF index implementation
@@ -508,45 +509,62 @@ namespace skch
                       exit(1);
                   }
                   
-                  // Thread-local reader wrapper that ensures cleanup
-                  struct ReaderWrapper {
-                      faidx_reader_t* reader = nullptr;
-                      ~ReaderWrapper() {
-                          if (reader) {
-                              faidx_reader_destroy(reader);
+                  // Create a pool of readers for thread safety
+                  // Using a mutex-protected vector instead of thread-local to avoid lifetime issues
+                  std::mutex reader_pool_mutex;
+                  std::vector<faidx_reader_t*> reader_pool;
+                  
+                  // Pre-create readers for all threads
+                  for (int i = 0; i < param.threads; ++i) {
+                      faidx_reader_t* reader = faidx_reader_create(query_meta);
+                      if (!reader) {
+                          // Clean up already created readers
+                          for (auto* r : reader_pool) {
+                              faidx_reader_destroy(r);
                           }
+                          faidx_meta_destroy(query_meta);
+                          std::cerr << "Error: Failed to create FASTA reader" << std::endl;
+                          exit(1);
                       }
+                      reader_pool.push_back(reader);
+                  }
+                  
+                  auto getReader = [&reader_pool, &reader_pool_mutex]() -> faidx_reader_t* {
+                      std::lock_guard<std::mutex> lock(reader_pool_mutex);
+                      if (reader_pool.empty()) {
+                          throw std::runtime_error("No available readers in pool");
+                      }
+                      faidx_reader_t* reader = reader_pool.back();
+                      reader_pool.pop_back();
+                      return reader;
                   };
                   
-                  auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
-                      thread_local ReaderWrapper wrapper;
-                      if (wrapper.reader == nullptr) {
-                          wrapper.reader = faidx_reader_create(meta);
-                          if (!wrapper.reader) {
-                              throw std::runtime_error("Failed to create thread-local reader");
-                          }
-                      }
-                      return wrapper.reader;
+                  auto returnReader = [&reader_pool, &reader_pool_mutex](faidx_reader_t* reader) {
+                      std::lock_guard<std::mutex> lock(reader_pool_mutex);
+                      reader_pool.push_back(reader);
                   };
                   
                   for (const auto& queryName : querySequenceNames) {
-                      faidx_reader_t* reader = getThreadLocalReader(query_meta);
+                      faidx_reader_t* reader = getReader();
                       
                       hts_pos_t seq_len;
                       hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
                       if (seq_total_len <= 0) {
                           std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
+                          returnReader(reader);
                           continue;
                       }
                       
                       char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
                       if (!seq_data) {
                           std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
+                          returnReader(reader);
                           continue;
                       }
                       
                       std::string sequence(seq_data, seq_len);
                       free(seq_data);
+                      returnReader(reader);
             
                       auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress,
                                                     scaffold_total_work, scaffold_completed_work](tf::Subflow& query_sf) {
@@ -689,6 +707,11 @@ namespace skch
                       }).name("query_" + queryName);
                   }
                   
+                  // Clean up reader pool
+                  for (auto* reader : reader_pool) {
+                      faidx_reader_destroy(reader);
+                  }
+                  
                   faidx_meta_destroy(query_meta);
               }).name("process_queries");
 
@@ -753,7 +776,15 @@ namespace skch
                   }
               });
               
-              executor.run(*subset_flow).wait();
+              // Submit the taskflow and get a future for proper tracking
+              auto future = executor.run(*subset_flow);
+              
+              // Wait for the future to complete - this ensures the top-level tasks are submitted
+              future.wait();
+              
+              // Now wait for ALL tasks including dynamically created nested subflows
+              executor.wait_for_all();
+              
               mapping_complete->store(true);
               if (monitor_task->joinable()) {
                   monitor_task->join();
@@ -762,12 +793,6 @@ namespace skch
               // Progress is already finished by the monitor thread
               if (!progress->is_finished.load()) {
                   progress->finish();
-              }
-              
-              // Wait for all tasks to complete
-              std::chrono::milliseconds wait_time(100);
-              while (executor.num_topologies() > 0) {
-                  std::this_thread::sleep_for(wait_time);
               }
               
               std::cerr << "[wfmash::mashmap] Subset processing complete, results saved to: " 
