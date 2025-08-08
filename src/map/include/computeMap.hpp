@@ -392,6 +392,17 @@ namespace skch
 
           bool exit_after_indices = param.create_index_only;
 
+          // Load query metadata ONCE for all subsets (to avoid use-after-free)
+          faidx_meta_t* query_meta = nullptr;
+          if (!exit_after_indices && !param.querySequences.empty()) {
+              const auto& fileName = param.querySequences[0];
+              query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+              if (!query_meta) {
+                  std::cerr << "Error: Failed to load query FASTA index: " << fileName << std::endl;
+                  exit(1);
+              }
+          }
+
           // Process each subset serially
           for (size_t subset_idx = 0; subset_idx < target_subsets.size(); ++subset_idx) {
               const auto& target_subset = target_subsets[subset_idx];
@@ -499,13 +510,7 @@ namespace skch
               auto scaffold_total_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
               auto scaffold_completed_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
 
-              // Load query metadata once
-              const auto& fileName = param.querySequences[0];
-              faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
-              if (!query_meta) {
-                  std::cerr << "Error: Failed to load query FASTA index: " << fileName << std::endl;
-                  exit(1);
-              }
+              // Query metadata already loaded outside the loop
               
               // Static thread-local reader wrapper that persists across tasks
               struct ReaderWrapper {
@@ -696,8 +701,7 @@ namespace skch
               // Execute the flat taskflow
               executor.run(query_taskflow).wait();
               
-              // Clean up query metadata
-              faidx_meta_destroy(query_meta);
+              // Don't destroy query_meta here - it's shared across subsets
               
               // Merge results if needed (no longer a task)
               auto mergeResults = [this,
@@ -846,6 +850,12 @@ namespace skch
               });
               
               executor.run(final_flow).wait();
+          }
+          
+          // Clean up query metadata at the very end
+          if (query_meta) {
+              faidx_meta_destroy(query_meta);
+              query_meta = nullptr;
           }
           
           // Explicitly clear combinedMappings to free memory before alignment phase
