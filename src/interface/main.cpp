@@ -84,6 +84,7 @@ int main(int argc, char** argv) {
                 
                 // Update the parameters that the rest of the program will use.
                 map_parameters.percentageIdentity = estimated_identity;
+                align_parameters.min_identity = estimated_identity;
                 
                 // Recalculate sketch size based on the new identity threshold
                 // Only if sketch size was auto-calculated (not manually specified with -s)
@@ -110,6 +111,7 @@ int main(int argc, char** argv) {
                 std::cerr << "[wfmash] Falling back to default identity threshold: " 
                           << std::fixed << std::setprecision(2) << skch::fixed::percentage_identity * 100 << "%" << std::endl;
                 map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+                align_parameters.min_identity = skch::fixed::percentage_identity;
                 map_parameters.auto_pct_identity = false;
             }
         }
@@ -163,6 +165,48 @@ int main(int argc, char** argv) {
         #ifdef __GLIBC__
         malloc_trim(0);
         #endif
+     } else if (yeet_parameters.remapping && map_parameters.auto_pct_identity) {
+        // When using -i (alignment-only mode) with an ANI preset
+        std::cerr << "[wfmash] ANI-based identity estimation enabled for alignment phase (ani" << map_parameters.ani_percentile;
+        if (map_parameters.ani_adjustment != 0) {
+            std::cerr << std::showpos << map_parameters.ani_adjustment << std::noshowpos;
+        }
+        std::cerr << ")..." << std::endl;
+
+        // Create SequenceIdManager for alignment phase
+        std::vector<std::string> target_prefix_vec;
+        if (!map_parameters.target_prefix.empty()) {
+            target_prefix_vec.push_back(map_parameters.target_prefix);
+        }
+        
+        auto idManager = std::make_unique<skch::SequenceIdManager>(
+            map_parameters.querySequences,
+            map_parameters.refSequences,
+            map_parameters.query_prefix,
+            target_prefix_vec,
+            std::string(1, map_parameters.prefix_delim),
+            map_parameters.query_list,
+            map_parameters.target_list
+        );
+
+        try {
+            // Estimate identity for alignment phase
+            double estimated_identity = skch::Stat::estimate_identity_for_groups(map_parameters, *idManager);
+            
+            // Update the parameters
+            map_parameters.percentageIdentity = estimated_identity;
+            align_parameters.min_identity = estimated_identity;
+            
+            std::cerr << "[wfmash] Using estimated identity cutoff for alignment: " 
+                      << std::fixed << std::setprecision(2) << estimated_identity * 100 << "%" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[wfmash] Error during identity estimation for alignment: " << e.what() << std::endl;
+            std::cerr << "[wfmash] Falling back to default identity threshold: " 
+                      << std::fixed << std::setprecision(2) << skch::fixed::percentage_identity * 100 << "%" << std::endl;
+            map_parameters.percentageIdentity = skch::fixed::percentage_identity;
+            align_parameters.min_identity = skch::fixed::percentage_identity;
+            map_parameters.auto_pct_identity = false;
+        }
      }
 
     align::printCmdOptions(align_parameters);
