@@ -706,7 +706,8 @@ namespace skch
                       }).name("query_" + queryName);
                   }
                   
-                  faidx_meta_destroy(query_meta);
+                  // Do NOT destroy query_meta here - it's still being used by tasks
+                  // and will be destroyed at the end of the main function
               }).name("process_queries");
 
               auto merge_task = subset_flow->emplace([this,
