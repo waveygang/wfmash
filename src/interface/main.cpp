@@ -87,19 +87,18 @@ void wfmash_memory_handler() {
         
         auto deadlock_duration = std::chrono::duration_cast<std::chrono::seconds>(now - deadlock_start).count();
         
-        // After 60 seconds of deadlock, abort
+        // After 60 seconds of deadlock, trigger recovery
         if (deadlock_duration >= 60) {
-            std::cerr << "\n[wfmash::memory] FATAL: Deadlock detected - all threads waiting for memory!\n";
+            std::cerr << "\n[wfmash::memory] DEADLOCK DETECTED - all threads waiting for memory!\n";
             std::cerr << "  " << stalled << " threads have been waiting with no progress for " << deadlock_duration << " seconds.\n";
-            std::cerr << "  The system cannot allocate memory for any task to proceed.\n";
-            std::cerr << "\n  This typically happens during the filtering phase with large batch sizes.\n";
-            std::cerr << "  To resolve:\n";
-            std::cerr << "    1. Use smaller batch size: -b 500m or -b 250m\n";
-            std::cerr << "    2. Process sequences separately\n";
-            std::cerr << "    3. Use a system with more memory\n";
-            std::cerr << "\n  Future versions will automatically switch to serial processing.\n";
-            std::cerr << "  Aborting to prevent indefinite hang.\n" << std::endl;
-            std::abort();
+            std::cerr << "  Triggering internal recovery to process failed queries serially...\n\n";
+            
+            // Set the deadlock flag for the main thread to detect
+            wfmash::memory::deadlock_detected.store(true);
+            
+            // Don't abort - just return and let allocations fail
+            // This will cause tasks to throw bad_alloc and unwind
+            return;
         }
     } else {
         // Reset deadlock detection if we're making progress

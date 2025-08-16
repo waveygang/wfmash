@@ -787,10 +787,30 @@ namespace skch
               });
               
               // Just run normally and wait - the memory handler will detect deadlock
-              executor.run(*subset_flow).wait();
+              // Run the taskflow, monitoring for deadlock
+              auto future = executor.run(*subset_flow);
+              
+              // Monitor execution and check for deadlock
+              while (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+                  // Check if deadlock was detected by the memory handler
+                  if (wfmash::memory::deadlock_detected.load()) {
+                      std::cerr << "[wfmash::mashmap] Main thread detected deadlock signal\n";
+                      // Wait a bit for tasks to fail and unwind
+                      std::this_thread::sleep_for(std::chrono::seconds(2));
+                      break;
+                  }
+              }
+              
+              // Wait for any remaining tasks to complete or fail
+              try {
+                  future.wait();
+              } catch (const std::exception& e) {
+                  std::cerr << "[wfmash::mashmap] Taskflow exception: " << e.what() << "\n";
+              }
+              
               mapping_complete->store(true);
               
-              // After completion, check if any queries failed
+              // Check for failed queries
               std::vector<std::string> failed_queries;
               {
                   std::lock_guard<std::mutex> lock(*queries_mutex);
@@ -801,11 +821,166 @@ namespace skch
                   }
               }
               
-              // If we have failed queries, it means we hit memory issues
-              // For now, just report them - full recovery would require reimplementing the entire query processing
-              if (!failed_queries.empty()) {
+              // If we have failed queries and deadlock was detected, retry them serially
+              if (!failed_queries.empty() && wfmash::memory::deadlock_detected.load()) {
+                  std::cerr << "\n[wfmash::mashmap] Retrying " << failed_queries.size() 
+                            << " failed queries serially...\n";
+                  
+                  // Reset deadlock flag for serial processing
+                  wfmash::memory::deadlock_detected.store(false);
+                  
+                  // Set up FASTA reader for serial processing
+                  const auto& fileName = param.querySequences[0];
+                  faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+                  if (!query_meta) {
+                      std::cerr << "Error: Failed to load query FASTA index for serial recovery: " << fileName << std::endl;
+                  } else {
+                      faidx_reader_t* reader = faidx_reader_create(query_meta);
+                      if (!reader) {
+                          std::cerr << "Error: Failed to create FASTA reader for serial recovery" << std::endl;
+                          faidx_meta_destroy(query_meta);
+                      } else {
+                          // Process each failed query one at a time serially
+                          for (const auto& queryName : failed_queries) {
+                              std::cerr << "[wfmash::mashmap] Processing " << queryName << " (serial recovery)...";
+                              
+                              try {
+                                  // 1. Fetch the sequence for the failed query
+                                  hts_pos_t seq_len;
+                                  hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
+                                  if (seq_total_len <= 0) {
+                                      std::cerr << " sequence not found or empty, skipping\n";
+                                      continue;
+                                  }
+                                  
+                                  char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
+                                  if (!seq_data) {
+                                      std::cerr << " failed to fetch sequence, skipping\n";
+                                      continue;
+                                  }
+                                  
+                                  std::string sequence(seq_data, seq_len);
+                                  free(seq_data);
+                                  
+                                  // 2. Set up query processing data structures
+                                  seqno_t seqId = idManager->getSequenceId(queryName);
+                                  auto input = std::make_shared<InputSeqProgContainer>(
+                                      sequence, queryName, seqId, *progress);
+                                  auto output = std::make_shared<QueryMappingOutput>(
+                                      queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
+                        
+                                  int refGroup = idManager->getRefGroup(seqId);
+                                  int noOverlapFragmentCount = input->len / param.windowLength;
+                                  
+                                  // 3. Process all fragments for this query serially
+                                  std::vector<MappingResult> all_results;
+                                  
+                                  // Regular fragments
+                                  for(int i = 0; i < noOverlapFragmentCount; i++) {
+                                      auto fragment = std::make_shared<FragmentData>(
+                                          &(sequence)[0u] + i * param.windowLength,
+                                          static_cast<int>(param.windowLength),
+                                          static_cast<int>(input->len),
+                                          seqId,
+                                          queryName,
+                                          refGroup,
+                                          i,
+                                          output
+                                      );
+                                      
+                                      std::vector<IntervalPoint> intervalPoints;
+                                      std::vector<L1_candidateLocus_t> l1Mappings;
+                                      MappingResultsVector_t l2Mappings;
+                                      QueryMetaData<MinVec_Type> Q;
+                                      std::vector<MappingResult> fragment_results;
+                                      
+                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, fragment_results);
+                                      
+                                      all_results.insert(all_results.end(), fragment_results.begin(), fragment_results.end());
+                                  }
+                                  
+                                  // Handle final fragment if needed
+                                  if (noOverlapFragmentCount >= 1 && input->len % param.windowLength != 0) {
+                                      auto fragment = std::make_shared<FragmentData>(
+                                          &(sequence)[0u] + input->len - param.windowLength,
+                                          static_cast<int>(param.windowLength),
+                                          static_cast<int>(input->len),
+                                          seqId,
+                                          queryName,
+                                          refGroup,
+                                          noOverlapFragmentCount,
+                                          output
+                                      );
+                                      
+                                      std::vector<IntervalPoint> intervalPoints;
+                                      std::vector<L1_candidateLocus_t> l1Mappings;
+                                      MappingResultsVector_t l2Mappings;
+                                      QueryMetaData<MinVec_Type> Q;
+                                      std::vector<MappingResult> fragment_results;
+                                      
+                                      processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, fragment_results);
+                                      
+                                      all_results.insert(all_results.end(), fragment_results.begin(), fragment_results.end());
+                                  }
+                                  
+                                  // 4. Apply sanity checks
+                                  output->results = all_results;
+                                  OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
+                                  
+                                  // 5. Apply filtering
+                                  auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
+                                                          scaffold_progress, scaffold_total_work, scaffold_completed_work);
+                                  
+                                  auto& mappings = param.mergeMappings && param.split ?
+                                        filteredResult.mergedMappings : filteredResult.nonMergedMappings;
+                                  auto& chainInfo = param.mergeMappings && param.split ?
+                                        filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
+                                  
+                                  // 6. Output the results
+                                  if (param.filterMode == filter::ONETOONE) {
+                                      std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
+                                      (*subsetMappings)[seqId].insert(
+                                          (*subsetMappings)[seqId].end(),
+                                          std::make_move_iterator(mappings.begin()),
+                                          std::make_move_iterator(mappings.end())
+                                      );
+                                  } else {
+                                      std::lock_guard<std::mutex> lock(*outstream_mutex);
+                                      if (is_stdout) {
+                                          OutputHandler::reportReadMappings(mappings, chainInfo, queryName, std::cout, 
+                                                                          *idManager, param, processMappingResults, input->len);
+                                          std::cout.flush();
+                                      } else {
+                                          OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *persistent_outstream, 
+                                                                          *idManager, param, processMappingResults, input->len);
+                                          persistent_outstream->flush();
+                                      }
+                                  }
+                                  
+                                  // 7. Mark query as completed
+                                  {
+                                      std::lock_guard<std::mutex> lock(*queries_mutex);
+                                      completed_queries->insert(queryName);
+                                  }
+                                  
+                                  std::cerr << " completed (" << mappings.size() << " mappings)\n";
+                                  
+                              } catch (const std::exception& e) {
+                                  std::cerr << " FAILED (" << e.what() << ")\n";
+                              }
+                          }
+                          
+                          faidx_reader_destroy(reader);
+                          faidx_meta_destroy(query_meta);
+                      }
+                  }
+                  
+                  std::cerr << "[wfmash::mashmap] Serial recovery completed (" << failed_queries.size() << " queries processed)\n\n";
+                  
+              } else if (!failed_queries.empty()) {
+                  // Failed queries but no deadlock detected - just report them
                   std::cerr << "\n[wfmash::mashmap] WARNING: " << failed_queries.size() 
-                            << " queries could not be completed due to memory constraints:\n";
+                            << " queries could not be completed:\n";
                   for (const auto& query : failed_queries) {
                       std::cerr << "  - " << query << "\n";
                   }

@@ -11,6 +11,7 @@ namespace memory {
 inline std::atomic<int> tasks_stalled(0);      // Tasks waiting for memory
 inline std::atomic<int> tasks_executing(0);    // Tasks currently executing
 inline std::atomic<int> total_stall_events(0); // Total stall events seen
+inline std::atomic<bool> deadlock_detected(false); // Flag for deadlock detection
 
 // Track when we last logged to avoid spam
 inline std::atomic<std::chrono::steady_clock::time_point> last_log_time{std::chrono::steady_clock::now()};
