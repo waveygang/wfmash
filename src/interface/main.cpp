@@ -35,7 +35,40 @@
 #include "common/args.hxx"
 #include "common/ALeS.hpp"
 
+// Memory allocation failure handler
+#include <new>
+#include <atomic>
+#include <thread>
+
+void wfmash_memory_handler() {
+    static std::atomic<int> attempts(0);
+    int attempt_count = ++attempts;
+    
+    if (attempt_count > 3) {
+        std::cerr << "\n[wfmash::fatal] Memory allocation failed after " 
+                  << attempt_count << " attempts\n";
+        std::cerr << "The system has run out of memory or reached allocation limits.\n";
+        std::cerr << "\nSuggestions to resolve:\n";
+        std::cerr << "  1. Use -b flag with smaller value (e.g., -b 50m or -b 100m)\n";
+        std::cerr << "  2. Reduce thread count with -t (fewer concurrent tasks)\n";
+        std::cerr << "  3. Process smaller sequence subsets\n";
+        std::cerr << "  4. Run on a system with more available memory\n";
+        std::cerr << "\nAborting to prevent incomplete results.\n";
+        std::abort();
+    }
+    
+    // Log warning for first few attempts
+    std::cerr << "\n[wfmash::warning] Memory allocation failed (attempt " 
+              << attempt_count << "/3)\n";
+    std::cerr << "Retrying allocation after brief pause...\n";
+    
+    // Brief pause to allow system to free memory
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+}
+
 int main(int argc, char** argv) {
+    // Install memory allocation failure handler
+    std::set_new_handler(wfmash_memory_handler);
     /*
      * Make sure env variable MALLOC_ARENA_MAX is unset
      * for efficient multi-thread execution
