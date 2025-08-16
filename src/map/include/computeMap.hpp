@@ -509,7 +509,7 @@ namespace skch
               auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
                                                            outstream_mutex, persistent_outstream, is_stdout,
                                                            scaffold_progress, scaffold_total_work, scaffold_completed_work, 
-                                                           subset_flow](tf::Subflow& sf) {
+                                                           subset_flow, completed_queries, queries_mutex](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
@@ -786,144 +786,32 @@ namespace skch
                   }
               });
               
-              // Try to run with parallel execution, monitoring for deadlock
-              bool run_completed = false;
-              bool recovery_needed = false;
-              
-              try {
-                  auto future = executor.run(*subset_flow);
-                  
-                  // Monitor for deadlock while execution is running
-                  auto start_time = std::chrono::steady_clock::now();
-                  auto last_progress_check = completed_queries->size();
-                  auto last_progress_time = start_time;
-                  
-                  while (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
-                      // Check if we're making progress
-                      size_t current_completed = 0;
-                      {
-                          std::lock_guard<std::mutex> lock(*queries_mutex);
-                          current_completed = completed_queries->size();
-                      }
-                      
-                      // Check for deadlock conditions
-                      int stalled = wfmash::memory::tasks_stalled.load();
-                      int executing = wfmash::memory::tasks_executing.load();
-                      
-                      if (stalled > 0 && executing == 0) {
-                          // All threads stalled, check if we're stuck
-                          auto now = std::chrono::steady_clock::now();
-                          
-                          if (current_completed == last_progress_check) {
-                              // No progress since last check
-                              auto stall_duration = std::chrono::duration_cast<std::chrono::seconds>(
-                                  now - last_progress_time).count();
-                              
-                              if (stall_duration >= 60) {
-                                  // Deadlock confirmed - cancel and recover
-                                  std::cerr << "\n[wfmash::mashmap] Deadlock detected during filtering!\n";
-                                  std::cerr << "  " << stalled << " threads waiting for memory, "
-                                            << current_completed << "/" << submitted_queries->size() 
-                                            << " queries completed\n";
-                                  std::cerr << "  Cancelling parallel execution for recovery...\n\n";
-                                  
-                                  executor.cancel();
-                                  recovery_needed = true;
-                                  break;
-                              }
-                          } else {
-                              // Made progress, reset timer
-                              last_progress_check = current_completed;
-                              last_progress_time = now;
-                          }
-                      }
-                  }
-                  
-                  if (!recovery_needed) {
-                      future.wait();
-                      run_completed = true;
-                  }
-              } catch (const std::exception& e) {
-                  std::cerr << "[wfmash::mashmap] Exception during parallel execution: " 
-                            << e.what() << std::endl;
-                  recovery_needed = true;
-              }
-              
-              // Handle recovery if needed
-              if (recovery_needed) {
-                  std::vector<std::string> failed_queries;
-                  {
-                      std::lock_guard<std::mutex> lock(*queries_mutex);
-                      // Find queries that weren't completed
-                      for (const auto& query : *submitted_queries) {
-                          if (completed_queries->find(query) == completed_queries->end()) {
-                              failed_queries.push_back(query);
-                          }
-                      }
-                  }
-                  
-                  if (!failed_queries.empty()) {
-                      std::cerr << "[wfmash::mashmap] Retrying " << failed_queries.size() 
-                                << " incomplete queries serially...\n\n";
-                      
-                      // Process each failed query serially
-                      for (const auto& queryName : failed_queries) {
-                          std::cerr << "[wfmash::mashmap] Processing " << queryName 
-                                    << " (serial mode)...";
-                          
-                          // Fetch the sequence again
-                          faidx_reader_t* reader = getThreadLocalReader(query_meta);
-                          hts_pos_t seq_len;
-                          char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 
-                                                                   0, LONG_MAX, &seq_len);
-                          if (!seq_data) {
-                              std::cerr << " FAILED (couldn't fetch sequence)\n";
-                              continue;
-                          }
-                          
-                          std::string sequence(seq_data, seq_len);
-                          free(seq_data);
-                          
-                          // Process this query serially (simplified version without subflow)
-                          seqno_t seqId = idManager->getSequenceId(queryName);
-                          auto input = std::make_shared<InputSeqProgContainer>(
-                              sequence, queryName, seqId, *progress);
-                          
-                          // Run the filtering directly (this is the memory-intensive part)
-                          try {
-                              auto output = std::make_shared<QueryMappingOutput>(
-                                  *progress, queryName, input->len, seqId);
-                              
-                              // Process fragments (simplified - just the essential parts)
-                              // Note: This is a simplified version - real implementation would
-                              // need to replicate the full fragment processing logic
-                              
-                              // For now, just mark as completed to avoid infinite retry
-                              {
-                                  std::lock_guard<std::mutex> lock(*queries_mutex);
-                                  completed_queries->insert(queryName);
-                              }
-                              
-                              std::cerr << " completed\n";
-                          } catch (const std::exception& e) {
-                              std::cerr << " FAILED (" << e.what() << ")\n";
-                              // If serial processing also fails, we have to give up
-                              std::cerr << "[wfmash::mashmap] ERROR: Unable to process " 
-                                        << queryName << " even in serial mode\n";
-                              std::cerr << "  This sequence requires too much memory.\n";
-                              std::cerr << "  Consider processing it separately with smaller parameters.\n";
-                          }
-                      }
-                      
-                      std::cerr << "\n[wfmash::mashmap] Serial recovery completed\n";
-                      run_completed = true;
-                  } else {
-                      std::cerr << "[wfmash::mashmap] All queries were already completed\n";
-                      run_completed = true;
-                  }
-              }
-              
+              // Just run normally and wait - the memory handler will detect deadlock
+              executor.run(*subset_flow).wait();
               mapping_complete->store(true);
+              
+              // After completion, check if any queries failed
+              std::vector<std::string> failed_queries;
+              {
+                  std::lock_guard<std::mutex> lock(*queries_mutex);
+                  for (const auto& query : *submitted_queries) {
+                      if (completed_queries->find(query) == completed_queries->end()) {
+                          failed_queries.push_back(query);
+                      }
+                  }
+              }
+              
+              // If we have failed queries, it means we hit memory issues
+              // For now, just report them - full recovery would require reimplementing the entire query processing
+              if (!failed_queries.empty()) {
+                  std::cerr << "\n[wfmash::mashmap] WARNING: " << failed_queries.size() 
+                            << " queries could not be completed due to memory constraints:\n";
+                  for (const auto& query : failed_queries) {
+                      std::cerr << "  - " << query << "\n";
+                  }
+                  std::cerr << "\nThese sequences require processing with smaller batch size (-b flag)\n";
+                  std::cerr << "or on a system with more available memory.\n\n";
+              }
               if (monitor_task->joinable()) {
                   monitor_task->join();
               }
