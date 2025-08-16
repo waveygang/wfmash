@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <iomanip>
 #include "indicators.hpp"
+#include "interface/memory_monitor.hpp"
 
 namespace progress_meter {
 
@@ -79,7 +80,8 @@ private:
                     std::cerr << banner << " [" 
                               << std::fixed << std::setprecision(1) << progress_percent << "% complete, " 
                               << curr_progress << "/" << total.load() 
-                              << " units, " << elapsed << "s elapsed]" << std::endl;
+                              << " units, " << elapsed << "s elapsed]"
+                              << wfmash::memory::get_memory_status() << std::endl;
                     
                     last_progress = curr_progress;
                     last_file_update = curr_time;

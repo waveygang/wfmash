@@ -33,6 +33,9 @@ namespace fs = std::filesystem;
 #define REENTRANT_FAIDX_IMPLEMENTATION
 #include "common/faigz.h"
 
+//Memory monitoring
+#include "interface/memory_monitor.hpp"
+
 //Own includes
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
@@ -564,6 +567,14 @@ namespace skch
                           // Regular fragments
                           for(int i = 0; i < noOverlapFragmentCount; i++) {
                               query_sf.emplace([&, i]() {
+                                  // Track task execution
+                                  wfmash::memory::tasks_executing.fetch_add(1);
+                                  
+                                  // RAII helper to ensure counter is decremented
+                                  struct TaskGuard {
+                                      ~TaskGuard() { wfmash::memory::tasks_executing.fetch_sub(1); }
+                                  } guard;
+                                  
                                   std::vector<MappingResult> all_fragment_results;
                                   auto fragment = std::make_shared<FragmentData>(
                                       &(sequence)[0u] + i * param.windowLength,
@@ -601,6 +612,14 @@ namespace skch
                           // Handle final fragment if needed
                           if (noOverlapFragmentCount >= 1 && input->len % param.windowLength != 0) {
                               query_sf.emplace([&]() {
+                                  // Track task execution
+                                  wfmash::memory::tasks_executing.fetch_add(1);
+                                  
+                                  // RAII helper to ensure counter is decremented
+                                  struct TaskGuard {
+                                      ~TaskGuard() { wfmash::memory::tasks_executing.fetch_sub(1); }
+                                  } guard;
+                                  
                                   std::vector<MappingResult> all_fragment_results;
                                   auto fragment = std::make_shared<FragmentData>(
                                       &(sequence)[0u] + input->len - param.windowLength,

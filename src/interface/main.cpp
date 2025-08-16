@@ -39,31 +39,66 @@
 #include <new>
 #include <atomic>
 #include <thread>
+#include <iomanip>
+#include "interface/memory_monitor.hpp"
 
 void wfmash_memory_handler() {
-    static std::atomic<int> attempts(0);
-    int attempt_count = ++attempts;
+    using namespace wfmash::memory;
     
-    if (attempt_count > 3) {
-        std::cerr << "\n[wfmash::fatal] Memory allocation failed after " 
-                  << attempt_count << " attempts\n";
-        std::cerr << "The system has run out of memory or reached allocation limits.\n";
-        std::cerr << "\nSuggestions to resolve:\n";
-        std::cerr << "  1. Use -b flag with smaller value (e.g., -b 50m or -b 100m)\n";
-        std::cerr << "  2. Reduce thread count with -t (fewer concurrent tasks)\n";
-        std::cerr << "  3. Process smaller sequence subsets\n";
-        std::cerr << "  4. Run on a system with more available memory\n";
-        std::cerr << "\nAborting to prevent incomplete results.\n";
-        std::abort();
+    // Increment stalled counter
+    tasks_stalled.fetch_add(1);
+    total_stall_events.fetch_add(1);
+    
+    // Log periodically (every 10 seconds) to avoid spam
+    auto now = std::chrono::steady_clock::now();
+    auto last = last_log_time.load();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
+    
+    if (elapsed >= 10) {
+        // Try to update last_log_time atomically
+        auto expected = last;
+        if (last_log_time.compare_exchange_strong(expected, now)) {
+            int stalled = tasks_stalled.load();
+            int executing = tasks_executing.load();
+            int total_events = total_stall_events.load();
+            
+            std::cerr << "\n[wfmash::memory] Allocation stalled - waiting for memory to become available\n";
+            std::cerr << "  Tasks waiting for memory: " << stalled << "\n";
+            std::cerr << "  Tasks currently executing: " << executing << "\n";
+            std::cerr << "  Total stall events: " << total_events << "\n";
+            
+            if (stalled >= executing && executing > 0) {
+                std::cerr << "  WARNING: More tasks stalled than executing - potential deadlock risk\n";
+            }
+            
+            std::cerr << "  Waiting indefinitely for memory to be freed by completing tasks...\n";
+            
+            // First time message with suggestions
+            static std::atomic<bool> first_message(true);
+            if (first_message.exchange(false)) {
+                std::cerr << "\nIf this persists, consider:\n";
+                std::cerr << "  1. Using -b flag with smaller value (e.g., -b 50m)\n";
+                std::cerr << "  2. Reducing thread count with -t\n";
+                std::cerr << "  3. Processing smaller sequence subsets\n";
+            }
+        }
     }
     
-    // Log warning for first few attempts
-    std::cerr << "\n[wfmash::warning] Memory allocation failed (attempt " 
-              << attempt_count << "/3)\n";
-    std::cerr << "Retrying allocation after brief pause...\n";
+    // Wait longer initially, then shorter waits
+    static thread_local int local_wait_count = 0;
+    local_wait_count++;
     
-    // Brief pause to allow system to free memory
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // Exponential backoff: 100ms, 200ms, 400ms, ... up to 5 seconds
+    int wait_ms = std::min(100 * (1 << std::min(local_wait_count - 1, 6)), 5000);
+    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+    
+    // Decrement stalled counter before returning to retry
+    tasks_stalled.fetch_sub(1);
+    
+    // Reset local wait count after successful wait
+    if (local_wait_count > 10) {
+        local_wait_count = 5; // Don't go back to very short waits
+    }
 }
 
 int main(int argc, char** argv) {
