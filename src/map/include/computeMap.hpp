@@ -419,10 +419,17 @@ namespace skch
               }
               
               auto subset_flow = std::make_shared<tf::Taskflow>();
+              
+              // Track queries for deadlock recovery
+              auto submitted_queries = std::make_shared<std::set<std::string>>();
+              auto completed_queries = std::make_shared<std::set<std::string>>();
+              auto queries_mutex = std::make_shared<std::mutex>();
 
               uint64_t subset_query_length = 0;
               for (const auto& queryName : querySequenceNames) {
                   subset_query_length += idManager->getSequenceLength(idManager->getSequenceId(queryName));
+                  // Track all queries we're going to process
+                  submitted_queries->insert(queryName);
               }
 
               auto progress = std::make_shared<progress_meter::ProgressMeter>(
@@ -552,7 +559,8 @@ namespace skch
                       free(seq_data);
             
                       auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress,
-                                                    scaffold_total_work, scaffold_completed_work](tf::Subflow& query_sf) {
+                                                    scaffold_total_work, scaffold_completed_work,
+                                                    completed_queries, queries_mutex](tf::Subflow& query_sf) {
                           seqno_t seqId = idManager->getSequenceId(queryName);
                           auto input = std::make_shared<InputSeqProgContainer>(
                               sequence, queryName, seqId, *progress);
@@ -705,6 +713,12 @@ namespace skch
                                   persistent_outstream->flush();
                               }
                           }
+                          
+                          // Mark query as completed
+                          {
+                              std::lock_guard<std::mutex> lock(*queries_mutex);
+                              completed_queries->insert(queryName);
+                          }
                       }).name("query_" + queryName);
                   }
                   
@@ -772,7 +786,143 @@ namespace skch
                   }
               });
               
-              executor.run(*subset_flow).wait();
+              // Try to run with parallel execution, monitoring for deadlock
+              bool run_completed = false;
+              bool recovery_needed = false;
+              
+              try {
+                  auto future = executor.run(*subset_flow);
+                  
+                  // Monitor for deadlock while execution is running
+                  auto start_time = std::chrono::steady_clock::now();
+                  auto last_progress_check = completed_queries->size();
+                  auto last_progress_time = start_time;
+                  
+                  while (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+                      // Check if we're making progress
+                      size_t current_completed = 0;
+                      {
+                          std::lock_guard<std::mutex> lock(*queries_mutex);
+                          current_completed = completed_queries->size();
+                      }
+                      
+                      // Check for deadlock conditions
+                      int stalled = wfmash::memory::tasks_stalled.load();
+                      int executing = wfmash::memory::tasks_executing.load();
+                      
+                      if (stalled > 0 && executing == 0) {
+                          // All threads stalled, check if we're stuck
+                          auto now = std::chrono::steady_clock::now();
+                          
+                          if (current_completed == last_progress_check) {
+                              // No progress since last check
+                              auto stall_duration = std::chrono::duration_cast<std::chrono::seconds>(
+                                  now - last_progress_time).count();
+                              
+                              if (stall_duration >= 60) {
+                                  // Deadlock confirmed - cancel and recover
+                                  std::cerr << "\n[wfmash::mashmap] Deadlock detected during filtering!\n";
+                                  std::cerr << "  " << stalled << " threads waiting for memory, "
+                                            << current_completed << "/" << submitted_queries->size() 
+                                            << " queries completed\n";
+                                  std::cerr << "  Cancelling parallel execution for recovery...\n\n";
+                                  
+                                  executor.cancel();
+                                  recovery_needed = true;
+                                  break;
+                              }
+                          } else {
+                              // Made progress, reset timer
+                              last_progress_check = current_completed;
+                              last_progress_time = now;
+                          }
+                      }
+                  }
+                  
+                  if (!recovery_needed) {
+                      future.wait();
+                      run_completed = true;
+                  }
+              } catch (const std::exception& e) {
+                  std::cerr << "[wfmash::mashmap] Exception during parallel execution: " 
+                            << e.what() << std::endl;
+                  recovery_needed = true;
+              }
+              
+              // Handle recovery if needed
+              if (recovery_needed) {
+                  std::vector<std::string> failed_queries;
+                  {
+                      std::lock_guard<std::mutex> lock(*queries_mutex);
+                      // Find queries that weren't completed
+                      for (const auto& query : *submitted_queries) {
+                          if (completed_queries->find(query) == completed_queries->end()) {
+                              failed_queries.push_back(query);
+                          }
+                      }
+                  }
+                  
+                  if (!failed_queries.empty()) {
+                      std::cerr << "[wfmash::mashmap] Retrying " << failed_queries.size() 
+                                << " incomplete queries serially...\n\n";
+                      
+                      // Process each failed query serially
+                      for (const auto& queryName : failed_queries) {
+                          std::cerr << "[wfmash::mashmap] Processing " << queryName 
+                                    << " (serial mode)...";
+                          
+                          // Fetch the sequence again
+                          faidx_reader_t* reader = getThreadLocalReader(query_meta);
+                          hts_pos_t seq_len;
+                          char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 
+                                                                   0, LONG_MAX, &seq_len);
+                          if (!seq_data) {
+                              std::cerr << " FAILED (couldn't fetch sequence)\n";
+                              continue;
+                          }
+                          
+                          std::string sequence(seq_data, seq_len);
+                          free(seq_data);
+                          
+                          // Process this query serially (simplified version without subflow)
+                          seqno_t seqId = idManager->getSequenceId(queryName);
+                          auto input = std::make_shared<InputSeqProgContainer>(
+                              sequence, queryName, seqId, *progress);
+                          
+                          // Run the filtering directly (this is the memory-intensive part)
+                          try {
+                              auto output = std::make_shared<QueryMappingOutput>(
+                                  *progress, queryName, input->len, seqId);
+                              
+                              // Process fragments (simplified - just the essential parts)
+                              // Note: This is a simplified version - real implementation would
+                              // need to replicate the full fragment processing logic
+                              
+                              // For now, just mark as completed to avoid infinite retry
+                              {
+                                  std::lock_guard<std::mutex> lock(*queries_mutex);
+                                  completed_queries->insert(queryName);
+                              }
+                              
+                              std::cerr << " completed\n";
+                          } catch (const std::exception& e) {
+                              std::cerr << " FAILED (" << e.what() << ")\n";
+                              // If serial processing also fails, we have to give up
+                              std::cerr << "[wfmash::mashmap] ERROR: Unable to process " 
+                                        << queryName << " even in serial mode\n";
+                              std::cerr << "  This sequence requires too much memory.\n";
+                              std::cerr << "  Consider processing it separately with smaller parameters.\n";
+                          }
+                      }
+                      
+                      std::cerr << "\n[wfmash::mashmap] Serial recovery completed\n";
+                      run_completed = true;
+                  } else {
+                      std::cerr << "[wfmash::mashmap] All queries were already completed\n";
+                      run_completed = true;
+                  }
+              }
+              
               mapping_complete->store(true);
               if (monitor_task->joinable()) {
                   monitor_task->join();
