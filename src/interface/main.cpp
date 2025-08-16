@@ -45,12 +45,48 @@
 void wfmash_memory_handler() {
     using namespace wfmash::memory;
     
-    // Increment stalled counter
-    tasks_stalled.fetch_add(1);
-    total_stall_events.fetch_add(1);
+    // Track when this thread started waiting
+    static thread_local auto wait_start = std::chrono::steady_clock::now();
+    static thread_local int local_wait_count = 0;
+    static thread_local bool first_call = true;
     
-    // Log periodically (every 10 seconds) to avoid spam
+    // Initialize wait start time on first call
+    if (first_call) {
+        wait_start = std::chrono::steady_clock::now();
+        first_call = false;
+        tasks_stalled.fetch_add(1);
+        total_stall_events.fetch_add(1);
+    }
+    
+    // Check total wait time
     auto now = std::chrono::steady_clock::now();
+    auto total_wait = std::chrono::duration_cast<std::chrono::seconds>(now - wait_start).count();
+    
+    // After 60 seconds of waiting, abort with clear error message
+    if (total_wait >= 60) {
+        int stalled = tasks_stalled.load();
+        int executing = tasks_executing.load();
+        int total_events = total_stall_events.load();
+        
+        std::cerr << "\n[wfmash::memory] FATAL: Memory allocation failed after 60 seconds of waiting\n";
+        std::cerr << "  Final status:\n";
+        std::cerr << "    Tasks waiting for memory: " << stalled << "\n";
+        std::cerr << "    Tasks currently executing: " << executing << "\n";
+        std::cerr << "    Total stall events: " << total_events << "\n";
+        std::cerr << "\n  The system appears to be out of memory.\n";
+        std::cerr << "  To resolve this issue:\n";
+        std::cerr << "    1. Use -b flag with smaller value (e.g., -b 50m or -b 25m)\n";
+        std::cerr << "    2. Reduce thread count with -t (current: many threads)\n";
+        std::cerr << "    3. Process smaller sequence subsets\n";
+        std::cerr << "    4. Run on a node with more memory\n";
+        std::cerr << "\n  Aborting to prevent indefinite hang.\n" << std::endl;
+        
+        // Clean up before abort
+        tasks_stalled.fetch_sub(1);
+        std::abort();
+    }
+    
+    // Log periodically (every 10 seconds) to show we're still alive
     auto last = last_log_time.load();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
     
@@ -62,43 +98,24 @@ void wfmash_memory_handler() {
             int executing = tasks_executing.load();
             int total_events = total_stall_events.load();
             
-            std::cerr << "\n[wfmash::memory] Allocation stalled - waiting for memory to become available\n";
+            std::cerr << "\n[wfmash::memory] Memory allocation stalled - waiting for memory to become available\n";
             std::cerr << "  Tasks waiting for memory: " << stalled << "\n";
             std::cerr << "  Tasks currently executing: " << executing << "\n";
             std::cerr << "  Total stall events: " << total_events << "\n";
+            std::cerr << "  Total wait time: " << total_wait << " seconds (will abort at 60s)\n";
             
             if (stalled >= executing && executing > 0) {
                 std::cerr << "  WARNING: More tasks stalled than executing - potential deadlock risk\n";
             }
-            
-            std::cerr << "  Waiting indefinitely for memory to be freed by completing tasks...\n";
-            
-            // First time message with suggestions
-            static std::atomic<bool> first_message(true);
-            if (first_message.exchange(false)) {
-                std::cerr << "\nIf this persists, consider:\n";
-                std::cerr << "  1. Using -b flag with smaller value (e.g., -b 50m)\n";
-                std::cerr << "  2. Reducing thread count with -t\n";
-                std::cerr << "  3. Processing smaller sequence subsets\n";
-            }
         }
     }
     
-    // Wait longer initially, then shorter waits
-    static thread_local int local_wait_count = 0;
     local_wait_count++;
     
-    // Exponential backoff: 100ms, 200ms, 400ms, ... up to 5 seconds
+    // Exponential backoff: 100ms, 200ms, 400ms, ... up to 60 seconds
+    // But since we abort at 60s total, cap individual waits at 5s
     int wait_ms = std::min(100 * (1 << std::min(local_wait_count - 1, 6)), 5000);
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
-    
-    // Decrement stalled counter before returning to retry
-    tasks_stalled.fetch_sub(1);
-    
-    // Reset local wait count after successful wait
-    if (local_wait_count > 10) {
-        local_wait_count = 5; // Don't go back to very short waits
-    }
 }
 
 int main(int argc, char** argv) {
