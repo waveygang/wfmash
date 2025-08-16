@@ -21,9 +21,10 @@ inline std::string get_memory_status() {
     int executing = tasks_executing.load();
     int total_events = total_stall_events.load();
     
-    if (stalled > 0) {
-        return " [Memory: " + std::to_string(stalled) + " stalled/" + 
-               std::to_string(executing) + " active]";
+    // Always show task status if any tasks are executing or stalled
+    if (executing > 0 || stalled > 0) {
+        return " [tasks: " + std::to_string(executing) + " active/" + 
+               std::to_string(stalled) + " stalled]";
     }
     return "";
 }
