@@ -57,7 +57,16 @@ void wfmash_memory_handler() {
     if (first_call) {
         wait_start = std::chrono::steady_clock::now();
         first_call = false;
-        total_stall_events.fetch_add(1);
+        int current_total = total_stall_events.fetch_add(1) + 1;
+        
+        // Print warning on very first stall across all threads
+        if (current_total == 1) {
+            std::cerr << "\n[wfmash::memory] WARNING: Memory allocation failure detected!\n";
+            std::cerr << "  The system is running low on memory.\n";
+            std::cerr << "  Threads will wait for memory to become available.\n";
+            std::cerr << "  Progress may be significantly slower.\n";
+            std::cerr << "  Consider using -b flag with smaller batch size (e.g., -b 50m)\n\n";
+        }
     }
     
     // Check total wait time
