@@ -62,30 +62,6 @@ void wfmash_memory_handler() {
     auto now = std::chrono::steady_clock::now();
     auto total_wait = std::chrono::duration_cast<std::chrono::seconds>(now - wait_start).count();
     
-    // After 60 seconds of waiting, abort with clear error message
-    if (total_wait >= 60) {
-        int stalled = tasks_stalled.load();
-        int executing = tasks_executing.load();
-        int total_events = total_stall_events.load();
-        
-        std::cerr << "\n[wfmash::memory] FATAL: Memory allocation failed after 60 seconds of waiting\n";
-        std::cerr << "  Final status:\n";
-        std::cerr << "    Tasks waiting for memory: " << stalled << "\n";
-        std::cerr << "    Tasks currently executing: " << executing << "\n";
-        std::cerr << "    Total stall events: " << total_events << "\n";
-        std::cerr << "\n  The system appears to be out of memory.\n";
-        std::cerr << "  To resolve this issue:\n";
-        std::cerr << "    1. Use -b flag with smaller value (e.g., -b 50m or -b 25m)\n";
-        std::cerr << "    2. Reduce thread count with -t (current: many threads)\n";
-        std::cerr << "    3. Process smaller sequence subsets\n";
-        std::cerr << "    4. Run on a node with more memory\n";
-        std::cerr << "\n  Aborting to prevent indefinite hang.\n" << std::endl;
-        
-        // Clean up before abort
-        tasks_stalled.fetch_sub(1);
-        std::abort();
-    }
-    
     // Log periodically (every 10 seconds) to show we're still alive
     auto last = last_log_time.load();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
@@ -102,10 +78,20 @@ void wfmash_memory_handler() {
             std::cerr << "  Tasks waiting for memory: " << stalled << "\n";
             std::cerr << "  Tasks currently executing: " << executing << "\n";
             std::cerr << "  Total stall events: " << total_events << "\n";
-            std::cerr << "  Total wait time: " << total_wait << " seconds (will abort at 60s)\n";
+            std::cerr << "  Total wait time: " << total_wait << " seconds\n";
             
             if (stalled >= executing && executing > 0) {
                 std::cerr << "  WARNING: More tasks stalled than executing - potential deadlock risk\n";
+            }
+            
+            // After significant wait time, provide suggestions
+            if (total_wait >= 60 && total_wait % 60 == 0) {
+                std::cerr << "\n  System appears to be under severe memory pressure.\n";
+                std::cerr << "  Consider:\n";
+                std::cerr << "    1. Using -b flag with smaller value (e.g., -b 50m or -b 25m)\n";
+                std::cerr << "    2. Reducing thread count with -t\n";
+                std::cerr << "    3. Processing smaller sequence subsets\n";
+                std::cerr << "  Continuing to wait for memory to become available...\n";
             }
         }
     }
