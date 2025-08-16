@@ -50,11 +50,13 @@ void wfmash_memory_handler() {
     static thread_local int local_wait_count = 0;
     static thread_local bool first_call = true;
     
-    // Initialize wait start time on first call
+    // Increment stalled counter on entry (allocation failed)
+    tasks_stalled.fetch_add(1);
+    
+    // Initialize wait start time on first call for this thread
     if (first_call) {
         wait_start = std::chrono::steady_clock::now();
         first_call = false;
-        tasks_stalled.fetch_add(1);
         total_stall_events.fetch_add(1);
     }
     
@@ -102,6 +104,9 @@ void wfmash_memory_handler() {
     // But since we abort at 60s total, cap individual waits at 5s
     int wait_ms = std::min(100 * (1 << std::min(local_wait_count - 1, 6)), 5000);
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+    
+    // Decrement stalled counter before returning (allocation will be retried)
+    tasks_stalled.fetch_sub(1);
 }
 
 int main(int argc, char** argv) {
