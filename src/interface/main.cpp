@@ -71,6 +71,42 @@ void wfmash_memory_handler() {
     auto now = std::chrono::steady_clock::now();
     auto total_wait = std::chrono::duration_cast<std::chrono::seconds>(now - wait_start).count();
     
+    // Detect deadlock: all threads stalled, none executing
+    static thread_local auto deadlock_start = std::chrono::steady_clock::time_point::max();
+    static thread_local bool deadlock_detected = false;
+    
+    int stalled = tasks_stalled.load();
+    int executing = tasks_executing.load();
+    
+    if (stalled > 0 && executing == 0) {
+        // All threads are stalled, none executing - potential deadlock
+        if (deadlock_start == std::chrono::steady_clock::time_point::max()) {
+            deadlock_start = now;
+            deadlock_detected = true;
+        }
+        
+        auto deadlock_duration = std::chrono::duration_cast<std::chrono::seconds>(now - deadlock_start).count();
+        
+        // After 60 seconds of deadlock, abort
+        if (deadlock_duration >= 60) {
+            std::cerr << "\n[wfmash::memory] FATAL: Deadlock detected - all threads waiting for memory!\n";
+            std::cerr << "  " << stalled << " threads have been waiting with no progress for " << deadlock_duration << " seconds.\n";
+            std::cerr << "  The system cannot allocate memory for any task to proceed.\n";
+            std::cerr << "\n  This typically happens during the filtering phase with large batch sizes.\n";
+            std::cerr << "  To resolve:\n";
+            std::cerr << "    1. Use smaller batch size: -b 500m or -b 250m\n";
+            std::cerr << "    2. Process sequences separately\n";
+            std::cerr << "    3. Use a system with more memory\n";
+            std::cerr << "\n  Future versions will automatically switch to serial processing.\n";
+            std::cerr << "  Aborting to prevent indefinite hang.\n" << std::endl;
+            std::abort();
+        }
+    } else {
+        // Reset deadlock detection if we're making progress
+        deadlock_start = std::chrono::steady_clock::time_point::max();
+        deadlock_detected = false;
+    }
+    
     // Log periodically (every 10 seconds) to show we're still alive
     auto last = last_log_time.load();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
@@ -79,8 +115,6 @@ void wfmash_memory_handler() {
         // Try to update last_log_time atomically
         auto expected = last;
         if (last_log_time.compare_exchange_strong(expected, now)) {
-            int stalled = tasks_stalled.load();
-            int executing = tasks_executing.load();
             int total_events = total_stall_events.load();
             
             std::cerr << "\n[wfmash::memory] Memory allocation stalled - waiting for memory to become available\n";
@@ -89,7 +123,10 @@ void wfmash_memory_handler() {
             std::cerr << "  Total stall events: " << total_events << "\n";
             std::cerr << "  Total wait time: " << total_wait << " seconds\n";
             
-            if (stalled >= executing && executing > 0) {
+            if (deadlock_detected) {
+                auto deadlock_duration = std::chrono::duration_cast<std::chrono::seconds>(now - deadlock_start).count();
+                std::cerr << "  DEADLOCK WARNING: No progress for " << deadlock_duration << " seconds!\n";
+            } else if (stalled >= executing && executing > 0) {
                 std::cerr << "  WARNING: More tasks stalled than executing - potential deadlock risk\n";
             }
             
@@ -100,7 +137,9 @@ void wfmash_memory_handler() {
                 std::cerr << "    1. Using -b flag with smaller value (e.g., -b 50m or -b 25m)\n";
                 std::cerr << "    2. Reducing thread count with -t\n";
                 std::cerr << "    3. Processing smaller sequence subsets\n";
-                std::cerr << "  Continuing to wait for memory to become available...\n";
+                if (!deadlock_detected) {
+                    std::cerr << "  Continuing to wait for memory to become available...\n";
+                }
             }
         }
     }
