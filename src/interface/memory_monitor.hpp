@@ -21,12 +21,17 @@ inline std::string get_memory_status() {
     int executing = tasks_executing.load();
     int total_events = total_stall_events.load();
     
-    // Always show task status if any tasks are executing or stalled
-    if (executing > 0 || stalled > 0) {
-        return " [tasks: " + std::to_string(executing) + " active/" + 
-               std::to_string(stalled) + " stalled]";
+    // Always show system status with thread counts
+    std::string status = " [threads: " + std::to_string(executing) + " active/" + 
+                        std::to_string(stalled) + " stalled";
+    
+    // Add total stall events if any have occurred
+    if (total_events > 0) {
+        status += "/" + std::to_string(total_events) + " total stalls";
     }
-    return "";
+    
+    status += "]";
+    return status;
 }
 
 } // namespace memory
