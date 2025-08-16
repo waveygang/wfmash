@@ -48,15 +48,15 @@ void wfmash_memory_handler() {
     // Track when this thread started waiting
     static thread_local auto wait_start = std::chrono::steady_clock::now();
     static thread_local int local_wait_count = 0;
-    static thread_local bool first_call = true;
+    static thread_local bool first_stall_for_thread = true;
     
-    // Increment stalled counter on entry (allocation failed)
-    tasks_stalled.fetch_add(1);
-    
-    // Initialize wait start time on first call for this thread
-    if (first_call) {
+    // Track this stall event
+    if (first_stall_for_thread) {
+        first_stall_for_thread = false;
         wait_start = std::chrono::steady_clock::now();
-        first_call = false;
+        
+        // Increment both counters on first stall for this thread
+        tasks_stalled.fetch_add(1);
         int current_total = total_stall_events.fetch_add(1) + 1;
         
         // Print warning on very first stall across all threads
@@ -108,12 +108,13 @@ void wfmash_memory_handler() {
     local_wait_count++;
     
     // Exponential backoff: 100ms, 200ms, 400ms, ... up to 60 seconds
-    // But since we abort at 60s total, cap individual waits at 5s
+    // Cap individual waits at 5s
     int wait_ms = std::min(100 * (1 << std::min(local_wait_count - 1, 6)), 5000);
     std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
     
-    // Decrement stalled counter before returning (allocation will be retried)
-    tasks_stalled.fetch_sub(1);
+    // Note: We don't decrement tasks_stalled because we can't know when the thread
+    // actually gets memory. The counter represents "threads that have experienced stalls"
+    // rather than "threads currently waiting"
 }
 
 int main(int argc, char** argv) {

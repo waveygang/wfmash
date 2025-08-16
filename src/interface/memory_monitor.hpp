@@ -17,21 +17,12 @@ inline std::atomic<std::chrono::steady_clock::time_point> last_log_time{std::chr
 
 // Helper to get memory stats string
 inline std::string get_memory_status() {
-    int stalled = tasks_stalled.load();
+    int threads_with_stalls = tasks_stalled.load();
     int total_events = total_stall_events.load();
     
-    // Only show status if there are stalls
-    if (stalled > 0 || total_events > 0) {
-        std::string status = " [";
-        if (stalled > 0) {
-            status += std::to_string(stalled) + " threads stalled";
-        }
-        if (total_events > 0) {
-            if (stalled > 0) status += ", ";
-            status += std::to_string(total_events) + " total stalls";
-        }
-        status += "]";
-        return status;
+    // Only show status if there have been stalls
+    if (threads_with_stalls > 0 || total_events > 0) {
+        return " [" + std::to_string(threads_with_stalls) + " threads experienced stalls]";
     }
     return "";
 }
