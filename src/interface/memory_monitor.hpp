@@ -18,20 +18,22 @@ inline std::atomic<std::chrono::steady_clock::time_point> last_log_time{std::chr
 // Helper to get memory stats string
 inline std::string get_memory_status() {
     int stalled = tasks_stalled.load();
-    int executing = tasks_executing.load();
     int total_events = total_stall_events.load();
     
-    // Always show system status with thread counts
-    std::string status = " [threads: " + std::to_string(executing) + " active/" + 
-                        std::to_string(stalled) + " stalled";
-    
-    // Add total stall events if any have occurred
-    if (total_events > 0) {
-        status += "/" + std::to_string(total_events) + " total stalls";
+    // Only show status if there are stalls
+    if (stalled > 0 || total_events > 0) {
+        std::string status = " [";
+        if (stalled > 0) {
+            status += std::to_string(stalled) + " threads stalled";
+        }
+        if (total_events > 0) {
+            if (stalled > 0) status += ", ";
+            status += std::to_string(total_events) + " total stalls";
+        }
+        status += "]";
+        return status;
     }
-    
-    status += "]";
-    return status;
+    return "";
 }
 
 } // namespace memory
