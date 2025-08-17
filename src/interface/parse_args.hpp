@@ -34,6 +34,15 @@ void parse_args(int argc,
                 skch::Parameters& map_parameters,
                 align::Parameters& align_parameters,
                 yeet::Parameters& yeet_parameters) {
+    
+    // Initialize all map_parameters defaults here (single source of truth)
+    // ANI settings - default to ani50
+    map_parameters.auto_pct_identity = true;
+    map_parameters.ani_percentile = 50;  // Changed from 25 to 50 for better performance
+    map_parameters.ani_adjustment = 0.0;  // Changed from -5.0 to 0.0
+    
+    // Scaffold filtering - default to 0.5 overlap threshold
+    map_parameters.scaffold_overlap_threshold = 0.5;
 
     args::ArgumentParser parser("");
     parser.helpParams.width = 100;
@@ -65,7 +74,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani25-5)", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
@@ -86,7 +95,7 @@ void parse_args(int argc,
 
     // SCAFFOLDING
     args::Group scaffold_opts(options_group, "SCAFFOLDING:");
-    args::ValueFlag<int> scaffold_mass(scaffold_opts, "INT", "scaffold mass (min segments) [5]", {'S', "scaffold-mass"});
+    args::ValueFlag<int> scaffold_mass(scaffold_opts, "INT", "scaffold mass (min segments) [10]", {'S', "scaffold-mass"});
     args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [100k]", {'D', "scaffold-dist"});
     args::ValueFlag<std::string> scaffold_jump(scaffold_opts, "INT", "scaffold jump (gap) [100k]", {'j', "scaffold-jump"});
     args::ValueFlag<double> scaffold_overlap_thresh(scaffold_opts, "FLOAT", "scaffold chain overlap threshold [0.5]", {"scaffold-overlap"});
@@ -374,9 +383,11 @@ void parse_args(int argc,
             }
         }
     } else {
-        // No -p flag provided, use ani25 by default
+        // No -p flag provided, use ani50 by default (set here, not in Parameters struct)
         map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
-        // auto_pct_identity, ani_percentile=25, ani_adjustment=0.0 already set in Parameters struct
+        map_parameters.auto_pct_identity = true;
+        map_parameters.ani_percentile = 50;
+        map_parameters.ani_adjustment = 0.0;
     }
 
     if (block_length) {
@@ -443,8 +454,8 @@ void parse_args(int argc,
         // Convert segments to length: segments * window_length
         map_parameters.scaffold_min_length = min_segs * map_parameters.windowLength;
     } else {
-        // Default: 5 segments of 1kb each = 5kb
-        map_parameters.scaffold_min_length = 5000;
+        // Default: 10 segments of 1kb each = 10kb
+        map_parameters.scaffold_min_length = 10000;
     }
 
     if (scaffold_output) {
