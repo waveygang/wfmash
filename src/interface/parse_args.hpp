@@ -95,7 +95,7 @@ void parse_args(int argc,
 
     // SCAFFOLDING
     args::Group scaffold_opts(options_group, "SCAFFOLDING:");
-    args::ValueFlag<int> scaffold_mass(scaffold_opts, "INT", "scaffold mass (min segments) [10]", {'S', "scaffold-mass"});
+    args::ValueFlag<std::string> scaffold_mass(scaffold_opts, "INT", "min scaffold length [10k]", {'S', "scaffold-mass"});
     args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [100k]", {'D', "scaffold-dist"});
     args::ValueFlag<std::string> scaffold_jump(scaffold_opts, "INT", "scaffold jump (gap) [100k]", {'j', "scaffold-jump"});
     args::ValueFlag<double> scaffold_overlap_thresh(scaffold_opts, "FLOAT", "scaffold chain overlap threshold [0.5]", {"scaffold-overlap"});
@@ -444,17 +444,15 @@ void parse_args(int argc,
         map_parameters.scaffold_max_deviation = 100000; // 100k default
     }
 
-    // Parse scaffold mass (minimum segments)
+    // Parse scaffold minimum length
     if (scaffold_mass) {
-        int min_segs = args::get(scaffold_mass);
-        if (min_segs <= 0) {
-            std::cerr << "[wfmash] ERROR: Invalid scaffold mass" << std::endl;
+        map_parameters.scaffold_min_length = wfmash::handy_parameter(args::get(scaffold_mass));
+        if (map_parameters.scaffold_min_length <= 0) {
+            std::cerr << "[wfmash] ERROR: Invalid scaffold minimum length" << std::endl;
             exit(1);
         }
-        // Convert segments to length: segments * window_length
-        map_parameters.scaffold_min_length = min_segs * map_parameters.windowLength;
     } else {
-        // Default: 10 segments of 1kb each = 10kb
+        // Default: 10kb minimum scaffold length
         map_parameters.scaffold_min_length = 10000;
     }
 
@@ -825,7 +823,7 @@ void parse_args(int argc,
               << ", P=" << map_parameters.max_mapping_length
               << ", j=" << map_parameters.scaffold_gap 
               << ", D=" << map_parameters.scaffold_max_deviation
-              << ", S=" << (map_parameters.scaffold_min_length / map_parameters.windowLength)
+              << ", S=" << map_parameters.scaffold_min_length
               << ", n=" << map_parameters.numMappingsForSegment
               << ", p=";
     

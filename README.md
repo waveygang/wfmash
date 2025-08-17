@@ -27,7 +27,7 @@ _**a pangenome-scale aligner**_
 
 4. **Scaffolding** (optional): For large-scale alignments, scaffolding identifies syntenic regions:
    - Chains are merged with larger gaps (default: 100kb) to form scaffolds
-   - Only chains with sufficient segments (default: 10) are considered
+   - Only chains with sufficient total length (default: 10kb) are considered
    - Mappings are retained if they fall within a maximum distance (default: 100kb) from scaffold anchors
    - This helps focus alignment on truly homologous regions while filtering out spurious matches
 
@@ -91,7 +91,7 @@ wfmash -Y '#' pangenome.fa >aln.paf
 * `--hg-filter=[n,Δ,conf]` - hypergeometric filter parameters (default: 1.0,0.0,99.9)
 
 #### Scaffolding Parameters (for synteny filtering)
-* `-S[INT], --scaffold-mass=[INT]` - minimum segments per scaffold (default: 10)
+* `-S[INT], --scaffold-mass=[INT]` - minimum scaffold length (default: 10k)
 * `-D[INT], --scaffold-dist=[INT]` - maximum distance from scaffold anchors (default: 100k)
 * `-j[INT], --scaffold-jump=[INT]` - maximum gap for scaffold chaining (default: 100k)
 * `--scaffold-out=[FILE]` - output scaffold chains to FILE
@@ -149,7 +149,7 @@ wfmash -m -w 50k -P 500k reference.fa query.fa >mappings.paf
 ```
 
 ### Standard alignment with default parameters
-For typical whole-genome alignment (default: ani50, -S 10):
+For typical whole-genome alignment (default: ani50, -S 10k):
 ```sh
 wfmash reference.fa query.fa >aln.paf
 ```
@@ -179,7 +179,7 @@ wfmash -n 3 reference.fa query.fa >aln.paf
 ### Pangenome all-vs-all with scaffolding
 For large-scale pangenome construction with synteny filtering:
 ```sh
-wfmash -Y '#' -S 10 -j 200k --scaffold-out scaffolds.paf pangenome.fa >aln.paf
+wfmash -Y '#' -S 20k -j 200k --scaffold-out scaffolds.paf pangenome.fa >aln.paf
 ```
 
 ### One-to-one mapping
@@ -536,64 +536,39 @@ nextflow run nf-core/pangenome -r dev --input references.fa --wfmash_only --wfma
 This emits a `results/wfmash` folder which stores all the `wfmash` output.
 
 
-## Performance Optimization
+## Parameter Selection Guide
 
-### Default Settings Rationale
+### Understanding ANI Settings
 
-The default settings (`-p ani50 -S 10`) have been optimized based on extensive benchmarking:
+The `-p` parameter accepts ANI-based presets that automatically determine the identity threshold from your data:
 
-- **ani50**: Uses the median ANI of input sequences, providing optimal balance between sensitivity and specificity
-  - Reduces spurious inter-chromosomal mappings by up to 95%
-  - Improves runtime by 2-8x compared to more permissive settings
-  - Focuses on high-confidence regions (>99% identity in many cases)
+- **ani50** (default): Uses the median (50th percentile) of the ANI distribution between input sequences. This provides a balanced approach focusing on syntenic regions.
+- **ani25**: Uses the 25th percentile, allowing more divergent mappings
+- **ani75**: Uses the 75th percentile, focusing on highly similar regions
+- **Adjustments**: You can add or subtract percentage points, e.g., `ani50-5` or `ani25+10`
 
-- **-S 10**: Requires 10 segments for scaffold chains, filtering noise while preserving synteny
-  - Reduces off-diagonal mappings by ~40%
-  - Minimal impact on coverage for most use cases
-  - Particularly effective for eukaryotic genomes with repetitive content
+When you subtract percentages from the ANI threshold (e.g., `ani50-5`), you begin to capture:
+- Repetitive sequences and satellite DNA
+- Mobile element insertions (MEIs) and transposable elements
+- More divergent homologous regions
+- Centromeric and pericentromeric sequences
 
-### Performance Tips
+### Scaffold Filtering
 
-#### For Maximum Speed (Gene-space focus)
-```sh
-# Use higher identity threshold and more stringent scaffolding
-wfmash -p ani75 -S 15 reference.fa query.fa >aln.paf
-```
-- 10x faster on divergent genomes
-- Focuses on highly conserved regions
-- Ideal for: gene annotation transfer, synteny analysis
+The `-S` parameter controls scaffold filtering, which helps focus on syntenic regions:
 
-#### For Maximum Sensitivity (Including repeats)
-```sh
-# Use lower identity threshold and relaxed scaffolding
-wfmash -p ani25-5 -S 5 reference.fa query.fa >aln.paf
-```
-- Captures centromeric and highly repetitive regions
-- ~90% query coverage on divergent genomes
-- Ideal for: repeat analysis, centromere studies, comprehensive coverage
-
-#### For Closely Related Genomes (>99% ANI)
-```sh
-# Default settings work well, or use fixed threshold
-wfmash -p 99 reference.fa query.fa >aln.paf
-```
+- **Default (10k)**: Requires chains of at least 10kb total length to form scaffolds
+- This filters out short, spurious matches while preserving true homologous regions
+- Accepts values like `5k`, `100k`, `1m` for 5kb, 100kb, 1Mb respectively
+- Adjust based on your genome characteristics and alignment goals
 
 ### Memory Management
 
 If you encounter memory issues:
 
-1. **Reduce batch size**: Use `-b 500m` or `-b 100m` instead of default
+1. **Reduce batch size**: Use `-b 500m` or `-b 100m`
 2. **Reduce threads**: Memory usage scales with thread count
-3. **Use scaffolding**: `-S 10` reduces the number of alignments computed
-
-### Benchmarking Results
-
-Based on real-world testing:
-
-| Setting | Arabidopsis Runtime | Yeast Runtime | Memory Usage | Noise Level |
-|---------|-------------------|---------------|--------------|-------------|
-| ani25-5 -S 5 | 5:15 | 2:35 | 2.1 GB | High (17% inter-chr) |
-| ani50 -S 10 | 0:38 (8.4x faster) | 1:19 (2x faster) | 1.5 GB | Low (1.7% inter-chr) |
+3. **Use stricter filtering**: Higher `-S` values reduce memory requirements
 
 ## <a name="publications"></a>publications
 
