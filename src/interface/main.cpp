@@ -51,7 +51,20 @@ int main(int argc, char** argv) {
     yeet::parse_args(argc, argv, map_parameters, align_parameters, yeet_parameters);
     
     // Install memory handler for clean abort on OOM
-    wfmash::memory::install_memory_handler();
+    // Convert batch size to human-readable format
+    std::string batch_str;
+    if (map_parameters.index_by_size == std::numeric_limits<int64_t>::max()) {
+        batch_str = "unlimited";
+    } else if (map_parameters.index_by_size >= 1000000000) {
+        batch_str = std::to_string(map_parameters.index_by_size / 1000000000) + "g";
+    } else if (map_parameters.index_by_size >= 1000000) {
+        batch_str = std::to_string(map_parameters.index_by_size / 1000000) + "m";
+    } else if (map_parameters.index_by_size >= 1000) {
+        batch_str = std::to_string(map_parameters.index_by_size / 1000) + "k";
+    } else {
+        batch_str = std::to_string(map_parameters.index_by_size);
+    }
+    wfmash::memory::install_memory_handler(map_parameters.threads, batch_str);
 
     //parameters.refSequences.push_back(ref);
 

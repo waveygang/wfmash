@@ -81,7 +81,7 @@ struct Parameters
     bool world_minimizers = false;
     uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
     double overlap_threshold;                         // minimum overlap for a mapping to be considered
-    double scaffold_overlap_threshold = 0.5;          // overlap threshold for scaffold chain filtering
+    double scaffold_overlap_threshold;  // set in parse_args.hpp
     int64_t scaffold_max_deviation;                  // max diagonal deviation from scaffold chains
     int64_t scaffold_gap;                           // gap threshold for scaffold chaining
     int64_t scaffold_min_length = 50000;            // minimum scaffold block length
@@ -94,9 +94,9 @@ struct Parameters
     double max_kmer_freq = 0.0002;  // Maximum allowed k-mer frequency fraction (0-1) or count (>1)
 
     bool use_progress_bar = false;
-    bool auto_pct_identity = true;  // default to auto identity estimation
-    int ani_percentile = 25;  // which percentile to use (25, 50, 75, etc.)
-    float ani_adjustment = -5.0;  // adjustment to apply to the percentile (+/- percentage points)
+    bool auto_pct_identity;  // set in parse_args.hpp
+    int ani_percentile;  // set in parse_args.hpp
+    float ani_adjustment;  // set in parse_args.hpp
     bool use_streaming_minhash = true;  // use efficient streaming MinHash algorithm (default enabled)
     int ani_sketch_size = 1000;  // sketch size for ANI estimation
     bool sketch_size_manually_set = false;  // true if user specified -s flag

@@ -8,7 +8,7 @@ _**a pangenome-scale aligner**_
 
 `wfmash` is an aligner for pangenomes that combines efficient homology mapping with base-level alignment. It uses MashMap 3.5 to find approximate mappings between sequences, then applies WFA (Wave Front Alignment) to obtain base-level alignments. MashMap 3.5 employs minmers, a generalization of minimizers that provides unbiased Jaccard similarity estimation for improved mapping accuracy.
 
-`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%. By default, `wfmash` automatically determines an appropriate identity threshold based on the ANI (Average Nucleotide Identity) distribution of your input sequences.
+`wfmash` is designed to make whole genome alignment easy. On a modest compute node, whole genome alignments of gigabase-scale genomes should take minutes to hours, depending on sequence divergence. It can handle high sequence divergence, with average nucleotide identity between input sequences as low as 70%. By default, `wfmash` automatically determines an appropriate identity threshold based on the ANI (Average Nucleotide Identity) distribution of your input sequences, using the median (50th percentile) for optimal balance between coverage and alignment quality.
 
 `wfmash` is the key algorithm in [`pggb`](https://github.com/pangenome/pggb) (the PanGenome Graph Builder), where it is applied to make an all-to-all alignment of input genomes that defines the base structure of the pangenome graph. It can scale to support the all-to-all alignment of hundreds of human genomes.
 
@@ -27,7 +27,7 @@ _**a pangenome-scale aligner**_
 
 4. **Scaffolding** (optional): For large-scale alignments, scaffolding identifies syntenic regions:
    - Chains are merged with larger gaps (default: 100kb) to form scaffolds
-   - Only chains with sufficient segments (default: 5) are considered
+   - Only chains with sufficient total length (default: 10kb) are considered
    - Mappings are retained if they fall within a maximum distance (default: 100kb) from scaffold anchors
    - This helps focus alignment on truly homologous regions while filtering out spurious matches
 
@@ -72,9 +72,9 @@ wfmash -Y '#' pangenome.fa >aln.paf
 
 #### Mapping Parameters
 * `-m, --approx-mapping` - output mappings only, no alignment
-* `-p[FLOAT|aniXX[+/-N]], --map-pct-id=[FLOAT|aniXX[+/-N]]` - minimum identity percentage or ANI preset (default: ani25-5)
+* `-p[FLOAT|aniXX[+/-N]], --map-pct-id=[FLOAT|aniXX[+/-N]]` - minimum identity percentage or ANI preset (default: ani50)
   * Fixed percentage: `-p 85` sets 85% identity threshold
-  * ANI presets: `-p ani25` uses 25th percentile of ANI distribution
+  * ANI presets: `-p ani25` uses 25th percentile, `-p ani50` uses median (default)
   * Adjustments: `-p ani50-10` uses median minus 10%, `-p ani75+5` uses 75th percentile plus 5%
 * `-n[INT], --mappings=[INT]` - number of mappings per segment (default: 1)
 * `-l[INT], --block-length=[INT]` - minimum mapping block length (default: 0, no minimum)
@@ -91,10 +91,11 @@ wfmash -Y '#' pangenome.fa >aln.paf
 * `--hg-filter=[n,Δ,conf]` - hypergeometric filter parameters (default: 1.0,0.0,99.9)
 
 #### Scaffolding Parameters (for synteny filtering)
-* `-S[INT], --scaffold-mass=[INT]` - minimum segments per scaffold (default: 5)
+* `-S[INT], --scaffold-mass=[INT]` - minimum scaffold length (default: 10k)
 * `-D[INT], --scaffold-dist=[INT]` - maximum distance from scaffold anchors (default: 100k)
 * `-j[INT], --scaffold-jump=[INT]` - maximum gap for scaffold chaining (default: 100k)
 * `--scaffold-out=[FILE]` - output scaffold chains to FILE
+* `--scaffold-overlap=[FLOAT]` - overlap threshold for scaffold chain filtering (default: 0.5)
 
 #### Selection Filters
 * `-X, --self-maps` - include self-mappings
@@ -148,7 +149,7 @@ wfmash -m -w 50k -P 500k reference.fa query.fa >mappings.paf
 ```
 
 ### Standard alignment with default parameters
-For typical whole-genome alignment (default: ani25-5):
+For typical whole-genome alignment (default: ani50, -S 10k):
 ```sh
 wfmash reference.fa query.fa >aln.paf
 ```
@@ -178,7 +179,7 @@ wfmash -n 3 reference.fa query.fa >aln.paf
 ### Pangenome all-vs-all with scaffolding
 For large-scale pangenome construction with synteny filtering:
 ```sh
-wfmash -Y '#' -S 10 -j 200k --scaffold-out scaffolds.paf pangenome.fa >aln.paf
+wfmash -Y '#' -S 20k -j 200k --scaffold-out scaffolds.paf pangenome.fa >aln.paf
 ```
 
 ### One-to-one mapping
@@ -535,7 +536,41 @@ nextflow run nf-core/pangenome -r dev --input references.fa --wfmash_only --wfma
 This emits a `results/wfmash` folder which stores all the `wfmash` output.
 
 
-## <a name=“publications”></a>publications
+## Parameter Selection Guide
+
+### Understanding ANI Settings
+
+The `-p` parameter accepts ANI-based presets that automatically determine the identity threshold from your data:
+
+- **ani50** (default): Uses the median (50th percentile) of the ANI distribution between input sequences. This provides a balanced approach focusing on syntenic regions.
+- **ani25**: Uses the 25th percentile, allowing more divergent mappings
+- **ani75**: Uses the 75th percentile, focusing on highly similar regions
+- **Adjustments**: You can add or subtract percentage points, e.g., `ani50-5` or `ani25+10`
+
+When you subtract percentages from the ANI threshold (e.g., `ani50-5`), you begin to capture:
+- Repetitive sequences and satellite DNA
+- Mobile element insertions (MEIs) and transposable elements
+- More divergent homologous regions
+- Centromeric and pericentromeric sequences
+
+### Scaffold Filtering
+
+The `-S` parameter controls scaffold filtering, which helps focus on syntenic regions:
+
+- **Default (10k)**: Requires chains of at least 10kb total length to form scaffolds
+- This filters out short, spurious matches while preserving true homologous regions
+- Accepts values like `5k`, `100k`, `1m` for 5kb, 100kb, 1Mb respectively
+- Adjust based on your genome characteristics and alignment goals
+
+### Memory Management
+
+If you encounter memory issues:
+
+1. **Reduce batch size**: Use `-b 500m` or `-b 100m`
+2. **Reduce threads**: Memory usage scales with thread count
+3. **Use stricter filtering**: Higher `-S` values reduce memory requirements
+
+## <a name="publications"></a>publications
 
 - **Santiago Marco-Sola, Jordan M. Eizenga, Andrea Guarracino, Benedict Paten, Erik Garrison, and Miquel Moreto**. ["Optimal gap-affine alignment in O (s) space"](https://doi.org/10.1093/bioinformatics/btad074). *Bioinformatics*, 2023.
 

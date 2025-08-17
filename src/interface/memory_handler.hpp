@@ -16,6 +16,10 @@ inline std::atomic<int> allocation_failures(0);
 inline std::atomic<bool> handler_installed(false);
 inline std::chrono::steady_clock::time_point last_failure_time;
 
+// Store actual parameters for better error messages
+inline int actual_threads = 0;
+inline std::string actual_batch_size = "";
+
 inline void memory_exhausted_handler() {
     allocation_failures.fetch_add(1);
     auto now = std::chrono::steady_clock::now();
@@ -34,8 +38,27 @@ inline void memory_exhausted_handler() {
         std::cerr << "  - The input sequences are very large\n\n";
         
         std::cerr << "SUGGESTIONS TO FIX THIS:\n";
-        std::cerr << "  1. Reduce batch size: Try -b 500m or -b 100m instead of -b 1g\n";
-        std::cerr << "  2. Use fewer threads: Try -t 24 or -t 48 instead of -t 112\n";
+        
+        // Provide specific suggestions based on current settings
+        if (!actual_batch_size.empty()) {
+            std::cerr << "  1. Reduce batch size: Current is -b " << actual_batch_size << "\n";
+            std::cerr << "     Try: -b 500m, -b 100m, or -b 50m\n";
+        } else {
+            std::cerr << "  1. Reduce batch size: Try -b 500m or -b 100m instead of -b 1g\n";
+        }
+        
+        if (actual_threads > 0) {
+            std::cerr << "  2. Use fewer threads: Current is -t " << actual_threads << "\n";
+            if (actual_threads > 48) {
+                std::cerr << "     Try: -t " << (actual_threads / 2) << " or -t 24\n";
+            } else if (actual_threads > 8) {
+                std::cerr << "     Try: -t " << (actual_threads / 2) << " or -t 8\n";
+            } else {
+                std::cerr << "     Try: -t " << std::max(1, actual_threads / 2) << "\n";
+            }
+        } else {
+            std::cerr << "  2. Use fewer threads: Try -t 24 or -t 48 instead of -t 112\n";
+        }
         std::cerr << "  3. Run on a node with more memory\n";
         std::cerr << "  4. Split your input into smaller chunks\n\n";
         
@@ -53,8 +76,10 @@ inline void memory_exhausted_handler() {
     std::abort();
 }
 
-inline void install_memory_handler() {
+inline void install_memory_handler(int threads = 0, const std::string& batch_size = "") {
     if (!handler_installed.exchange(true)) {
+        actual_threads = threads;
+        actual_batch_size = batch_size;
         std::set_new_handler(memory_exhausted_handler);
         std::cerr << "[wfmash] Memory handler installed - will abort cleanly on allocation failure\n";
     }
