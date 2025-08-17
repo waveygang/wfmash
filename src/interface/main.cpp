@@ -30,6 +30,8 @@
 #include "align/include/parseCmdArgs.hpp"
 #include "align/include/computeAlignments.hpp"
 
+// Memory handler
+#include "interface/memory_handler.hpp"
 
 // External includes
 #include "common/args.hxx"
@@ -47,6 +49,9 @@ int main(int argc, char** argv) {
     align::Parameters align_parameters;
     yeet::Parameters yeet_parameters;
     yeet::parse_args(argc, argv, map_parameters, align_parameters, yeet_parameters);
+    
+    // Install memory handler for clean abort on OOM
+    wfmash::memory::install_memory_handler();
 
     //parameters.refSequences.push_back(ref);
 
