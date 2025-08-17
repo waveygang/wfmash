@@ -89,6 +89,7 @@ void parse_args(int argc,
     args::ValueFlag<int> scaffold_mass(scaffold_opts, "INT", "scaffold mass (min segments) [5]", {'S', "scaffold-mass"});
     args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [100k]", {'D', "scaffold-dist"});
     args::ValueFlag<std::string> scaffold_jump(scaffold_opts, "INT", "scaffold jump (gap) [100k]", {'j', "scaffold-jump"});
+    args::ValueFlag<double> scaffold_overlap_thresh(scaffold_opts, "FLOAT", "scaffold chain overlap threshold [0.5]", {"scaffold-overlap"});
     args::ValueFlag<std::string> scaffold_output(scaffold_opts, "FILE", "output scaffold mappings to FILE", {"scaffold-out"});
 
     // SELECTION
@@ -448,6 +449,10 @@ void parse_args(int argc,
 
     if (scaffold_output) {
         map_parameters.scaffold_output_file = args::get(scaffold_output);
+    }
+
+    if (scaffold_overlap_thresh) {
+        map_parameters.scaffold_overlap_threshold = args::get(scaffold_overlap_thresh);
     }
 
     if (max_mapping_length) {

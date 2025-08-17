@@ -874,8 +874,11 @@ namespace skch
         // Step 4: Apply plane sweep filter to the merged chains to remove off-diagonal/weaker scaffold chains
         if (!mergedChains.empty() && (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE)) {
             MappingResultsVector_t filteredChains;
+            // Use scaffold-specific overlap threshold for more aggressive filtering
+            Parameters scaffoldFilterParam = param;
+            scaffoldFilterParam.overlap_threshold = param.scaffold_overlap_threshold;
             filterByGroup(mergedChains, filteredChains, param.numMappingsForSegment - 1, 
-                         false, idManager, param, progress);
+                         false, idManager, scaffoldFilterParam, progress);
             mergedChains = std::move(filteredChains);
         }
 

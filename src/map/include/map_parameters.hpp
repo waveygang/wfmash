@@ -81,6 +81,7 @@ struct Parameters
     bool world_minimizers = false;
     uint64_t sparsity_hash_threshold;                 // keep mappings that hash to <= this value
     double overlap_threshold;                         // minimum overlap for a mapping to be considered
+    double scaffold_overlap_threshold = 0.5;          // overlap threshold for scaffold chain filtering
     int64_t scaffold_max_deviation;                  // max diagonal deviation from scaffold chains
     int64_t scaffold_gap;                           // gap threshold for scaffold chaining
     int64_t scaffold_min_length = 50000;            // minimum scaffold block length
