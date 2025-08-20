@@ -36,10 +36,10 @@ void parse_args(int argc,
                 yeet::Parameters& yeet_parameters) {
     
     // Initialize all map_parameters defaults here (single source of truth)
-    // ANI settings - default to ani50
+    // ANI settings - default to ani50-2
     map_parameters.auto_pct_identity = true;
-    map_parameters.ani_percentile = 50;  // Changed from 25 to 50 for better performance
-    map_parameters.ani_adjustment = 0.0;  // Changed from -5.0 to 0.0
+    map_parameters.ani_percentile = 50;  // Use 50th percentile (median)
+    map_parameters.ani_adjustment = -2.0;  // Subtract 2% for more sensitive alignment
     
     // Scaffold filtering - default to 0.5 overlap threshold
     map_parameters.scaffold_overlap_threshold = 0.5;
@@ -74,7 +74,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50)", {'p', "map-pct-id"});
+    args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50-2)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
