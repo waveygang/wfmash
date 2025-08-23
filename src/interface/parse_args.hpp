@@ -383,11 +383,11 @@ void parse_args(int argc,
             }
         }
     } else {
-        // No -p flag provided, use ani50 by default (set here, not in Parameters struct)
+        // No -p flag provided, use ani50-2 by default (set here, not in Parameters struct)
         map_parameters.percentageIdentity = skch::fixed::percentage_identity; // Will be overridden
         map_parameters.auto_pct_identity = true;
         map_parameters.ani_percentile = 50;
-        map_parameters.ani_adjustment = 0.0;
+        map_parameters.ani_adjustment = -2.0;
     }
 
     if (block_length) {
