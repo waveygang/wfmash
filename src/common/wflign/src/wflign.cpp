@@ -124,6 +124,8 @@ void do_biwfa_alignment(
     const bool no_seq_in_sam,
     const bool disable_chain_patching,
     const float min_identity,
+    const uint64_t min_alignment_length,
+    const float min_block_identity,
     const uint64_t wflign_max_len_minor,
     const float mashmap_estimated_identity,
     const int32_t chain_id,
@@ -444,6 +446,8 @@ void do_biwfa_alignment(
             target_offset,
             target_length,
             min_identity,
+            min_alignment_length,
+            min_block_identity,
             mashmap_estimated_identity,
             chain_id,
             chain_length,
@@ -464,6 +468,8 @@ void do_biwfa_alignment(
             target_offset,
             target_length,
             min_identity,
+            min_alignment_length,
+            min_block_identity,
             mashmap_estimated_identity,
             no_seq_in_sam,
             emit_md_tag,
@@ -507,6 +513,8 @@ void clean_up_sketches(std::vector<std::vector<rkmh::hash_t>*> &sketches) {
 WFlign::WFlign(
     const uint16_t segment_length,
     const float min_identity,
+    const uint64_t min_alignment_length,
+    const float min_block_identity,
     const bool force_wflign_,
     const int wfa_mismatch_score,
     const int wfa_gap_opening_score,
@@ -532,6 +540,8 @@ WFlign::WFlign(
     // Parameters
     this->segment_length = segment_length;
     this->min_identity = min_identity;
+    this->min_alignment_length = min_alignment_length;
+    this->min_block_identity = min_block_identity;
 
     this->force_wflign = force_wflign_;
 
@@ -822,7 +832,7 @@ void WFlign::wflign_affine_wavefront(
             query_name, query, query_total_length, query_offset, query_length, query_is_rev,
             target_name, target, target_total_length, target_offset, target_length,
             *out, wfa_convex_penalties, emit_md_tag, paf_format_else_sam, no_seq_in_sam, disable_chain_patching,
-            min_identity, wflign_max_len_minor, mashmap_estimated_identity,
+            min_identity, min_alignment_length, min_block_identity, wflign_max_len_minor, mashmap_estimated_identity,
             -1, 1, 1); // Not part of a chain when using direct biWFA
         return;
     }
@@ -1007,6 +1017,8 @@ void WFlign::wflign_affine_wavefront(
                 target_offset,
                 target_length,
                 min_identity,
+                min_alignment_length,
+                min_block_identity,
 #ifdef WFA_PNG_TSV_TIMING
                 elapsed_time_wflambda_ms,
                 1,
@@ -1476,6 +1488,8 @@ void WFlign::wflign_affine_wavefront(
                         target_offset,
                         target_length,
                         min_identity,
+                        min_alignment_length,
+                        min_block_identity,
 #ifdef WFA_PNG_TSV_TIMING
                         elapsed_time_wflambda_ms,
                         extend_data.num_alignments,
@@ -1517,6 +1531,8 @@ void WFlign::wflign_affine_wavefront(
                             target_offset,
                             target_length,
                             min_identity,
+                            min_alignment_length,
+                            min_block_identity,
                             mashmap_estimated_identity,
                             0, 0, 0);
                 }

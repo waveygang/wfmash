@@ -1092,6 +1092,8 @@ void write_merged_alignment(
         const uint64_t& _target_offset,
         const uint64_t& _target_length,
         const float& min_identity,
+        const uint64_t& min_alignment_length,
+        const float& min_block_identity,
 #ifdef WFA_PNG_TSV_TIMING
         const long& elapsed_time_wflambda_ms,
         const uint64_t& num_alignments,
@@ -2121,8 +2123,8 @@ query_start : query_end)
     const double block_identity =
             (double)cigar_matches / (double)(cigar_matches + edit_distance);
 
-    // Apply filtering: gap_compressed_identity >= min_identity, alignment length >= 34bp and block_identity >= 0.3
-    if (gap_compressed_identity >= min_identity && cigar_qAlignedLength >= 34 && block_identity >= 0.3) {
+    // Apply filtering using configurable thresholds
+    if (gap_compressed_identity >= min_identity && cigar_qAlignedLength >= min_alignment_length && block_identity >= min_block_identity) {
         auto write_tag_and_md_string = [&](std::ostream &out, const char *c,
                                            const int target_start) {
             out << "MD:Z:";
@@ -2345,7 +2347,7 @@ query_start : query_end)
                 out, patch_aln, "", query_name, query_total_length,
                 query_offset, query_length, query_is_rev,
                 target_name, target_total_length, target_offset, target_length,
-                min_identity, mashmap_estimated_identity,
+                min_identity, min_alignment_length, min_block_identity, mashmap_estimated_identity,
                 no_seq_in_sam, emit_md_tag, query, target, target_pointer_shift,
                 0, 0, 0);
         }
@@ -2375,6 +2377,8 @@ query_start : query_end)
                     target_offset,
                     target_length,
                     min_identity,
+                    min_alignment_length,
+                    min_block_identity,
                     mashmap_estimated_identity,
                     0, 0, 0,
                     false,  // Don't add an endline after each alignment
@@ -2487,6 +2491,8 @@ void write_alignment_sam(
     const uint64_t& target_offset,
     const uint64_t& target_length,
     const float& min_identity,
+    const uint64_t& min_alignment_length,
+    const float& min_block_identity,
     const float& mashmap_estimated_identity,
     const bool& no_seq_in_sam,
     const bool& emit_md_tag,
@@ -2551,8 +2557,8 @@ void write_alignment_sam(
         (query_is_rev ? query_offset : query_offset + query_length);
     */
 
-    // Apply filtering: gap_compressed_identity >= min_identity, alignment length >= 34bp and block_identity >= 0.3
-    if (patch_gap_compressed_identity >= min_identity && patch_qAlignedLength >= 34 && patch_block_identity >= 0.3) {
+    // Apply filtering using configurable thresholds
+    if (patch_gap_compressed_identity >= min_identity && patch_qAlignedLength >= min_alignment_length && patch_block_identity >= min_block_identity) {
 
         out << query_name << "\t"
             << (query_is_rev ^ patch_aln.is_rev ? "16" : "0") << "\t"
@@ -2616,6 +2622,8 @@ bool write_alignment_paf(
         const uint64_t& target_offset,
         const uint64_t& target_length, // unused
         const float& min_identity,
+        const uint64_t& min_alignment_length,
+        const float& min_block_identity,
         const float& mashmap_estimated_identity,
         const int32_t& chain_id,
         const int32_t& chain_length,
@@ -2672,8 +2680,8 @@ bool write_alignment_paf(
                 (double)matches /
                 (double)(matches + mismatches + inserted_bp + deleted_bp);
 
-        // Apply filtering: gap_compressed_identity >= min_identity, alignment length >= 34bp and block_identity >= 0.3
-        if (gap_compressed_identity >= min_identity && qAlignedLength >= 34 && block_identity >= 0.3) {
+        // Apply filtering using configurable thresholds
+        if (gap_compressed_identity >= min_identity && qAlignedLength >= min_alignment_length && block_identity >= min_block_identity) {
             uint64_t q_start, q_end;
             // The new aln.j is "new_query_start - query_offset"
             if (query_is_rev) {
