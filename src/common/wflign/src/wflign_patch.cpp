@@ -2115,13 +2115,14 @@ query_start : query_end)
             (double)cigar_matches /
             (double)(cigar_matches + cigar_mismatches + cigar_insertions + cigar_deletions);
 
-    if (gap_compressed_identity >= min_identity) {
-        const uint64_t edit_distance = cigar_mismatches + cigar_inserted_bp + cigar_deleted_bp;
+    const uint64_t edit_distance = cigar_mismatches + cigar_inserted_bp + cigar_deleted_bp;
 
-        // identity over the full block
-        const double block_identity =
-                (double)cigar_matches / (double)(cigar_matches + edit_distance);
+    // identity over the full block
+    const double block_identity =
+            (double)cigar_matches / (double)(cigar_matches + edit_distance);
 
+    // Apply filtering: gap_compressed_identity >= min_identity, alignment length >= 34bp and block_identity >= 0.3
+    if (gap_compressed_identity >= min_identity && cigar_qAlignedLength >= 34 && block_identity >= 0.3) {
         auto write_tag_and_md_string = [&](std::ostream &out, const char *c,
                                            const int target_start) {
             out << "MD:Z:";
@@ -2550,7 +2551,8 @@ void write_alignment_sam(
         (query_is_rev ? query_offset : query_offset + query_length);
     */
 
-    if (patch_gap_compressed_identity >= min_identity) {
+    // Apply filtering: gap_compressed_identity >= min_identity, alignment length >= 34bp and block_identity >= 0.3
+    if (patch_gap_compressed_identity >= min_identity && patch_qAlignedLength >= 34 && patch_block_identity >= 0.3) {
 
         out << query_name << "\t"
             << (query_is_rev ^ patch_aln.is_rev ? "16" : "0") << "\t"
@@ -2670,7 +2672,8 @@ bool write_alignment_paf(
                 (double)matches /
                 (double)(matches + mismatches + inserted_bp + deleted_bp);
 
-        if (gap_compressed_identity >= min_identity) {
+        // Apply filtering: gap_compressed_identity >= min_identity, alignment length >= 34bp and block_identity >= 0.3
+        if (gap_compressed_identity >= min_identity && qAlignedLength >= 34 && block_identity >= 0.3) {
             uint64_t q_start, q_end;
             // The new aln.j is "new_query_start - query_offset"
             if (query_is_rev) {
