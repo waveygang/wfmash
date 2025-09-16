@@ -117,8 +117,8 @@ void parse_args(int argc,
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "target padding [segment-length]", {'E', "target-padding"});
     args::ValueFlag<std::string> query_padding(alignment_opts, "INT", "query padding [segment-length]", {'U', "query-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "m,go1,ge1,go2,ge2", "gap costs [5,8,2,24,1]", {'g', "wfa-params"});
-    args::ValueFlag<uint64_t> min_alignment_length(alignment_opts, "INT", "minimum alignment length in bp [34]", {"min-length"});
-    args::ValueFlag<float> min_block_identity(alignment_opts, "FLOAT", "minimum block identity [0.3]", {"min-block-id"});
+    args::ValueFlag<uint64_t> min_alignment_length(alignment_opts, "INT", "minimum alignment length in bp [32]", {"min-length"});
+    args::ValueFlag<float> min_block_identity(alignment_opts, "FLOAT", "minimum block identity [0.1]", {"min-block-id"});
 
     // OUTPUT
     args::Group output_opts(options_group, "OUTPUT:");
@@ -566,7 +566,7 @@ void parse_args(int argc,
     if (min_alignment_length) {
         align_parameters.min_alignment_length = args::get(min_alignment_length);
     } else {
-        align_parameters.min_alignment_length = 34;  // default
+        align_parameters.min_alignment_length = 32;  // default
     }
     
     // Parse minimum block identity
@@ -577,7 +577,7 @@ void parse_args(int argc,
             exit(1);
         }
     } else {
-        align_parameters.min_block_identity = 0.3;  // default
+        align_parameters.min_block_identity = 0.1;  // default
     }
 
     args::ValueFlag<int> wflambda_segment_length(alignment_opts, "N", "WFlambda segment length [256]", {"wflambda-segment"});
