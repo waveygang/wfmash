@@ -74,6 +74,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
+    args::ValueFlag<std::string> input_seeds(mapping_opts, "FILE", "use external PAF seeds instead of MinHash", {'E', "input-seeds"});
     args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50-2)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
@@ -743,6 +744,16 @@ void parse_args(int argc,
         map_parameters.index_by_size = static_cast<int64_t>(index_size);
     } else {
         map_parameters.index_by_size = std::numeric_limits<int64_t>::max(); // Default to indexing all sequences
+    }
+
+    if (input_seeds) {
+        map_parameters.use_external_seeds = true;
+        map_parameters.external_seeds_file = args::get(input_seeds);
+        // External seeds mode implies mapping only (no alignment)
+        yeet_parameters.approx_mapping = true;
+        if (map_parameters.outFileName.empty()) {
+            map_parameters.outFileName = "/dev/stdout";
+        }
     }
 
     if (approx_mapping) {

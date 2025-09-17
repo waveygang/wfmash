@@ -100,6 +100,10 @@ struct Parameters
     bool use_streaming_minhash = true;  // use efficient streaming MinHash algorithm (default enabled)
     int ani_sketch_size = 1000;  // sketch size for ANI estimation
     bool sketch_size_manually_set = false;  // true if user specified -s flag
+
+    // External seed input
+    bool use_external_seeds = false;  // use external PAF seeds instead of MinHash
+    std::string external_seeds_file = "";  // path to external PAF seed file
 };
 
 
