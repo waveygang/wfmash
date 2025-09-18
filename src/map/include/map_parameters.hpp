@@ -44,7 +44,8 @@ struct Parameters
     float ANIDiff;                                    //ANI distance threshold below best mapping to retain in stage 1 filtering
     float ANIDiffConf;                                //Confidence of stage 1 ANI filtering threshold
     int filterMode;                                   //filtering mode in mashmap
-    uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment
+    uint32_t numMappingsForSegment;                   //how many mappings to retain for each segment (plane sweep)
+    uint32_t numMappingsForScaffold;                  //how many mappings to retain per scaffold chain (scaffold plane sweep)
     uint32_t numMappingsForShortSequence;             //how many secondary alignments we keep for reads < segLength
     bool dropRand = false;                            //drop mappings w/ same score until only numMappingsForSegment remain
     int threads;                                      //execution thread count

@@ -302,11 +302,8 @@ private:
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
             // For external seeds with scaffold filtering, use a high n value
             // to let scaffold filter see more mappings
+            // For external seeds, use the configured plane sweep parameter
             int effectiveN = param.numMappingsForSegment - 1;
-            if (param.scaffold_min_length > 0) {
-                // Allow many more mappings through for scaffold filtering
-                effectiveN = std::max(effectiveN, 99);  // Keep top 100 per segment
-            }
 
             MappingResultsVector_t groupFilteredMappings;
             MappingFilterUtils::filterByGroup(

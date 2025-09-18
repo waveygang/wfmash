@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <limits.h>
+#include <limits>
 #include <regex>
 
 #include "common/args.hxx"
@@ -77,7 +78,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> input_seeds(mapping_opts, "FILE", "use external PAF seeds instead of MinHash", {'E', "input-seeds"});
     args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50-2)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
-    args::ValueFlag<uint32_t> num_mappings(mapping_opts, "INT", "mappings per segment [1]", {'n', "mappings"});
+    args::ValueFlag<std::string> num_mappings(mapping_opts, "INT", "mappings per segment (plane sweep) [inf]", {'n', "mappings"});
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "max mapping length [50k]", {'P', "max-length"});
@@ -99,6 +100,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> scaffold_mass(scaffold_opts, "INT", "min scaffold length [10k]", {'S', "scaffold-mass"});
     args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [100k]", {'D', "scaffold-dist"});
     args::ValueFlag<std::string> scaffold_jump(scaffold_opts, "INT", "scaffold jump (gap) [100k]", {'j', "scaffold-jump"});
+    args::ValueFlag<std::string> scaffold_mappings(scaffold_opts, "INT", "mappings per scaffold chain [1]", {'r', "retain-per-scaffold"});
     args::ValueFlag<double> scaffold_overlap_thresh(scaffold_opts, "FLOAT", "scaffold chain overlap threshold [0.5]", {"scaffold-overlap"});
     args::ValueFlag<std::string> scaffold_output(scaffold_opts, "FILE", "output scaffold mappings to FILE", {"scaffold-out"});
 
@@ -808,15 +810,56 @@ void parse_args(int argc,
     }
 #endif
 
+    // Parse plane sweep parameter (-n)
     if (num_mappings) {
-        if (args::get(num_mappings) > 0) {
-            map_parameters.numMappingsForSegment = args::get(num_mappings);
+        std::string n_str = args::get(num_mappings);
+        if (n_str == "inf" || n_str == "Inf" || n_str == "∞" || n_str == "-1") {
+            map_parameters.numMappingsForSegment = std::numeric_limits<uint32_t>::max();
         } else {
-            std::cerr << "[wfmash] ERROR: the number of mappings to retain (-n) must be greater than 0." << std::endl;
-            exit(1);
+            try {
+                int n_val = std::stoi(n_str);
+                if (n_val == -1) {
+                    map_parameters.numMappingsForSegment = std::numeric_limits<uint32_t>::max();
+                } else if (n_val <= 0) {
+                    std::cerr << "[wfmash] ERROR: the number of mappings to retain (-n) must be greater than 0 or -1/inf for unlimited." << std::endl;
+                    exit(1);
+                } else {
+                    map_parameters.numMappingsForSegment = n_val;
+                }
+            } catch (...) {
+                std::cerr << "[wfmash] ERROR: invalid value for -n: " << n_str << std::endl;
+                exit(1);
+            }
         }
     } else {
-        map_parameters.numMappingsForSegment = 1;
+        // Default to infinity (no plane sweep filtering)
+        map_parameters.numMappingsForSegment = std::numeric_limits<uint32_t>::max();
+    }
+
+    // Parse scaffold plane sweep parameter (-r)
+    if (scaffold_mappings) {
+        std::string r_str = args::get(scaffold_mappings);
+        if (r_str == "inf" || r_str == "Inf" || r_str == "∞" || r_str == "-1") {
+            map_parameters.numMappingsForScaffold = std::numeric_limits<uint32_t>::max();
+        } else {
+            try {
+                int r_val = std::stoi(r_str);
+                if (r_val == -1) {
+                    map_parameters.numMappingsForScaffold = std::numeric_limits<uint32_t>::max();
+                } else if (r_val <= 0) {
+                    std::cerr << "[wfmash] ERROR: the number of mappings to retain per scaffold (-r) must be greater than 0 or -1/inf for unlimited." << std::endl;
+                    exit(1);
+                } else {
+                    map_parameters.numMappingsForScaffold = r_val;
+                }
+            } catch (...) {
+                std::cerr << "[wfmash] ERROR: invalid value for -r: " << r_str << std::endl;
+                exit(1);
+            }
+        }
+    } else {
+        // Default to 1 (keep best mapping per scaffold chain)
+        map_parameters.numMappingsForScaffold = 1;
     }
 
     map_parameters.numMappingsForShortSequence = 1;
@@ -832,10 +875,11 @@ void parse_args(int argc,
               << ", l=" << map_parameters.block_length
               << ", c=" << map_parameters.chain_gap
               << ", P=" << map_parameters.max_mapping_length
-              << ", j=" << map_parameters.scaffold_gap 
+              << ", j=" << map_parameters.scaffold_gap
               << ", D=" << map_parameters.scaffold_max_deviation
               << ", S=" << map_parameters.scaffold_min_length
-              << ", n=" << map_parameters.numMappingsForSegment
+              << ", n=" << (map_parameters.numMappingsForSegment == std::numeric_limits<uint32_t>::max() ? "inf" : std::to_string(map_parameters.numMappingsForSegment))
+              << ", r=" << (map_parameters.numMappingsForScaffold == std::numeric_limits<uint32_t>::max() ? "inf" : std::to_string(map_parameters.numMappingsForScaffold))
               << ", p=";
     
     // Show the ANI preset if auto_pct_identity is enabled
