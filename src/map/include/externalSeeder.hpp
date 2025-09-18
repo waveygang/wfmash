@@ -12,12 +12,15 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <iostream>
 #include <optional>
 #include <map>
 #include <memory>
 #include <atomic>
+#include <numeric>
+#include <cmath>
 
 #include "map/include/base_types.hpp"
 #include "map/include/map_parameters.hpp"
@@ -35,6 +38,7 @@ struct PAFSeed {
     offset_t queryLen;   // Store query sequence length from PAF
     offset_t queryEnd;   // Store query end since MappingResult only has start + blockLength
     offset_t refEnd;     // Store ref end for same reason
+    std::string cigarString;  // Store CIGAR string from PAF if present
 };
 
 /**
@@ -123,16 +127,17 @@ public:
                     filteredResult.merged_mappings : filteredResult.unmerged_mappings;
                 auto& chain_info = filteredResult.chain_info;
 
-                // Report the mappings using the standard output handler
-                MappingOutput::reportReadMappings(
+                // Custom output with scaffold annotations
+                outputMappingsWithAnnotations(
                     final_mappings,
                     chain_info,
                     query_name,
                     output_stream,
                     idManager,
                     param,
-                    nullptr,  // no post-processing function
-                    queryLen  // pass the query length
+                    queryLen,
+                    seeds,  // Pass original seeds for CIGAR lookup
+                    filteredResult.scaffoldHashes  // Pass scaffold hashes
                 );
             }
         }
@@ -142,6 +147,100 @@ public:
 
 private:
     /**
+     * @brief Custom output function with scaffold and CIGAR annotations
+     */
+    static void outputMappingsWithAnnotations(
+        const MappingResultsVector_t& mappings,
+        const ChainInfoVector_t& chainInfo,
+        const std::string& queryName,
+        std::ostream& outstrm,
+        const SequenceIdManager& idManager,
+        const Parameters& param,
+        offset_t queryLen,
+        const std::vector<PAFSeed>& originalSeeds,
+        const std::unordered_set<size_t>& scaffoldHashes) {
+
+        // Sort indices by query position
+        std::vector<size_t> indices(mappings.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        std::sort(indices.begin(), indices.end(),
+            [&mappings](size_t a, size_t b) {
+                return mappings[a].queryStartPos < mappings[b].queryStartPos;
+            });
+
+        // Output with annotations
+        for(size_t idx : indices) {
+            auto &e = mappings[idx];
+            auto &chain = chainInfo[idx];
+
+            // Find matching CIGAR from original seeds
+            std::string cigar;
+            for (const auto& seed : originalSeeds) {
+                if (seed.mapping.queryStartPos == e.queryStartPos &&
+                    seed.mapping.refStartPos == e.refStartPos &&
+                    seed.mapping.refSeqId == e.refSeqId &&
+                    seed.mapping.strand() == e.strand()) {
+                    cigar = seed.cigarString;
+                    break;
+                }
+            }
+
+            // Check if this mapping is a scaffold using hash
+            std::string scaffoldType = "";
+            if (!scaffoldHashes.empty()) {
+                // Create hash for this mapping
+                size_t hash = std::hash<offset_t>{}(e.queryStartPos) ^
+                              (std::hash<offset_t>{}(e.refStartPos) << 1) ^
+                              (std::hash<seqno_t>{}(e.refSeqId) << 2) ^
+                              (std::hash<bool>{}(e.strand() == strnd::FWD) << 3);
+
+                if (scaffoldHashes.count(hash)) {
+                    scaffoldType = "scaffold";
+                } else {
+                    scaffoldType = "rescued";
+                }
+            }
+
+            float fakeMapQ = e.getNucIdentity() == 1 ? 255 :
+                std::round(-10.0 * std::log10(1-(e.getNucIdentity())));
+            std::string sep = "\t";
+
+            outstrm  << queryName
+                     << sep << queryLen
+                     << sep << e.queryStartPos
+                     << sep << e.queryEndPos()
+                     << sep << (e.strand() == strnd::FWD ? "+" : "-")
+                     << sep << idManager.getSequenceName(e.refSeqId)
+                     << sep << idManager.getSequenceLength(e.refSeqId)
+                     << sep << e.refStartPos
+                     << sep << e.refEndPos()
+                     << sep << e.conservedSketches
+                     << sep << e.blockLength
+                     << sep << fakeMapQ;
+
+            // Standard tags
+            outstrm  << sep << "id:f:" << e.getNucIdentity()
+                     << sep << "kc:f:" << e.getKmerComplexity();
+
+            // Chain info
+            if (param.mergeMappings) {
+                outstrm << sep << "ch:Z:" << chain.chainId << "."
+                        << chain.chainPos << "." << chain.chainLen;
+            }
+
+            // CIGAR if available
+            if (!cigar.empty()) {
+                outstrm << sep << "cg:Z:" << cigar;
+            }
+
+            // Scaffold type annotation
+            outstrm << sep << "st:Z:" << scaffoldType;
+
+            outstrm << std::endl;
+        }
+    }
+
+    /**
      * @brief The actual filtering function that matches computeMap.hpp
      * This replicates the filterSubsetMappings function to work with external seeds
      */
@@ -149,6 +248,7 @@ private:
         MappingResultsVector_t merged_mappings;
         MappingResultsVector_t unmerged_mappings;
         ChainInfoVector_t chain_info;
+        std::unordered_set<size_t> scaffoldHashes;  // Hashes of scaffold mappings
     };
 
     static FilteredMappingsResult filterSubsetMappings(
@@ -200,11 +300,19 @@ private:
 
         // Apply filtering based on parameters
         if (param.filterMode == filter::MAP || param.filterMode == filter::ONETOONE) {
+            // For external seeds with scaffold filtering, use a high n value
+            // to let scaffold filter see more mappings
+            int effectiveN = param.numMappingsForSegment - 1;
+            if (param.scaffold_min_length > 0) {
+                // Allow many more mappings through for scaffold filtering
+                effectiveN = std::max(effectiveN, 99);  // Keep top 100 per segment
+            }
+
             MappingResultsVector_t groupFilteredMappings;
             MappingFilterUtils::filterByGroup(
                 workingMappings,
                 groupFilteredMappings,
-                param.numMappingsForSegment - 1,
+                effectiveN,
                 false,
                 idManager,
                 param,
@@ -215,6 +323,9 @@ private:
 
         // Apply sparsification if needed
         MappingFilterUtils::sparsifyMappings(workingMappings, param);
+
+        // Track which mappings ARE the actual scaffolds using a hash of coordinates
+        std::unordered_set<size_t> scaffoldHashes;
 
         // Apply scaffold filtering if enabled and not in NONE filter mode
         if (param.scaffold_min_length > 0 && param.filterMode != filter::NONE) {
@@ -235,7 +346,22 @@ private:
                 scaffold_total_work,
                 scaffold_completed_work
             );
+
+            // Mark mappings that are actual scaffold chains (blockLength >= min)
+            for (const auto& m : workingMappings) {
+                if (m.blockLength >= param.scaffold_min_length) {
+                    // Create unique hash from mapping coordinates
+                    size_t hash = std::hash<offset_t>{}(m.queryStartPos) ^
+                                  (std::hash<offset_t>{}(m.refStartPos) << 1) ^
+                                  (std::hash<seqno_t>{}(m.refSeqId) << 2) ^
+                                  (std::hash<bool>{}(m.strand() == strnd::FWD) << 3);
+                    scaffoldHashes.insert(hash);
+                }
+            }
         }
+
+        // Store scaffold info in result for output
+        result.scaffoldHashes = scaffoldHashes;
 
         // Store results
         result.merged_mappings = workingMappings;
