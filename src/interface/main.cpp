@@ -23,6 +23,7 @@
 #include "map/include/parseCmdArgs.hpp"
 #include "map/include/sequenceIds.hpp"
 #include "map/include/map_stats.hpp"
+#include "map/include/externalSeeder.hpp"
 
 #include "map/include/winSketch.hpp"
 
@@ -168,7 +169,53 @@ int main(int argc, char** argv) {
         //Map the sequences in query file
         t0 = skch::Time::now();
 
-        skch::Map mapper = skch::Map(map_parameters);
+        if (map_parameters.use_external_seeds) {
+            // Process external PAF seeds instead of running MinHash mapping
+            std::cerr << "[wfmash::mashmap] Using external seeds from: " << map_parameters.external_seeds_file << std::endl;
+
+            // Create SequenceIdManager without building index (just for name->ID mapping)
+            std::vector<std::string> target_prefix_vec;
+            if (!map_parameters.target_prefix.empty()) {
+                target_prefix_vec.push_back(map_parameters.target_prefix);
+            }
+
+            auto idManager = std::make_unique<skch::SequenceIdManager>(
+                map_parameters.querySequences,
+                map_parameters.refSequences,
+                map_parameters.query_prefix,
+                target_prefix_vec,
+                std::string(1, map_parameters.prefix_delim),
+                map_parameters.query_list,
+                map_parameters.target_list
+            );
+
+            // Open output stream
+            std::ofstream outFile;
+            std::ostream* outStream = &std::cout;
+            if (map_parameters.outFileName != "/dev/stdout" && map_parameters.outFileName != "-") {
+                outFile.open(map_parameters.outFileName);
+                if (!outFile.is_open()) {
+                    std::cerr << "Error: Could not open output file: " << map_parameters.outFileName << std::endl;
+                    exit(1);
+                }
+                outStream = &outFile;
+            }
+
+            // Process external seeds through chaining/filtering pipeline
+            skch::ExternalSeeder::processExternalSeeds(
+                map_parameters,
+                map_parameters.external_seeds_file,
+                *idManager,
+                *outStream
+            );
+
+            if (outFile.is_open()) {
+                outFile.close();
+            }
+        } else {
+            // Normal MinHash-based mapping
+            skch::Map mapper = skch::Map(map_parameters);
+        }
 
         std::chrono::duration<double> timeMapQuery = skch::Time::now() - t0;
         std::cerr << "[wfmash::mashmap] Mapped query in " << timeMapQuery.count() << "s, results saved to: " << map_parameters.outFileName << std::endl;

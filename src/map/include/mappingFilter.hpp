@@ -877,7 +877,7 @@ namespace skch
             // Use scaffold-specific overlap threshold for more aggressive filtering
             Parameters scaffoldFilterParam = param;
             scaffoldFilterParam.overlap_threshold = param.scaffold_overlap_threshold;
-            filterByGroup(mergedChains, filteredChains, param.numMappingsForSegment - 1, 
+            filterByGroup(mergedChains, filteredChains, param.numMappingsForScaffold - 1,
                          false, idManager, scaffoldFilterParam, progress);
             mergedChains = std::move(filteredChains);
         }
