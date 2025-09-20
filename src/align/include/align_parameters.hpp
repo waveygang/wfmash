@@ -17,6 +17,8 @@ struct Parameters {
     int threads;                                  //execution thread count
     //float percentageIdentity;                     //user defined threshold for good similarity
     float min_identity;                           // drop alignments below this identity threshold
+    uint64_t min_alignment_length;                // drop alignments shorter than this length (in bp)
+    float min_block_identity;                     // drop alignments with block identity below this threshold
     //int wf_min;                                   // minimum wavefront length to trigger WF_reduce wavefront pruning
     //int wf_diff;                                  // max distance threshold that a wavefront may lag behind the best wavefront and not be removed
     //bool exact_wfa;                               // use exact WFA, avoiding adaptive wavefront reduction
