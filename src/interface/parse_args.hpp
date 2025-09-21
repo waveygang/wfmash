@@ -75,7 +75,7 @@ void parse_args(int argc,
     // MAPPING
     args::Group mapping_opts(options_group, "MAPPING:");
     args::Flag approx_mapping(mapping_opts, "", "output mappings only (no alignment)", {'m', "approx-mapping"});
-    args::ValueFlag<std::string> input_seeds(mapping_opts, "FILE", "use external PAF seeds instead of MinHash", {'E', "input-seeds"});
+    args::ValueFlag<std::string> input_seeds(mapping_opts, "FILE", "use external PAF seeds instead of MinHash", {'K', "input-seeds"});
     args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50-2)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<std::string> num_mappings(mapping_opts, "INT", "mappings per segment (plane sweep) [inf]", {'n', "mappings"});
