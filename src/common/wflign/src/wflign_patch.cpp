@@ -902,7 +902,11 @@ std::vector<alignment_t> do_progressive_wfa_patch_alignment(
 
         //std::cerr << "WFA fwd alignment: " << aln << std::endl;
         //std::cerr << "WFA rev alignment: " << rev_aln << std::endl;
-
+        
+        // If both the forward and reverse alignments are not okay, we break here to avoid an occasional infinite loop
+        if (!rev_aln.ok && !aln.ok) {
+            break;
+        }
         if (rev_aln.ok && (!aln.ok || rev_aln.score < aln.score)) {
             alignments.push_back(rev_aln);
         } else if (aln.ok) {
