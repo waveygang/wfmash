@@ -28,9 +28,9 @@ namespace align
     float mashmap_estimated_identity;
 
     // Chain metadata
-    int32_t chain_id{-1};               // Unique ID for this chain (-1 if not part of chain)
-    int32_t chain_length{1};            // Total segments in chain (1 if not part of chain)
-    int32_t chain_pos{1};               // Position in chain, 1-based (1 if not part of chain)
+    int64_t chain_id{-1};               // Unique ID for this chain (-1 if not part of chain)
+    int64_t chain_length{1};            // Total segments in chain (1 if not part of chain)
+    int64_t chain_pos{1};               // Position in chain, 1-based (1 if not part of chain)
   };
 
   typedef std::unordered_map <std::string, std::string> refSequenceMap_t;

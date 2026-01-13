@@ -1242,9 +1242,9 @@ namespace skch
 
           // Add chain information
           // All mappings in this batch form a chain
-          int32_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
-          int32_t chain_length = l2Mappings.size();
-          int32_t chain_pos = 1;
+          int64_t chain_id = maxChainIdSeen.fetch_add(1, std::memory_order_relaxed);
+          int64_t chain_length = l2Mappings.size();
+          int64_t chain_pos = 1;
           for (auto& mapping : l2Mappings) {
               mapping.chain_id = chain_id;
               mapping.chain_length = chain_length;

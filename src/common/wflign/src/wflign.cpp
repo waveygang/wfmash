@@ -126,9 +126,9 @@ void do_biwfa_alignment(
     const float min_identity,
     const uint64_t wflign_max_len_minor,
     const float mashmap_estimated_identity,
-    const int32_t chain_id,
-    const int32_t chain_length,
-    const int32_t chain_pos) {
+    const int64_t chain_id,
+    const int64_t chain_length,
+    const int64_t chain_pos) {
     
     // Create WFA aligner for the main alignment
     wfa::WFAlignerGapAffine2Pieces wf_aligner(
