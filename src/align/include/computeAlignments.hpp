@@ -227,8 +227,8 @@ struct seq_record_t {
           // Save values into currentRecord
           {
               currentRecord.qId = std::string(tokens[0]);  // Need to copy ID strings
-              currentRecord.qStartPos = std::stoi(std::string(tokens[2]));
-              currentRecord.qEndPos = std::stoi(std::string(tokens[3]));
+              currentRecord.qStartPos = std::stoll(std::string(tokens[2]));
+              currentRecord.qEndPos = std::stoll(std::string(tokens[3]));
               currentRecord.strand = (tokens[4] == "+" ? skch::strnd::FWD : skch::strnd::REV);
               currentRecord.refId = std::string(tokens[5]);  // Need to copy ID strings
               const uint64_t ref_len = std::stoull(std::string(tokens[6]));
@@ -237,8 +237,8 @@ struct seq_record_t {
               currentRecord.chain_pos = chain_pos;
 
               // Parse position values
-              uint64_t rStartPos = std::stoi(std::string(tokens[7]));
-              uint64_t rEndPos = std::stoi(std::string(tokens[8]));
+              uint64_t rStartPos = std::stoll(std::string(tokens[7]));
+              uint64_t rEndPos = std::stoll(std::string(tokens[8]));
               uint64_t qStartPos = currentRecord.qStartPos;
               uint64_t qEndPos = currentRecord.qEndPos;
               const uint64_t query_len = std::stoull(std::string(tokens[1]));  // Query sequence length
