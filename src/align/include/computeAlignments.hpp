@@ -711,6 +711,8 @@ std::string processAlignment(seq_record_t* rec) {
         param.no_seq_in_sam,
         param.disable_chain_patching,
         param.min_identity,
+        param.min_alignment_length,
+        param.min_block_identity,
         param.wflign_max_len_minor,
         rec->currentRecord.mashmap_estimated_identity,
         rec->currentRecord.chain_id,

@@ -53,6 +53,8 @@ namespace wflign {
             const bool no_seq_in_sam,
             const bool disable_chain_patching,
             const float min_identity,
+            const uint64_t min_alignment_length,
+            const float min_block_identity,
             const uint64_t wflign_max_len_minor,
             const float mashmap_estimated_identity,
             const int32_t chain_id,
@@ -64,6 +66,8 @@ namespace wflign {
             // WFlambda parameters
             uint16_t segment_length;
             float min_identity;
+            uint64_t min_alignment_length;
+            float min_block_identity;
             int _minhash_kmer_size;
 
             int wfa_mismatch_score;
@@ -124,6 +128,8 @@ namespace wflign {
             WFlign(
                     const uint16_t segment_length,
                     const float min_identity,
+                    const uint64_t min_alignment_length,
+                    const float min_block_identity,
                     const bool force_wflign,
                     const int wfa_mismatch_score,
                     const int wfa_gap_opening_score,
