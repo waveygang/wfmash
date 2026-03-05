@@ -70,7 +70,7 @@ jobs:
           export CC=gcc-${GCC_VERSION}
           export CXX=g++-${GCC_VERSION}
           echo "Using CC=$CC CXX=$CXX"
-          cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Debug -DVENDOR_EVERYTHING=ON
+          cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Release -DVENDOR_EVERYTHING=ON
           cmake --build build -- -j 3
       - name: Run cmake tests
         run: |
