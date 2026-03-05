@@ -785,16 +785,16 @@ AlignmentBounds find_alignment_bounds(const alignment_t& aln, const int& erode_k
         bounds.target_start_offset = 0;
     } else {
         // heuristic: subtract erode_k
-        bounds.query_start_offset = std::max((int64_t)0, bounds.query_start_offset - erode_k);
-        bounds.target_start_offset = std::max((int64_t)0, bounds.target_start_offset - erode_k);
+        bounds.query_start_offset = std::max(static_cast<int64_t>(0), bounds.query_start_offset - static_cast<int64_t>(erode_k));
+        bounds.target_start_offset = std::max(static_cast<int64_t>(0), bounds.target_start_offset - static_cast<int64_t>(erode_k));
     }
     if (!found_end) {
         bounds.query_end_offset = aln.query_length;
         bounds.target_end_offset = aln.target_length;
     } else {
         // heuristic: add erode_k
-        bounds.query_end_offset = std::min((int64_t)aln.query_length, bounds.query_end_offset + erode_k);
-        bounds.target_end_offset = std::min((int64_t)aln.target_length, bounds.target_end_offset + erode_k);
+        bounds.query_end_offset = std::min(static_cast<int64_t>(aln.query_length), bounds.query_end_offset + static_cast<int64_t>(erode_k));
+        bounds.target_end_offset = std::min(static_cast<int64_t>(aln.target_length), bounds.target_end_offset + static_cast<int64_t>(erode_k));
     }
 
     // Adjust bounds for reverse complement alignments
@@ -1262,7 +1262,7 @@ void write_merged_alignment(
             // Head patching
             if (query_start > 0 || target_start > 0) {
                 // Calculate how far we need to shift to cover the query, and how far we can safely shift
-                int64_t needed_shift = std::max(0L, static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
+                int64_t needed_shift = std::max(static_cast<int64_t>(0), static_cast<int64_t>(query_start) - static_cast<int64_t>(target_start));
                 int64_t max_safe_shift = std::min(
                     static_cast<int64_t>(wflign_max_len_minor),
                     static_cast<int64_t>(target_offset)
@@ -1652,7 +1652,7 @@ void write_merged_alignment(
             // Tail patching
             if (query_pos < query_length || target_pos < target_length) {
                 // Calculate how much additional target sequence we need
-                int64_t needed_extension = std::max(0L, static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
+                int64_t needed_extension = std::max(static_cast<int64_t>(0), static_cast<int64_t>(query_length - query_pos) - static_cast<int64_t>(target_length - target_pos));
     
                 // Calculate how much we can safely extend
                 int64_t max_safe_extension = std::min(

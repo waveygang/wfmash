@@ -378,9 +378,13 @@ target_include_directories(wfmash PRIVATE
 target_link_libraries(wfmash
   m
   pthread
-  rt
   Threads::Threads
 )
+
+# librt is needed on Linux but not on macOS (where it doesn't exist)
+if (NOT APPLE)
+  target_link_libraries(wfmash rt)
+endif()
 
 # Only link system compression libraries if not vendoring everything
 if (NOT VENDOR_EVERYTHING)
