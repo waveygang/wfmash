@@ -11,7 +11,7 @@ on:
 name: build and test
 
 jobs:
-  build_and_test:
+  build_and_test_linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -36,12 +36,42 @@ jobs:
           cargo
       - name: Install wgatools
         run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
-      - name: Install pafcheck  
+      - name: Install pafcheck
         run: cargo install --git https://github.com/ekg/pafcheck.git
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
         run: cmake -H. -Bbuild -D CMAKE_BUILD_TYPE=Debug -DWFA_PNG_AND_TSV=ON && cmake --build build -- -j 2
+      - name: Run cmake tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+  build_and_test_macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install required packages
+        run: |
+          brew install cmake gcc gsl zlib samtools bedtools
+          # Install Rust toolchain
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Install wgatools
+        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+      - name: Install pafcheck
+        run: cargo install --git https://github.com/ekg/pafcheck.git
+      - name: Init and update submodules
+        run: git submodule update --init --recursive
+      - name: Build wfmash
+        run: |
+          # Use Homebrew GCC for OpenMP support (Apple clang doesn't support -fopenmp)
+          GCC_VERSION=$(ls /opt/homebrew/bin/gcc-* 2>/dev/null | grep -o '[0-9]*$' | sort -rn | head -1)
+          export CC=gcc-${GCC_VERSION}
+          export CXX=g++-${GCC_VERSION}
+          echo "Using CC=$CC CXX=$CXX"
+          cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Debug -DVENDOR_EVERYTHING=ON
+          cmake --build build -- -j 3
       - name: Run cmake tests
         run: |
           cd build
