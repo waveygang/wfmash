@@ -393,7 +393,7 @@ namespace skch
 
           uint64_t freq_cutoff;
           if (param.max_kmer_freq <= 1.0) {
-              freq_cutoff = std::max(1UL, (uint64_t)(total_windows * param.max_kmer_freq));
+              freq_cutoff = std::max(static_cast<uint64_t>(1), static_cast<uint64_t>(total_windows * param.max_kmer_freq));
           } else {
               freq_cutoff = (uint64_t)param.max_kmer_freq;
           }

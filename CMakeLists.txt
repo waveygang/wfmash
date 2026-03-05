@@ -274,6 +274,7 @@ if (BUILD_DEPS)
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libdeflate
     CMAKE_ARGS
       -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/libdeflate
+      -DCMAKE_INSTALL_LIBDIR=lib
       -DCMAKE_BUILD_TYPE=Release
       -DLIBDEFLATE_BUILD_STATIC_LIB=ON
       -DLIBDEFLATE_BUILD_SHARED_LIB=OFF
@@ -317,7 +318,7 @@ if (BUILD_DEPS)
       ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgsl.a
       ${CMAKE_CURRENT_BINARY_DIR}/gsl/lib/libgslcblas.a
       ${CMAKE_CURRENT_BINARY_DIR}/htslib/lib/libhts.a
-      ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib64/libdeflate.a
+      ${CMAKE_CURRENT_BINARY_DIR}/libdeflate/lib/libdeflate.a
       ${CMAKE_CURRENT_BINARY_DIR}/zlib/lib/libz.a
       ${CMAKE_CURRENT_BINARY_DIR}/bzip2/lib/libbz2.a
       ${CMAKE_CURRENT_BINARY_DIR}/xz/lib/liblzma.a
@@ -378,9 +379,13 @@ target_include_directories(wfmash PRIVATE
 target_link_libraries(wfmash
   m
   pthread
-  rt
   Threads::Threads
 )
+
+# librt is needed on Linux but not on macOS (where it doesn't exist)
+if (NOT APPLE)
+  target_link_libraries(wfmash rt)
+endif()
 
 # Only link system compression libraries if not vendoring everything
 if (NOT VENDOR_EVERYTHING)
