@@ -310,16 +310,20 @@ namespace skch
                                               (uint64_t)param.max_kmer_freq));
           }
 
-          // Safety check to prevent filtering all k-mers
-          size_t would_filter = 0;
+          // Safety check: count how many window positions would be filtered
+          size_t would_filter_positions = 0;
+          size_t would_filter_unique = 0;
           for (const auto& [hash, freq] : kmer_freqs) {
               if (freq > count_threshold && freq > min_occ) {
-                  would_filter++;
+                  would_filter_unique++;
+                  would_filter_positions += freq;
               }
           }
 
-          // If we would filter too many k-mers (>70%), adjust threshold
-          if (would_filter > kmer_freqs.size() * 0.7) {
+          // Adjust if >50% of window positions or >70% of unique k-mers would be filtered.
+          // Position-based check catches repetitive genomes (e.g., LPA Kringle IV repeats)
+          // where many k-mers cluster just above the threshold.
+          if (would_filter_positions > total_windows / 2 || would_filter_unique > kmer_freqs.size() * 0.7) {
               std::vector<uint64_t> all_freqs;
               all_freqs.reserve(kmer_freqs.size());
               for (const auto& [hash, freq] : kmer_freqs) {
@@ -327,14 +331,21 @@ namespace skch
               }
               std::sort(all_freqs.begin(), all_freqs.end());
 
-              // Find threshold that keeps at least 10% of k-mers
-              size_t keep_index = kmer_freqs.size() - (kmer_freqs.size() / 10);
-              count_threshold = all_freqs[keep_index];
+              // Use percentile-based threshold: filter only the top 0.1% most frequent
+              // unique k-mers. This mirrors v0.14.0's approach and is robust for
+              // repetitive genomes where repeat k-mers cluster at moderate frequencies.
+              uint64_t original_threshold = count_threshold;
+              size_t keep_index = (size_t)(all_freqs.size() * 0.999);
+              if (keep_index >= all_freqs.size()) keep_index = all_freqs.size() - 1;
+              count_threshold = std::max(count_threshold, all_freqs[keep_index]);
 
               std::cerr << "[wfmash::mashmap] WARNING: Adjusted k-mer frequency threshold from "
-                      << (uint64_t)(total_windows * param.max_kmer_freq)
+                      << original_threshold
                       << " to " << count_threshold
-                      << " to prevent filtering all k-mers" << std::endl;
+                      << " to prevent over-filtering"
+                      << " (" << would_filter_positions << "/" << total_windows << " positions, "
+                      << would_filter_unique << "/" << kmer_freqs.size() << " unique k-mers)"
+                      << std::endl;
           }
 
           // Parallel index building
