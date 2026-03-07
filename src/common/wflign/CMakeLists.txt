@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 project(wflign VERSION 0.0.1)
 
 include(GNUInstallDirs)
@@ -30,9 +30,9 @@ if (${CMAKE_BUILD_TYPE} MATCHES Debug)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -g -fsanitize=address")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O -g -fsanitize=address")
 else()
-    # Use all standard-compliant optimizations - always add these:
-    set (CMAKE_C_FLAGS "${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    # Use all standard-compliant optimizations - preserve any flags passed via -DCMAKE_C/CXX_FLAGS:
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} ${PIC_FLAG} ${EXTRA_FLAGS}")
 endif ()
 
 if(WFA_PNG_TSV_TIMING)

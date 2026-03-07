@@ -37,15 +37,16 @@ public:
     void do_print(void) {
         auto curr = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = curr-start_time;
-        double rate = completed / elapsed_seconds.count();
-        double seconds_to_completion = (completed > 0 ? (total - completed) / rate : 0);
+        double rate = (elapsed_seconds.count() > 0 ? completed / elapsed_seconds.count() : 0);
+        double seconds_to_completion = (completed > 0 && rate > 0 ? (total - completed) / rate : 0);
+        double pct = (total > 0 ? 100.0 * ((double)completed / (double)total) : 0);
         std::cerr << "\r" << banner << " "
                   << std::defaultfloat
                   << std::setfill(' ')
                   << std::setw(5)
                   << std::fixed
                   << std::setprecision(2)
-                  << 100.0 * ((double)completed / (double)total) << "%"
+                  << pct << "%"
                   << " @ "
                   << std::setw(4) << std::scientific << rate << " bp/s "
                   << "elapsed: " << print_time(elapsed_seconds.count()) << " "

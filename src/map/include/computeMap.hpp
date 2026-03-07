@@ -296,20 +296,25 @@ namespace skch
 				std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
                     auto line_split = CommonFunc::split(line, '\t');
-					// if we have a param.target_prefix and the sequence name matches, skip it
 					auto seq_name = line_split[0];
-					bool prefix_skip = true;
-					for (const auto& prefix : param.query_prefix) {
-						if (seq_name.substr(0, prefix.size()) == prefix) {
-							prefix_skip = false;
-							break;
+					// Apply same filtering logic as for_each_seq_in_file_filtered:
+					// skip only when a filter is active and doesn't match
+					if (!param.query_prefix.empty()) {
+						bool prefix_match = false;
+						for (const auto& prefix : param.query_prefix) {
+							if (seq_name.substr(0, prefix.size()) == prefix) {
+								prefix_match = true;
+								break;
+							}
 						}
+						if (!prefix_match) continue;
 					}
-					if (!allowed_query_names.empty() && allowed_query_names.find(seq_name) != allowed_query_names.end()
-						|| !param.query_prefix.empty() && !prefix_skip) {
-						total_seqs++;
-						total_seq_length += std::stoul(line_split[1]);
+					if (!allowed_query_names.empty()
+						&& allowed_query_names.find(seq_name) == allowed_query_names.end()) {
+						continue;
 					}
+					total_seqs++;
+					total_seq_length += std::stoul(line_split[1]);
 				}
 			} else {
 				// If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
