@@ -111,7 +111,11 @@ namespace skch
 
       //Vector for obtaining group from refId
       //if refIdGroup[i] == refIdGroup[j], then sequence i and j have the same prefix;
-      std::vector<int> refIdGroup; 
+      std::vector<int> refIdGroup;
+
+      // Allowed (query, target) pairs from --pairs-file
+      std::unordered_set<std::string> allowed_pairs;
+      std::unordered_set<std::string> allowed_queries_from_pairs;
 
     public:
 
@@ -136,6 +140,9 @@ namespace skch
       {
         this->setRefGroups();
       }
+      if (!p.pairs_file.empty()) {
+        this->loadPairsFile(p.pairs_file);
+      }
       this->mapQuery();
     }
 
@@ -159,6 +166,33 @@ namespace skch
           group++;
           start_idx = idx;
         }
+      }
+
+      // Load allowed pairs from a TSV file (query<TAB>target per line)
+      void loadPairsFile(const std::string& filename) {
+        std::ifstream in(filename);
+        if (!in.is_open()) {
+          std::cerr << "[mashmap::skch::Map::loadPairsFile] ERROR: cannot open pairs file: " << filename << std::endl;
+          exit(1);
+        }
+        std::string line;
+        while (std::getline(in, line)) {
+          // Skip empty lines and comments
+          if (line.empty() || line[0] == '#') continue;
+          // Each line should be query<TAB>target
+          auto tab_pos = line.find('\t');
+          if (tab_pos != std::string::npos) {
+            std::string query_name = line.substr(0, tab_pos);
+            std::string target_name = line.substr(tab_pos + 1);
+            // Trim trailing whitespace/carriage return
+            while (!target_name.empty() && (target_name.back() == '\r' || target_name.back() == ' ' || target_name.back() == '\t')) {
+              target_name.pop_back();
+            }
+            allowed_pairs.insert(query_name + "\t" + target_name);
+            allowed_queries_from_pairs.insert(query_name);
+          }
+        }
+        std::cerr << "[mashmap::skch::Map::loadPairsFile] Loaded " << allowed_pairs.size() << " allowed pairs from " << filename << std::endl;
       }
 
       // Gets the ref group of a query based on the prefix
@@ -351,6 +385,9 @@ namespace skch
 						&& param.target_prefix != ""
 						&& seq_name.substr(0, param.target_prefix.size()) == param.target_prefix) {
 						// skip
+					} else if (!allowed_queries_from_pairs.empty()
+						&& allowed_queries_from_pairs.find(seq_name) == allowed_queries_from_pairs.end()) {
+						// skip: query not in any allowed pair
 					} else {
 						if (param.filterMode == filter::ONETOONE)
 							qmetadata.push_back( ContigInfo{seq_name, len} );
@@ -927,6 +964,7 @@ namespace skch
             if ((!param.skip_self || Q.seqName != ref.name)
                 && (!param.skip_prefix || this->refIdGroup[ip_it->seqId] != Q.refGroup)
                 && (!param.lower_triangular || Q.seqCounter > ip_it->seqId)
+                && (allowed_pairs.empty() || allowed_pairs.count(Q.seqName + "\t" + ref.name))
             ) {
               intervalPoints.push_back(*ip_it);
             }

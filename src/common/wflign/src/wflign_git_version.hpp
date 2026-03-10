@@ -1,0 +1,1 @@
+#define WFLIGN_GIT_VERSION "v0.24.2-11-g738a9c32"

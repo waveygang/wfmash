@@ -84,6 +84,7 @@ void parse_args(int argc,
 	args::ValueFlag<std::string> target_list(mapping_opts, "FILE", "file containing list of target sequence names to use", {'R', "target-list"});
 	args::ValueFlag<std::string> query_prefix(mapping_opts, "pfx[,pfx,...]", "use only queries whose names start with these prefixes (comma delimited)", {'Q', "query-prefix"});
 	args::ValueFlag<std::string> query_list(mapping_opts, "FILE", "file containing list of query sequence names", {'A', "query-list"});
+	args::ValueFlag<std::string> pairs_file(mapping_opts, "FILE", "file containing allowed query<TAB>target pairs (TSV, one pair per line)", {"pairs-file"});
     args::Flag approx_mapping(mapping_opts, "approx-map", "skip base-level alignment, producing an approximate mapping in PAF", {'m',"approx-map"});
     args::Flag no_split(mapping_opts, "no-split", "disable splitting of input sequences during mapping [default: enabled]", {'N',"no-split"});
     args::ValueFlag<std::string> chain_gap(mapping_opts, "N", "chain mappings closer than this distance in query and target, sets approximate maximum variant length detectable in alignment [default: 4*segment_length, up to 20k]", {'c', "chain-gap"});
@@ -212,7 +213,11 @@ void parse_args(int argc,
 	if (query_prefix) {
 		map_parameters.query_prefix = skch::CommonFunc::split(args::get(query_prefix), ',');
 	}
-	
+
+	if (pairs_file) {
+		map_parameters.pairs_file = args::get(pairs_file);
+	}
+
     if (target_sequence_file) {
         map_parameters.refSequences.push_back(args::get(target_sequence_file));
         align_parameters.refSequences.push_back(args::get(target_sequence_file));

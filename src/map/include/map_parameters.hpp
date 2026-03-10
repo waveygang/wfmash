@@ -69,6 +69,7 @@ struct Parameters
 
 	std::string query_list;                           // file containing list of query sequence names
 	std::vector<std::string> query_prefix;            // prefix for query sequences to use
+	std::string pairs_file;                           // file containing allowed (query, target) pairs
 
     int sketchSize;
     bool use_spaced_seeds;                            //

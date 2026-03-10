@@ -2,7 +2,7 @@
 
 _**a pangenome-scale aligner**_
 
-[![build and test](https://github.com/ekg/wfmash/actions/workflows/test_on_push.yml/badge.svg)](https://github.com/ekg/wfmash/actions/workflows/test_on_push.yml)
+[![build and test](https://github.com/waveygang/wfmash/actions/workflows/test_on_push.yml/badge.svg)](https://github.com/waveygang/wfmash/actions/workflows/test_on_push.yml)
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](https://anaconda.org/bioconda/wfmash)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6949373.svg)](https://doi.org/10.5281/zenodo.6949373)
 
@@ -41,10 +41,10 @@ Seven parameters shape the length, number, identity, and alignment divergence of
 
 These parameters affect the structure of the mappings:
 
-* `-s[N], --segment-length=[N]` is the length of the mapping seed (default: `1k`). The best pairs of consecutive segment mappings are merged where separated by less than `-c[N], --chain-gap=[N]` bases.
-* `-l[N], --block-length-min=[N]` requires seed mappings in a merged mapping to sum to more than the given length (default 5kb).
+* `-s[N], --segment-length=[N]` is the length of the mapping seed (default: `5k`). The best pairs of consecutive segment mappings are merged where separated by less than `-c[N], --chain-gap=[N]` bases.
+* `-l[N], --block-length=[N]` requires seed mappings in a merged mapping to sum to more than the given length (default: `5*segment-length`).
 * `-p[%], --map-pct-id=[%]` is the percentage identity minimum in the _mapping_ step
-* `-n[N], --n-secondary=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length-min` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --n-short-secondary=[N]`, and defaults to 1)
+* `-n[N], --num-mappings-for-segment=[N]` is the maximum number of mappings (and alignments) to report for each segment above `--block-length` (the number of mappings for sequences shorter than the segment length is defined by `-S[N], --num-mappings-for-short-seq=[N]`, and defaults to 1)
 
 By default, we obtain base-level alignments by applying a high-order version of WFA to the mappings.
 Various settings affect the behavior of the pairwise alignment, but in general the alignment parameters are adjusted based on expected divergence between the mapped subsequences.
@@ -54,6 +54,7 @@ Specifying `-m, --approx-map` lets us stop before alignment and obtain the appro
 
 Together, these settings allow us to precisely define an alignment space to consider.
 During all-to-all mapping, `-X` can additionally help us by removing self mappings from the reported set, and `-Y` extends this capability to prevent mapping between sequences with the same name prefix.
+For fine-grained control, `--pairs-file` accepts a TSV file listing allowed `query<TAB>target` pairs (one per line), restricting mapping and alignment to only those pairs.
 
 
 ## input indexing
@@ -131,7 +132,7 @@ sudo apt install build-essential cmake libjemalloc-dev zlib1g-dev libgsl-dev lib
 After installing the required dependencies, clone the `wfmash` git repository and build with:
 
 ```
-git clone --recursive https://github.com/ekg/wfmash.git
+git clone --recursive https://github.com/waveygang/wfmash.git
 cd wfmash
 cmake -H. -Bbuild && cmake --build build -- -j 3
 ```
