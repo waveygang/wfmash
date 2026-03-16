@@ -1,0 +1,7 @@
+[wfmash] Performing all-vs-all mapping including self mappings.
+[wfmash] Parameters: k=15, s=78, w=1000 (split), l=0, c=2000, P=50000, j=100000, D=100000, S=5, n=1, p=ani25-5, t=8, b=1000000000
+[wfmash] Filters: skip-self, hg(Δ=0,conf=0.999), mode=1 (1=map,2=1-to-1,3=none)
+[wfmash] Output: /dev/stdout
+[wfmash] ANI-based identity estimation enabled (ani25-5)...
+[wfmash::auto-identity] Starting identity estimation with k=21, sketch_size=1000
+[wfmash::auto-identity] Using 8 threads for k-mer extraction
