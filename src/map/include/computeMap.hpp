@@ -99,6 +99,35 @@ namespace skch
       using FilterUtils = MappingFilterUtils;
       using OutputHandler = MappingOutput;
 
+      /**
+       * @brief Thread-local buffer structure for fragment processing
+       */
+      struct FragmentBuffers {
+          std::vector<IntervalPoint> intervalPoints;
+          std::vector<L1_candidateLocus_t> l1Mappings;
+          MappingResultsVector_t l2Mappings;
+          QueryMetaData<MinVec_Type> Q;
+          
+          void clear() {
+              intervalPoints.clear();
+              l1Mappings.clear();
+              l2Mappings.clear();
+          }
+      };
+
+      /**
+       * @brief Thread-local wrapper for faidx reader with proper cleanup
+       */
+      struct ReaderWrapper {
+          faidx_reader_t* reader = nullptr;
+          ~ReaderWrapper() {
+              if (reader) {
+                  faidx_reader_destroy(reader);
+                  reader = nullptr;
+              }
+          }
+      };
+
     void processFragment(const FragmentData& fragment, 
                          std::vector<IntervalPoint>& intervalPoints,
                          std::vector<L1_candidateLocus_t>& l1Mappings,
@@ -135,6 +164,147 @@ namespace skch
         if (fragment.output) {
             fragment.output->progress.increment(fragment.len);
         }
+    }
+
+    /**
+     * @brief Process a single query with fragment-level parallelism using work-stealing
+     */
+    void processQueryWithFragments(
+        const std::string& queryName,
+        faidx_meta_t* query_meta,
+        tf::Subflow& parent_sf,
+        const std::shared_ptr<std::unordered_map<seqno_t, MappingResultsVector_t>>& subsetMappings,
+        const std::shared_ptr<std::mutex>& subsetMappings_mutex,
+        const std::shared_ptr<std::mutex>& outstream_mutex,
+        const std::shared_ptr<std::ofstream>& persistent_outstream,
+        bool is_stdout,
+        progress_meter::ProgressMeter& progress)
+    {
+        // Get thread-local reader
+        thread_local ReaderWrapper wrapper;
+        if (wrapper.reader == nullptr) {
+            wrapper.reader = faidx_reader_create(query_meta);
+        }
+        faidx_reader_t* reader = wrapper.reader;
+        
+        // Load sequence
+        hts_pos_t seq_len;
+        hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
+        if (seq_total_len <= 0) return;
+        
+        char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
+        if (!seq_data) return;
+        
+        // Set up query context
+        seqno_t seqId = idManager->getSequenceId(queryName);
+        int refGroup = idManager->getRefGroup(seqId);
+        int fragment_count = seq_len / param.windowLength;
+        
+        // Thread-safe results collection
+        std::mutex results_mutex;
+        MappingResultsVector_t all_results;
+        
+        // Process fragments - simplified without nested subflows
+        // Process all fragments inline to avoid threading issues
+        thread_local FragmentBuffers buffers;
+        for (int i = 0; i < fragment_count; i++) {
+            processFragmentWithBuffers(seq_data, seq_len, i, seqId, queryName, 
+                                     refGroup, all_results, buffers, progress);
+        }
+        
+        // Handle final fragment if needed
+        if (fragment_count >= 1 && seq_len % param.windowLength != 0) {
+            processFragmentDirect(seq_data, seq_len, fragment_count, seqId, 
+                                queryName, refGroup, all_results, progress);
+        }
+        
+        // Post-process and output results
+        if (!all_results.empty()) {
+            // Create a copy of the sequence data before freeing
+            std::string sequence(seq_data, seq_len);
+            auto input = std::make_shared<InputSeqProgContainer>(
+                sequence, queryName, seqId, progress);
+            OutputHandler::mappingBoundarySanityCheck(input.get(), all_results, *idManager);
+            
+            auto filteredResult = filterSubsetMappings(all_results, progress, seqId, seq_len,
+                                                      nullptr, nullptr, nullptr);
+            
+            auto& mappings = param.mergeMappings && param.split ?
+                            filteredResult.mergedMappings : filteredResult.nonMergedMappings;
+            auto& chainInfo = param.mergeMappings && param.split ?
+                            filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
+            
+            if (param.filterMode == filter::ONETOONE) {
+                std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
+                (*subsetMappings)[seqId] = std::move(mappings);
+            } else {
+                std::lock_guard<std::mutex> lock(*outstream_mutex);
+                OutputHandler::reportReadMappings(mappings, chainInfo, queryName, 
+                                                is_stdout ? std::cout : *persistent_outstream,
+                                                *idManager, param, processMappingResults, seq_len);
+            }
+        }
+        
+        // Free the sequence data after we're done with it
+        free(seq_data);
+    }
+
+    /**
+     * @brief Process a fragment with thread-local buffers
+     */
+    void processFragmentWithBuffers(
+        const char* seq_data,
+        int seq_len,
+        int fragment_idx,
+        seqno_t seqId,
+        const std::string& queryName,
+        int refGroup,
+        MappingResultsVector_t& results,
+        FragmentBuffers& buffers,
+        progress_meter::ProgressMeter& progress)
+    {
+        buffers.clear();
+        
+        // Set up fragment data
+        int offset = fragment_idx * param.windowLength;
+        int frag_len = std::min((int)param.windowLength, seq_len - offset);
+        
+        buffers.Q.seq = const_cast<char*>(seq_data + offset);
+        buffers.Q.len = frag_len;
+        buffers.Q.fullLen = seq_len;
+        buffers.Q.seqId = seqId;
+        buffers.Q.seqName = queryName;
+        buffers.Q.refGroup = refGroup;
+        
+        // Process using existing logic
+        mapSingleQueryFrag(buffers.Q, buffers.intervalPoints, 
+                          buffers.l1Mappings, buffers.l2Mappings);
+        
+        // Adjust positions and save results
+        for (auto& mapping : buffers.l2Mappings) {
+            mapping.queryStartPos += offset;
+            results.push_back(mapping);
+        }
+        
+        progress.increment(frag_len);
+    }
+
+    /**
+     * @brief Process a fragment directly (for small queries or final fragments)
+     */
+    void processFragmentDirect(
+        const char* seq_data,
+        int seq_len,
+        int fragment_idx,
+        seqno_t seqId,
+        const std::string& queryName,
+        int refGroup,
+        MappingResultsVector_t& results,
+        progress_meter::ProgressMeter& progress)
+    {
+        thread_local FragmentBuffers buffers;
+        processFragmentWithBuffers(seq_data, seq_len, fragment_idx, seqId,
+                                 queryName, refGroup, results, buffers, progress);
     }
       
     public:
@@ -497,9 +667,7 @@ namespace skch
               auto scaffold_completed_work = std::shared_ptr<std::atomic<size_t>>(nullptr);
 
               auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
-                                                           outstream_mutex, persistent_outstream, is_stdout,
-                                                           scaffold_progress, scaffold_total_work, scaffold_completed_work, 
-                                                           subset_flow](tf::Subflow& sf) {
+                                                           outstream_mutex, persistent_outstream, is_stdout](tf::Subflow& sf) {
                   const auto& fileName = param.querySequences[0];
     
                   faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
@@ -508,187 +676,32 @@ namespace skch
                       exit(1);
                   }
                   
-                  // Thread-local reader wrapper that ensures cleanup
-                  struct ReaderWrapper {
-                      faidx_reader_t* reader = nullptr;
-                      ~ReaderWrapper() {
-                          if (reader) {
-                              faidx_reader_destroy(reader);
-                          }
-                      }
-                  };
+                  // Single task that dynamically spawns work
+                  std::atomic<size_t> query_index(0);
+                  const size_t num_queries = querySequenceNames.size();
                   
-                  auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
-                      thread_local ReaderWrapper wrapper;
-                      if (wrapper.reader == nullptr) {
-                          wrapper.reader = faidx_reader_create(meta);
-                          if (!wrapper.reader) {
-                              throw std::runtime_error("Failed to create thread-local reader");
-                          }
-                      }
-                      return wrapper.reader;
-                  };
+                  // Create worker tasks based on thread count
+                  const size_t num_workers = std::min((size_t)param.threads, num_queries);
                   
-                  for (const auto& queryName : querySequenceNames) {
-                      faidx_reader_t* reader = getThreadLocalReader(query_meta);
-                      
-                      hts_pos_t seq_len;
-                      hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
-                      if (seq_total_len <= 0) {
-                          std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
-                          continue;
-                      }
-                      
-                      char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
-                      if (!seq_data) {
-                          std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
-                          continue;
-                      }
-                      
-                      std::string sequence(seq_data, seq_len);
-                      free(seq_data);
-            
-                      auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress,
-                                                    scaffold_total_work, scaffold_completed_work](tf::Subflow& query_sf) {
-                          seqno_t seqId = idManager->getSequenceId(queryName);
-                          auto input = std::make_shared<InputSeqProgContainer>(
-                              sequence, queryName, seqId, *progress);
-                          auto output = std::make_shared<QueryMappingOutput>(
-                              queryName, MappingResultsVector_t{}, MappingResultsVector_t{}, *progress);
-            
-                          int refGroup = idManager->getRefGroup(seqId);
-                          int noOverlapFragmentCount = input->len / param.windowLength;
-
-                          std::mutex results_mutex;
-
-                          // Regular fragments
-                          for(int i = 0; i < noOverlapFragmentCount; i++) {
-                              query_sf.emplace([&, i]() {
-                                  std::vector<MappingResult> all_fragment_results;
-                                  auto fragment = std::make_shared<FragmentData>(
-                                      &(sequence)[0u] + i * param.windowLength,
-                                      static_cast<int>(param.windowLength),
-                                      static_cast<int>(input->len),
-                                      seqId,
-                                      queryName,
-                                      refGroup,
-                                      i,
-                                      output
-                                  );
-
-                                  static std::once_flag first_fragment;
-                                  std::call_once(first_fragment, [&output]() {
-                                      output->progress.reset_timer();
-                                  });
-                                  
-                                  std::vector<IntervalPoint> intervalPoints;
-                                  std::vector<L1_candidateLocus_t> l1Mappings;
-                                  MappingResultsVector_t l2Mappings;
-                                  QueryMetaData<MinVec_Type> Q;
-                                  processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
-                                  
-                                  if (!all_fragment_results.empty()) {
-                                      std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.insert(
-                                          output->results.end(),
-                                          all_fragment_results.begin(),
-                                          all_fragment_results.end()
-                                      );
-                                  }
-                              });
+                  for (size_t w = 0; w < num_workers; ++w) {
+                      sf.emplace([this, &query_index, num_queries, query_meta,
+                                  subsetMappings, subsetMappings_mutex, outstream_mutex, 
+                                  persistent_outstream, is_stdout, progress](tf::Subflow& worker_sf) {
+                          // Each worker steals queries
+                          size_t my_query;
+                          while ((my_query = query_index.fetch_add(1)) < num_queries) {
+                              const auto& queryName = this->querySequenceNames[my_query];
+                              
+                              // Process single query with nested subflow for fragments
+                              processQueryWithFragments(queryName, query_meta, worker_sf, 
+                                                      subsetMappings, subsetMappings_mutex,
+                                                      outstream_mutex, persistent_outstream, 
+                                                      is_stdout, *progress);
                           }
-
-                          // Handle final fragment if needed
-                          if (noOverlapFragmentCount >= 1 && input->len % param.windowLength != 0) {
-                              query_sf.emplace([&]() {
-                                  std::vector<MappingResult> all_fragment_results;
-                                  auto fragment = std::make_shared<FragmentData>(
-                                      &(sequence)[0u] + input->len - param.windowLength,
-                                      static_cast<int>(param.windowLength),
-                                      static_cast<int>(input->len),
-                                      seqId,
-                                      queryName,
-                                      refGroup,
-                                      noOverlapFragmentCount,
-                                      output
-                                  );
-
-                                  std::vector<IntervalPoint> intervalPoints;
-                                  std::vector<L1_candidateLocus_t> l1Mappings;
-                                  MappingResultsVector_t l2Mappings;
-                                  QueryMetaData<MinVec_Type> Q;
-                                  processFragment(*fragment, intervalPoints, l1Mappings, l2Mappings, Q, all_fragment_results);
-                                  
-                                  if (!all_fragment_results.empty()) {
-                                      std::lock_guard<std::mutex> lock(results_mutex);
-                                      output->results.insert(
-                                          output->results.end(),
-                                          all_fragment_results.begin(),
-                                          all_fragment_results.end()
-                                      );
-                                  }
-                              });
-                          }
-
-                          query_sf.join();
-
-                          OutputHandler::mappingBoundarySanityCheck(input.get(), output->results, *idManager);
-                          
-                          // Add timing and progress info for filtering phase
-                          auto filter_start = std::chrono::high_resolution_clock::now();
-                          
-                          // Only log during post-processing phase (after mapping is complete)
-                          if (progress->is_finished.load()) {
-                              // Log for all sequences during filtering, with more detail for large ones
-                              std::cerr << "[wfmash::mashmap] Filtering " << output->results.size() 
-                                        << " mappings for " << queryName 
-                                        << " (" << input->len << "bp)";
-                              if (param.scaffold_gap > 0) {
-                                  std::cerr << " [scaffold filtering enabled]";
-                              }
-                              std::cerr << "..." << std::endl;
-                          }
-                          
-                          auto filteredResult = filterSubsetMappings(output->results, output->progress, seqId, input->len,
-                                                  scaffold_progress, scaffold_total_work, scaffold_completed_work);
-                          
-                          auto filter_end = std::chrono::high_resolution_clock::now();
-                          auto filter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(filter_end - filter_start);
-                          
-                          // Report long filtering times (only during post-processing)
-                          if (progress->is_finished.load() && filter_duration.count() > 1000) {
-                              std::cerr << "[wfmash::mashmap] Filtering " << queryName 
-                                        << " took " << std::fixed << std::setprecision(1) 
-                                        << filter_duration.count() / 1000.0 << "s" << std::endl;
-                          }
-
-                          auto& mappings = param.mergeMappings && param.split ?
-                                filteredResult.mergedMappings : filteredResult.nonMergedMappings;
-                          auto& chainInfo = param.mergeMappings && param.split ?
-                                filteredResult.mergedChainInfo : filteredResult.nonMergedChainInfo;
-
-                          if (param.filterMode == filter::ONETOONE) {
-                              std::lock_guard<std::mutex> lock(*subsetMappings_mutex);
-                              (*subsetMappings)[seqId].insert(
-                                  (*subsetMappings)[seqId].end(),
-                                  std::make_move_iterator(mappings.begin()),
-                                  std::make_move_iterator(mappings.end())
-                              );
-                          } else {
-                              std::lock_guard<std::mutex> lock(*outstream_mutex);
-                              if (is_stdout) {
-                                  OutputHandler::reportReadMappings(mappings, chainInfo, queryName, std::cout, 
-                                                                  *idManager, param, processMappingResults, input->len);
-                                  std::cout.flush();
-                              } else {
-                                  OutputHandler::reportReadMappings(mappings, chainInfo, queryName, *persistent_outstream, 
-                                                                  *idManager, param, processMappingResults, input->len);
-                                  persistent_outstream->flush();
-                              }
-                          }
-                      }).name("query_" + queryName);
+                      });
                   }
                   
+                  sf.join();  // Wait for all workers
                   faidx_meta_destroy(query_meta);
               }).name("process_queries");
 
