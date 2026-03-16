@@ -392,6 +392,28 @@ namespace skch
 
           bool exit_after_indices = param.create_index_only;
 
+          // Load query metadata once at the top level - faigz metadata is thread-safe to share
+          faidx_meta_t* query_meta = nullptr;
+          
+          // In all-vs-all mode, querySequences might be empty but we still have refSequences
+          std::string query_file;
+          if (!param.querySequences.empty()) {
+              query_file = param.querySequences[0];
+          } else if (!param.refSequences.empty()) {
+              // All-vs-all mode: use reference as query
+              query_file = param.refSequences[0];
+          }
+          
+          if (!query_file.empty()) {
+              std::cerr << "[wfmash::mashmap] Loading FASTA index from: " << query_file << std::endl;
+              query_meta = faidx_meta_load(query_file.c_str(), FAI_FASTA, FAI_CREATE);
+              if (!query_meta) {
+                  std::cerr << "Error: Failed to load FASTA index: " << query_file << std::endl;
+                  exit(1);
+              }
+              std::cerr << "[wfmash::mashmap] Successfully loaded metadata at " << (void*)query_meta << std::endl;
+          }
+
           // Process each subset serially
           for (size_t subset_idx = 0; subset_idx < target_subsets.size(); ++subset_idx) {
               const auto& target_subset = target_subsets[subset_idx];
@@ -499,57 +521,63 @@ namespace skch
               auto processQueries_task = subset_flow->emplace([this, progress, subsetMappings, subsetMappings_mutex, 
                                                            outstream_mutex, persistent_outstream, is_stdout,
                                                            scaffold_progress, scaffold_total_work, scaffold_completed_work, 
-                                                           subset_flow](tf::Subflow& sf) {
-                  const auto& fileName = param.querySequences[0];
-    
-                  faidx_meta_t* query_meta = faidx_meta_load(fileName.c_str(), FAI_FASTA, FAI_CREATE);
+                                                           subset_flow, query_meta](tf::Subflow& sf) {
+                  
                   if (!query_meta) {
-                      std::cerr << "Error: Failed to load query FASTA index: " << fileName << std::endl;
-                      exit(1);
+                      std::cerr << "Error: Query metadata is null" << std::endl;
+                      return;
                   }
                   
-                  // Thread-local reader wrapper that ensures cleanup
-                  struct ReaderWrapper {
-                      faidx_reader_t* reader = nullptr;
-                      ~ReaderWrapper() {
-                          if (reader) {
-                              faidx_reader_destroy(reader);
-                          }
-                      }
-                  };
-                  
-                  auto getThreadLocalReader = [](faidx_meta_t* meta) -> faidx_reader_t* {
-                      thread_local ReaderWrapper wrapper;
-                      if (wrapper.reader == nullptr) {
-                          wrapper.reader = faidx_reader_create(meta);
-                          if (!wrapper.reader) {
-                              throw std::runtime_error("Failed to create thread-local reader");
-                          }
-                      }
-                      return wrapper.reader;
-                  };
-                  
                   for (const auto& queryName : querySequenceNames) {
-                      faidx_reader_t* reader = getThreadLocalReader(query_meta);
-                      
-                      hts_pos_t seq_len;
-                      hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
-                      if (seq_total_len <= 0) {
-                          std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
-                          continue;
-                      }
-                      
-                      char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
-                      if (!seq_data) {
-                          std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
-                          continue;
-                      }
-                      
-                      std::string sequence(seq_data, seq_len);
-                      free(seq_data);
-            
-                      auto query_task = sf.emplace([&, queryName, sequence, scaffold_progress,
+                      auto query_task = sf.emplace([&, queryName, query_meta, scaffold_progress,
                                                     scaffold_total_work, scaffold_completed_work](tf::Subflow& query_sf) {
+                          
+                          // Check metadata is valid
+                          if (!query_meta) {
+                              std::cerr << "Error: Query metadata is null when processing " << queryName << std::endl;
+                              return;
+                          }
+                          
+                          // Thread-local reader cache - each thread maintains its own reader
+                          thread_local faidx_reader_t* cached_reader = nullptr;
+                          thread_local faidx_meta_t* cached_meta = nullptr;
+                          
+                          // Create reader if not cached or metadata changed
+                          if (!cached_reader || cached_meta != query_meta) {
+                              if (cached_reader) {
+                                  faidx_reader_destroy(cached_reader);
+                              }
+                              cached_reader = faidx_reader_create(query_meta);
+                              cached_meta = query_meta;
+                              if (!cached_reader) {
+                                  std::cerr << "Error: Failed to create reader for " << queryName << std::endl;
+                                  return;
+                              }
+                          }
+                          
+                          faidx_reader_t* reader = cached_reader;
+                          
+                          // Fetch sequence using pooled reader
+                          hts_pos_t seq_len;
+                          hts_pos_t seq_total_len = faidx_meta_seq_len(query_meta, queryName.c_str());
+                          if (seq_total_len <= 0) {
+                              std::cerr << "Warning: Sequence " << queryName << " not found or empty, skipping" << std::endl;
+                              // Don't destroy cached reader
+                              return;
+                          }
+                          
+                          char* seq_data = faidx_reader_fetch_seq(reader, queryName.c_str(), 0, seq_total_len-1, &seq_len);
+                          if (!seq_data) {
+                              std::cerr << "Warning: Failed to fetch sequence " << queryName << ", skipping" << std::endl;
+                              // Don't destroy cached reader
+                              return;
+                          }
+                          
+                          std::string sequence(seq_data, seq_len);
+                          free(seq_data);
+                          
+                          // Reader is cached, don't destroy it
+                          
                           seqno_t seqId = idManager->getSequenceId(queryName);
                           auto input = std::make_shared<InputSeqProgContainer>(
                               sequence, queryName, seqId, *progress);
@@ -689,7 +717,8 @@ namespace skch
                       }).name("query_" + queryName);
                   }
                   
-                  faidx_meta_destroy(query_meta);
+                  // Do NOT destroy query_meta here - it's still being used by tasks
+                  // and will be destroyed at the end of the main function
               }).name("process_queries");
 
               auto merge_task = subset_flow->emplace([this,
@@ -870,6 +899,12 @@ namespace skch
           
           // Force deallocation by swapping with empty container
           std::unordered_map<seqno_t, MappingResultsVector_t>().swap(combinedMappings);
+          
+          // Clean up metadata (thread-local readers will be cleaned up automatically)
+          if (query_meta) {
+              faidx_meta_destroy(query_meta);
+              query_meta = nullptr;
+          }
       }
 
       /**
