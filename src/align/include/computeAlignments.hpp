@@ -516,7 +516,7 @@ namespace align
 #endif
 
         // To distinguish split alignment in SAM output format (currentRecord.rankMapping == 0 to avoid the suffix in there is just one alignment for the query)
-        const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
+        //const std::string query_name_suffix = param.split && param.sam_format ? "_" + std::to_string(currentRecord.rankMapping) : "";
 
         wflign::wavefront::WFlign* wflign = new wflign::wavefront::WFlign(
                 param.wflambda_segment_length,
@@ -556,7 +556,7 @@ namespace align
                 !param.sam_format,
                 param.no_seq_in_sam);
         wflign->wflign_affine_wavefront(
-                currentRecord.qId + query_name_suffix,
+                currentRecord.qId,// + query_name_suffix,
                 queryRegionStrand,
                 querySize,
                 currentRecord.qStartPos,
