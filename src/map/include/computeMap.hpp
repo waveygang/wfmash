@@ -1281,7 +1281,15 @@ namespace skch
           const double max_hash_01 = (long double)(Q.minmerTableQuery.back().hash) / std::numeric_limits<hash_t>::max();
           Q.kmerComplexity = (double(Q.minmerTableQuery.size()) / max_hash_01) / ((Q.len - param.kmerSize + 1)*2);
 
-          // Removed frequent kmer filtering
+          // Filter query k-mers that were filtered from reference index (symmetric filtering)
+          if (!refSketch->filteredMinmerHashes.empty()) {
+              Q.minmerTableQuery.erase(
+                  std::remove_if(Q.minmerTableQuery.begin(), Q.minmerTableQuery.end(),
+                      [this](const auto& mi) {
+                          return refSketch->filteredMinmerHashes.count(mi.hash) > 0;
+                      }),
+                  Q.minmerTableQuery.end());
+          }
 
           Q.sketchSize = Q.minmerTableQuery.size();
 #ifdef DEBUG

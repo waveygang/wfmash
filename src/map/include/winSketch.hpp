@@ -107,6 +107,9 @@ namespace skch
       //using MI_Map_t = tsl::sparse_map< MinmerMapKeyType, MinmerMapValueType >;
       using MI_Map_t = ankerl::unordered_dense::map< MinmerMapKeyType, MinmerMapValueType >;
       MI_Map_t minmerPosLookupIndex;
+
+      using HF_Set_t = ankerl::unordered_dense::set<hash_t>;
+      HF_Set_t filteredMinmerHashes;  // hashes filtered during index building
       MI_Type minmerIndex;
 
       // Atomic queues for input and output
@@ -294,46 +297,63 @@ namespace skch
           }
 
           // Calculate count_threshold ONCE before parallel section
-          uint64_t min_occ = 10;
           uint64_t max_occ = std::numeric_limits<uint64_t>::max();
           uint64_t count_threshold;
 
           if (param.max_kmer_freq <= 1.0) {
-              count_threshold = std::min(max_occ, 
-                                      std::max(min_occ, 
+              count_threshold = std::min(max_occ,
+                                      std::max((uint64_t)1,
                                               (uint64_t)(total_windows * param.max_kmer_freq)));
           } else {
               count_threshold = std::min(max_occ,
-                                      std::max(min_occ,
+                                      std::max((uint64_t)1,
                                               (uint64_t)param.max_kmer_freq));
           }
 
-          // Safety check to prevent filtering all k-mers
-          size_t would_filter = 0;
+          // Safety check: compute both unique and occurrence-weighted filtering rates
+          size_t would_filter_unique = 0;
+          uint64_t would_filter_occurrences = 0;
           for (const auto& [hash, freq] : kmer_freqs) {
-              if (freq > count_threshold && freq > min_occ) {
-                  would_filter++;
+              if (freq > count_threshold) {
+                  would_filter_unique++;
+                  would_filter_occurrences += freq;
               }
           }
 
-          // If we would filter too many k-mers (>70%), adjust threshold
-          if (would_filter > kmer_freqs.size() * 0.7) {
-              // Collect all frequencies and sort them
+          // If we would filter >20% of total occurrences, raise the threshold
+          if (would_filter_occurrences > total_windows * 0.2) {
               std::vector<uint64_t> all_freqs;
               all_freqs.reserve(kmer_freqs.size());
               for (const auto& [hash, freq] : kmer_freqs) {
                   all_freqs.push_back(freq);
               }
               std::sort(all_freqs.begin(), all_freqs.end());
-              
-              // Find threshold that keeps at least 10% of k-mers
-              size_t keep_index = kmer_freqs.size() - (kmer_freqs.size() / 10);
-              count_threshold = all_freqs[keep_index];
-              
-              std::cerr << "[wfmash::mashmap] WARNING: Adjusted k-mer frequency threshold from " 
-                      << (uint64_t)(total_windows * param.max_kmer_freq) 
-                      << " to " << count_threshold 
-                      << " to prevent filtering all k-mers" << std::endl;
+
+              // Walk from the top: find threshold that filters at most 20% of occurrences
+              uint64_t max_filter = (uint64_t)(total_windows * 0.2);
+              uint64_t accum_filtered = 0;
+              count_threshold = all_freqs.back(); // start at max
+              for (int64_t i = (int64_t)all_freqs.size() - 1; i >= 0; i--) {
+                  if (accum_filtered + all_freqs[i] > max_filter) {
+                      count_threshold = all_freqs[i]; // keep this freq and below
+                      break;
+                  }
+                  accum_filtered += all_freqs[i];
+              }
+
+              std::cerr << "[wfmash::mashmap] WARNING: Adjusted k-mer frequency threshold to "
+                      << count_threshold << " to prevent over-filtering (would have filtered "
+                      << would_filter_occurrences << "/" << total_windows << " occurrences, "
+                      << would_filter_unique << "/" << kmer_freqs.size() << " unique k-mers)"
+                      << std::endl;
+          }
+
+          // Build the set of filtered hashes for symmetric query-side filtering
+          filteredMinmerHashes.clear();
+          for (const auto& [hash, freq] : kmer_freqs) {
+              if (freq > count_threshold) {
+                  filteredMinmerHashes.insert(hash);
+              }
           }
           
           // Parallel index building
@@ -360,7 +380,7 @@ namespace skch
                           uint64_t freq = freq_it->second;
                           
                           // Use the captured count_threshold instead of recalculating
-                          if (freq > count_threshold && freq > min_occ) {
+                          if (freq > count_threshold) {
                               thread_filtered_kmers[t]++;
                               continue;
                           }
@@ -986,6 +1006,7 @@ namespace skch
         minmerPosLookupIndex.clear();
         minmerIndex.clear();
         minmerFreqHistogram.clear();
+        filteredMinmerHashes.clear();
       }
 
     }; //End of class Sketch
