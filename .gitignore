@@ -23,6 +23,8 @@ wfmash
 #build directories
 src/common/wflign/build
 build
+build-static
+build-fully-static
 pgo
 
 #Others

@@ -1,0 +1,23 @@
+(specifications->manifest
+ (list
+  "bash"
+  "bedtools"
+  "bzip2"
+  "cmake"
+  "coreutils"
+  "findutils"
+  "gawk"
+  "gcc-toolchain@12"
+  "git"
+  "grep"
+  "gsl"
+  "htslib"
+  "libdeflate"
+  "make"
+  "nss-certs"
+  "pkg-config"
+  "samtools"
+  "sed"
+  "which"
+  "xz"
+  "zlib"))

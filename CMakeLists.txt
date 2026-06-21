@@ -88,7 +88,13 @@ if (BUILD_STATIC)
   set(OpenMP_CXX_FLAGS "-fopenmp")
   set(OpenMP_C_LIB_NAMES "gomp")
   set(OpenMP_CXX_LIB_NAMES "gomp")
-  set(OpenMP_gomp_LIBRARY "/usr/lib/gcc/x86_64-redhat-linux/11/libgomp.a")
+  execute_process(
+    COMMAND ${CMAKE_C_COMPILER} -print-file-name=libgomp.a
+    OUTPUT_VARIABLE OpenMP_gomp_LIBRARY
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if (NOT EXISTS "${OpenMP_gomp_LIBRARY}")
+    unset(OpenMP_gomp_LIBRARY)
+  endif()
 endif()
 
 find_package(Threads REQUIRED)
@@ -382,9 +388,12 @@ target_link_libraries(wfmash
   Threads::Threads
 )
 
-# librt is needed on Linux but not on macOS (where it doesn't exist)
+# librt is needed on older Linux/glibc systems.  Newer glibc folds it into libc.
 if (NOT APPLE)
-  target_link_libraries(wfmash rt)
+  find_library(RT_LIBRARY rt)
+  if (RT_LIBRARY)
+    target_link_libraries(wfmash ${RT_LIBRARY})
+  endif()
 endif()
 
 # Only link system compression libraries if not vendoring everything
