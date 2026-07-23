@@ -325,12 +325,13 @@ namespace skch {
 
             makeUpperCaseAndValidDNA(seq, len);
 
-            //Compute reverse complement of seq
-            std::unique_ptr<char[]> seqRev(new char[kmerSize]);
+            //Compute reverse complement of the whole sequence once. Hashing the
+            //corresponding RC slice below is byte-identical to per-kmer RC but avoids
+            //recomputing an O(kmerSize) reverse-complement at every position.
+            std::unique_ptr<char[]> seqRev(new char[len]);
+            if(alphabetSize == 4) //not protein
+              CommonFunc::reverseComplement(seq, seqRev.get(), len);
 
-            //if(alphabetSize == 4) //not protein
-              //CommonFunc::reverseComplement(seq, seqRev.get(), len);
-            
             // Get distance until last "N"
             int ambig_kmer_count = 0;
 
@@ -358,11 +359,8 @@ namespace skch {
               hash_t hashFwd = CommonFunc::getHash(seq + i, kmerSize); 
               hash_t hashBwd;
 
-              if(alphabetSize == 4) 
-              {
-                CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
-                hashBwd = CommonFunc::getHash(seqRev.get(), kmerSize);
-              }
+              if(alphabetSize == 4)
+                hashBwd = CommonFunc::getHash(seqRev.get() + (len - i - kmerSize), kmerSize);
               else  //proteins
                 hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
 
