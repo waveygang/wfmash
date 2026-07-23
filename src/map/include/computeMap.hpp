@@ -17,6 +17,7 @@
 #include <zlib.h>
 #include <cassert>
 #include <numeric>
+#include <cstring>
 #include <iostream>
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -47,6 +48,75 @@ namespace fs = std::filesystem;
 
 namespace skch
 {
+  /**
+   * @brief  LSD radix sort of interval points in [start, end) by (seqId, pos, side),
+   *         reproducing IntervalPoint::operator< order. Replaces std::sort, which
+   *         dominates mapping self-time at scale (all-vs-all makes the point count grow).
+   *         (seqId, pos, side) are packed into an order-preserving uint64 key; ties among
+   *         equal keys (same seqId/pos/side, differing hash) are order-insensitive downstream
+   *         (verified byte-identical), so a stable radix is safe. Falls back to std::sort for
+   *         small ranges or keys outside the packable range. thread_local scratch is reused to
+   *         avoid per-call allocation (called once per query fragment).
+   */
+  template <typename Vec>
+  inline void radixSortIntervalPoints(Vec& ip, std::size_t start)
+  {
+    const std::size_t n = ip.size() - start;
+    if (n < 128) {                         // radix setup not worth it for tiny ranges
+      std::sort(ip.begin() + start, ip.end());
+      return;
+    }
+
+    thread_local std::vector<uint64_t> keys;
+    keys.resize(n);
+    // Pack: [ seqId : bits 33..63 ][ pos : bits 1..32 ][ sideOpen : bit 0 ]
+    // side::CLOSE(-1)->0, side::OPEN(1)->1, so CLOSE sorts before OPEN (matches operator<).
+    for (std::size_t i = 0; i < n; ++i) {
+      const IntervalPoint& p = ip[start + i];
+      if (p.seqId < 0 || p.pos < 0 ||
+          (uint64_t)p.seqId >= (UINT64_C(1) << 31) ||
+          (uint64_t)p.pos   >= (UINT64_C(1) << 32)) {   // out of packable range: bail
+        std::sort(ip.begin() + start, ip.end());
+        return;
+      }
+      const uint64_t sideOpen = (p.side == side::OPEN) ? 1u : 0u;
+      keys[i] = ((uint64_t)(uint32_t)p.seqId << 33) | ((uint64_t)p.pos << 1) | sideOpen;
+    }
+
+    // One pass to build all 8 byte-histograms.
+    std::size_t hist[8][256];
+    std::memset(hist, 0, sizeof(hist));
+    for (std::size_t i = 0; i < n; ++i) {
+      const uint64_t k = keys[i];
+      for (int b = 0; b < 8; ++b) hist[b][(k >> (b * 8)) & 0xFF]++;
+    }
+
+    thread_local std::vector<uint32_t> ordA, ordB;
+    ordA.resize(n); ordB.resize(n);
+    for (uint32_t i = 0; i < (uint32_t)n; ++i) ordA[i] = i;
+    uint32_t* src = ordA.data();
+    uint32_t* dst = ordB.data();
+
+    for (int b = 0; b < 8; ++b) {
+      std::size_t* h = hist[b];
+      if (h[(keys[src[0]] >> (b * 8)) & 0xFF] == n) continue;   // constant byte: skip pass
+      std::size_t sum = 0;
+      for (int c = 0; c < 256; ++c) { std::size_t t = h[c]; h[c] = sum; sum += t; }
+      for (std::size_t i = 0; i < n; ++i) {
+        const uint32_t idx = src[i];
+        const uint8_t c = (keys[idx] >> (b * 8)) & 0xFF;
+        dst[h[c]++] = idx;
+      }
+      std::swap(src, dst);
+    }
+
+    // Gather the permutation into scratch, then write back.
+    thread_local std::vector<typename Vec::value_type> tmp;
+    tmp.resize(n);
+    for (std::size_t i = 0; i < n; ++i) tmp[i] = ip[start + src[i]];
+    std::copy(tmp.begin(), tmp.end(), ip.begin() + start);
+  }
+
   /**
    * @class     skch::Map
    * @brief     L1 and L2 mapping stages
@@ -970,7 +1040,7 @@ namespace skch
               }
             }
           }
-          std::sort(intervalPoints.begin() + ip_start, intervalPoints.end());
+          radixSortIntervalPoints(intervalPoints, ip_start);
 
 #ifdef DEBUG
           std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqCounter << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";
