@@ -264,8 +264,9 @@ namespace skch {
                 {
                   // TODO these sketched values might never be useful, might save memory by deleting
                   // extend the length of the window
-                  sketched_vals[currentKmer].wpos_end = i;
-                  sketched_vals[currentKmer].strand += currentStrand == strnd::FWD ? 1 : -1;
+                  auto& sketchedVal = sketched_vals[currentKmer];
+                  sketchedVal.wpos_end = i;
+                  sketchedVal.strand += currentStrand == strnd::FWD ? 1 : -1;
                 }
               }
             }
@@ -493,13 +494,14 @@ namespace skch {
                   }
                   // Add kmers of same value
                   const KmerInfo newKmer = heapWindow.front();
-                  sortedWindow[newKmer.hash].first = MinmerInfo{newKmer.hash, currentWindowId, -1, seqCounter, 0};
+                  auto& windowEntry = sortedWindow[newKmer.hash];
+                  windowEntry.first = MinmerInfo{newKmer.hash, currentWindowId, -1, seqCounter, 0};
                   while (!heapWindow.empty() && heapWindow.front().hash == newKmer.hash)
                   {
-                    sortedWindow[newKmer.hash].second.push_back(heapWindow.front());
-                    sortedWindow[newKmer.hash].first.strand += heapWindow.front().strand;
+                    windowEntry.second.push_back(heapWindow.front());
+                    windowEntry.first.strand += heapWindow.front().strand;
                     std::pop_heap(heapWindow.begin(), heapWindow.end(), KIHeap_cmp);
-                    heapWindow.pop_back(); 
+                    heapWindow.pop_back();
                   }
                 }
               }

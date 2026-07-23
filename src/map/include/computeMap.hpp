@@ -955,30 +955,22 @@ namespace skch
               pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
             }
           }
-          std::make_heap(pq.begin(), pq.end(), heap_cmp);
-
-          while(!pq.empty())
+          const size_t ip_start = intervalPoints.size();
+          for (auto& bp : pq)
           {
-            const IP_const_iterator ip_it = pq.front().it;
-            const auto& ref = this->refSketch.metadata[ip_it->seqId];
-            if ((!param.skip_self || Q.seqName != ref.name)
-                && (!param.skip_prefix || this->refIdGroup[ip_it->seqId] != Q.refGroup)
-                && (!param.lower_triangular || Q.seqCounter > ip_it->seqId)
-                && (allowed_pairs.empty() || allowed_pairs.count(Q.seqName + "\t" + ref.name))
-            ) {
-              intervalPoints.push_back(*ip_it);
-            }
-            std::pop_heap(pq.begin(), pq.end(), heap_cmp);
-            pq.back().it++;
-            if (pq.back().it >= pq.back().end) 
+            for (auto it = bp.it; it != bp.end; ++it)
             {
-              pq.pop_back();
-            }
-            else
-            {
-              std::push_heap(pq.begin(), pq.end(), heap_cmp);
+              const auto& ref = this->refSketch.metadata[it->seqId];
+              if ((!param.skip_self || Q.seqName != ref.name)
+                  && (!param.skip_prefix || this->refIdGroup[it->seqId] != Q.refGroup)
+                  && (!param.lower_triangular || Q.seqCounter > it->seqId)
+                  && (allowed_pairs.empty() || allowed_pairs.count(Q.seqName + "\t" + ref.name))
+              ) {
+                intervalPoints.push_back(*it);
+              }
             }
           }
+          std::sort(intervalPoints.begin() + ip_start, intervalPoints.end());
 
 #ifdef DEBUG
           std::cerr << "INFO, skch::Map:getSeedHits, read id " << Q.seqCounter << ", Count of seed hits in the reference = " << intervalPoints.size() / 2 << "\n";

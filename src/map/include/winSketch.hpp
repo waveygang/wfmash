@@ -385,14 +385,15 @@ namespace skch
           for(auto &mi : minmerIndex)
           {
             // [hash value -> info about minmer]
-            if (minmerPosLookupIndex[mi.hash].size() == 0 
-                || minmerPosLookupIndex[mi.hash].back().hash != mi.hash 
-                || minmerPosLookupIndex[mi.hash].back().pos != mi.wpos)
+            auto& ipVec = minmerPosLookupIndex[mi.hash];
+            if (ipVec.size() == 0
+                || ipVec.back().hash != mi.hash
+                || ipVec.back().pos != mi.wpos)
             {
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
-              minmerPosLookupIndex[mi.hash].push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
+              ipVec.push_back(IntervalPoint {mi.wpos, mi.hash, mi.seqId, side::OPEN});
+              ipVec.push_back(IntervalPoint {mi.wpos_end, mi.hash, mi.seqId, side::CLOSE});
             } else {
-              minmerPosLookupIndex[mi.hash].back().pos = mi.wpos_end;
+              ipVec.back().pos = mi.wpos_end;
             }
           }
         }

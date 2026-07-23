@@ -178,7 +178,7 @@ int wflambda_extend_match(
         const uint64_t k = encode_pair(v, h);
         const auto f = alignments.find(k); // high-level of WF-inception
         if (f != alignments.end()) {
-            is_a_match = (alignments[k] != nullptr);
+            is_a_match = (f->second != nullptr);
         } else {
             const int query_begin = v * step_size;
             const int target_begin = h * step_size;

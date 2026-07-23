@@ -44,8 +44,6 @@ inline void reverse_complement(const char *seq, char *ret, int len) {
  **/
 inline void calc_hashes_(const char *seq, const uint64_t &len,
                          const uint64_t &k, hash_t *&hashes, int numhashes) {
-    char reverse[k + 1];
-    char rhash[16];
     char fhash[16];
     for (int i = 0; i < numhashes; ++i) {
         if (canonical(seq + i, k)) {
@@ -83,9 +81,11 @@ std::vector<hash_t> hash_sequence(const char* seq,
                                   const uint64_t& k,
                                   const uint64_t& sketch_size) {
     std::vector<hash_t> hashes = calc_hashes(seq, len, k);
-    std::sort(hashes.begin(), hashes.end());
     if (hashes.size() > sketch_size) {
+        std::partial_sort(hashes.begin(), hashes.begin()+sketch_size, hashes.end());
         hashes.erase(hashes.begin()+sketch_size, hashes.end());
+    } else {
+        std::sort(hashes.begin(), hashes.end());
     }
     // we remove non-canonical hashes which sort last
     if (hashes.back() == std::numeric_limits<hash_t>::max()) {
