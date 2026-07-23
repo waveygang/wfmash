@@ -30,6 +30,8 @@
 
 #include "align_benchmark_params.h"
 
+#define CHECK_SENTINEL(sent, errmsg) if ((sent)==NULL) { fprintf(stderr, "Error: " errmsg); exit(1); }
+
 /*
  * Default parameters
  */
@@ -68,7 +70,9 @@ align_bench_params_t parameters = {
       .gap_extension2 = 1,
   },
   // Alignment form
-  .endsfree = false,
+  .align_span_global = true,
+  .align_span_extension = false,
+  .align_span_endsfree = false,
   .pattern_begin_free = 0.0,
   .text_begin_free = 0.0,
   .pattern_end_free = 0.0,
@@ -130,14 +134,14 @@ void usage() {
       "          --input|i PATH                                                \n"
       "          --output|o PATH                                               \n"
       "          --output-full PATH                                            \n"
-      "        [Penalties & Span]                                              \n"
+      "        [Penalties]                                                     \n"
       "          --linear-penalties|p M,X,I                                    \n"
       "          --affine-penalties|g M,X,O,E                                  \n"
       "          --affine2p-penalties M,X,O1,E1,O2,E2                          \n"
-      "          --ends-free P0,Pf,T0,Tf                                       \n"
       "        [Wavefront parameters]                                          \n"
       "          --wfa-score-only                                              \n"
-      "          --wfa-memory-mode 'high'|'med'|'low'|'ultralow'               \n"
+      "          --wfa-span 'global'|'extension'|'ends-free[,P0,Pf,T0,Tf]'     \n"
+      "          --wfa-memory 'high'|'med'|'low'|'ultralow'                    \n"
       "          --wfa-heuristic STRATEGY                                      \n"
       "          --wfa-heuristic-parameters  P1,P2[,P3]                        \n"
       "            [STRATEGY='banded-static']                                  \n"
@@ -168,7 +172,12 @@ void usage() {
       "          --check-bandwidth INT                                         \n"
       "          --plot                                                        \n"
       "        [System]                                                        \n"
+      #ifndef WFA_PARALLEL
+      "          --num-threads|t INT [n/a]  Compile with BUILD_WFA_PARALLEL=1  \n"
+      "                                     to be able to use this feature.    \n"
+      #else
       "          --num-threads|t INT                                           \n"
+      #endif
       "          --batch-size INT                                              \n"
     //"          --progress|P INT                                              \n"
       "          --verbose|v INT                                               \n"
@@ -191,12 +200,12 @@ void parse_arguments(
     { "linear-penalties", required_argument, 0, 'p' },
     { "affine-penalties", required_argument, 0, 'g' },
     { "affine2p-penalties", required_argument, 0, 900 },
-    { "ends-free", required_argument, 0, 901 },
     /* Wavefront parameters */
     { "wfa-score-only", no_argument, 0, 1000 },
-    { "wfa-memory-mode", required_argument, 0, 1001 },
-    { "wfa-heuristic", required_argument, 0, 1002 },
-    { "wfa-heuristic-parameters", required_argument, 0, 1003 },
+    { "wfa-span", required_argument, 0, 1001 },
+    { "wfa-memory", required_argument, 0, 1002 },
+    { "wfa-heuristic", required_argument, 0, 1003 },
+    { "wfa-heuristic-parameters", required_argument, 0, 1004 },
     { "wfa-max-memory", required_argument, 0, 1005 },
     { "wfa-max-steps", required_argument, 0, 1006 },
     { "wfa-max-threads", required_argument, 0, 1007 },
@@ -289,49 +298,50 @@ void parse_arguments(
      */
     case 'p': { // --linear-penalties M,X,I
       char* sentinel = strtok(optarg,",");
+      CHECK_SENTINEL(sentinel, "Invalid --linear-penalties\n");
       parameters.linear_penalties.match = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --linear-penalties\n");
       parameters.linear_penalties.mismatch = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --linear-penalties\n");
       parameters.linear_penalties.indel = atoi(sentinel);
       break;
     }
     case 'g': { // --affine-penalties M,X,O,E
       char* sentinel = strtok(optarg,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine-penalties\n");
       parameters.affine_penalties.match = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine-penalties\n");
       parameters.affine_penalties.mismatch = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine-penalties\n");
       parameters.affine_penalties.gap_opening = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine-penalties\n");
       parameters.affine_penalties.gap_extension = atoi(sentinel);
       break;
     }
     case 900: { // --affine2p-penalties M,X,O1,E1,O2,E2
       char* sentinel = strtok(optarg,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine2p-penalties\n");
       parameters.affine2p_penalties.match = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine2p-penalties\n");
       parameters.affine2p_penalties.mismatch = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine2p-penalties\n");
       parameters.affine2p_penalties.gap_opening1 = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine2p-penalties\n");
       parameters.affine2p_penalties.gap_extension1 = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine2p-penalties\n");
       parameters.affine2p_penalties.gap_opening2 = atoi(sentinel);
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --affine2p-penalties\n");
       parameters.affine2p_penalties.gap_extension2 = atoi(sentinel);
-      break;
-    }
-    case 901: { // --ends-free P0,Pf,T0,Tf
-      parameters.endsfree = true;
-      char* sentinel = strtok(optarg,",");
-      parameters.pattern_begin_free = atof(sentinel);
-      sentinel = strtok(NULL,",");
-      parameters.pattern_end_free = atof(sentinel);
-      sentinel = strtok(NULL,",");
-      parameters.text_begin_free = atof(sentinel);
-      sentinel = strtok(NULL,",");
-      parameters.text_end_free = atof(sentinel);
       break;
     }
     /*
@@ -340,7 +350,43 @@ void parse_arguments(
     case 1000: // --wfa-score-only
       parameters.wfa_score_only = true;
       break;
-    case 1001: // --wfa-memory-mode in {'high','med','low'}
+    case 1001: { // --wfa-span P0,Pf,T0,Tf
+      if (strcmp(optarg,"global")==0) {
+        parameters.align_span_global = true;
+        parameters.align_span_extension = false;
+        parameters.align_span_endsfree = false;
+      } else if (strcmp(optarg,"extension")==0 ||
+                 strcmp(optarg,"extend")==0) {
+        parameters.align_span_global = false;
+        parameters.align_span_extension = true;
+        parameters.align_span_endsfree = false;
+      } else if (strncmp(optarg,"ends-free",9)==0 ||
+                 strncmp(optarg,"endsfree",8)==0) {
+        parameters.align_span_global = false;
+        parameters.align_span_extension = false;
+        parameters.align_span_endsfree = true;
+        // Parse arguments
+        char* sentinel = strtok(optarg,",");
+        CHECK_SENTINEL(sentinel, "Invalid --wfa-span\n");
+        sentinel = strtok(NULL,","); // Skip span-keyword
+        CHECK_SENTINEL(sentinel, "Invalid --wfa-span\n");
+        parameters.pattern_begin_free = atof(sentinel);
+        sentinel = strtok(NULL,",");
+        CHECK_SENTINEL(sentinel, "Invalid --wfa-span\n");
+        parameters.pattern_end_free = atof(sentinel);
+        sentinel = strtok(NULL,",");
+        CHECK_SENTINEL(sentinel, "Invalid --wfa-span\n");
+        parameters.text_begin_free = atof(sentinel);
+        sentinel = strtok(NULL,",");
+        CHECK_SENTINEL(sentinel, "Invalid --wfa-span\n");
+        parameters.text_end_free = atof(sentinel);
+      } else {
+        fprintf(stderr,"Option '--wfa-span' must be in {'global','extension','ends-free'}\n");
+        exit(1);
+      }
+      break;
+    }
+    case 1002: // --wfa-memory in {'high','med','low'}
       if (strcmp(optarg,"high")==0) {
         parameters.wfa_memory_mode = wavefront_memory_high;
       } else if (strcmp(optarg,"med")==0) {
@@ -350,11 +396,11 @@ void parse_arguments(
       } else if (strcmp(optarg,"ultralow")==0) {
         parameters.wfa_memory_mode = wavefront_memory_ultralow;
       } else {
-        fprintf(stderr,"Option '--wfa-memory-mode' must be in {'high','med','low','ultralow'}\n");
+        fprintf(stderr,"Option '--wfa-memory' must be in {'high','med','low','ultralow'}\n");
         exit(1);
       }
       break;
-    case 1002: // --wfa-heuristic in {'none'|'banded-static'|'banded-adaptive'|'wfa-adaptive'|'xdrop'|'zdrop'}
+    case 1003: // --wfa-heuristic in {'none'|'banded-static'|'banded-adaptive'|'wfa-adaptive'|'xdrop'|'zdrop'}
       if (strcmp(optarg,"none")==0) {
         parameters.wfa_heuristic = wf_heuristic_none;
       } else if (strcmp(optarg,"banded-static")==0 || strcmp(optarg,"banded")==0) {
@@ -372,11 +418,13 @@ void parse_arguments(
         exit(1);
       }
       break;
-    case 1003: { // --wfa-heuristic-parameters  <P1>,<P2>[,<P3>]
+    case 1004: { // --wfa-heuristic-parameters  <P1>,<P2>[,<P3>]
       char* sentinel = strtok(optarg,",");
+      CHECK_SENTINEL(sentinel, "Invalid --wfa-heuristic-parameters\n");
       const int p1 = atoi(sentinel);
       parameters.wfa_heuristic_p1 = p1;
       sentinel = strtok(NULL,",");
+      CHECK_SENTINEL(sentinel, "Invalid --wfa-heuristic-parameters\n");
       const int p2 = atoi(sentinel);
       parameters.wfa_heuristic_p2 = p2;
       sentinel = strtok(NULL,",");
@@ -493,11 +541,8 @@ void parse_arguments(
     exit(1);
   }
   // Check 'ends-free' parameter
-  if (parameters.endsfree) {
+  if (parameters.align_span_endsfree || parameters.align_span_extension) {
     switch (parameters.algorithm) {
-      case alignment_gap_affine_swg:
-        parameters.algorithm = alignment_gap_affine_swg_endsfree;
-        break;
       case alignment_indel_wavefront:
       case alignment_edit_wavefront:
       case alignment_gap_linear_wavefront:
@@ -505,7 +550,7 @@ void parse_arguments(
       case alignment_gap_affine2p_wavefront:
         break;
       default:
-        fprintf(stderr,"Ends-free variant not implemented for the selected algorithm\n");
+        fprintf(stderr,"Ends-free/Extension variant not implemented for the selected algorithm\n");
         exit(1);
         break;
     }

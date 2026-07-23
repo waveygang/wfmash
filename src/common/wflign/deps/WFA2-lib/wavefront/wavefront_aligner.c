@@ -30,6 +30,7 @@
  */
 
 #include "utils/commons.h"
+#include "alignment/cigar_utils.h"
 #include "wavefront_aligner.h"
 #include "wavefront_components.h"
 #include "wavefront_heuristic.h"
@@ -257,8 +258,8 @@ void wavefront_aligner_init_wf_m(
   wavefront_penalties_t* const penalties = &wf_aligner->penalties;
   alignment_form_t* const form = &wf_aligner->alignment_form;
   // Consider ends-free
-  const int hi = (penalties->match==0) ? form->text_begin_free : 0;
-  const int lo = (penalties->match==0) ? -form->pattern_begin_free : 0;
+  const int hi = (penalties->match==0 && form->span==alignment_endsfree) ? form->text_begin_free : 0;
+  const int lo = (penalties->match==0 && form->span==alignment_endsfree) ? -form->pattern_begin_free : 0;
   // Compute dimensions
   int effective_lo, effective_hi;
   wavefront_compute_limits_output(wf_aligner,lo,hi,&effective_lo,&effective_hi);
@@ -516,7 +517,7 @@ void wavefront_aligner_set_alignment_free_ends(
     const int text_begin_free,
     const int text_end_free) {
   wf_aligner->alignment_form.span = alignment_endsfree;
-  wf_aligner->alignment_form.extension = true;
+  wf_aligner->alignment_form.extension = false;
   wf_aligner->alignment_form.pattern_begin_free = pattern_begin_free;
   wf_aligner->alignment_form.pattern_end_free = pattern_end_free;
   wf_aligner->alignment_form.text_begin_free = text_begin_free;

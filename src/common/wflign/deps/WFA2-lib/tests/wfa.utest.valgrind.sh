@@ -12,15 +12,15 @@ OUTPUT="./tests"
 LOG="./tests/wfa.utest.log.valgrind"
 
 # Clear
-rm $OUTPUT/*.alg $LOG
+rm -f $OUTPUT/*.alg $LOG
 touch $LOG
 
 # Run tests
 for opt in "--check=correct","test" \
            "--wfa-score-only","test.score" \
-           "--wfa-memory-mode=med --check=correct","test.pb" \
-           "--wfa-memory-mode=ultralow --check=correct","test.biwfa" \
-           "--wfa-memory-mode=ultralow --wfa-score-only","test.biwfa.score" 
+           "--wfa-memory=med --check=correct","test.pb" \
+           "--wfa-memory=ultralow --check=correct","test.biwfa" \
+           "--wfa-memory=ultralow --wfa-score-only","test.biwfa.score"
 do 
     # Config
     IFS=','; set -- $opt
