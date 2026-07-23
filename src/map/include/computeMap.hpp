@@ -83,12 +83,19 @@ namespace skch
       keys[i] = ((uint64_t)(uint32_t)p.seqId << 33) | ((uint64_t)p.pos << 1) | sideOpen;
     }
 
-    // One pass to build all 8 byte-histograms.
-    std::size_t hist[8][256];
-    std::memset(hist, 0, sizeof(hist));
+    // 11-bit radix digits: 6 passes over a 64-bit key instead of 8 byte-passes, so
+    // ~40% fewer index-scatter passes (this sort is movement-bound). 2048-bucket
+    // histograms fit in L2. constant-digit passes are skipped, so in practice only
+    // the ~3 populated digits (small seqId/pos) are scattered.
+    constexpr int RB = 11;
+    constexpr int RN = 1 << RB;          // 2048 buckets
+    constexpr uint64_t RM = RN - 1;
+    constexpr int NP = (64 + RB - 1) / RB;   // 6 passes
+    thread_local std::vector<std::size_t> histbuf;
+    histbuf.assign((std::size_t)NP * RN, 0);
     for (std::size_t i = 0; i < n; ++i) {
       const uint64_t k = keys[i];
-      for (int b = 0; b < 8; ++b) hist[b][(k >> (b * 8)) & 0xFF]++;
+      for (int d = 0; d < NP; ++d) histbuf[(std::size_t)d * RN + ((k >> (d * RB)) & RM)]++;
     }
 
     thread_local std::vector<uint32_t> ordA, ordB;
@@ -97,14 +104,14 @@ namespace skch
     uint32_t* src = ordA.data();
     uint32_t* dst = ordB.data();
 
-    for (int b = 0; b < 8; ++b) {
-      std::size_t* h = hist[b];
-      if (h[(keys[src[0]] >> (b * 8)) & 0xFF] == n) continue;   // constant byte: skip pass
+    for (int d = 0; d < NP; ++d) {
+      std::size_t* h = histbuf.data() + (std::size_t)d * RN;
+      if (h[(keys[src[0]] >> (d * RB)) & RM] == n) continue;   // constant digit: skip pass
       std::size_t sum = 0;
-      for (int c = 0; c < 256; ++c) { std::size_t t = h[c]; h[c] = sum; sum += t; }
+      for (int c = 0; c < RN; ++c) { std::size_t t = h[c]; h[c] = sum; sum += t; }
       for (std::size_t i = 0; i < n; ++i) {
         const uint32_t idx = src[i];
-        const uint8_t c = (keys[idx] >> (b * 8)) & 0xFF;
+        const uint32_t c = (uint32_t)((keys[idx] >> (d * RB)) & RM);
         dst[h[c]++] = idx;
       }
       std::swap(src, dst);
