@@ -527,7 +527,32 @@ namespace skch
 					total_seqs++;
 					total_seq_length += std::stoul(line_split[1]);
 				}
-			} else {
+			}
+#ifdef WFMASH_HAVE_AGC
+			else if (agcidx::is_agc_file(fileName)) {
+				// AGC: count sequences / sum lengths from metadata (GetCtgLen), no decompression
+				agcidx::AgcIndex agc;
+				if (!agc.open(fileName)) {
+					std::cerr << "[mashmap::skch::Map::mapQuery] ERROR: could not open AGC archive " << fileName << std::endl;
+					exit(1);
+				}
+				for (const auto& nl : agc.names_and_lengths()) {
+					const std::string& seq_name = nl.first;
+					if (!param.query_prefix.empty()) {
+						bool prefix_match = false;
+						for (const auto& prefix : param.query_prefix) {
+							if (seq_name.substr(0, prefix.size()) == prefix) { prefix_match = true; break; }
+						}
+						if (!prefix_match) continue;
+					}
+					if (!allowed_query_names.empty()
+						&& allowed_query_names.find(seq_name) == allowed_query_names.end()) continue;
+					++total_seqs;
+					total_seq_length += nl.second;
+				}
+			}
+#endif
+			else {
 				// If .fai file doesn't exist, warn and use the for_each_seq_in_file_filtered function
 				std::cerr << "[mashmap::skch::Map::mapQuery] WARNING, no .fai index found for " << fileName << ", reading the file to filter query sequences (slow)" << std::endl;
 				seqiter::for_each_seq_in_file_filtered(

@@ -75,6 +75,26 @@ if (NOT APPLE)
   target_link_libraries(wfmash rt)
 endif()
 
+# --- AGC (Assembled Genomes Compressor) support: read .agc archives directly ---
+# Defaults to a sibling checkout of https://github.com/refresh-bio/agc built with
+# `make` (which produces bin/libagc.a and 3rd_party/zstd/lib/libzstd.a). If it is
+# not found, wfmash still builds but will not accept .agc input.
+set(AGC_ROOT "${CMAKE_SOURCE_DIR}/../agc" CACHE PATH
+    "Path to an AGC source tree with bin/libagc.a and src/lib-cxx/agc-api.h")
+if (EXISTS "${AGC_ROOT}/bin/libagc.a" AND EXISTS "${AGC_ROOT}/src/lib-cxx/agc-api.h")
+    message(STATUS "AGC support: ENABLED (AGC_ROOT=${AGC_ROOT})")
+    target_compile_definitions(wfmash PRIVATE WFMASH_HAVE_AGC)
+    target_include_directories(wfmash PRIVATE ${AGC_ROOT}/src/lib-cxx)
+    # libagc.a must precede libzstd.a on the link line (it references ZSTD_*).
+    target_link_libraries(wfmash
+        ${AGC_ROOT}/bin/libagc.a
+        ${AGC_ROOT}/3rd_party/zstd/lib/libzstd.a
+    )
+else()
+    message(WARNING "AGC support: DISABLED (no libagc.a / agc-api.h under AGC_ROOT=${AGC_ROOT}); "
+        ".agc input will not be accepted. Set -DAGC_ROOT=/path/to/agc to enable.")
+endif()
+
 install(TARGETS wfmash DESTINATION bin)
 
 install(TARGETS wfa2cpp

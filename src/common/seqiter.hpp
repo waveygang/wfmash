@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include "gzstream.h"
 #include <htslib/faidx.h>
+#include "agc_index.hpp"
 
 namespace seqiter {
 
@@ -20,6 +21,28 @@ void for_each_seq_in_file(
     const std::unordered_set<std::string>& keep_seq,
     const std::string& keep_prefix,
     const std::function<void(const std::string&, const std::string&)>& func) {
+
+#ifdef WFMASH_HAVE_AGC
+    if (agcidx::is_agc_file(filename)) {
+        agcidx::AgcIndex agc;
+        if (!agc.open(filename)) {
+            std::cerr << "[wfmash::for_each_seq_in_file] could not open AGC archive " << filename << std::endl;
+            exit(1);
+        }
+        for (const auto& rec : agc.records()) {
+            const std::string& name = rec.name;
+            const bool keep =
+                (keep_prefix.empty() || name.compare(0, keep_prefix.size(), keep_prefix) == 0)
+                && (keep_seq.empty() || keep_seq.find(name) != keep_seq.end());
+            if (keep) {
+                func(name, agc.fetch_string(name));
+            } else {
+                func(name, "");
+            }
+        }
+        return;
+    }
+#endif
 
     if ((!keep_seq.empty() || !keep_prefix.empty())
           && fai_index_exists(filename)) {
@@ -125,6 +148,31 @@ void for_each_seq_in_file_filtered(
     const std::vector<std::string>& query_prefix,
     const std::unordered_set<std::string>& query_list,
     const std::function<void(const std::string&, const std::string&)>& func) {
+
+#ifdef WFMASH_HAVE_AGC
+    if (agcidx::is_agc_file(filename)) {
+        agcidx::AgcIndex agc;
+        if (!agc.open(filename)) {
+            std::cerr << "[wfmash::for_each_seq_in_file_filtered] could not open AGC archive " << filename << std::endl;
+            return;
+        }
+        for (const auto& rec : agc.records()) {
+            const std::string& name = rec.name;
+            bool prefix_ok = query_prefix.empty();
+            for (const auto& prefix : query_prefix) {
+                if (name.compare(0, prefix.size(), prefix) == 0) {
+                    prefix_ok = true;
+                    break;
+                }
+            }
+            if (!prefix_ok) continue;
+            if (!query_list.empty() && query_list.count(name) == 0) continue;
+            func(name, agc.fetch_string(name));
+        }
+        return;
+    }
+#endif
+
     faidx_t* fai = fai_load(filename.c_str());
     if (fai == nullptr) {
         std::cerr << "Error: Failed to load FASTA index for file " << filename << std::endl;
