@@ -28,6 +28,7 @@
 #include "common/wflign/src/wflign.hpp"
 #include "common/atomic_queue/atomic_queue.h"
 #include "common/seqiter.hpp"
+#include "common/agc_index.hpp"
 #include "common/progress.hpp"
 #include "common/utils.hpp"
 
@@ -73,16 +74,27 @@ namespace align
 
       refSequenceMap_t refSequences;
       std::vector<faidx_t*> faidxs;
+      // When the reference is an AGC archive we keep one AgcIndex per thread
+      // instead of a faidx_t, mirroring the per-thread faidx model below.
+      bool use_agc = false;
+#ifdef WFMASH_HAVE_AGC
+      std::vector<agcidx::AgcIndex*> agc_readers;
+#endif
 
     public:
       /**
-       * @brief                 destructor, cleans up faidx index
+       * @brief                 destructor, cleans up faidx / AGC indices
        */
       ~Aligner()
       {
           for (auto& faid : this->faidxs) {
               fai_destroy(faid);
           }
+#ifdef WFMASH_HAVE_AGC
+          for (auto* reader : this->agc_readers) {
+              delete reader;
+          }
+#endif
       }
 
       /**
@@ -148,6 +160,22 @@ namespace align
           auto& nthreads = param.threads;
           assert(param.refSequences.size() == 1);
           auto& filename = param.refSequences.front();
+#ifdef WFMASH_HAVE_AGC
+          if (agcidx::is_agc_file(filename)) {
+              use_agc = true;
+              // One decompressor per thread: AGC's per-query state is not shared
+              // across threads, exactly like the per-thread faidx_t below.
+              for (int i = 0; i < nthreads; ++i) {
+                  auto* reader = new agcidx::AgcIndex();
+                  if (!reader->open(filename)) {
+                      std::cerr << "[wfmash::align] ERROR: could not open AGC archive " << filename << std::endl;
+                      exit(1);
+                  }
+                  agc_readers.push_back(reader);
+              }
+              return;
+          }
+#endif
           for (int i = 0; i < nthreads; ++i) {
               auto faid = fai_load(filename.c_str());
               faidxs.push_back(faid);
@@ -467,20 +495,44 @@ namespace align
 
         //Obtain reference substring for this mapping
         // htslib caches are not threadsafe! so we use a thread-specific faidx_t
+        // (or, for AGC input, a thread-specific AgcIndex).
+#ifdef WFMASH_HAVE_AGC
+        agcidx::AgcIndex* agc_reader = use_agc ? agc_readers[tid] : nullptr;
+        faidx_t* faid = use_agc ? nullptr : faidxs[tid];
+        const int64_t ref_size = use_agc
+            ? agc_reader->length(currentRecord.refId)
+            : faidx_seq_len(faid, currentRecord.refId.c_str());
+#else
         faidx_t* faid = faidxs[tid];
         const int64_t ref_size = faidx_seq_len(faid, currentRecord.refId.c_str());
+#endif
 
         // Take flanking sequences to support head/tail patching due to noisy (inaccurate) mapping boundaries
         const uint64_t head_padding = currentRecord.rStartPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : currentRecord.rStartPos;
         const uint64_t tail_padding = ref_size - currentRecord.rEndPos >= param.wflign_max_len_minor ? param.wflign_max_len_minor : ref_size - currentRecord.rEndPos;
 
         int64_t got_seq_len = 0;
-        char * ref_seq = faidx_fetch_seq64(
-                faid, currentRecord.refId.c_str(),
-                currentRecord.rStartPos - head_padding,
-                currentRecord.rEndPos + tail_padding,
-                &got_seq_len
-                );
+        char * ref_seq;
+#ifdef WFMASH_HAVE_AGC
+        if (use_agc) {
+            // fetch_malloc returns a malloc()-ed, 0-terminated buffer with the same
+            // [start,end] inclusive convention as faidx_fetch_seq64, so the cleanup
+            // (free of ref_seq - head_padding) below is unchanged.
+            ref_seq = agc_reader->fetch_malloc(
+                    currentRecord.refId,
+                    (int64_t)currentRecord.rStartPos - (int64_t)head_padding,
+                    (int64_t)currentRecord.rEndPos + (int64_t)tail_padding,
+                    got_seq_len);
+        } else
+#endif
+        {
+            ref_seq = faidx_fetch_seq64(
+                    faid, currentRecord.refId.c_str(),
+                    currentRecord.rStartPos - head_padding,
+                    currentRecord.rEndPos + tail_padding,
+                    &got_seq_len
+                    );
+        }
 
         // hack to make it 0-terminated as expected by WFA
         ref_seq[got_seq_len] = '\0';
