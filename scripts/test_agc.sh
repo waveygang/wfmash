@@ -32,6 +32,24 @@ else
     exit 1
 fi
 
+# AGC keeps the whole FASTA header line as the contig name, so an archive built from headers
+# that carry a description must still expose the sequences under their first token, the name
+# the FASTA reader and the PAF use.
+sed 's/^\(>[^ ]*\).*/\1 some description here/' "$tmp/seq.fa" > "$tmp/desc.fa"
+samtools faidx "$tmp/desc.fa"
+agc create -o "$tmp/desc.agc" "$tmp/desc.fa" > /dev/null 2>&1
+
+"$wfmash" "$tmp/desc.fa"  -t 1 "$@" 2>/dev/null | sort > "$tmp/desc_fa.paf"
+"$wfmash" "$tmp/desc.agc" -t 1 "$@" 2>/dev/null | sort > "$tmp/desc_agc.paf"
+
+if [ -s "$tmp/desc_fa.paf" ] && diff -q "$tmp/desc_fa.paf" "$tmp/desc_agc.paf" > /dev/null; then
+    echo "[test_agc] OK: headers with descriptions give identical output ($(wc -l < "$tmp/desc_fa.paf") mappings)"
+else
+    echo "[test_agc] FAIL: FASTA and AGC output differ when headers carry a description"
+    diff "$tmp/desc_fa.paf" "$tmp/desc_agc.paf" | head
+    exit 1
+fi
+
 # A multi-sample archive built the canonical AGC way (one sample per file, plain contig
 # names) repeats contig names across samples. Those records must stay distinct: each is
 # named contig@sample and must carry its own sample's bases. If they collapsed onto one

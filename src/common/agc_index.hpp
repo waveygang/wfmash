@@ -85,15 +85,15 @@ public:
         std::vector<std::string> samples;
         agc.ListSample(samples);
 
-        // Pass 1: collect (sample, contig) in archive order and count each contig name.
+        // Pass 1: collect (sample, contig) in archive order and count each short name.
         std::vector<std::pair<std::string, std::string>> raw;
-        std::unordered_map<std::string, size_t> contig_count;
+        std::unordered_map<std::string, size_t> short_name_count;
         for (const auto& sample : samples) {
             std::vector<std::string> contigs;
             agc.ListCtg(sample, contigs);
             for (const auto& contig : contigs) {
                 raw.emplace_back(sample, contig);
-                ++contig_count[contig];
+                ++short_name_count[short_name(contig)];
             }
         }
 
@@ -102,7 +102,8 @@ public:
         for (const auto& sc : raw) {
             const std::string& sample = sc.first;
             const std::string& contig = sc.second;
-            std::string name = contig_count[contig] > 1 ? contig + "@" + sample : contig;
+            const std::string base = short_name(contig);
+            std::string name = short_name_count[base] > 1 ? base + "@" + sample : base;
             if (!name_to_index.emplace(name, ordered.size()).second) {
                 // Only reachable if the archive itself holds a contig literally named
                 // "x@y" that collides with a disambiguated name; bail out rather than
@@ -191,6 +192,15 @@ public:
     }
 
 private:
+    // AGC stores the whole FASTA header line as the contig name, so ">chr1 some description"
+    // comes back with its description attached. wfmash names a sequence by the first
+    // whitespace-delimited token (as htslib and the FASTA reader do), and its own PAF parser
+    // splits rows on whitespace, so the description must be dropped here too.
+    static std::string short_name(const std::string& contig) {
+        const size_t end = contig.find_first_of(" \t");
+        return end == std::string::npos ? contig : contig.substr(0, end);
+    }
+
     const Record* find(const std::string& name) const {
         auto it = name_to_index.find(name);
         return it != name_to_index.end() ? &ordered[it->second] : nullptr;
