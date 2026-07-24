@@ -1016,34 +1016,25 @@ namespace skch
           if(Q.minmerTableQuery.size() == 0)
             return;
 
-          // Priority queue for sorting interval points
-          using IP_const_iterator = std::vector<IntervalPoint>::const_iterator;
-          std::vector<boundPtr<IP_const_iterator>> pq;
-          pq.reserve(Q.sketchSize);
-          constexpr auto heap_cmp = [](const auto& a, const auto& b) {return b < a;};
-
+          // Gather matched interval points directly during the reference lookup
+          // (no separate priority-queue pass; radixSortIntervalPoints sorts afterwards).
+          const size_t ip_start = intervalPoints.size();
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
             const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
+            if(seedFind == refSketch.minmerPosLookupIndex.end())
+              continue;
 
-            if(seedFind != refSketch.minmerPosLookupIndex.end())
+            for (const auto& ip : seedFind->second)
             {
-              pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
-            }
-          }
-          const size_t ip_start = intervalPoints.size();
-          for (auto& bp : pq)
-          {
-            for (auto it = bp.it; it != bp.end; ++it)
-            {
-              const auto& ref = this->refSketch.metadata[it->seqId];
+              const auto& ref = this->refSketch.metadata[ip.seqId];
               if ((!param.skip_self || Q.seqName != ref.name)
-                  && (!param.skip_prefix || this->refIdGroup[it->seqId] != Q.refGroup)
-                  && (!param.lower_triangular || Q.seqCounter > it->seqId)
+                  && (!param.skip_prefix || this->refIdGroup[ip.seqId] != Q.refGroup)
+                  && (!param.lower_triangular || Q.seqCounter > ip.seqId)
                   && (allowed_pairs.empty() || allowed_pairs.count(Q.seqName + "\t" + ref.name))
               ) {
-                intervalPoints.push_back(*it);
+                intervalPoints.push_back(ip);
               }
             }
           }

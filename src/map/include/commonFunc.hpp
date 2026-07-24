@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <map>
+#include <array>
 #include <algorithm>
 #include <deque>
 #include <cmath>
@@ -47,28 +48,19 @@ namespace skch {
          * @brief   reverse complement of kmer (borrowed from mash)
          * @note    assumes dest is pre-allocated
          */
+        // Complement lookup table: A<->T, C<->G, everything else unchanged
+        // (byte-identical to the per-base switch, but branchless).
+        inline const std::array<char, 256> complement_table = [] {
+            std::array<char, 256> t{};
+            for (int i = 0; i < 256; ++i) t[i] = (char)i;
+            t[(unsigned char)'A'] = 'T'; t[(unsigned char)'C'] = 'G';
+            t[(unsigned char)'G'] = 'C'; t[(unsigned char)'T'] = 'A';
+            return t;
+        }();
+
         inline void reverseComplement(const char *src, char *dest, int length) {
             for (int i = 0; i < length; i++) {
-                char base = src[i];
-
-                switch (base) {
-                    case 'A':
-                        base = 'T';
-                        break;
-                    case 'C':
-                        base = 'G';
-                        break;
-                    case 'G':
-                        base = 'C';
-                        break;
-                    case 'T':
-                        base = 'A';
-                        break;
-                    default:
-                        break;
-                }
-
-                dest[length - i - 1] = base;
+                dest[length - i - 1] = complement_table[(unsigned char)src[i]];
             }
         }
         // Crazy hack char table to test for canonical bases
@@ -94,15 +86,22 @@ namespace skch {
      * @param[in]   seq     pointer to input sequence
      * @param[in]   len     length of input sequence
      */
-        inline void makeUpperCaseAndValidDNA(char *seq, offset_t len) {
-            for (int i = 0; i < len; i++) {
-                if (seq[i] > 96 && seq[i] < 123) {
-                    seq[i] -= 32;
-                }
+        // Precomputed uppercase+validate table: uppercase a-z, then map any non-ACGT
+        // to 'N'. Byte-identical to the branch version for ASCII input; also defines
+        // bytes >=127 (previously an out-of-bounds read of valid_dna) as 'N'.
+        inline const std::array<char, 256> dna_clean_table = [] {
+            std::array<char, 256> t{};
+            for (int c = 0; c < 256; ++c) {
+                int u = (c > 96 && c < 123) ? c - 32 : c;   // uppercase a-z
+                bool invalid = (u >= 0 && u < 127) ? (bool)valid_dna[u] : true;
+                t[c] = invalid ? 'N' : (char)u;
+            }
+            return t;
+        }();
 
-                if (valid_dna[seq[i]]) {
-                    seq[i] = 'N';
-                }
+        inline void makeUpperCaseAndValidDNA(char *seq, offset_t len) {
+            for (offset_t i = 0; i < len; i++) {
+                seq[i] = dna_clean_table[(unsigned char)seq[i]];
             }
         }
 
@@ -200,6 +199,7 @@ namespace skch {
 
           // TODO cleanup
           ankerl::unordered_dense::map<hash_t, MinmerInfo> sketched_vals;
+          sketched_vals.reserve(sketchSize + 1);
           std::vector<hash_t> sketched_heap;
           sketched_heap.reserve(sketchSize+1);
             

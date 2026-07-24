@@ -391,6 +391,9 @@ void write_merged_alignment(
                                    const uint16_t &min_wfa_head_tail_patch_length,
                                    const uint16_t &min_wfa_patch_length,
                                    const uint16_t &max_dist_to_look_at) {
+            // Patched CIGAR is ~unpatched size plus gap-fill ops; reserve to avoid
+            // repeated reallocation of this per-alignment vector (capacity only).
+            patched.reserve(patched.size() + unpatched.size());
             auto q = unpatched.begin();
 
             uint64_t query_pos = query_start;
