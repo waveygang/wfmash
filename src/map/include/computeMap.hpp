@@ -266,6 +266,10 @@ namespace skch
       // interval points can use the compact packed-uint64 representation (IP-1).
       bool packed_ip_ok = false;
 
+      // Reference sequence name -> seqId, so the per-interval-point skip_self test can be
+      // an integer compare (queryRefId != ip.seqId) instead of a std::string comparison.
+      ankerl::unordered_dense::map<std::string, seqno_t> refNameToId;
+
       // Allowed (query, target) pairs from --pairs-file
       std::unordered_set<std::string> allowed_pairs;
       std::unordered_set<std::string> allowed_queries_from_pairs;
@@ -303,6 +307,11 @@ namespace skch
           if (m.len < 0 || (uint64_t)m.len >= (UINT64_C(1) << 32)) { ok = false; break; }
         }
         this->packed_ip_ok = ok;
+      }
+      // Build reference name -> seqId once (for the integer skip_self test).
+      this->refNameToId.reserve(refSketch.metadata.size());
+      for (seqno_t i = 0; i < (seqno_t)refSketch.metadata.size(); ++i) {
+        this->refNameToId[refSketch.metadata[i].name] = i;
       }
       this->mapQuery();
     }
@@ -354,6 +363,13 @@ namespace skch
           }
         }
         std::cerr << "[mashmap::skch::Map::loadPairsFile] Loaded " << allowed_pairs.size() << " allowed pairs from " << filename << std::endl;
+      }
+
+      // Reference seqId whose name equals seqName, or -1 if none (for skip_self).
+      seqno_t queryRefSeqId(const std::string& seqName) const
+      {
+        const auto it = refNameToId.find(seqName);
+        return it != refNameToId.end() ? it->second : (seqno_t)-1;
       }
 
       // Gets the ref group of a query based on the prefix
@@ -1103,6 +1119,7 @@ namespace skch
           // Gather matched interval points directly during the reference lookup
           // (no separate priority-queue pass; radixSortIntervalPoints sorts afterwards).
           const size_t ip_start = intervalPoints.size();
+          const seqno_t queryRefId = param.skip_self ? this->queryRefSeqId(Q.seqName) : (seqno_t)-1;
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
@@ -1112,11 +1129,11 @@ namespace skch
 
             for (const auto& ip : seedFind->second)
             {
-              const auto& ref = this->refSketch.metadata[ip.seqId];
-              if ((!param.skip_self || Q.seqName != ref.name)
+              if ((!param.skip_self || queryRefId != ip.seqId)
                   && (!param.skip_prefix || this->refIdGroup[ip.seqId] != Q.refGroup)
                   && (!param.lower_triangular || Q.seqCounter > ip.seqId)
-                  && (allowed_pairs.empty() || allowed_pairs.count(Q.seqName + "\t" + ref.name))
+                  && (allowed_pairs.empty()
+                      || allowed_pairs.count(Q.seqName + "\t" + this->refSketch.metadata[ip.seqId].name))
               ) {
                 intervalPoints.push_back(ip);
               }
@@ -1142,6 +1159,7 @@ namespace skch
             return;
 
           const std::size_t start = packed.size();
+          const seqno_t queryRefId = param.skip_self ? this->queryRefSeqId(Q.seqName) : (seqno_t)-1;
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
@@ -1150,11 +1168,11 @@ namespace skch
 
             for (const auto& ip : seedFind->second)
             {
-              const auto& ref = this->refSketch.metadata[ip.seqId];
-              if ((!param.skip_self || Q.seqName != ref.name)
+              if ((!param.skip_self || queryRefId != ip.seqId)
                   && (!param.skip_prefix || this->refIdGroup[ip.seqId] != Q.refGroup)
                   && (!param.lower_triangular || Q.seqCounter > ip.seqId)
-                  && (allowed_pairs.empty() || allowed_pairs.count(Q.seqName + "\t" + ref.name))
+                  && (allowed_pairs.empty()
+                      || allowed_pairs.count(Q.seqName + "\t" + this->refSketch.metadata[ip.seqId].name))
               ) {
                 packed.push_back(encodePackedIP(ip));
               }
