@@ -29,8 +29,8 @@ void for_each_seq_in_file(
             std::cerr << "[wfmash::for_each_seq_in_file] could not open AGC archive " << filename << std::endl;
             exit(1);
         }
-        for (const auto& sc : agc.sample_contigs()) {
-            const std::string& name = sc.second;
+        for (const auto& rec : agc.records()) {
+            const std::string& name = rec.name;
             const bool keep =
                 (keep_prefix.empty() || name.compare(0, keep_prefix.size(), keep_prefix) == 0)
                 && (keep_seq.empty() || keep_seq.find(name) != keep_seq.end());
@@ -156,8 +156,8 @@ void for_each_seq_in_file_filtered(
             std::cerr << "[wfmash::for_each_seq_in_file_filtered] could not open AGC archive " << filename << std::endl;
             return;
         }
-        for (const auto& sc : agc.sample_contigs()) {
-            const std::string& name = sc.second;
+        for (const auto& rec : agc.records()) {
+            const std::string& name = rec.name;
             bool prefix_ok = query_prefix.empty();
             for (const auto& prefix : query_prefix) {
                 if (name.compare(0, prefix.size(), prefix) == 0) {
