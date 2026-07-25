@@ -13,8 +13,10 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <filesystem>
-namespace fs = std::filesystem;
+static inline bool hasSuffix(const std::string &s, const std::string &suffix) {
+  return s.size() >= suffix.size() &&
+         s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
 
 //#include <zlib.h>
 
@@ -125,7 +127,7 @@ namespace skch
             this->build();
             this->index();
             if (!param.saveIndexFilename.empty()) {
-              if (param.saveIndexFilename.extension() == ".tsv") {
+              if (hasSuffix(param.saveIndexFilename, ".tsv")) {
                 this->saveIndexTSV();
               } else {
                 this->saveIndexBinary();
@@ -164,7 +166,7 @@ namespace skch
         //Create the thread pool 
         ThreadPool<InputSeqContainer, MI_Type> threadPool( [this](InputSeqContainer* e) {return buildHelper(e);}, param.threads);
         if (!param.loadIndexFilename.empty()) {
-          if (param.loadIndexFilename.extension() == ".tsv") {
+          if (hasSuffix(param.loadIndexFilename, ".tsv")) {
             this->loadIndexTSV();
           } else {
             this->loadIndexBinary();
@@ -283,7 +285,7 @@ namespace skch
        */
       void saveIndexBinary() 
       {
-        fs::path indexFilename = fs::path(param.saveIndexFilename);
+        std::string indexFilename = param.saveIndexFilename;
         indexFilename += ".index";
         std::ofstream outStream;
         outStream.open(indexFilename, std::ios::binary);
@@ -297,7 +299,7 @@ namespace skch
        */
       void savePosListBinary() 
       {
-        fs::path posListFilename = fs::path(param.saveIndexFilename);
+        std::string posListFilename = param.saveIndexFilename;
         posListFilename += ".map";
         std::ofstream outStream;
         outStream.open(posListFilename, std::ios::binary);
@@ -337,7 +339,7 @@ namespace skch
        */
       void loadIndexBinary() 
       {
-        fs::path indexFilename = fs::path(param.loadIndexFilename);
+        std::string indexFilename = param.loadIndexFilename;
         indexFilename += ".index";
         std::ifstream inStream;
         inStream.open(indexFilename, std::ios::binary);
@@ -352,7 +354,7 @@ namespace skch
        */
       void loadPosListBinary() 
       {
-        fs::path posListFilename = fs::path(param.loadIndexFilename);
+        std::string posListFilename = param.loadIndexFilename;
         posListFilename += ".map";
         std::ifstream inStream;
         inStream.open(posListFilename, std::ios::binary);
