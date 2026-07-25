@@ -17,9 +17,7 @@
 #include <cassert>
 #include <numeric>
 #include <iostream>
-#include <filesystem>
 #include <map>
-namespace fs = std::filesystem;
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
@@ -347,7 +345,7 @@ namespace skch
           }
 
           if (!param.indexFilename.empty() && !param.create_index_only) {
-              std::ifstream indexStream(param.indexFilename.string(), std::ios::binary);
+              std::ifstream indexStream(param.indexFilename, std::ios::binary);
               if (!indexStream) {
                   std::cerr << "Error: Unable to open index file for reading: " << param.indexFilename << std::endl;
                   exit(1);
@@ -400,7 +398,7 @@ namespace skch
               std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
                         << "/" << target_subsets.size() << " (mapping)" << std::endl;
               
-              std::string indexFilename = param.indexFilename.string();
+              std::string indexFilename = param.indexFilename;
               
               if (param.create_index_only) {
                   std::cerr << "[wfmash::mashmap] Processing subset " << (subset_idx + 1) 
@@ -430,7 +428,7 @@ namespace skch
 
               auto buildIndex_task = subset_flow->emplace([this, target_subset=target_subset, subset_idx, total_subsets=target_subsets.size()]() {
                   if (!param.indexFilename.empty()) {
-                      std::string indexFilename = param.indexFilename.string();
+                      std::string indexFilename = param.indexFilename;
                       static std::ifstream indexStream;
                       static bool index_opened = false;
                       static size_t file_subset_count = 0;

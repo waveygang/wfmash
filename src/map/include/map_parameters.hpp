@@ -8,8 +8,6 @@
 
 #include <vector>
 #include <unordered_set>
-#include <filesystem>
-namespace stdfs = std::filesystem;
 
 #include "common/ALeS.hpp"
 #include "base_types.hpp"
@@ -52,7 +50,7 @@ struct Parameters
     std::vector<std::string> refSequences;            //reference sequence(s)
     std::vector<std::string> querySequences;          //query sequence(s)
     std::string outFileName;                          //output file name
-    stdfs::path indexFilename;                        //output file name of index
+    std::string indexFilename;                        //output file name of index
     bool overwrite_index = false;                     //overwrite index if it exists
     bool create_index_only = false;                   //only create index and exit
     bool split = false;                               //Split read mapping (done if this is true)

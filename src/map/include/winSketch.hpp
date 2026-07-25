@@ -13,8 +13,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <filesystem>
-namespace fs = std::filesystem;
 
 //#include <zlib.h>
 
@@ -554,7 +552,7 @@ namespace skch
       void writeSketchTSV() 
       {
         std::ofstream outStream;
-        outStream.open(std::string(param.indexFilename) + ".tsv");
+        outStream.open(param.indexFilename + ".tsv");
         outStream << "seqId" << "\t" << "strand" << "\t" << "start" << "\t" << "end" << "\t" << "hash\n";
         for (auto& mi : this->minmerIndex) {
           outStream << mi.seqId << "\t" << std::to_string(mi.strand) << "\t" << mi.wpos << "\t" << mi.wpos_end << "\t" << mi.hash << "\n";
@@ -615,7 +613,7 @@ namespace skch
        */
       void writeIndex(const std::vector<std::string>& target_subset, const std::string& filename = "", bool append = false, size_t batch_idx = 0, size_t total_batches = 1) 
       {
-        fs::path indexFilename = filename.empty() ? fs::path(param.indexFilename) : fs::path(filename);
+        std::string indexFilename = filename.empty() ? param.indexFilename : filename;
         std::ofstream outStream;
         if (append) {
             outStream.open(indexFilename, std::ios::binary | std::ios::app);
@@ -664,7 +662,7 @@ namespace skch
        */
       void readSketchTSV() 
       {
-        io::CSVReader<5, io::trim_chars<' '>, io::no_quote_escape<'\t'>> inReader(std::string(param.indexFilename) + ".tsv");
+        io::CSVReader<5, io::trim_chars<' '>, io::no_quote_escape<'\t'>> inReader(param.indexFilename + ".tsv");
         inReader.read_header(io::ignore_missing_column, "seqId", "strand", "start", "end", "hash");
         hash_t hash;
         offset_t start, end;
