@@ -35,9 +35,9 @@ jobs:
           bedtools
           cargo
       - name: Install wgatools
-        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+        run: cargo install --locked --git https://github.com/wjwei-handsome/wgatools.git
       - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
+        run: cargo install --locked --git https://github.com/ekg/pafcheck.git
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
@@ -58,9 +58,9 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install wgatools
-        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+        run: cargo install --locked --git https://github.com/wjwei-handsome/wgatools.git
       - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
+        run: cargo install --locked --git https://github.com/ekg/pafcheck.git
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
