@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
         for(const auto &fileName : map_parameters.querySequences) {
             // check if there is a .fai
             std::string fai_name = fileName + ".fai";
-            if (fs::exists(fai_name)) {
+            if ((access((fai_name).c_str(), F_OK) == 0)) {
                 // if so, process the .fai to determine our sequence length
                 std::string line;
                 std::ifstream in(fai_name.c_str());
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
         {
             // check if there is a .fai
             std::string fai_name = fileName + ".fai";
-            if (fs::exists(fai_name)) {
+            if ((access((fai_name).c_str(), F_OK) == 0)) {
                 // if so, process the .fai to determine our sequence length
                 std::string line;
                 std::ifstream in(fai_name.c_str());

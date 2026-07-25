@@ -19,8 +19,7 @@
 #include <numeric>
 #include <cstring>
 #include <iostream>
-#include <filesystem>
-namespace fs = std::filesystem;
+#include <unistd.h>
 #include <queue>
 
 //Own includes
@@ -502,7 +501,7 @@ namespace skch
 		for (const auto& fileName : param.querySequences) {
 			// Check if there is a .fai file
 			std::string fai_name = fileName + ".fai";
-			if (fs::exists(fai_name)) {
+			if ((access((fai_name).c_str(), F_OK) == 0)) {
 				std::string line;
 				std::ifstream in(fai_name.c_str());
                 while (std::getline(in, line)) {
