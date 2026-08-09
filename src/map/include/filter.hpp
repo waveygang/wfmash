@@ -151,7 +151,8 @@ namespace skch
           //Event point schedule
           //vector of triplets <position, event type, segment id>
           typedef std::tuple<offset_t, int, int> eventRecord_t;
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
+          std::vector <eventRecord_t>  eventSchedule;
+          eventSchedule.reserve(2*readMappings.size());
 
           for(int i = 0; i < readMappings.size(); i++)
           {
@@ -212,7 +213,8 @@ namespace skch
           //Event point schedule
           //vector of triplets <position, event type, segment id>
           typedef std::tuple<offset_t, double, int, int> eventRecord_t;
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
+          std::vector <eventRecord_t>  eventSchedule;
+          eventSchedule.reserve(2*readMappings.size());
 
           for(int i = 0; i < readMappings.size(); i++) {
               eventSchedule.emplace_back (readMappings[i].queryStartPos, obj.get_score(i), event::BEGIN, i);
@@ -384,7 +386,8 @@ namespace skch
 
           //Event point schedule
           //vector of triplets <position, event type, segment id>
-          std::vector <eventRecord_t>  eventSchedule (2*readMappings.size());
+          std::vector <eventRecord_t>  eventSchedule;
+          eventSchedule.reserve(2*readMappings.size());
 
           for(int i = 0; i < readMappings.size(); i++)
           {

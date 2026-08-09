@@ -638,13 +638,22 @@ namespace skch
           MappingResultsVector_t tmpMappings;
           MappingResultsVector_t filteredMappings;
 
+          // Precompute each query's group once (getRefGroup is O(#ref contigs))
+          std::vector<int> queryGroup;
+          if (param.skip_prefix)
+          {
+            queryGroup.resize(qmetadata.size());
+            for (size_t i = 0; i < qmetadata.size(); i++)
+              queryGroup[i] = this->getRefGroup(qmetadata[i].name);
+          }
+
           while (subrange_end != allReadMappings.end())
           {
             if (param.skip_prefix)
             {
-              int currGroup = this->getRefGroup(qmetadata[subrange_begin->querySeqId].name);
-              subrange_end = std::find_if_not(subrange_begin, allReadMappings.end(), [this, currGroup] (const auto& allReadMappings_candidate) {
-                  return currGroup == this->getRefGroup(this->qmetadata[allReadMappings_candidate.querySeqId].name);
+              int currGroup = queryGroup[subrange_begin->querySeqId];
+              subrange_end = std::find_if_not(subrange_begin, allReadMappings.end(), [&queryGroup, currGroup] (const auto& allReadMappings_candidate) {
+                  return currGroup == queryGroup[allReadMappings_candidate.querySeqId];
               });
             }
             else
@@ -850,13 +859,10 @@ namespace skch
         output->qseqLen = input->len;
         bool split_mapping = true;
         std::vector<IntervalPoint> intervalPoints;
-        // Reserve the "expected" number of interval points
-        intervalPoints.reserve(
-            2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
         std::vector<L1_candidateLocus_t> l1Mappings;
         MappingResultsVector_t l2Mappings;
         MappingResultsVector_t unfilteredMappings;
-        int refGroup = this->getRefGroup(input->seqName);
+        int refGroup = param.skip_prefix ? this->getRefGroup(input->seqName) : -1;
 
         if(! param.split || input->len <= param.segLength)
         {
@@ -1140,10 +1146,22 @@ namespace skch
           if(Q.minmerTableQuery.size() == 0)
             return;
 
+          // Reserve the "expected" number of interval points
+          // (lazy: the packed path never reaches this function)
+          if (intervalPoints.capacity() == 0)
+            intervalPoints.reserve(
+                2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
+
           // Gather matched interval points directly during the reference lookup
           // (no separate priority-queue pass; radixSortIntervalPoints sorts afterwards).
           const size_t ip_start = intervalPoints.size();
           const seqno_t queryRefId = param.skip_self ? this->queryRefSeqId(Q.seqName) : (seqno_t)-1;
+          const bool doSelf = param.skip_self;
+          const bool doPref = param.skip_prefix;
+          const bool doLT = param.lower_triangular;
+          const bool anyPairs = !allowed_pairs.empty();
+          const auto* refGroupData = this->refIdGroup.data();
+          const std::string pairPrefix = anyPairs ? Q.seqName + "\t" : std::string();
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
@@ -1153,11 +1171,11 @@ namespace skch
 
             for (const auto& ip : seedFind->second)
             {
-              if ((!param.skip_self || queryRefId != ip.seqId)
-                  && (!param.skip_prefix || this->refIdGroup[ip.seqId] != Q.refGroup)
-                  && (!param.lower_triangular || Q.seqCounter > ip.seqId)
-                  && (allowed_pairs.empty()
-                      || allowed_pairs.count(Q.seqName + "\t" + this->refSketch.metadata[ip.seqId].name))
+              if ((!doSelf || queryRefId != ip.seqId)
+                  && (!doPref || refGroupData[ip.seqId] != Q.refGroup)
+                  && (!doLT || Q.seqCounter > ip.seqId)
+                  && (!anyPairs
+                      || allowed_pairs.count(pairPrefix + this->refSketch.metadata[ip.seqId].name))
               ) {
                 intervalPoints.push_back(ip);
               }
@@ -1184,6 +1202,12 @@ namespace skch
 
           const std::size_t start = packed.size();
           const seqno_t queryRefId = param.skip_self ? this->queryRefSeqId(Q.seqName) : (seqno_t)-1;
+          const bool doSelf = param.skip_self;
+          const bool doPref = param.skip_prefix;
+          const bool doLT = param.lower_triangular;
+          const bool anyPairs = !allowed_pairs.empty();
+          const auto* refGroupData = this->refIdGroup.data();
+          const std::string pairPrefix = anyPairs ? Q.seqName + "\t" : std::string();
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
@@ -1192,11 +1216,11 @@ namespace skch
 
             for (const auto& ip : seedFind->second)
             {
-              if ((!param.skip_self || queryRefId != ip.seqId)
-                  && (!param.skip_prefix || this->refIdGroup[ip.seqId] != Q.refGroup)
-                  && (!param.lower_triangular || Q.seqCounter > ip.seqId)
-                  && (allowed_pairs.empty()
-                      || allowed_pairs.count(Q.seqName + "\t" + this->refSketch.metadata[ip.seqId].name))
+              if ((!doSelf || queryRefId != ip.seqId)
+                  && (!doPref || refGroupData[ip.seqId] != Q.refGroup)
+                  && (!doLT || Q.seqCounter > ip.seqId)
+                  && (!anyPairs
+                      || allowed_pairs.count(pairPrefix + this->refSketch.metadata[ip.seqId].name))
               ) {
                 packed.push_back(encodePackedIP(ip));
               }
@@ -1221,7 +1245,8 @@ namespace skch
           int overlapCount = 0;
           int strandCount = 0;
           int bestIntersectionSize = 0;
-          std::vector<L1_candidateLocus_t> localOpts;
+          thread_local std::vector<L1_candidateLocus_t> localOpts;
+          localOpts.clear();
 
           // Keep track of all minmer windows that intersect with [i, i+windowLen]
           int windowLen = std::max<offset_t>(0, Q.len - param.segLength);
@@ -1509,7 +1534,7 @@ namespace skch
         void doL2Mapping(Q_Info &Q, L1_Iter l1_begin, L1_Iter l1_end, VecOut &l2Mappings)
         {
           ///2. Walk the read over the candidate regions and compute the jaccard similarity with minimum s sketches
-          std::vector<L2_mapLocus_t> l2_vec;
+          thread_local std::vector<L2_mapLocus_t> l2_vec;
           double bestJaccardNumerator = 0;
           auto loc_iterator = l1_begin;
           while (loc_iterator != l1_end)
@@ -1620,7 +1645,8 @@ namespace skch
           auto firstOpenIt = std::lower_bound(minmerIndex.begin(), minmerIndex.end(), first_minmer); 
 
           // Keeps track of the lowest end position
-          std::vector<skch::MinmerInfo> slidingWindow;
+          thread_local std::vector<skch::MinmerInfo> slidingWindow;
+          slidingWindow.clear();
           slidingWindow.reserve(Q.sketchSize);
 
           // Used to make a min-heap
@@ -1920,8 +1946,9 @@ namespace skch
           auto disjoint_sets = dsets::DisjointSets(ufv.data(), ufv.size());
 
           //Start the procedure to identify the chains
+          std::vector<std::pair<double, uint64_t>> distances;
           for (auto it = readMappings.begin(); it != readMappings.end(); it++) {
-              std::vector<std::pair<double, uint64_t>> distances;
+              distances.clear();
               for (auto it2 = std::next(it); it2 != readMappings.end(); it2++) {
                   //If this mapping is for the same segment, ignore
                   if (it2->refSeqId == it->refSeqId && it2->queryStartPos == it->queryStartPos) {
@@ -1954,8 +1981,8 @@ namespace skch
                   }
               }
               if (distances.size()) {
-                  std::sort(distances.begin(), distances.end());
-                  disjoint_sets.unite(it->splitMappingId, distances.front().second);
+                  disjoint_sets.unite(it->splitMappingId,
+                      std::min_element(distances.begin(), distances.end())->second);
               }
           }
 

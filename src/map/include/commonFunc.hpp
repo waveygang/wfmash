@@ -190,17 +190,20 @@ namespace skch {
         {
           makeUpperCaseAndValidDNA(seq, len);
 
-          //Compute reverse complement of seq
-          std::unique_ptr<char[]> seqRev(new char[len]);
-          //char* seqRev = new char[len];
+          //Compute reverse complement of seq (buffer reused across fragments)
+          thread_local std::vector<char> seqRevBuf;
+          seqRevBuf.resize(len);
+          char* seqRev = seqRevBuf.data();
 
           if(alphabetSize == 4) //not protein
-            CommonFunc::reverseComplement(seq, seqRev.get(), len);
+            CommonFunc::reverseComplement(seq, seqRev, len);
 
           // TODO cleanup
-          ankerl::unordered_dense::map<hash_t, MinmerInfo> sketched_vals;
+          thread_local ankerl::unordered_dense::map<hash_t, MinmerInfo> sketched_vals;
+          sketched_vals.clear();
           sketched_vals.reserve(sketchSize + 1);
-          std::vector<hash_t> sketched_heap;
+          thread_local std::vector<hash_t> sketched_heap;
+          sketched_heap.clear();
           sketched_heap.reserve(sketchSize+1);
             
           // Get distance until last "N"
@@ -226,7 +229,7 @@ namespace skch {
             hash_t hashBwd;
 
             if(alphabetSize == 4)
-              hashBwd = CommonFunc::getHash(seqRev.get() + len - i - kmerSize, kmerSize);
+              hashBwd = CommonFunc::getHash(seqRev + len - i - kmerSize, kmerSize);
             else  //proteins
               hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
 

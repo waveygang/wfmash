@@ -54,7 +54,9 @@ namespace skch
         //Ordered map to save unique sketch elements, and associated value as 
         //a pair of its occurrence in the query and the reference
         typedef std::vector<slidingMapContainerValueType> VecType;
-        VecType slidingWindowMinhashes;
+        // One live SlideMapper per thread (constructed only in computeL2MappedRegions),
+        // so the vector's capacity can be reused across L1 candidates.
+        inline static thread_local VecType slidingWindowMinhashes;
 
         //Iterator pointing to the last query minmer that is below rank sketch-size
         typename VecType::iterator pivot;
@@ -82,11 +84,11 @@ namespace skch
          */
         SlideMapper(Q_Info &Q_) :
           Q(Q_),
-          slidingWindowMinhashes(Q.sketchSize + 1),
           sharedSketchElements(0),
           intersectionSize(0),
           strand_votes(0)
         {
+          slidingWindowMinhashes.assign(Q.sketchSize + 1, slidingMapContainerValueType{});
           this->init();
         }
 
