@@ -503,21 +503,9 @@ void WFlign::wflign_affine_wavefront(
                         std::chrono::steady_clock::now() - start_time).count();
 #endif
 
-        // Free old aligner
-        delete wf_aligner;
-
-        // use biWFA for all patching
-        wf_aligner =
-                new wfa::WFAlignerGapAffine2Pieces(
-                        0,
-                        wfa_convex_penalties.mismatch,
-                        wfa_convex_penalties.gap_opening1,
-                        wfa_convex_penalties.gap_extension1,
-                        wfa_convex_penalties.gap_opening2,
-                        wfa_convex_penalties.gap_extension2,
-                        wfa::WFAligner::Alignment,
-                        wfa::WFAligner::MemoryUltralow);
-        wf_aligner->setHeuristicNone();
+        // Reuse the aligner for patching: it was constructed with these exact
+        // penalties/memory-mode/heuristic, and wavefront_aligner_init fully
+        // resets per-alignment state on every align call.
 
         // write a merged alignment
         write_merged_alignment(

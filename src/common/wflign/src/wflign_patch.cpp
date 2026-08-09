@@ -371,6 +371,27 @@ void write_merged_alignment(
                            : -1;	
                 };
 
+        // One lazily-constructed head/tail patch aligner shared by both
+        // patching rounds (was a fresh MemoryMed aligner per patch event).
+        // Nothing may call setMaxAlignmentSteps on it: that field persists
+        // across align calls, and fresh instances carried INT_MAX.
+        std::unique_ptr<wfa::WFAlignerGapAffine2Pieces> head_tail_aligner;
+        auto get_head_tail_aligner = [&]() -> wfa::WFAlignerGapAffine2Pieces* {
+            if (!head_tail_aligner) {
+                head_tail_aligner = std::make_unique<wfa::WFAlignerGapAffine2Pieces>(
+                        0,
+                        convex_penalties.mismatch,
+                        convex_penalties.gap_opening1,
+                        convex_penalties.gap_extension1,
+                        convex_penalties.gap_opening2,
+                        convex_penalties.gap_extension2,
+                        wfa::WFAligner::Alignment,
+                        wfa::WFAligner::MemoryMed);
+                head_tail_aligner->setHeuristicWFmash(min_wf_length,max_dist_threshold);
+            }
+            return head_tail_aligner.get();
+        };
+
         auto patching = [&query, &query_name, &query_length, &query_start,
                 &query_offset, &target, &target_name,
                 &target_length_mut, &target_start, &target_offset,
@@ -381,7 +402,8 @@ void write_merged_alignment(
                 &distance_close_big_enough_indels, &min_wf_length,
                 &max_dist_threshold, &wf_aligner,
                 &convex_penalties,
-                &chain_gap, &max_patching_score
+                &chain_gap, &max_patching_score,
+                &get_head_tail_aligner
 #ifdef WFA_PNG_TSV_TIMING
                 ,&emit_patching_tsv,
                 &out_patching_tsv
@@ -546,17 +568,7 @@ void write_merged_alignment(
 //                        }
 //                        std::cerr << std::endl;
 
-                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_heads =
-                                new wfa::WFAlignerGapAffine2Pieces(
-                                        0,
-                                        convex_penalties.mismatch,
-                                        convex_penalties.gap_opening1,
-                                        convex_penalties.gap_extension1,
-                                        convex_penalties.gap_opening2,
-                                        convex_penalties.gap_extension2,
-                                        wfa::WFAligner::Alignment,
-                                        wfa::WFAligner::MemoryMed);
-                        wf_aligner_heads->setHeuristicWFmash(min_wf_length,max_dist_threshold);
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_heads = get_head_tail_aligner();
                         const int status = wf_aligner_heads->alignEndsFree(
                                 target_rev.c_str(),target_rev.size(),0,0,
                                 query_rev.c_str(),query_rev.size(),0,query_rev.size());
@@ -618,7 +630,6 @@ void write_merged_alignment(
                             }
                             //std::cerr << "\n";
                         }
-                        delete wf_aligner_heads;
                     }
                 }
 
@@ -1061,17 +1072,7 @@ void write_merged_alignment(
                     //              << target_delta_x
                     //              << std::endl;
 
-                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails =
-                                new wfa::WFAlignerGapAffine2Pieces(
-                                        0,
-                                        convex_penalties.mismatch,
-                                        convex_penalties.gap_opening1,
-                                        convex_penalties.gap_extension1,
-                                        convex_penalties.gap_opening2,
-                                        convex_penalties.gap_extension2,
-                                        wfa::WFAligner::Alignment,
-                                        wfa::WFAligner::MemoryMed);
-                        wf_aligner_tails->setHeuristicWFmash(min_wf_length,max_dist_threshold);
+                        wfa::WFAlignerGapAffine2Pieces* wf_aligner_tails = get_head_tail_aligner();
                         const int status = wf_aligner_tails->alignEndsFree(
                                 target - target_pointer_shift + target_pos, target_delta_x,0,0,
                                 query + query_pos, query_delta,0,query_delta);
@@ -1137,7 +1138,6 @@ void write_merged_alignment(
                                 patched.push_back('D');
                             }
                         }
-                        delete wf_aligner_tails;
                     }
                 }
 
