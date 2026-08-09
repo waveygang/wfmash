@@ -273,6 +273,11 @@ namespace skch
       std::unordered_set<std::string> allowed_pairs;
       std::unordered_set<std::string> allowed_queries_from_pairs;
 
+      // Memoized Stat::estimateMinimumHitsRelaxed for every possible Q.sketchSize;
+      // all its other arguments are run constants, so this avoids the per-fragment
+      // GSL binomial-CDF loops.
+      std::vector<int> minHitsCache;
+
     public:
 
       /**
@@ -311,6 +316,11 @@ namespace skch
       this->refNameToId.reserve(refSketch.metadata.size());
       for (seqno_t i = 0; i < (seqno_t)refSketch.metadata.size(); ++i) {
         this->refNameToId[refSketch.metadata[i].name] = i;
+      }
+      // Memoize estimateMinimumHitsRelaxed over all possible sketch sizes.
+      this->minHitsCache.resize(param.sketchSize + 1);
+      for (int s = 0; s <= param.sketchSize; ++s) {
+        this->minHitsCache[s] = Stat::estimateMinimumHitsRelaxed(s, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
       }
       this->mapQuery();
     }
@@ -1457,7 +1467,9 @@ namespace skch
           }
 
           //3. Compute L1 windows
-          int minimumHits = Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
+          int minimumHits = (size_t)Q.sketchSize < minHitsCache.size()
+              ? minHitsCache[Q.sketchSize]
+              : Stat::estimateMinimumHitsRelaxed(Q.sketchSize, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
 
           // Fast packed-key path: windowLen == max(0, Q.len - segLength) is 0 here
           // (Q.len <= segLength, the default split fragmentation), so IntervalPoint::hash
