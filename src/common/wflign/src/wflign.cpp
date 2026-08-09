@@ -1,5 +1,7 @@
 #include <cassert>
 #include <chrono>
+#include <limits>
+#include <memory>
 #include <string>
 
 #include "wflign.hpp"
@@ -441,8 +443,12 @@ void WFlign::wflign_affine_wavefront(
             (mashmap_estimated_identity >= 0.99
              && query_length <= MAX_LEN_FOR_STANDARD_WFA && target_length <= MAX_LEN_FOR_STANDARD_WFA)
             ) {
-        wfa::WFAlignerGapAffine2Pieces* wf_aligner =
-                new wfa::WFAlignerGapAffine2Pieces(
+        // Thread-reused aligner (penalties are run constants; align calls fully
+        // reset per-alignment state). The previous record's patching may have
+        // set a step limit on it, so restore the fresh default.
+        thread_local std::unique_ptr<wfa::WFAlignerGapAffine2Pieces> standard_aligner;
+        if (!standard_aligner) {
+            standard_aligner = std::make_unique<wfa::WFAlignerGapAffine2Pieces>(
                         0,
                         wfa_convex_penalties.mismatch,
                         wfa_convex_penalties.gap_opening1,
@@ -451,8 +457,11 @@ void WFlign::wflign_affine_wavefront(
                         wfa_convex_penalties.gap_extension2,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
+        }
+        wfa::WFAlignerGapAffine2Pieces* wf_aligner = standard_aligner.get();
         wf_aligner->setHeuristicNone();
-        
+        wf_aligner->setMaxAlignmentSteps(std::numeric_limits<int>::max());
+
         const int status = wf_aligner->alignEnd2End(target,(int)target_length,query,(int)query_length);
 
         auto *aln = new alignment_t();
@@ -549,9 +558,6 @@ void WFlign::wflign_affine_wavefront(
                 out_patching_tsv
 #endif
                 );
-
-        // Free biWFA aligner
-        delete wf_aligner;
     } else {
 #ifdef WFA_PNG_TSV_TIMING
         if (emit_tsv) {
@@ -601,14 +607,18 @@ void WFlign::wflign_affine_wavefront(
         //std::cerr << "wflambda_affine_penalties.gap_extension1 " << wflambda_affine_penalties.gap_extension1 << std::endl;
         //std::cerr << "max_mash_dist_to_evaluate " << max_mash_dist_to_evaluate << std::endl;
 
-        // Configure the attributes of the wflambda-aligner
-        wfa::WFAlignerGapAffine* wflambda_aligner =
-                new wfa::WFAlignerGapAffine(
+        // Configure the attributes of the wflambda-aligner (thread-reused; the
+        // per-record heuristic calls below leave it state-equal to a fresh one)
+        thread_local std::unique_ptr<wfa::WFAlignerGapAffine> wflambda_aligner_tl;
+        if (!wflambda_aligner_tl) {
+            wflambda_aligner_tl = std::make_unique<wfa::WFAlignerGapAffine>(
                         wflambda_affine_penalties.mismatch,
                         wflambda_affine_penalties.gap_opening1,
                         wflambda_affine_penalties.gap_extension1,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryUltralow);
+        }
+        wfa::WFAlignerGapAffine* wflambda_aligner = wflambda_aligner_tl.get();
         wflambda_aligner->setHeuristicNone(); // It should help
         if (wflign_max_distance_threshold <= 0) {
             wflambda_aligner->setHeuristicWFmash(wflign_min_wavefront_length, (int) (2048.0 / (mashmap_estimated_identity*mashmap_estimated_identity)));
@@ -622,14 +632,18 @@ void WFlign::wflign_affine_wavefront(
         std::vector<std::vector<rkmh::hash_t>*> query_sketches(pattern_length,nullptr);
         std::vector<std::vector<rkmh::hash_t>*> target_sketches(text_length,nullptr);
 
-        // Allocate subsidiary WFAligner
-        wfa::WFAlignerGapAffine* wf_aligner =
-                new wfa::WFAlignerGapAffine(
+        // Subsidiary segment WFAligner (thread-reused; steps are re-set before
+        // every segment alignment in do_wfa_segment_alignment)
+        thread_local std::unique_ptr<wfa::WFAlignerGapAffine> segment_aligner_tl;
+        if (!segment_aligner_tl) {
+            segment_aligner_tl = std::make_unique<wfa::WFAlignerGapAffine>(
                         wfa_affine_penalties.mismatch,
                         wfa_affine_penalties.gap_opening1,
                         wfa_affine_penalties.gap_extension1,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryHigh);
+        }
+        wfa::WFAlignerGapAffine* wf_aligner = segment_aligner_tl.get();
         wf_aligner->setHeuristicNone();
 
         // Save mismatches if wfplots are requested
@@ -680,10 +694,6 @@ void WFlign::wflign_affine_wavefront(
             wflambda_trace_match(alignments,*wflambda_aligner,trace,pattern_length,text_length);
 #endif
         }
-
-        // Free
-        delete wflambda_aligner;
-        delete wf_aligner;
 
 #ifdef WFA_PNG_TSV_TIMING
         if (extend_data.emit_png) {
@@ -961,9 +971,11 @@ void WFlign::wflign_affine_wavefront(
             }
 
             if (merge_alignments) {
-                // use biWFA for all patching
-                wfa::WFAlignerGapAffine2Pieces* wf_aligner =
-                        new wfa::WFAlignerGapAffine2Pieces(
+                // use biWFA for all patching (thread-reused; steps are re-set
+                // before every patch alignment in do_wfa_patch_alignment)
+                thread_local std::unique_ptr<wfa::WFAlignerGapAffine2Pieces> patch_aligner_tl;
+                if (!patch_aligner_tl) {
+                    patch_aligner_tl = std::make_unique<wfa::WFAlignerGapAffine2Pieces>(
                                 0,
                                 wfa_convex_penalties.mismatch,
                                 wfa_convex_penalties.gap_opening1,
@@ -972,6 +984,8 @@ void WFlign::wflign_affine_wavefront(
                                 wfa_convex_penalties.gap_extension2,
                                 wfa::WFAligner::Alignment,
                                 wfa::WFAligner::MemoryUltralow);
+                }
+                wfa::WFAlignerGapAffine2Pieces* wf_aligner = patch_aligner_tl.get();
                 wf_aligner->setHeuristicNone();
 
                 // write a merged alignment
@@ -1016,8 +1030,6 @@ void WFlign::wflign_affine_wavefront(
                         out_patching_tsv
 #endif
                 );
-
-                delete wf_aligner;
             } else {
                 // todo old implementation (and SAM format is not supported)
                 for (auto x = trace.rbegin(); x != trace.rend(); ++x) {

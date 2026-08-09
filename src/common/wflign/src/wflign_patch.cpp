@@ -371,12 +371,13 @@ void write_merged_alignment(
                            : -1;	
                 };
 
-        // One lazily-constructed head/tail patch aligner shared by both
-        // patching rounds (was a fresh MemoryMed aligner per patch event).
-        // Nothing may call setMaxAlignmentSteps on it: that field persists
-        // across align calls, and fresh instances carried INT_MAX.
-        std::unique_ptr<wfa::WFAlignerGapAffine2Pieces> head_tail_aligner;
+        // One thread-reused head/tail patch aligner shared by all patch events
+        // (was a fresh MemoryMed aligner per event). The heuristic is re-applied
+        // per event, leaving it state-equal to a fresh instance; nothing may
+        // call setMaxAlignmentSteps on it (that field persists across aligns,
+        // and fresh instances carried INT_MAX).
         auto get_head_tail_aligner = [&]() -> wfa::WFAlignerGapAffine2Pieces* {
+            thread_local std::unique_ptr<wfa::WFAlignerGapAffine2Pieces> head_tail_aligner;
             if (!head_tail_aligner) {
                 head_tail_aligner = std::make_unique<wfa::WFAlignerGapAffine2Pieces>(
                         0,
@@ -387,8 +388,8 @@ void write_merged_alignment(
                         convex_penalties.gap_extension2,
                         wfa::WFAligner::Alignment,
                         wfa::WFAligner::MemoryMed);
-                head_tail_aligner->setHeuristicWFmash(min_wf_length,max_dist_threshold);
             }
+            head_tail_aligner->setHeuristicWFmash(min_wf_length,max_dist_threshold);
             return head_tail_aligner.get();
         };
 
