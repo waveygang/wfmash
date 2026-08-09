@@ -1258,6 +1258,38 @@ namespace skch
         }
 
 
+      // One recorded pos-group of the fused L1 counting sweep: the group's
+      // coordinate (seqId of its first point, pos) and the overlap count right
+      // after consuming the group.
+      struct SweepStep {
+        seqno_t seqId;
+        offset_t pos;
+        int overlapAfter;
+      };
+
+      // End of the run of interval points with seqId == sid starting at runStart.
+      template <typename IP_iter>
+      static IP_iter findIPRunEnd(IP_iter runStart, IP_iter ip_end, seqno_t sid)
+      {
+        if constexpr (std::is_same_v<IP_iter, PackedIPCursor>) {
+          const uint64_t bound = (uint64_t)(uint32_t)(sid + 1) << 33;
+          return PackedIPCursor{ std::lower_bound(runStart.p, ip_end.p, bound) };
+        } else {
+          return std::partition_point(runStart, ip_end,
+              [sid](const auto& p) { return p.seqId <= sid; });
+        }
+      }
+
+      template <typename IP_iter>
+      static bool ipBefore(const IP_iter& a, const IP_iter& b)
+      {
+        if constexpr (std::is_same_v<IP_iter, PackedIPCursor>) {
+          return a.p < b.p;
+        } else {
+          return a < b;
+        }
+      }
+
       template <typename Q_Info, typename IP_iter, typename Vec2>
         void computeL1CandidateRegions(
             Q_Info &Q, 
@@ -1270,8 +1302,10 @@ namespace skch
           std::cerr << "INFO, skch::Map:computeL1CandidateRegions, read id " << Q.seqCounter << std::endl;
 #endif
 
+          if (ip_begin == ip_end)
+            return;
+
           int overlapCount = 0;
-          int strandCount = 0;
           int bestIntersectionSize = 0;
           thread_local std::vector<L1_candidateLocus_t> localOpts;
           localOpts.clear();
@@ -1292,41 +1326,124 @@ namespace skch
           // Only necessary when windowLen != 0.
           std::unordered_map<hash_t, int> hash_to_freq;
 
+          bool in_candidate = false;
+          L1_candidateLocus_t l1_out = {};
+
+          // Candidate-emission state machine, applied once per pos-group with the
+          // overlap count and coordinate of the PREVIOUS group. Shared verbatim by
+          // the fused replay (stage1_topANI_filter) and the plain sweep below.
+          auto emit = [&](int prevOverlap, const SeqCoord& prevPos) {
+          if ( prevOverlap >= minimumHits
+              //&& prevOverlap > overlapCount && prevOverlap >= prevPrevOverlap)
+          ) {
+            if (l1_out.seqId != prevPos.seqId && in_candidate) {
+              localOpts.push_back(l1_out);
+              l1_out = {};
+              in_candidate = false;
+            }
+            if (!in_candidate) {
+              l1_out.rangeStartPos = prevPos.pos - windowLen;
+              l1_out.rangeEndPos = prevPos.pos - windowLen;
+              l1_out.seqId = prevPos.seqId;
+              l1_out.intersectionSize = prevOverlap;
+              in_candidate = true;
+            } else {
+              if (param.stage2_full_scan) {
+                l1_out.intersectionSize = std::max(l1_out.intersectionSize, prevOverlap);
+                l1_out.rangeEndPos = prevPos.pos - windowLen;
+              }
+              else if (l1_out.intersectionSize < prevOverlap) {
+                l1_out.intersectionSize = prevOverlap;
+                l1_out.rangeStartPos = prevPos.pos - windowLen;
+                l1_out.rangeEndPos = prevPos.pos - windowLen;
+              }
+            }
+          }
+          else {
+            if (in_candidate) {
+              localOpts.push_back(l1_out);
+              l1_out = {};
+            }
+            in_candidate = false;
+          }
+          };
+
           if (param.stage1_topANI_filter) {
-            while (leadingIt != ip_end)
+            // Fused counting sweep: one traversal records each pos-group's
+            // coordinate and post-group overlap; the emission machine is replayed
+            // from that compact record after minimumHits is raised. seqId runs
+            // that cannot reach minimumHits collapse to a single zero-overlap
+            // step: their opens/closes balance to zero, they can never emit, and
+            // they cannot own bestIntersectionSize in a way that changes the
+            // early return or the raise (their best < minimumHits <= any
+            // qualifying run's best).
+            thread_local std::vector<SweepStep> steps;
+            steps.clear();
+            auto runStart = ip_begin;
+            bool cleanStart = true;   // leading did not overshoot into this run
+            while (runStart != ip_end)
             {
-              // Catch the trailing iterator up to the leading iterator - windowLen
-              while (
-                  trailingIt != ip_end 
-                  && ((trailingIt->seqId == leadingIt->seqId && trailingIt->pos <= leadingIt->pos - windowLen)
-                    || trailingIt->seqId < leadingIt->seqId))
+              const seqno_t runSeqId = runStart->seqId;
+              const auto runEnd = findIPRunEnd(runStart, ip_end, runSeqId);
+              if (windowLen == 0 && cleanStart)
               {
-                if (trailingIt->side == side::CLOSE) {
-                  if (windowLen != 0)
-                    hash_to_freq[trailingIt->hash]--;
-                  if (windowLen == 0 || hash_to_freq[trailingIt->hash] == 0) {
-                    overlapCount--;
-                  }
+                std::size_t runLen;
+                offset_t lastPos;
+                if constexpr (std::is_same_v<IP_iter, PackedIPCursor>) {
+                  runLen = (std::size_t)(runEnd.p - runStart.p);
+                  lastPos = (offset_t)((*(runEnd.p - 1) >> 1) & 0xFFFFFFFFULL);
+                } else {
+                  runLen = (std::size_t)std::distance(runStart, runEnd);
+                  lastPos = std::prev(runEnd)->pos;
                 }
-                trailingIt++;
-              }
-              auto currentPos = leadingIt->pos;
-              while (leadingIt != ip_end && leadingIt->pos == currentPos) {
-                if (leadingIt->side == side::OPEN) {
-                  if (windowLen == 0 || hash_to_freq[leadingIt->hash] == 0) {
-                    overlapCount++;
-                  }
-                  if (windowLen != 0)
-                    hash_to_freq[leadingIt->hash]++;
+                // Prune only when the run also does not share a position with the
+                // next run (pos-only grouping would merge such points into one
+                // group whose overlap must include both runs' opens).
+                if ((int)(runLen / 2) < minimumHits
+                    && !(runEnd != ip_end && runEnd->pos == lastPos))
+                {
+                  steps.push_back(SweepStep{runSeqId, runStart->pos, 0});
+                  trailingIt = runEnd;
+                  leadingIt = runEnd;
+                  runStart = runEnd;
+                  continue;
                 }
-                leadingIt++;
               }
-
-              //DEBUG_ASSERT(overlapCount >= 0, windowLen, trailingIt->seqId, trailingIt->pos, leadingIt->seqId, leadingIt->pos);
-              //DEBUG_ASSERT(windowLen != 0 || overlapCount <= Q.sketchSize, windowLen, trailingIt->seqId, trailingIt->pos, leadingIt->seqId, leadingIt->pos);
-
-              //Is this sliding window the best we have so far?
-              bestIntersectionSize = std::max(bestIntersectionSize, overlapCount);
+              while (ipBefore(leadingIt, runEnd))
+              {
+                // Catch the trailing iterator up to the leading iterator - windowLen
+                while (
+                    trailingIt != ip_end
+                    && ((trailingIt->seqId == leadingIt->seqId && trailingIt->pos <= leadingIt->pos - windowLen)
+                      || trailingIt->seqId < leadingIt->seqId))
+                {
+                  if (trailingIt->side == side::CLOSE) {
+                    if (windowLen != 0)
+                      hash_to_freq[trailingIt->hash]--;
+                    if (windowLen == 0 || hash_to_freq[trailingIt->hash] == 0) {
+                      overlapCount--;
+                    }
+                  }
+                  trailingIt++;
+                }
+                const seqno_t groupSeqId = leadingIt->seqId;
+                const offset_t groupPos = leadingIt->pos;
+                while (leadingIt != ip_end && leadingIt->pos == groupPos) {
+                  if (leadingIt->side == side::OPEN) {
+                    if (windowLen == 0 || hash_to_freq[leadingIt->hash] == 0) {
+                      overlapCount++;
+                    }
+                    if (windowLen != 0)
+                      hash_to_freq[leadingIt->hash]++;
+                  }
+                  leadingIt++;
+                }
+                //Is this sliding window the best we have so far?
+                bestIntersectionSize = std::max(bestIntersectionSize, overlapCount);
+                steps.push_back(SweepStep{groupSeqId, groupPos, overlapCount});
+              }
+              cleanStart = (leadingIt == runEnd);
+              runStart = leadingIt;
             }
 
             // Only go back through to find local opts if we know that there are some that are 
@@ -1338,23 +1455,48 @@ namespace skch
             {
               minimumHits = std::max(
                   sketchCutoffs[
-                    int(std::min(bestIntersectionSize, Q.sketchSize) 
+                    int(std::min(bestIntersectionSize, Q.sketchSize)
                       / std::max<double>(1, param.sketchSize / skch::fixed::ss_table_max))
                   ],
                   minimumHits);
             }
-          } 
+
+            // Replay the emission machine over the recorded pos-groups: step t's
+            // emission sees the overlap/coordinate of step t-1 (the last step's
+            // overlap is never read, exactly like the plain sweep's last group).
+            int prevOverlap = 0;
+            SeqCoord prevPos{};
+            for (const auto& st : steps) {
+              emit(prevOverlap, prevPos);
+              prevOverlap = st.overlapAfter;
+              prevPos = SeqCoord{st.seqId, st.pos};
+            }
+          }
           
+#ifdef WFMASH_SWEEP_VERIFY
+          // Verification mode: finalize and stash the fused result, then let the
+          // reference sweep below recompute into localOpts for comparison.
+          std::vector<L1_candidateLocus_t> fusedOpts;
+          if (param.stage1_topANI_filter) {
+            if (in_candidate) localOpts.push_back(l1_out);
+            in_candidate = false;
+            l1_out = {};
+            fusedOpts = localOpts;
+            localOpts.clear();
+          }
+          if (true)
+#else
+          if (!param.stage1_topANI_filter)
+#endif
+          {
           // Clear freq dict, as there will be left open CLOSE points at the end of the last seq
           // that we never got to
           hash_to_freq.clear();
 
           // Since there can be more than sketchSize windows that overlap w/ [i, i+windowLen]
-          // cap the best intersection size 
+          // cap the best intersection size
           bestIntersectionSize = std::min(bestIntersectionSize, Q.sketchSize);
 
-          bool in_candidate = false;
-          L1_candidateLocus_t l1_out = {};
           trailingIt = ip_begin;
           leadingIt = ip_begin;
 
@@ -1406,43 +1548,28 @@ namespace skch
               }
               leadingIt++;
             }
-          if ( prevOverlap >= minimumHits
-              //&& prevOverlap > overlapCount && prevOverlap >= prevPrevOverlap)
-          ) {
-            if (l1_out.seqId != prevPos.seqId && in_candidate) {
-              localOpts.push_back(l1_out);
-              l1_out = {};
-              in_candidate = false;
-            }
-            if (!in_candidate) {
-              l1_out.rangeStartPos = prevPos.pos - windowLen;
-              l1_out.rangeEndPos = prevPos.pos - windowLen;
-              l1_out.seqId = prevPos.seqId;
-              l1_out.intersectionSize = prevOverlap;
-              in_candidate = true;
-            } else {
-              if (param.stage2_full_scan) {
-                l1_out.intersectionSize = std::max(l1_out.intersectionSize, prevOverlap);
-                l1_out.rangeEndPos = prevPos.pos - windowLen;
-              }
-              else if (l1_out.intersectionSize < prevOverlap) {
-                l1_out.intersectionSize = prevOverlap;
-                l1_out.rangeStartPos = prevPos.pos - windowLen;
-                l1_out.rangeEndPos = prevPos.pos - windowLen;
-              }
-            }
-          } 
-          else {
-            if (in_candidate) {
-              localOpts.push_back(l1_out);
-              l1_out = {};
-            }
-            in_candidate = false;
-          }
+          emit(prevOverlap, prevPos);
         }
+          }
         if (in_candidate) {
           localOpts.push_back(l1_out);
         }
+#ifdef WFMASH_SWEEP_VERIFY
+        if (param.stage1_topANI_filter) {
+          bool same = fusedOpts.size() == localOpts.size();
+          for (std::size_t i = 0; same && i < fusedOpts.size(); ++i) {
+            same = fusedOpts[i].seqId == localOpts[i].seqId
+                && fusedOpts[i].rangeStartPos == localOpts[i].rangeStartPos
+                && fusedOpts[i].rangeEndPos == localOpts[i].rangeEndPos
+                && fusedOpts[i].intersectionSize == localOpts[i].intersectionSize;
+          }
+          if (!same) {
+            std::cerr << "[wfmash] WFMASH_SWEEP_VERIFY mismatch, query " << Q.seqCounter
+                      << " fused=" << fusedOpts.size() << " ref=" << localOpts.size() << std::endl;
+            std::abort();
+          }
+        }
+#endif
         
 
         // Join together proximal local opts
