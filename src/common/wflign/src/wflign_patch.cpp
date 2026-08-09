@@ -1170,6 +1170,7 @@ void write_merged_alignment(
             std::vector<char> erodev;
             {
                 std::vector<char> rawv;
+                rawv.reserve(query_length + query_length / 4);
 
                 // copy
 #ifdef WFLIGN_DEBUG
@@ -1257,6 +1258,7 @@ void write_merged_alignment(
 #endif
 
                 // erode by removing matches < k
+                erodev.reserve(rawv.size() + 16);
                 for (uint64_t i = 0; i < rawv.size();) {
                     if (rawv[i] == 'M' || rawv[i] == 'X') {
                         uint64_t j = i;
@@ -1346,8 +1348,8 @@ void write_merged_alignment(
             }
 #endif
 
-            // normalize: sort so that I<D and otherwise leave it as-is
-            sort_indels(tracev);
+            // (a sort_indels(tracev) call sat here, but tracev is not written
+            // until the second patching round below: it was a no-op)
         }
 
         //std::cerr << "SECOND PATCH ROUND" << std::endl;
@@ -1860,14 +1862,19 @@ double float2phred(const double& prob) {
 }
 
 void sort_indels(std::vector<char>& v) {
+    // Sorting a two-symbol run descending means all 'I's then all 'D's:
+    // count and refill instead of std::sort.
     auto f = v.begin();
     while (f != v.end()) {
         auto j = f;
+        size_t num_i = 0;
         while (j != v.end() && (*j == 'D' || *j == 'I')) {
+            num_i += (*j == 'I');
             ++j;
         }
         if (j != f) {
-            std::sort(f, j, [](char a, char b) { return b < a; });
+            std::fill(f, f + num_i, 'I');
+            std::fill(f + num_i, j, 'D');
             f = j;
         } else {
             ++f;
