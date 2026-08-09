@@ -58,6 +58,10 @@ target_include_directories(wfmash PRIVATE
   )
 #target_link_directories(wfmash PRIVATE
 #  src/common/wflign/deps/WFA2-lib/lib)
+# WFA2 is linked statically: the shared libs exported 434 symbols and every
+# internal call crossed the PLT (including per-diagonal calls in the extend
+# kernels). jemalloc interposition is unaffected (malloc stays undefined in
+# the WFA2 objects).
 target_link_libraries(wfmash
   gsl
   gslcblas
@@ -65,7 +69,7 @@ target_link_libraries(wfmash
   pthread
   libwflign_static
   hts
-  wfa2cpp
+  wfa2cpp_static
   jemalloc
   z
 )
@@ -97,12 +101,12 @@ endif()
 
 install(TARGETS wfmash DESTINATION bin)
 
-install(TARGETS wfa2cpp
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+install(TARGETS wfa2cpp_static
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(TARGETS wfa2
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+install(TARGETS wfa2_static
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 
