@@ -568,7 +568,7 @@ namespace skch
 				param.query_prefix,
 				allowed_query_names,
                 [&](const std::string& seq_name,
-                    const std::string& seq) {
+                    std::string&& seq) {
                     // todo: offset_t is an 32-bit integer, which could cause problems
                     offset_t len = seq.length();
 					if (param.skip_self
@@ -597,7 +597,7 @@ namespace skch
 						{
 							totalReadsPickedForMapping++;
 							//Dispatch input to thread
-							threadPool.runWhenThreadAvailable(new InputSeqProgContainer(seq, seq_name, seqCounter, progress));
+							threadPool.runWhenThreadAvailable(new InputSeqProgContainer(std::move(seq), seq_name, seqCounter, progress));
 
 							//Collect output if available
 							while ( threadPool.outputAvailable() ) {

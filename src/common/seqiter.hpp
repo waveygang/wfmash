@@ -20,7 +20,7 @@ void for_each_seq_in_file(
     const std::string& filename,
     const std::unordered_set<std::string>& keep_seq,
     const std::string& keep_prefix,
-    const std::function<void(const std::string&, const std::string&)>& func) {
+    const std::function<void(const std::string&, std::string&&)>& func) {
 
 #ifdef WFMASH_HAVE_AGC
     if (agcidx::is_agc_file(filename)) {
@@ -111,7 +111,7 @@ void for_each_seq_in_file(
                         }
                     }
                 }
-                func(name, seq);
+                func(name, std::move(seq));
             }
         } else if (input_is_fastq) {
             while (in.good()) {
@@ -123,7 +123,7 @@ void for_each_seq_in_file(
                 std::getline(in, line); // delimiter
                 std::getline(in, line); // quality
                 std::getline(in, line); // next header
-                func(name, keep ? seq : "");
+                func(name, keep ? std::move(seq) : std::string());
             }
         }
     }
@@ -132,12 +132,12 @@ void for_each_seq_in_file(
 void for_each_seq_in_file(
     faidx_t* fai,
     const std::vector<std::string>& seq_names,
-    const std::function<void(const std::string&, const std::string&)>& func) {
+    const std::function<void(const std::string&, std::string&&)>& func) {
     for (const auto& seq_name : seq_names) {
         int len;
         char* seq = fai_fetch(fai, seq_name.c_str(), &len);
         if (seq != nullptr) {
-            func(seq_name, std::string(seq));
+            func(seq_name, std::string(seq, (size_t)len));
             free(seq);
         }
     }
@@ -147,7 +147,7 @@ void for_each_seq_in_file_filtered(
     const std::string& filename,
     const std::vector<std::string>& query_prefix,
     const std::unordered_set<std::string>& query_list,
-    const std::function<void(const std::string&, const std::string&)>& func) {
+    const std::function<void(const std::string&, std::string&&)>& func) {
 
 #ifdef WFMASH_HAVE_AGC
     if (agcidx::is_agc_file(filename)) {

@@ -260,6 +260,14 @@ namespace skch
           , len(s.length())
           , seq(s)
           , seqName(id) { }
+
+      // len is initialized before seq in declaration order, so reading s.length()
+      // happens before the move.
+      InputSeqContainer(std::string&& s, const std::string& id, seqno_t seqcount)
+          : seqCounter(seqcount)
+          , len(s.length())
+          , seq(std::move(s))
+          , seqName(id) { }
   };
 
   struct InputSeqProgContainer : InputSeqContainer
@@ -276,6 +284,10 @@ namespace skch
      */
       InputSeqProgContainer(const std::string& s, const std::string& id, seqno_t seqcount, progress_meter::ProgressMeter& pm)
           : InputSeqContainer(s, id, seqcount)
+          , progress(pm) { }
+
+      InputSeqProgContainer(std::string&& s, const std::string& id, seqno_t seqcount, progress_meter::ProgressMeter& pm)
+          : InputSeqContainer(std::move(s), id, seqcount)
           , progress(pm) { }
   };
 

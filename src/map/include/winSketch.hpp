@@ -203,7 +203,7 @@ namespace skch
             allowed_target_names,
             param.target_prefix,
             [&](const std::string& seq_name,
-                const std::string& seq) {
+                std::string&& seq) {
                 // todo: offset_t is an 32-bit integer, which could cause problems
                 offset_t len = seq.length();
 
@@ -220,7 +220,7 @@ namespace skch
                 else
                 {
                   if (param.loadIndexFilename.empty()) {
-                    threadPool.runWhenThreadAvailable(new InputSeqContainer(seq, seq_name, seqCounter));
+                    threadPool.runWhenThreadAvailable(new InputSeqContainer(std::move(seq), seq_name, seqCounter));
                     
                     //Collect output if available
                     while ( threadPool.outputAvailable() )
