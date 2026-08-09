@@ -448,8 +448,11 @@ namespace skch {
                 // Add current hash to window
                 Q.push_back(std::make_tuple(currentKmer, currentStrand, i)); 
 
-                // Check if current kmer is already in the map
-                auto kmer_it = windowMap.find(currentKmer);
+                // Check if current kmer is already in the map. Membership implies
+                // currentKmer <= the max in-window hash, so skip the probe when
+                // it is larger (the common case: the window keeps the smallest).
+                auto kmer_it = (!sortedHashes.empty() && currentKmer <= sortedHashes.back())
+                    ? windowMap.find(currentKmer) : windowMap.end();
                 if (kmer_it != windowMap.end())
                 {
                   auto& current_entry = kmer_it->second;
