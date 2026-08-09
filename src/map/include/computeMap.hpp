@@ -123,42 +123,8 @@ namespace skch
     std::copy(tmp.begin(), tmp.end(), ip.begin() + start);
   }
 
-  // ---- Packed interval-point representation (IP-1) ----
-  // When windowLen == 0 (the default split fragmentation) the plane sweep never
-  // reads IntervalPoint::hash, so interval points can be represented as the same
-  // order-preserving uint64 key the radix sort already uses:
-  //   [ seqId : bits 33..63 ][ pos : bits 1..32 ][ sideOpen : bit 0 ]
-  // (side::CLOSE(-1)->0, side::OPEN(1)->1, so numeric key order == operator<).
-  // This drops the 24-byte struct and its scattered gather from the sort and cuts
-  // the plane sweep's memory traffic ~3x. Byte-identical for windowLen == 0.
-  inline uint64_t encodePackedIP(const IntervalPoint& p) {
-    return ((uint64_t)(uint32_t)p.seqId << 33) | ((uint64_t)p.pos << 1)
-         | (uint64_t)(p.side == side::OPEN ? 1u : 0u);
-  }
-  inline IntervalPoint decodePackedIP(uint64_t k) {
-    IntervalPoint ip;
-    ip.pos   = (offset_t)((k >> 1) & 0xFFFFFFFFULL);
-    ip.hash  = 0;                                   // dead when windowLen == 0
-    ip.seqId = (seqno_t)(k >> 33);
-    ip.side  = (k & 1) ? side::OPEN : side::CLOSE;
-    return ip;
-  }
-
-  // Forward iterator over packed keys presenting each as a decoded IntervalPoint,
-  // so computeL1CandidateRegions can consume packed keys unchanged.
-  struct PackedIPCursor {
-    const uint64_t* p;
-    struct Arrow {
-      IntervalPoint ip;
-      const IntervalPoint* operator->() const { return &ip; }
-    };
-    IntervalPoint operator*()  const { return decodePackedIP(*p); }
-    Arrow         operator->() const { return Arrow{ decodePackedIP(*p) }; }
-    PackedIPCursor& operator++()    { ++p; return *this; }
-    PackedIPCursor  operator++(int) { PackedIPCursor t = *this; ++p; return t; }
-    bool operator==(const PackedIPCursor& o) const { return p == o.p; }
-    bool operator!=(const PackedIPCursor& o) const { return p != o.p; }
-  };
+  // encodePackedIP / decodePackedIP / PackedIPCursor live in base_types.hpp
+  // (winSketch.hpp uses them to build the CSR position-lookup arena).
 
   // In-place LSD radix sort of packed uint64 keys in [start,end): 11-bit digits,
   // constant-digit skip, std::sort fallback for tiny ranges. The keys themselves
@@ -309,14 +275,9 @@ namespace skch
       if (!p.pairs_file.empty()) {
         this->loadPairsFile(p.pairs_file);
       }
-      // Decide once whether the compact packed interval-point path is usable.
-      {
-        bool ok = refSketch.metadata.size() <= (size_t)0x7FFFFFFF;
-        for (const auto& m : refSketch.metadata) {
-          if (m.len < 0 || (uint64_t)m.len >= (UINT64_C(1) << 32)) { ok = false; break; }
-        }
-        this->packed_ip_ok = ok;
-      }
+      // The compact packed interval-point path is usable exactly when the Sketch
+      // flattened its position lookup into the packed CSR arena.
+      this->packed_ip_ok = refSketch.packed_ok;
       // Build reference name -> seqId once (for the integer skip_self test).
       this->refNameToId.reserve(refSketch.metadata.size());
       for (seqno_t i = 0; i < (seqno_t)refSketch.metadata.size(); ++i) {
@@ -1178,7 +1139,7 @@ namespace skch
           // (lazy: the packed path never reaches this function)
           if (intervalPoints.capacity() == 0)
             intervalPoints.reserve(
-                2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.minmerPosLookupIndex.size());
+                2 * param.sketchSize * refSketch.minmerIndex.size() / refSketch.nUniqueMinmers);
 
           // Gather matched interval points directly during the reference lookup
           // (no separate priority-queue pass; radixSortIntervalPoints sorts afterwards).
@@ -1193,6 +1154,29 @@ namespace skch
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
             //Check if hash value exists in the reference lookup index
+            if (refSketch.packed_ok) {
+              // CSR arena: decode each packed key back to the identical
+              // IntervalPoint (hash is the lookup key itself).
+              const auto seedFind = refSketch.posLookupCSR.find(it->hash);
+              if(seedFind == refSketch.posLookupCSR.end())
+                continue;
+              const uint64_t* runB = refSketch.ipArena.data() + seedFind->second.off;
+              const uint64_t* runE = runB + seedFind->second.cnt;
+              for (const uint64_t* k = runB; k != runE; ++k)
+              {
+                IntervalPoint ip = decodePackedIP(*k);
+                ip.hash = it->hash;
+                if ((!doSelf || queryRefId != ip.seqId)
+                    && (!doPref || refGroupData[ip.seqId] != Q.refGroup)
+                    && (!doLT || Q.seqCounter > ip.seqId)
+                    && (!anyPairs
+                        || allowed_pairs.count(pairPrefix + this->refSketch.metadata[ip.seqId].name))
+                ) {
+                  intervalPoints.push_back(ip);
+                }
+              }
+              continue;
+            }
             const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
             if(seedFind == refSketch.minmerPosLookupIndex.end())
               continue;
@@ -1236,21 +1220,32 @@ namespace skch
           const bool anyPairs = !allowed_pairs.empty();
           const auto* refGroupData = this->refIdGroup.data();
           const std::string pairPrefix = anyPairs ? Q.seqName + "\t" : std::string();
+          // When no per-point predicate can reject anything, whole runs are
+          // appended with one insert (the arena is already encodePackedIP keys).
+          const bool noFilter = (!doSelf || queryRefId == (seqno_t)-1) && !doPref && !doLT && !anyPairs;
+          const uint64_t* arena = refSketch.ipArena.data();
           for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
           {
-            const auto seedFind = refSketch.minmerPosLookupIndex.find(it->hash);
-            if(seedFind == refSketch.minmerPosLookupIndex.end())
+            const auto seedFind = refSketch.posLookupCSR.find(it->hash);
+            if(seedFind == refSketch.posLookupCSR.end())
               continue;
 
-            for (const auto& ip : seedFind->second)
+            const uint64_t* runB = arena + seedFind->second.off;
+            const uint64_t* runE = runB + seedFind->second.cnt;
+            if (noFilter) {
+              packed.insert(packed.end(), runB, runE);
+              continue;
+            }
+            for (const uint64_t* k = runB; k != runE; ++k)
             {
-              if ((!doSelf || queryRefId != ip.seqId)
-                  && (!doPref || refGroupData[ip.seqId] != Q.refGroup)
-                  && (!doLT || Q.seqCounter > ip.seqId)
+              const seqno_t sid = (seqno_t)(*k >> 33);
+              if ((!doSelf || queryRefId != sid)
+                  && (!doPref || refGroupData[sid] != Q.refGroup)
+                  && (!doLT || Q.seqCounter > sid)
                   && (!anyPairs
-                      || allowed_pairs.count(pairPrefix + this->refSketch.metadata[ip.seqId].name))
+                      || allowed_pairs.count(pairPrefix + this->refSketch.metadata[sid].name))
               ) {
-                packed.push_back(encodePackedIP(ip));
+                packed.push_back(*k);
               }
             }
           }
