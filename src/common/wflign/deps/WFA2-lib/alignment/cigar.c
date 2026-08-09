@@ -70,9 +70,9 @@ cigar_t* cigar_new(
   cigar->score = INT32_MIN;
   cigar->end_v = -1;
   cigar->end_h = -1;
-  // CIGAR
+  // CIGAR (SAM buffer allocated lazily on first cigar_compute_CIGAR)
   cigar->cigar_length = 0;
-  cigar->cigar_buffer = calloc(max_operations,sizeof(uint32_t));
+  cigar->cigar_buffer = NULL;
   // Return
   return cigar;
 }
@@ -97,7 +97,7 @@ void cigar_resize(
     free(cigar->operations); // Free
     free(cigar->cigar_buffer); // Free
     cigar->operations = malloc(max_operations); // Allocate
-    cigar->cigar_buffer = calloc(max_operations,sizeof(uint32_t)); // Allocate
+    cigar->cigar_buffer = NULL; // Reallocated lazily if ever read
   }
   cigar_clear(cigar);
 }
@@ -191,7 +191,11 @@ void cigar_compute_CIGAR(
       cigar->cigar_length = 0;
       return;
     }
-    // Generate CIGAR
+    // Generate CIGAR (allocate the SAM buffer on first use; it is fully
+    // written before being read, so zero-initialization is unnecessary)
+    if (cigar->cigar_buffer == NULL) {
+      cigar->cigar_buffer = malloc(cigar->max_operations*sizeof(uint32_t));
+    }
     uint32_t* const cigar_buffer = cigar->cigar_buffer;
     int cigar_length = 0;
     char last_op = operations[begin_offset];
