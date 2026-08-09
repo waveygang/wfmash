@@ -278,6 +278,11 @@ namespace skch
       // GSL binomial-CDF loops.
       std::vector<int> minHitsCache;
 
+      // Per-seqId start offsets into refSketch.minmerIndex (globally sorted by
+      // (seqId, wpos)), so the per-candidate lower_bound searches one contig
+      // instead of the whole index.
+      std::vector<size_t> minmerIndexSeqStart;
+
     public:
 
       /**
@@ -321,6 +326,19 @@ namespace skch
       this->minHitsCache.resize(param.sketchSize + 1);
       for (int s = 0; s <= param.sketchSize; ++s) {
         this->minHitsCache[s] = Stat::estimateMinimumHitsRelaxed(s, param.kmerSize, param.percentageIdentity, skch::fixed::confidence_interval);
+      }
+      // Partition offsets of the (seqId, wpos)-sorted minmerIndex by seqId;
+      // empty seqIds point at the next sequence's start.
+      {
+        const auto& mi = refSketch.minmerIndex;
+        minmerIndexSeqStart.assign(refSketch.metadata.size() + 1, mi.size());
+        for (size_t i = mi.size(); i-- > 0; ) {
+          minmerIndexSeqStart[mi[i].seqId] = i;
+        }
+        for (size_t s = refSketch.metadata.size(); s-- > 0; ) {
+          if (minmerIndexSeqStart[s] > minmerIndexSeqStart[s + 1])
+            minmerIndexSeqStart[s] = minmerIndexSeqStart[s + 1];
+        }
       }
       this->mapQuery();
     }
@@ -1650,11 +1668,15 @@ namespace skch
           //candidateLocus.rangeStartPos -= param.segLength;
           //candidateLocus.rangeEndPos += param.segLength;
           
-          // Get first potential mashimizer
-          const MinmerInfo first_minmer = MinmerInfo {0, candidateLocus.rangeStartPos - param.segLength - 1, 0, candidateLocus.seqId, 0};
-
-          //const MinmerInfo first_minmer = MinmerInfo {0, candidateLocus.seqId, -1, 0, 0};
-          auto firstOpenIt = std::lower_bound(minmerIndex.begin(), minmerIndex.end(), first_minmer); 
+          // Get first potential mashimizer: search only within this seqId's slice
+          // of the (seqId, wpos)-sorted index (equivalent to the former whole-index
+          // lower_bound on {seqId, wpos}).
+          const offset_t windowStartPos = candidateLocus.rangeStartPos - param.segLength - 1;
+          auto firstOpenIt = std::lower_bound(
+              minmerIndex.begin() + minmerIndexSeqStart[candidateLocus.seqId],
+              minmerIndex.begin() + minmerIndexSeqStart[candidateLocus.seqId + 1],
+              windowStartPos,
+              [](const MinmerInfo& mi, offset_t w) { return mi.wpos < w; });
 
           // Keeps track of the lowest end position
           thread_local std::vector<skch::MinmerInfo> slidingWindow;
