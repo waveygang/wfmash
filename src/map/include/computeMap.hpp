@@ -1404,6 +1404,27 @@ namespace skch
                   continue;
                 }
               }
+              if (windowLen == 0)
+              {
+                // windowLen == 0: a CLOSE at position C is drained by the
+                // trailing iterator exactly when the leading group reaches C
+                // (pos <= P inclusive), so the overlap after each pos-group is a
+                // plain running sum of +1/-1 over the sorted points and the
+                // trailing iterator is unnecessary.
+                while (ipBefore(leadingIt, runEnd))
+                {
+                  const seqno_t groupSeqId = leadingIt->seqId;
+                  const offset_t groupPos = leadingIt->pos;
+                  while (leadingIt != ip_end && leadingIt->pos == groupPos) {
+                    overlapCount += (leadingIt->side == side::OPEN) ? 1 : -1;
+                    leadingIt++;
+                  }
+                  bestIntersectionSize = std::max(bestIntersectionSize, overlapCount);
+                  steps.push_back(SweepStep{groupSeqId, groupPos, overlapCount});
+                }
+                trailingIt = leadingIt;   // preserve the run-boundary invariant
+              }
+              else
               while (ipBefore(leadingIt, runEnd))
               {
                 // Catch the trailing iterator up to the leading iterator - windowLen
@@ -1413,9 +1434,8 @@ namespace skch
                       || trailingIt->seqId < leadingIt->seqId))
                 {
                   if (trailingIt->side == side::CLOSE) {
-                    if (windowLen != 0)
-                      hash_to_freq[trailingIt->hash]--;
-                    if (windowLen == 0 || hash_to_freq[trailingIt->hash] == 0) {
+                    hash_to_freq[trailingIt->hash]--;
+                    if (hash_to_freq[trailingIt->hash] == 0) {
                       overlapCount--;
                     }
                   }
@@ -1425,11 +1445,10 @@ namespace skch
                 const offset_t groupPos = leadingIt->pos;
                 while (leadingIt != ip_end && leadingIt->pos == groupPos) {
                   if (leadingIt->side == side::OPEN) {
-                    if (windowLen == 0 || hash_to_freq[leadingIt->hash] == 0) {
+                    if (hash_to_freq[leadingIt->hash] == 0) {
                       overlapCount++;
                     }
-                    if (windowLen != 0)
-                      hash_to_freq[leadingIt->hash]++;
+                    hash_to_freq[leadingIt->hash]++;
                   }
                   leadingIt++;
                 }
