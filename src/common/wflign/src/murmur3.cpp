@@ -37,7 +37,22 @@ static FORCE_INLINE uint64_t rotl64 ( uint64_t x, int8_t r )
 // Block read - if your platform needs to do endian-swapping or can only
 // handle aligned reads, do the conversion here
 
-#define getblock(p, i) (p[i])
+#include <string.h>
+
+/* Loads come from arbitrary byte offsets, so p is usually misaligned.
+   Dereferencing a misaligned wide pointer is undefined behaviour;
+   memcpy expresses the unaligned load and costs nothing after optimisation. */
+static FORCE_INLINE uint32_t getblock(const uint32_t *p, int i) {
+    uint32_t v;
+    memcpy(&v, (const char *)p + (size_t)i * sizeof(v), sizeof(v));
+    return v;
+}
+
+static FORCE_INLINE uint64_t getblock(const uint64_t *p, int i) {
+    uint64_t v;
+    memcpy(&v, (const char *)p + (size_t)i * sizeof(v), sizeof(v));
+    return v;
+}
 
 //-----------------------------------------------------------------------------
 // Finalization mix - force all bits of a hash block to avalanche

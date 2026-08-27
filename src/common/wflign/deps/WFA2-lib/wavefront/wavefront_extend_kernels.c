@@ -34,6 +34,7 @@
 #include <sys/types.h>
 
 #include "wavefront_extend_kernels.h"
+#include <string.h>
 #include "wavefront_termination.h"
 #include "wavefront_extend_kernels_avx.h"
 
@@ -65,23 +66,34 @@ FORCE_INLINE wf_offset_t wavefront_extend_matches_kernel_charwise(
   return offset;
 }
 
+/* Unaligned 64-bit load. The wavefront kernels index char buffers at
+   arbitrary offsets, so a uint64_t* cast would be undefined behaviour. */
+static FORCE_INLINE uint64_t wf_load_u64(const void* p) {
+  uint64_t v;
+  memcpy(&v,p,sizeof(v));
+  return v;
+}
+
 FORCE_INLINE wf_offset_t wavefront_extend_matches_kernel_blockwise(
     wavefront_aligner_t* const wf_aligner,
     const int k,
     wf_offset_t offset) {
-  // Fetch pattern/text blocks
-  uint64_t* pattern_blocks = (uint64_t*)(wf_aligner->sequences.pattern+WAVEFRONT_V(k,offset));
-  uint64_t* text_blocks = (uint64_t*)(wf_aligner->sequences.text+WAVEFRONT_H(k,offset));
+  // Fetch pattern/text blocks. The sequences are char buffers and these
+  // offsets are arbitrary, so the addresses are usually misaligned. Casting
+  // to uint64_t* and dereferencing is undefined behaviour; memcpy states the
+  // unaligned load and optimises to the same instruction.
+  const char* pattern_ptr = wf_aligner->sequences.pattern+WAVEFRONT_V(k,offset);
+  const char* text_ptr = wf_aligner->sequences.text+WAVEFRONT_H(k,offset);
   // Compare 64-bits blocks
-  uint64_t cmp = *pattern_blocks ^ *text_blocks;
+  uint64_t cmp = wf_load_u64(pattern_ptr) ^ wf_load_u64(text_ptr);
   while (__builtin_expect(cmp==0,0)) {
     // Increment offset (full block)
     offset += 8;
     // Next blocks
-    ++pattern_blocks;
-    ++text_blocks;
+    pattern_ptr += 8;
+    text_ptr += 8;
     // Compare
-    cmp = *pattern_blocks ^ *text_blocks;
+    cmp = wf_load_u64(pattern_ptr) ^ wf_load_u64(text_ptr);
   }
   // Count equal characters
   const int equal_right_bits = __builtin_ctzl(cmp);
