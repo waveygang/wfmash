@@ -79,7 +79,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> map_pct_identity(mapping_opts, "FLOAT|aniXX[+/-N]", "minimum identity % or ANI preset (default: ani50-2)", {'p', "map-pct-id"});
     args::ValueFlag<int> ani_sketch_size(mapping_opts, "INT", "sketch size for ANI estimation [1000]", {"ani-sketch-size"});
     args::ValueFlag<std::string> num_mappings(mapping_opts, "INT", "mappings per segment (plane sweep) [inf]", {'n', "mappings"});
-    args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
+    args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [5*window]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "max mapping length [50k]", {'P', "max-length"});
     args::Flag no_split(mapping_opts, "", "map each sequence in one piece", {'N', "no-split"});
@@ -98,7 +98,7 @@ void parse_args(int argc,
     // SCAFFOLDING
     args::Group scaffold_opts(options_group, "SCAFFOLDING:");
     args::ValueFlag<std::string> scaffold_mass(scaffold_opts, "INT", "min scaffold length [10k]", {'S', "scaffold-mass"});
-    args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [100k]", {'D', "scaffold-dist"});
+    args::ValueFlag<std::string> scaffold_dist(scaffold_opts, "INT", "max scaffold distance [5*window]", {'D', "scaffold-dist"});
     args::ValueFlag<std::string> scaffold_jump(scaffold_opts, "INT", "scaffold jump (gap) [100k]", {'j', "scaffold-jump"});
     args::ValueFlag<std::string> scaffold_mappings(scaffold_opts, "INT", "mappings per scaffold chain [1]", {'r', "retain-per-scaffold"});
     args::ValueFlag<double> scaffold_overlap_thresh(scaffold_opts, "FLOAT", "scaffold chain overlap threshold [0.5]", {"scaffold-overlap"});
@@ -411,7 +411,10 @@ void parse_args(int argc,
         }
         map_parameters.block_length = l;
     } else {
-        map_parameters.block_length = 0; // Default 0 (no filtering)
+        // Default to 5 windows of merged support, matching the historical
+        // `-l` default of 5*segment-length. Clamp to the alignment-phase limit
+        // enforced above for a user-provided `-l`.
+        map_parameters.block_length = std::min<int64_t>(5 * map_parameters.windowLength, 30000);
     }
 
     if (chain_jump) {
@@ -446,7 +449,12 @@ void parse_args(int argc,
             exit(1);
         }
     } else {
-        map_parameters.scaffold_max_deviation = 100000; // 100k default
+        // Rescue radius. The historical 100k default re-admitted large numbers
+        // of off-diagonal fragments around each scaffold anchor (issue #399).
+        // SweepGA's scaffold pipeline defaults to no rescue at all; a small,
+        // window-scaled radius keeps legitimate nearby mappings without
+        // re-introducing the noise.
+        map_parameters.scaffold_max_deviation = 5 * map_parameters.windowLength;
     }
 
     // Parse scaffold minimum length

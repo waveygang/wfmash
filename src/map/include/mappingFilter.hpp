@@ -396,6 +396,7 @@ namespace skch
             // For unmerged mappings, each is its own chain
             result.chainInfo.resize(readMappings.size());
             for (size_t i = 0; i < readMappings.size(); ++i) {
+                result.mappings[i].chainId = static_cast<uint32_t>(i);
                 result.chainInfo[i] = {static_cast<uint32_t>(i), 1, 1};
             }
             return result;
@@ -561,6 +562,7 @@ namespace skch
                 merged.setNucIdentity(total_id / merged.n_merged);
                 merged.setKmerComplexity(total_comp / merged.n_merged);
                 merged.conservedSketches = total_conserved;
+                merged.chainId = chainId;
                 
                 result.mappings.push_back(merged);
                 result.chainInfo.push_back({chainId, chainPos++, chainLen});
@@ -1016,6 +1018,46 @@ namespace skch
                       << " mappings in " << std::fixed << std::setprecision(1) 
                       << scaffold_duration.count() / 1000.0 << "s" << std::endl;
         }
+    }
+
+    /**
+     * @brief Rebuild chain position/length metadata from MappingResult::chainId
+     *
+     * Filtering erases and reorders mappings after chaining, so a parallel
+     * chain-info vector becomes stale. The chain id is carried on each mapping,
+     * so position-within-chain and chain length are re-derived from the
+     * surviving set. The result is index-aligned with `mappings`.
+     */
+    static ChainInfoVector_t buildChainInfo(const MappingResultsVector_t& mappings) {
+        ChainInfoVector_t info(mappings.size());
+        if (mappings.empty()) return info;
+
+        std::unordered_map<uint32_t, uint32_t> counts;
+        counts.reserve(mappings.size());
+        for (const auto& e : mappings) {
+            ++counts[e.chainId];
+        }
+
+        std::vector<uint32_t> order(mappings.size());
+        std::iota(order.begin(), order.end(), 0u);
+        std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) {
+            return std::tie(mappings[a].chainId, mappings[a].queryStartPos, mappings[a].refStartPos)
+                 < std::tie(mappings[b].chainId, mappings[b].queryStartPos, mappings[b].refStartPos);
+        });
+
+        std::unordered_map<uint32_t, uint32_t> pos;
+        pos.reserve(counts.size());
+        for (uint32_t i : order) {
+            const uint32_t cid = mappings[i].chainId;
+            const uint32_t p = ++pos[cid];
+            // chainPos/chainLen are uint16; saturate rather than wrap for very
+            // long chains.
+            constexpr uint32_t max16 = std::numeric_limits<uint16_t>::max();
+            info[i] = ChainInfo{cid,
+                                static_cast<uint16_t>(std::min(p, max16)),
+                                static_cast<uint16_t>(std::min(counts[cid], max16))};
+        }
+        return info;
     }
 
     /**

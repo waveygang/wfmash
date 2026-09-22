@@ -37,6 +37,7 @@ option(DISABLE_LTO "Disable IPO/LTO" OFF)
 option(STOP_ON_ERROR "Stop compiling on first error" OFF)
 option(VENDOR_HTSLIB "Download and build htslib instead of using system version" OFF)
 option(VENDOR_EVERYTHING "Download and build all dependencies (enables BUILD_STATIC and VENDOR_HTSLIB)" OFF)
+option(WFMASH_ONLINE_TESTS "Enable regression tests that download reference genomes" OFF)
 
 # Enable static build and htslib vendoring when VENDOR_EVERYTHING is ON
 if (VENDOR_EVERYTHING)
@@ -462,6 +463,21 @@ add_test(
   NAME wfmash-multi-subset-index
   COMMAND bash -c "${INVOKE} data/scerevisiae8.fa.gz -t 4 -b 1m -T S288C -W index.idx && ${INVOKE} data/scerevisiae8.fa.gz -t 4 -T S288C -I index.idx -Q Y12 > index.paf && ./scripts/test.sh data/scerevisiae8.fa.gz.fai index.paf 0.9 'Y12\|S288C'"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Issue #399 regression: near-identical fungal genomes must map strongly
+# diagonally. Downloads its inputs on first run, so it is opt-in.
+if (WFMASH_ONLINE_TESTS)
+  add_test(
+    NAME wfmash-regression-issue399-map
+    COMMAND bash -c "./scripts/regression-issue399.sh ${CMAKE_BINARY_DIR}/bin/wfmash map"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(
+    NAME wfmash-regression-issue399-full
+    COMMAND bash -c "./scripts/regression-issue399.sh ${CMAKE_BINARY_DIR}/bin/wfmash full"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(wfmash-regression-issue399-map wfmash-regression-issue399-full
+    PROPERTIES LABELS "online;regression" TIMEOUT 1800)
+endif()
 
 install(TARGETS wfmash DESTINATION bin)
 
