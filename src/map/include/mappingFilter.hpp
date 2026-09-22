@@ -858,19 +858,66 @@ namespace skch
         // Step 1: Keep a copy of original mappings before merging
         MappingResultsVector_t originalMappings = scaffoldMappings;
         
-        // Step 2: Merge to identify chains (this is expensive)
+        // Step 2: Merge to identify chains, then aggregate each chain's *full*
+        // span. mergeMappingsInRange() emits chunks capped at
+        // param.max_mapping_length, so a chunk's blockLength is not the
+        // scaffold length. Comparing that against -S made -S behave like a
+        // second -l and made -S >= -P remove everything. Scaffold mass must be
+        // the span accumulated over the whole chain.
         auto merge_start = std::chrono::high_resolution_clock::now();
-        auto mergedChains = mergeMappingsInRange(scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
+        auto mergedWithChains = mergeMappingsInRangeWithChains(
+            scaffoldMappings, scaffoldParam.chain_gap, scaffoldParam, progress, querySeqId, queryLen);
         auto merge_end = std::chrono::high_resolution_clock::now();
         auto merge_duration = std::chrono::duration_cast<std::chrono::milliseconds>(merge_end - merge_start);
-        
+
         if (merge_duration.count() > 500) {
-            std::cerr << "[wfmash::scaffold] Merging " << initial_mappings 
-                      << " mappings took " << std::fixed << std::setprecision(1) 
+            std::cerr << "[wfmash::scaffold] Merging " << initial_mappings
+                      << " mappings took " << std::fixed << std::setprecision(1)
                       << merge_duration.count() / 1000.0 << "s" << std::endl;
         }
-        
-        // Step 3: Filter merged chains by length
+
+        const auto& chunks = mergedWithChains.mappings;
+        const auto& chunkChain = mergedWithChains.chainInfo;
+
+        MappingResultsVector_t mergedChains;
+        {
+            std::unordered_map<uint32_t, size_t> chainIndex;
+            std::vector<double> identitySum;
+            std::vector<uint32_t> chunkCount;
+            chainIndex.reserve(chunkChain.size());
+
+            for (size_t k = 0; k < chunks.size(); ++k) {
+                const uint32_t cid = chunkChain[k].chainId;
+                const MappingResult& chunk = chunks[k];
+                auto found = chainIndex.find(cid);
+                if (found == chainIndex.end()) {
+                    chainIndex[cid] = mergedChains.size();
+                    mergedChains.push_back(chunk);
+                    identitySum.push_back(chunk.getNucIdentity());
+                    chunkCount.push_back(1);
+                } else {
+                    const size_t idx = found->second;
+                    MappingResult& sc = mergedChains[idx];
+                    const offset_t qStart = std::min<offset_t>(sc.queryStartPos, chunk.queryStartPos);
+                    const offset_t qEnd   = std::max<offset_t>(sc.queryEndPos(), chunk.queryEndPos());
+                    const offset_t rStart = std::min<offset_t>(sc.refStartPos, chunk.refStartPos);
+                    const offset_t rEnd   = std::max<offset_t>(sc.refEndPos(), chunk.refEndPos());
+                    sc.queryStartPos = static_cast<uint32_t>(qStart);
+                    sc.refStartPos = static_cast<uint32_t>(rStart);
+                    sc.blockLength = static_cast<uint32_t>(std::max<offset_t>(qEnd - qStart, rEnd - rStart));
+                    sc.conservedSketches += chunk.conservedSketches;
+                    identitySum[idx] += chunk.getNucIdentity();
+                    chunkCount[idx] += 1;
+                }
+            }
+
+            for (size_t idx = 0; idx < mergedChains.size(); ++idx) {
+                mergedChains[idx].n_merged = chunkCount[idx];
+                mergedChains[idx].setNucIdentity(identitySum[idx] / chunkCount[idx]);
+            }
+        }
+
+        // Step 3: Filter scaffolds by their accumulated span
         mergedChains.erase(
             std::remove_if(mergedChains.begin(), mergedChains.end(),
                 [&](const MappingResult& m) { return m.blockLength < param.scaffold_min_length; }),
