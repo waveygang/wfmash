@@ -22,7 +22,13 @@ wfmash
 
 #build directories
 src/common/wflign/build
+build-asan
+build-dbg
+build-rwdi
 build
+build-asan
+build-dbg
+build-rwdi
 pgo
 
 #Others

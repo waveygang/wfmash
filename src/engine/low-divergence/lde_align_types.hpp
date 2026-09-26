@@ -1,0 +1,34 @@
+/**
+ * @file    align_types.hpp
+ * @brief   Critical type defintions for generating alignments
+ * @author  Chirag Jain <cjain7@gatech.edu>
+ */
+
+#ifndef ALIGN_TYPES_MAP_HPP 
+#define ALIGN_TYPES_MAP_HPP
+
+#include <tuple>
+#include <unordered_map>
+
+namespace lde_align
+{
+  //Type for map value type used for
+  //L1 stage lookup index
+  struct MappingBoundaryRow
+  {
+    uint16_t rankMapping;             //rank of the mapping for the query qId. It has the same variable type of num_mappings_for_segments (used for the SAM output format)
+
+    std::string qId;                    //query sequence(s) 
+    std::string refId;                  //reference sequence(s)
+    lde_skch::offset_t qStartPos;           //mapping boundary start offset on query
+    lde_skch::offset_t qEndPos;             //mapping boundary end offset on query
+    lde_skch::offset_t rStartPos;           //mapping boundary start offset on ref
+    lde_skch::offset_t rEndPos;             //mapping boundary end offset on ref
+    lde_skch::strand_t strand;              //mapping strand
+    float mashmap_estimated_identity;
+  };
+
+  typedef std::unordered_map <std::string, std::string> refSequenceMap_t;
+}
+
+#endif

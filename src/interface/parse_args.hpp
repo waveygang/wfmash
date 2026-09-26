@@ -45,7 +45,7 @@ void parse_args(int argc,
     // Scaffold filtering - default to 0.5 overlap threshold
     map_parameters.scaffold_overlap_threshold = 0.5;
 
-    args::ArgumentParser parser("");
+    args::ArgumentParser parser("wfmash " WFMASH_GIT_VERSION " - a pangenome-scale aligner");
     parser.helpParams.width = 100;
     parser.helpParams.showTerminator = false;
     parser.helpParams.progindent = 0;
@@ -82,6 +82,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> block_length(mapping_opts, "INT", "minimum block length [0]", {'l', "block-length"});
     args::ValueFlag<std::string> chain_jump(mapping_opts, "INT", "chain jump (gap) [2k]", {'c', "chain-jump"});
     args::ValueFlag<std::string> max_mapping_length(mapping_opts, "INT", "max mapping length [50k]", {'P', "max-length"});
+    args::Flag legacy(mapping_opts, "", "use pre-0.15 (mashmap v3.1.1-era) defaults: k=19, 5kb window, 20kb chain gap, 25kb block floor, 1 mapping/segment, fixed 90% identity, no 50kb mapping cap, no scaffold filtering, 0.001% k-mer filter, align identity cutoff 0.8x -p. Explicit options always win over these.", {"legacy"});
     args::Flag no_split(mapping_opts, "", "map each sequence in one piece", {'N', "no-split"});
 
     // FILTERING
@@ -120,6 +121,7 @@ void parse_args(int argc,
     args::ValueFlag<std::string> target_padding(alignment_opts, "INT", "target padding [segment-length]", {'E', "target-padding"});
     args::ValueFlag<std::string> query_padding(alignment_opts, "INT", "query padding [segment-length]", {'U', "query-padding"});
     args::ValueFlag<std::string> wfa_params(alignment_opts, "m,go1,ge1,go2,ge2", "gap costs [5,8,2,24,1]", {'g', "wfa-params"});
+    args::Flag force_wflign(alignment_opts, "", "force WFlign alignment", {"force-wflign"});
     args::ValueFlag<uint64_t> min_alignment_length(alignment_opts, "INT", "minimum alignment length in bp [32]", {"min-length"});
     args::ValueFlag<float> min_block_identity(alignment_opts, "FLOAT", "minimum block identity [0.1]", {"min-block-id"});
 
@@ -306,7 +308,6 @@ void parse_args(int argc,
     align_parameters.sam_format = args::get(sam_format);
     align_parameters.no_seq_in_sam = false;
     align_parameters.disable_chain_patching = false;
-    args::Flag force_wflign(alignment_opts, "", "force WFlign alignment", {"force-wflign"});
     align_parameters.force_wflign = args::get(force_wflign);
     map_parameters.split = !args::get(no_split);
     map_parameters.dropRand = false;//ToFix: !args::get(keep_ties);
@@ -336,7 +337,7 @@ void parse_args(int argc,
         }
         map_parameters.windowLength = s;
     } else {
-        map_parameters.windowLength = 1000; // Default 1k
+        map_parameters.windowLength = legacy ? 5000 : 1000; // Default 1k (5k pre-0.15)
     }
 
     if (map_pct_identity) {
@@ -395,6 +396,12 @@ void parse_args(int argc,
         map_parameters.ani_adjustment = -2.0;
     }
 
+    if (legacy && !map_pct_identity) {
+        // pre-0.15 used a single fixed identity threshold (90% default)
+        map_parameters.percentageIdentity = 0.90;
+        map_parameters.auto_pct_identity = false;
+    }
+
     if (block_length) {
         const int64_t l = wfmash::handy_parameter(args::get(block_length));
 
@@ -411,7 +418,7 @@ void parse_args(int argc,
         }
         map_parameters.block_length = l;
     } else {
-        map_parameters.block_length = 0; // Default 0 (no filtering)
+        map_parameters.block_length = legacy ? 25000 : 0; // Default 0 (no filtering); 5x segment pre-0.15
     }
 
     if (chain_jump) {
@@ -423,8 +430,8 @@ void parse_args(int argc,
         map_parameters.chain_gap = l;
         align_parameters.chain_gap = l;
     } else {
-        map_parameters.chain_gap = 2000;
-        align_parameters.chain_gap = 2000;
+        map_parameters.chain_gap = legacy ? 20000 : 2000;
+        align_parameters.chain_gap = map_parameters.chain_gap;
     }
 
     // Parse scaffold jump (gap)
@@ -436,6 +443,9 @@ void parse_args(int argc,
         }
     } else {
         map_parameters.scaffold_gap = 100000; // 100k default
+    }
+    if (legacy && !scaffold_jump) {
+        map_parameters.scaffold_gap = 0; // no scaffold filtering pre-0.15
     }
 
     // Parse scaffold distance threshold
@@ -479,7 +489,7 @@ void parse_args(int argc,
         // Removed restriction on max mapping length
         map_parameters.max_mapping_length = l;
     } else {
-        map_parameters.max_mapping_length = 50000;
+        map_parameters.max_mapping_length = legacy ? std::numeric_limits<int64_t>::max() : 50000;
     }
 
     if (map_parameters.windowLength >= map_parameters.max_mapping_length) {
@@ -507,7 +517,7 @@ void parse_args(int argc,
         map_parameters.kmerSize = (map_parameters.percentageIdentity >= 0.97 ? 18 :
                                   (map_parameters.percentageIdentity >= 0.9 ? 17 : 15));
         */
-        map_parameters.kmerSize = 15;
+        map_parameters.kmerSize = legacy ? 19 : 15;
     }
 
     //if (spaced_seed_params) {
@@ -563,7 +573,7 @@ void parse_args(int argc,
 //        std::cerr << "[wfmash] INFO, skch::parseandSave, read " << map_parameters.high_freq_kmers.size() << " high frequency kmers." << std::endl;
 //    }
 
-    align_parameters.min_identity = 0; // disabled
+    align_parameters.min_identity = legacy ? map_parameters.percentageIdentity * 0.8 : 0; // pre-0.15: p x 0.8 (e.g. 76% for -p 95); disabled otherwise
     
     // Parse minimum alignment length
     if (min_alignment_length) {
@@ -734,7 +744,7 @@ void parse_args(int argc,
     if (max_kmer_freq) {
         map_parameters.max_kmer_freq = args::get(max_kmer_freq);
     } else {
-        map_parameters.max_kmer_freq = 0.0002; // default filter fraction
+        map_parameters.max_kmer_freq = legacy ? 0.00001 : 0.0002; // 0.001% pre-0.15, 0.02% now
     }
 
     //if (window_minimizers) {
@@ -853,7 +863,7 @@ void parse_args(int argc,
         }
     } else {
         // Default to infinity (no plane sweep filtering)
-        map_parameters.numMappingsForSegment = std::numeric_limits<uint32_t>::max();
+        map_parameters.numMappingsForSegment = legacy ? 1 : std::numeric_limits<uint32_t>::max();
     }
 
     // Parse scaffold plane sweep parameter (-r)

@@ -38,12 +38,56 @@
 #include "common/args.hxx"
 #include "common/ALeS.hpp"
 
+// Engine handoff: the vendored low-divergence engine (the wfmash 0.14
+// lineage, src/engine/low-divergence/) parses its own command line with
+// the 0.14-era flags it was built for, so `--engine low-divergence ...`
+// dispatches the raw remaining argv straight to it before the mainline
+// parser ever sees it.
+int lde_main(int argc, char** argv);
+
+static int dispatch_engine(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        std::string name;
+        int consumed = 0;   // number of argv entries the --engine flag uses
+        if (arg == "--engine" && i + 1 < argc) {
+            name = argv[i + 1];
+            consumed = 2;
+        } else if (arg.rfind("--engine=", 0) == 0) {
+            name = arg.substr(std::string("--engine=").size());
+            consumed = 1;
+        } else {
+            continue;
+        }
+        if (name == "low-divergence") {
+            // strip only the --engine pair; the engine parses the rest
+            char** engine_argv = new char*[argc - consumed + 1];
+            int j = 0;
+            engine_argv[j++] = argv[0];
+            for (int k = 1; k < argc; ++k) {
+                if (k == i || (consumed == 2 && k == i + 1)) continue;
+                engine_argv[j++] = argv[k];
+            }
+            int code = lde_main(j, engine_argv);
+            delete[] engine_argv;
+            return code;
+        }
+        std::cerr << "[wfmash] ERROR: unknown engine '" << name
+                  << "' (available: low-divergence)" << std::endl;
+        return 2;
+    }
+    return -1;  // no engine selection: mainline 0.24 engine
+}
+
 int main(int argc, char** argv) {
     /*
      * Make sure env variable MALLOC_ARENA_MAX is unset
      * for efficient multi-thread execution
      */
     unsetenv((char *)"MALLOC_ARENA_MAX");
+
+    int engine_code = dispatch_engine(argc, argv);
+    if (engine_code >= 0) return engine_code;
 
     // get our parameters from the command line
     skch::Parameters map_parameters;

@@ -1,3 +1,4 @@
+#include <cmath>
 #include "atomic_image.hpp"
 
 // routines for drawing raster images

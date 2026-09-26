@@ -160,6 +160,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(src/common/wflign EXCLUDE_FROM_ALL)
 
+# Low-divergence engine: the vendored wfmash 0.14 wflign aligner
+add_subdirectory(src/engine/low-divergence/wflign)
+
 include(ExternalProject)
 
 add_subdirectory(deps/WFA2-lib)
@@ -287,7 +290,8 @@ endif()
 
 add_executable(wfmash
   src/common/utils.cpp
-  src/interface/main.cpp)
+  src/interface/main.cpp
+  src/engine/low-divergence/lde_main.cpp)
 
 # Add dependencies after target creation
 if (BUILD_DEPS)
@@ -404,11 +408,13 @@ if (BUILD_STATIC)
   target_link_libraries(wfmash
     wflign_static
     wfa2cpp_static
+    lde_wflign
   )
 else()
   target_link_libraries(wfmash
     wflign
     wfa2cpp
+    lde_wflign
   )
 endif()
 

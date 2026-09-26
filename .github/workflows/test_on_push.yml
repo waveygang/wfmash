@@ -12,9 +12,11 @@ name: build and test
 
 jobs:
   build_and_test_linux:
-    runs-on: ubuntu-latest
+    # pinned to match upstream CI; ubuntu-latest rolled to a newer
+    # toolchain that cannot build the wgatools rust-htslib dependency
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
       - name: Install required packages
         run: sudo apt-get update && sudo apt-get install -y
           git
@@ -35,9 +37,12 @@ jobs:
           bedtools
           cargo
       - name: Install wgatools
-        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+        # --locked: the repo's Cargo.lock pins hts-sys 2.1.1 (htslib with the
+        # pre-1.18 `isize` field) against rust-htslib 0.44.1; without it a fresh
+        # resolution pulls hts-sys 2.2.x, which fails to compile (E0609/E0308)
+        run: cargo install --locked --git https://github.com/wjwei-handsome/wgatools.git
       - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
+        run: cargo install --locked --git https://github.com/ekg/pafcheck.git
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
@@ -48,9 +53,11 @@ jobs:
           ctest --output-on-failure
 
   build_and_test_macos:
-    runs-on: macos-latest
+    # pinned image; macos-latest (macOS 26) rolled to a newer Xcode that
+    # cannot build the wgatools rust-htslib dependency
+    runs-on: macos-15
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
       - name: Install required packages
         run: |
           brew install cmake gcc gsl zlib samtools bedtools
@@ -58,9 +65,10 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install wgatools
-        run: cargo install --git https://github.com/wjwei-handsome/wgatools.git
+        # see the linux job for why --locked is required
+        run: cargo install --locked --git https://github.com/wjwei-handsome/wgatools.git
       - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
+        run: cargo install --locked --git https://github.com/ekg/pafcheck.git
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash

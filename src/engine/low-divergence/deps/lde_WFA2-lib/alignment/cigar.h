@@ -1,0 +1,162 @@
+/*
+ *                             The MIT License
+ *
+ * Wavefront Alignment Algorithms
+ * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
+ *
+ * This file is part of Wavefront Alignment Algorithms.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * PROJECT: Wavefront Alignment Algorithms
+ * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
+ * DESCRIPTION: Cigar data-structure (match/mismatch/insertion/deletion)
+ */
+
+#ifndef CIGAR_H_
+#define CIGAR_H_
+
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdint.h>
+#include "alignment/linear_penalties.h"
+#include "alignment/affine_penalties.h"
+#include "alignment/affine2p_penalties.h"
+
+/*
+ * CIGAR
+ */
+typedef struct {
+  // Alignment operations
+  char* operations;        // Raw alignment operations
+  int max_operations;      // Maximum buffer size
+  int begin_offset;        // Begin offset
+  int end_offset;          // End offset
+  // Score and end position (useful for partial alignments like Z-dropped)
+  int score;               // Computed scored
+  int end_v;               // Alignment-end vertical coordinate (pattern characters aligned)
+  int end_h;               // Alignment-end horizontal coordinate (text characters aligned)
+  // CIGAR (SAM compliant)
+  bool has_misms;          // Show 'X' and '=', instead of  just 'M'
+  uint32_t* cigar_buffer;  // CIGAR-operations (max_operations length)
+  int cigar_length;        // Total CIGAR-operations
+} cigar_t;
+
+/*
+ * Setup
+ */
+cigar_t* lde_cigar_new(
+    const int max_operations);
+void lde_cigar_clear(
+    cigar_t* const cigar);
+void lde_cigar_resize(
+    cigar_t* const cigar,
+    const int max_operations);
+void lde_cigar_free(
+    cigar_t* const cigar);
+
+/*
+ * Accessors
+ */
+bool lde_cigar_is_null(
+    const cigar_t* const cigar);
+
+int lde_cigar_count_matches(
+    const cigar_t* const cigar);
+
+void lde_cigar_append_forward(
+    cigar_t* const cigar_dst,
+    const cigar_t* const cigar_src);
+void lde_cigar_append_reverse(
+    cigar_t* const cigar_dst,
+    const cigar_t* const cigar_src);
+
+void lde_cigar_append_deletion(
+    cigar_t* const cigar,
+    const int length);
+void lde_cigar_append_insertion(
+    cigar_t* const cigar,
+    const int length);
+
+/*
+ * SAM-compliant CIGAR
+ */
+void lde_cigar_get_CIGAR(
+    cigar_t* const cigar,
+    const bool show_mismatches,
+    uint32_t** const cigar_buffer,
+    int* const cigar_length);
+
+/*
+ * Score
+ */
+int lde_cigar_score_edit(
+    const cigar_t* const cigar);
+int lde_cigar_score_gap_linear(
+    const cigar_t* const cigar,
+    const linear_penalties_t* const penalties);
+int lde_cigar_score_gap_affine(
+    const cigar_t* const cigar,
+    const affine_penalties_t* const penalties);
+int lde_cigar_score_gap_affine2p(
+    const cigar_t* const cigar,
+    const affine2p_penalties_t* const penalties);
+
+/*
+ * Check
+ */
+bool lde_cigar_check_alignment(
+    FILE* const stream,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length,
+    const cigar_t* const cigar,
+    const bool verbose);
+
+/*
+ * Display
+ */
+void lde_cigar_print(
+    FILE* const stream,
+    const cigar_t* const cigar,
+    const bool print_matches);
+int lde_cigar_sprint(
+    char* const buffer,
+    const cigar_t* const cigar,
+    const bool print_matches);
+
+void lde_cigar_print_SAM_CIGAR(
+    FILE* const stream,
+    cigar_t* const cigar,
+    const bool show_mismatches);
+int lde_cigar_sprint_SAM_CIGAR(
+    char* const buffer,
+    cigar_t* const cigar,
+    const bool show_mismatches);
+
+void lde_cigar_print_pretty(
+    FILE* const stream,
+    cigar_t* const cigar,
+    const char* const pattern,
+    const int pattern_length,
+    const char* const text,
+    const int text_length);
+
+#endif /* CIGAR_H_ */
