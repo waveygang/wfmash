@@ -37,7 +37,7 @@ jobs:
       - name: Install wgatools
         run: cargo install --git https://github.com/wjwei-handsome/wgatools.git --locked
       - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
+        run: cargo install --git https://github.com/ekg/pafcheck.git --locked
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
@@ -60,7 +60,7 @@ jobs:
       - name: Install wgatools
         run: cargo install --git https://github.com/wjwei-handsome/wgatools.git --locked
       - name: Install pafcheck
-        run: cargo install --git https://github.com/ekg/pafcheck.git
+        run: cargo install --git https://github.com/ekg/pafcheck.git --locked
       - name: Init and update submodules
         run: git submodule update --init --recursive
       - name: Build wfmash
