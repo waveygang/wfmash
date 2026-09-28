@@ -1091,7 +1091,6 @@ namespace skch
           // Pass context to the merge function - now returns mappings with chain info
           auto mappingsWithChains = FilterUtils::mergeMappingsInRangeWithChains(mappings, param.chain_gap, param, progress, querySeqId, queryLen);
           auto& maximallyMergedMappings = mappingsWithChains.mappings;
-          auto& chainInfo = mappingsWithChains.chainInfo;
 
           if (param.mergeMappings && param.split) {
               // Pass context (queryLen) to weak mapping filter
@@ -1159,7 +1158,11 @@ namespace skch
           for (size_t i = 0; i < result.nonMergedMappings.size(); ++i) {
               result.nonMergedChainInfo[i] = {static_cast<uint32_t>(i), 1, 1};
           }
-          result.mergedChainInfo = std::move(chainInfo);
+          // Filtering above erased and reordered mappings, so re-derive the
+          // chain position/length from the surviving mappings' chain ids.
+          // Using the pre-filter `chainInfo` here attaches chain tags to the
+          // wrong mappings (issue #399).
+          result.mergedChainInfo = FilterUtils::buildChainInfo(result.mergedMappings);
           
           return result;
       }

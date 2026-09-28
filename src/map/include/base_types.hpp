@@ -162,6 +162,7 @@ namespace skch
     uint16_t nucIdentity;      // 2 bytes - scaled identity (0-10000 for 0.00-100.00%)
     uint8_t  flags;            // 1 byte - bit-packed flags (strand, discard, overlapped)
     uint8_t  kmerComplexity;   // 1 byte - scaled kmer complexity (0-100)
+    uint32_t chainId = 0;      // 4 bytes - chain id within the query (uses struct padding)
                                // Total: 32 bytes
 
     // Helper methods to extract flag values
@@ -249,8 +250,11 @@ namespace skch
     // Initialize all fields to default values
     MappingResult() : refSeqId(0), refStartPos(0), queryStartPos(0), 
                       blockLength(0), n_merged(1), conservedSketches(0),
-                      nucIdentity(0), flags(0), kmerComplexity(0) {}
+                      nucIdentity(0), flags(0), kmerComplexity(0), chainId(0) {}
   };
+
+  // chainId above intentionally fills the struct's padding; keep it 32 bytes.
+  static_assert(sizeof(MappingResult) == 32, "MappingResult must remain 32 bytes");
 
   typedef std::vector<MappingResult> MappingResultsVector_t;
 
