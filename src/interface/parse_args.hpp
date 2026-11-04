@@ -172,6 +172,7 @@ void parse_args(int argc,
     map_parameters.lower_triangular = lower_triangular ? args::get(lower_triangular) : false;
     map_parameters.keep_low_pct_id = true;
 
+    progress_meter::quiet = args::get(quiet);
     map_parameters.use_progress_bar = !args::get(quiet);
     align_parameters.use_progress_bar = !args::get(quiet);
     map_parameters.use_streaming_minhash = args::get(streaming_minhash);
