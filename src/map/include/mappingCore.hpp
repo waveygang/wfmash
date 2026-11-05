@@ -87,47 +87,76 @@ namespace skch
       if(Q.minmerTableQuery.size() == 0)
         return;
 
-      // Priority queue for sorting interval points
-      using IP_const_iterator = typename std::vector<IntervalPoint>::const_iterator;
-      std::vector<boundPtr<IP_const_iterator>> pq;
-      pq.reserve(Q.sketchSize);
-      constexpr auto heap_cmp = [](const auto& a, const auto& b) {return b < a;};
-
-      for(auto it = Q.minmerTableQuery.begin(); it != Q.minmerTableQuery.end(); it++)
+      // Gather matching points, then radix sort
+      const std::size_t ip_start = intervalPoints.size();
+      const int queryGroup = idManager.getRefGroup(Q.seqId);
+      const bool checkGroup = param.skip_self || param.skip_prefix;
+      for (const auto& m : Q.minmerTableQuery)
       {
-        const auto seedFind = refSketch->minmerPosLookupIndex.find(it->hash);
-        if(seedFind != refSketch->minmerPosLookupIndex.end())
+        const auto seedFind = refSketch->minmerPosLookupIndex.find(m.hash);
+        if (seedFind == refSketch->minmerPosLookupIndex.end()) continue;
+        for (const auto& ip : seedFind->second)
         {
-          pq.emplace_back(boundPtr<IP_const_iterator> {seedFind->second.cbegin(), seedFind->second.cend()});
+          if (checkGroup && queryGroup == idManager.getRefGroup(ip.seqId)) continue;
+          if (param.lower_triangular && Q.seqId <= ip.seqId) continue;
+          intervalPoints.push_back(ip);
         }
       }
-      std::make_heap(pq.begin(), pq.end(), heap_cmp);
+      radixSortIntervalPoints(intervalPoints, ip_start);
+    }
 
-      while(!pq.empty())
-      {
-        const IP_const_iterator ip_it = pq.front().it;
-        bool skip_mapping = false;
-        int queryGroup = idManager.getRefGroup(Q.seqId);
-        int targetGroup = idManager.getRefGroup(ip_it->seqId);
-
-        if (param.skip_self && queryGroup == targetGroup) skip_mapping = true;
-        if (param.skip_prefix && queryGroup == targetGroup) skip_mapping = true;
-        if (param.lower_triangular && Q.seqId <= ip_it->seqId) skip_mapping = true;
-
-        if (!skip_mapping) {
-          intervalPoints.push_back(*ip_it);
-        }
-        std::pop_heap(pq.begin(), pq.end(), heap_cmp);
-        pq.back().it++;
-        if (pq.back().it >= pq.back().end) 
-        {
-          pq.pop_back();
-        }
-        else
-        {
-          std::push_heap(pq.begin(), pq.end(), heap_cmp);
-        }
+    /**
+     * @brief LSD radix sort of [start, end) by (seqId, pos, side), the
+     *        IntervalPoint::operator< order. Ties (same key, other hash) are
+     *        order-insensitive downstream. Falls back to std::sort for small
+     *        ranges or unpackable keys.
+     */
+    template <typename Vec>
+    static void radixSortIntervalPoints(Vec& ip, std::size_t start)
+    {
+      const std::size_t n = ip.size() - start;
+      if (n < 128) {
+        std::sort(ip.begin() + start, ip.end());
+        return;
       }
+      // Key: seqId bits 33..63, pos 1..32, OPEN bit 0
+      thread_local std::vector<uint64_t> keys;
+      keys.resize(n);
+      for (std::size_t i = 0; i < n; ++i) {
+        const IntervalPoint& p = ip[start + i];
+        if (p.seqId < 0 || p.pos < 0 || (uint64_t)p.pos >= (UINT64_C(1) << 32)) {
+          std::sort(ip.begin() + start, ip.end());
+          return;
+        }
+        keys[i] = ((uint64_t)(uint32_t)p.seqId << 33) | ((uint64_t)p.pos << 1) | (p.side == side::OPEN ? 1u : 0u);
+      }
+      // Six 11-bit passes; constant digits are skipped
+      constexpr int RB = 11, RN = 1 << RB, NP = (64 + RB - 1) / RB;
+      constexpr uint64_t RM = RN - 1;
+      thread_local std::vector<std::size_t> hist;
+      hist.assign((std::size_t)NP * RN, 0);
+      for (std::size_t i = 0; i < n; ++i)
+        for (int d = 0; d < NP; ++d) hist[(std::size_t)d * RN + ((keys[i] >> (d * RB)) & RM)]++;
+      thread_local std::vector<uint32_t> ordA, ordB;
+      ordA.resize(n); ordB.resize(n);
+      for (uint32_t i = 0; i < (uint32_t)n; ++i) ordA[i] = i;
+      uint32_t* src = ordA.data();
+      uint32_t* dst = ordB.data();
+      for (int d = 0; d < NP; ++d) {
+        std::size_t* h = hist.data() + (std::size_t)d * RN;
+        if (h[(keys[src[0]] >> (d * RB)) & RM] == n) continue;
+        std::size_t sum = 0;
+        for (int c = 0; c < RN; ++c) { const std::size_t t = h[c]; h[c] = sum; sum += t; }
+        for (std::size_t i = 0; i < n; ++i) {
+          const uint32_t idx = src[i];
+          dst[h[(keys[idx] >> (d * RB)) & RM]++] = idx;
+        }
+        std::swap(src, dst);
+      }
+      thread_local std::vector<typename Vec::value_type> tmp;
+      tmp.resize(n);
+      for (std::size_t i = 0; i < n; ++i) tmp[i] = ip[start + src[i]];
+      std::copy(tmp.begin(), tmp.end(), ip.begin() + start);
     }
 
     // One pos-group of the fused L1 sweep
