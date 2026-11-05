@@ -564,42 +564,37 @@ namespace skch
                 return;
               }
               
-              // Process all k-mers in the sequence
-              // Use thread-local buffers to avoid allocations
-              thread_local std::vector<char> kmerBuf(estimation_k);
-              thread_local std::vector<char> seqRev(estimation_k);
+              // Uppercase once, reverse-complement once
+              thread_local std::vector<char> seqRev;
+              seqRev.resize(seq_len);
+              for (hts_pos_t j = 0; j < seq_len; j++) {
+                char& c = seq_data[j];
+                if (c >= 'a' && c <= 'z') c -= 32;
+                seqRev[seq_len - 1 - j] = c == 'A' ? 'T' : c == 'C' ? 'G' : c == 'G' ? 'C' : c == 'T' ? 'A' : 'N';
+              }
               int ambig_kmer_count = 0;
-              
+
               // Check initial k-mer for N's
               for (int j = 0; j < estimation_k && j < seq_len; j++) {
-                char c = std::toupper(seq_data[j]);
+                char c = seq_data[j];
                 if (c != 'A' && c != 'C' && c != 'G' && c != 'T') {
                   ambig_kmer_count = estimation_k;
                   break;
                 }
               }
-              
+
               // Process all k-mers
               for (offset_t i = 0; i <= (offset_t)seq_len - estimation_k; i++) {
                 // Check for N at the end of current k-mer
-                char endChar = std::toupper(seq_data[i + estimation_k - 1]);
+                char endChar = seq_data[i + estimation_k - 1];
                 if (endChar != 'A' && endChar != 'C' && endChar != 'G' && endChar != 'T') {
                   ambig_kmer_count = estimation_k;
                 }
-                
+
                 if (ambig_kmer_count == 0) {
-                  // Copy and uppercase k-mer
-                  for (int j = 0; j < estimation_k; j++) {
-                    kmerBuf[j] = std::toupper(seq_data[i + j]);
-                  }
-                  
-                  // Hash forward k-mer
-                  hash_t hashFwd = CommonFunc::getHash(kmerBuf.data(), estimation_k);
-                  hash_t hashBwd = std::numeric_limits<hash_t>::max();
-                  
-                  // Hash reverse complement for DNA
-                  CommonFunc::reverseComplement(kmerBuf.data(), seqRev.data(), estimation_k);
-                  hashBwd = CommonFunc::getHash(seqRev.data(), estimation_k);
+                  // Hash forward k-mer and its reverse complement slice
+                  hash_t hashFwd = CommonFunc::getHash(seq_data + i, estimation_k);
+                  hash_t hashBwd = CommonFunc::getHash(seqRev.data() + (seq_len - i - estimation_k), estimation_k);
                   
                   // Use canonical k-mer (minimum of forward and reverse)
                   if (hashFwd != hashBwd) {
