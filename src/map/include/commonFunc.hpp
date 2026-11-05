@@ -465,11 +465,10 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
 
             makeUpperCaseAndValidDNA(seq, len);
 
-            //Compute reverse complement of seq
-            std::unique_ptr<char[]> seqRev(new char[kmerSize]);
-
-            //if(alphabetSize == 4) //not protein
-              //CommonFunc::reverseComplement(seq, seqRev.get(), len);
+            //Reverse-complement the whole sequence once
+            std::unique_ptr<char[]> seqRev(new char[len]);
+            if(alphabetSize == 4) //not protein
+              CommonFunc::reverseComplement(seq, seqRev.get(), len);
 
             // Get distance until last "N"
             int ambig_kmer_count = 0;
@@ -502,10 +501,7 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
               hash_t hashBwd;
 
               if(alphabetSize == 4)
-              {
-                  CommonFunc::reverseComplement(seq + i, seqRev.get(), kmerSize);
-                hashBwd = CommonFunc::getHash(seqRev.get(), kmerSize);
-              }
+                hashBwd = CommonFunc::getHash(seqRev.get() + (len - i - kmerSize), kmerSize);
               else  //proteins
                 hashBwd = std::numeric_limits<hash_t>::max();   //Pick a dummy high value so that it is ignored later
 
@@ -563,8 +559,9 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
                 // Add current hash to window
                 Q.push_back(std::make_tuple(currentKmer, currentStrand, i));
 
-                // Check if current kmer is already in the map
-                auto kmer_it = sortedWindow.find(currentKmer);
+                // Membership implies currentKmer <= max key
+                auto kmer_it = (!sortedWindow.empty() && currentKmer <= sortedWindow.rbegin()->first)
+                    ? sortedWindow.find(currentKmer) : sortedWindow.end();
                 if (kmer_it != sortedWindow.end())
                 {
                   auto& current_pair = kmer_it->second;
