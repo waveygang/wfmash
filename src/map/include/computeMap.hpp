@@ -472,8 +472,13 @@ namespace skch
                       refSketch = new skch::Sketch(param, *idManager, target_subset, &indexStream);
                       size_t seq_count = refSketch->getSequenceCount();
                   } else {
+                      // Sketching increments once per target k-mer
+                      uint64_t subset_target_length = 0;
+                      for (const auto& name : target_subset) {
+                          subset_target_length += idManager->getSequenceLength(idManager->getSequenceId(name));
+                      }
                       auto sketch_index_progress = std::make_shared<progress_meter::ProgressMeter>(
-                          100,
+                          subset_target_length,
                           "[wfmash::mashmap] indexing",
                           param.use_progress_bar);
                   

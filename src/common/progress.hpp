@@ -13,8 +13,12 @@
 
 namespace progress_meter {
 
+// Set by --quiet: no progress thread, no output
+inline bool quiet = false;
+
 class ProgressMeter {
 private:
+    bool silent;
     std::string banner;
     std::mutex banner_mutex;
     std::atomic<uint64_t> total;
@@ -110,14 +114,14 @@ public:
     std::atomic<bool> is_finished;
     
     ProgressMeter(uint64_t _total, const std::string& _banner, const bool& _use_progress_bar)
-        : banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
+        : silent(quiet), banner(_banner), total(_total), completed(0), is_finished(false), running(true) {
         
         // Initialize start time but it will be reset when actual work begins
         start_time = std::chrono::high_resolution_clock::now();
         last_file_update = start_time;
         
         // Only show progress bars when stderr is connected to a terminal
-        use_progress_bar = _use_progress_bar && isatty(fileno(stderr));
+        use_progress_bar = !silent && _use_progress_bar && isatty(fileno(stderr));
         
         // No longer print initial banner here - will be printed explicitly when mapping starts
         
@@ -142,8 +146,8 @@ public:
             );
         }
         
-        // Always start the update thread, for both progress bar and file output modes
-        update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
+        // Start the update thread, for both progress bar and file output modes
+        if (!silent) update_thread = std::thread(&ProgressMeter::update_progress_thread, this);
     }
 
     ~ProgressMeter() {
@@ -169,7 +173,7 @@ public:
         
         // For file output with quick tasks, we might need to force an update
         // if this is a significant increment (more than 5% of total)
-        if (!use_progress_bar && (incr > total.load() / 20)) {
+        if (!use_progress_bar && !silent && (incr > total.load() / 20)) {
             // Take mutex to avoid concurrent output with update thread
             static std::mutex increment_mutex;
             std::lock_guard<std::mutex> lock(increment_mutex);
@@ -198,7 +202,7 @@ public:
         start_time = now;
         last_file_update = now;
         
-        if (!use_progress_bar && !initial_message_printed.exchange(true)) {
+        if (!use_progress_bar && !silent && !initial_message_printed.exchange(true)) {
             std::cerr << banner << " [0.0% complete, 0/" << total.load() 
                       << " units, 0s elapsed]" << std::endl;
         } else if (use_progress_bar && progress_bar) {
@@ -220,7 +224,7 @@ public:
         // Update progress bar prefix if using progress bar
         if (use_progress_bar && progress_bar) {
             progress_bar->set_option(indicators::option::PrefixText{banner + " "});
-        } else {
+        } else if (!silent) {
             // For file output, print a message with the new banner
             auto now = std::chrono::high_resolution_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
@@ -245,7 +249,7 @@ public:
         }
         
         // Print a message that we're finishing
-        if (!use_progress_bar) {
+        if (!use_progress_bar && !silent) {
             std::cerr << banner << " finishing..." << std::endl;
         }
         
@@ -259,7 +263,7 @@ public:
         if (use_progress_bar && progress_bar) {
             progress_bar->set_progress(total.load());
             progress_bar->mark_as_completed();
-        } else {
+        } else if (!silent) {
             // For file output, always print 100% completion message
             std::cerr << banner << " [100.0% complete, " << total.load() << "/" << total.load() 
                       << " units, " << elapsed.count() << "s elapsed]" << std::endl;

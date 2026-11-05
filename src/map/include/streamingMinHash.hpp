@@ -191,7 +191,8 @@ public:
 
         // Process all k-mers in the sequence
         for (offset_t i = 0; i <= len - kmerSize; i++) {
-            if (progress) progress->increment(1);
+            // Batch updates: one shared atomic per 2^20 k-mers
+            if (progress && (i & 0xFFFFF) == 0xFFFFF) progress->increment(0x100000);
 
             // Check for N at the end of current k-mer
             char endChar = std::toupper(seq[i + kmerSize - 1]);
@@ -229,6 +230,7 @@ public:
                 ambig_kmer_count--;
             }
         }
+        if (progress && len >= kmerSize) progress->increment((len - kmerSize + 1) & 0xFFFFF);
     }
 
     /**

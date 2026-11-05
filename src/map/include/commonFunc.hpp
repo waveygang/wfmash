@@ -368,7 +368,8 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
             
             // Process all k-mers and build MinHash sketch
             for (offset_t i = 0; i <= len - kmerSize; i++) {
-                if (progress) progress->increment(1);
+                // Batch updates: one shared atomic per 2^20 k-mers
+                if (progress && (i & 0xFFFFF) == 0xFFFFF) progress->increment(0x100000);
                 
                 // Check for N at the end of current k-mer
                 if (seq[i + kmerSize - 1] == 'N') {
@@ -404,7 +405,8 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
                     ambig_kmer_count--;
                 }
             }
-            
+            if (progress && len >= kmerSize) progress->increment((len - kmerSize + 1) & 0xFFFFF);
+
             // Convert MinHash sketch to MinmerInfo objects
             // Each hash in the sketch gets ONE entry at its first position
             auto finalSketch = sketch.getSketch();
@@ -476,7 +478,8 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
 
             for(offset_t i = 0; i < len - kmerSize + 1; i++)
             {
-                progress->increment(1);
+                // Batch updates: one shared atomic per 2^20 k-mers
+                if (progress && (i & 0xFFFFF) == 0xFFFFF) progress->increment(0x100000);
               //The serial number of current sliding window
               //First valid window appears when i = windowSize - 1
               offset_t currentWindowId = i + kmerSize - windowSize;
@@ -642,6 +645,7 @@ Test project /export/local/home/wrk/iwrk/opensource/code/pangenome/wfmash/build
                 }
               }
             }
+            if (progress && len >= kmerSize) progress->increment((len - kmerSize + 1) & 0xFFFFF);
 
             // Add remaining open minmer windows
             uint64_t rank = 1;
