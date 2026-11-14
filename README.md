@@ -247,7 +247,7 @@ Before building `wfmash`, you need the following dependencies installed on your 
 On Ubuntu >20.04, these dependencies can be installed with the following command:
 
 ```sh
-sudo apt install build-essential cmake zlib1g-dev libgsl-dev libhts-dev liblzma-dev libbz2-dev
+sudo apt install build-essential cmake pkg-config zlib1g-dev libgsl-dev libhts-dev liblzma-dev libbz2-dev
 ```
 
 ### Clone the Repository
