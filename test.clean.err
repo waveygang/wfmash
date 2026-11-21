@@ -1,0 +1,86 @@
+[wfmash] Parameters: k=15, s=78, w=1000 (split), l=0, c=2000, P=50000, j=100000, D=100000, S=5, n=1, p=ani25-5, t=8, b=9223372036854775807
+[wfmash] Filters: skip-self, hg(Δ=0,conf=0.999), mode=1 (1=map,2=1-to-1,3=none)
+[wfmash] Output: /dev/stdout
+[wfmash] ANI-based identity estimation enabled (ani25-5)...
+[wfmash::auto-identity] Starting identity estimation with k=21, sketch_size=4096
+[wfmash::auto-identity] Using 8 threads for k-mer extraction
+[wfmash::auto-identity] Total sequences in idManager: 7
+[wfmash::auto-identity] Unique sequences to sketch: 7 (query-only: 0, target-only: 0, both: 7)
+[wfmash::auto-identity] Pre-allocating sketches for all groups...
+[wfmash::auto-identity] Pre-allocated 7 query group sketches and 7 target group sketches
+[wfmash::auto-identity] sketching finishing...
+[wfmash::auto-identity] sketching [100.0% complete, 7/7 units, 0s elapsed]
+[wfmash::auto-identity] sketching completed.
+[wfmash::auto-identity] Finalizing MinHash sketches...
+[wfmash::auto-identity] Processed 7 query sequences into 7 groups
+[wfmash::auto-identity] Processed 7 target sequences into 7 groups
+[wfmash::auto-identity] Group 1 vs 2: 3310/4096 sketches overlap, Jaccard=0.8081, ANI=99.47% (weight=330063490432) [DBVPG6044#1 vs DBVPG6765#1]
+[wfmash::auto-identity] Group 1 vs 3: 3368/4096 sketches overlap, Jaccard=0.8223, ANI=99.51% (weight=333673230816) [DBVPG6044#1 vs S288C#1]
+[wfmash::auto-identity] Group 1 vs 4: 3887/4096 sketches overlap, Jaccard=0.9490, ANI=99.87% (weight=337518737376) [DBVPG6044#1 vs SK1#1]
+[wfmash::auto-identity] Group 1 vs 5: 3441/4096 sketches overlap, Jaccard=0.8401, ANI=99.57% (weight=317993635616) [DBVPG6044#1 vs UWOPS034614#1]
+[wfmash::auto-identity] Group 1 vs 6: 3468/4096 sketches overlap, Jaccard=0.8467, ANI=99.59% (weight=329501542896) [DBVPG6044#1 vs Y12#1]
+[wfmash::auto-identity] Group 1 vs 7: 3499/4096 sketches overlap, Jaccard=0.8542, ANI=99.61% (weight=329593102576) [DBVPG6044#1 vs YPS128#1]
+[wfmash::auto-identity] Group 2 vs 1: 3310/4096 sketches overlap, Jaccard=0.8081, ANI=99.47% (weight=330063490432) [DBVPG6765#1 vs DBVPG6044#1]
+[wfmash::auto-identity] Group 2 vs 3: 3614/4096 sketches overlap, Jaccard=0.8823, ANI=99.69% (weight=336318136128) [DBVPG6765#1 vs S288C#1]
+[wfmash::auto-identity] Group 2 vs 4: 3288/4096 sketches overlap, Jaccard=0.8027, ANI=99.45% (weight=340194124608) [DBVPG6765#1 vs SK1#1]
+[wfmash::auto-identity] Group 2 vs 5: 3332/4096 sketches overlap, Jaccard=0.8135, ANI=99.48% (weight=320514254528) [DBVPG6765#1 vs UWOPS034614#1]
+[wfmash::auto-identity] Group 2 vs 6: 3351/4096 sketches overlap, Jaccard=0.8181, ANI=99.50% (weight=332113380768) [DBVPG6765#1 vs Y12#1]
+[wfmash::auto-identity] Group 2 vs 7: 3431/4096 sketches overlap, Jaccard=0.8376, ANI=99.56% (weight=332205666208) [DBVPG6765#1 vs YPS128#1]
+[wfmash::auto-identity] Group 3 vs 1: 3368/4096 sketches overlap, Jaccard=0.8223, ANI=99.51% (weight=333673230816) [S288C#1 vs DBVPG6044#1]
+[wfmash::auto-identity] Group 3 vs 2: 3614/4096 sketches overlap, Jaccard=0.8823, ANI=99.69% (weight=336318136128) [S288C#1 vs DBVPG6765#1]
+[wfmash::auto-identity] Group 3 vs 4: 3355/4096 sketches overlap, Jaccard=0.8191, ANI=99.50% (weight=343914658704) [S288C#1 vs SK1#1]
+[wfmash::auto-identity] Group 3 vs 5: 3360/4096 sketches overlap, Jaccard=0.8203, ANI=99.51% (weight=324019559664) [S288C#1 vs UWOPS034614#1]
+[wfmash::auto-identity] Group 3 vs 6: 3465/4096 sketches overlap, Jaccard=0.8459, ANI=99.59% (weight=335745539784) [S288C#1 vs Y12#1]
+[wfmash::auto-identity] Group 3 vs 7: 3464/4096 sketches overlap, Jaccard=0.8457, ANI=99.59% (weight=335838834504) [S288C#1 vs YPS128#1]
+[wfmash::auto-identity] Group 4 vs 1: 3887/4096 sketches overlap, Jaccard=0.9490, ANI=99.87% (weight=337518737376) [SK1#1 vs DBVPG6044#1]
+[wfmash::auto-identity] Group 4 vs 2: 3288/4096 sketches overlap, Jaccard=0.8027, ANI=99.45% (weight=340194124608) [SK1#1 vs DBVPG6765#1]
+[wfmash::auto-identity] Group 4 vs 3: 3355/4096 sketches overlap, Jaccard=0.8191, ANI=99.50% (weight=343914658704) [SK1#1 vs S288C#1]
+[wfmash::auto-identity] Group 4 vs 5: 3358/4096 sketches overlap, Jaccard=0.8198, ANI=99.50% (weight=327753809904) [SK1#1 vs UWOPS034614#1]
+[wfmash::auto-identity] Group 4 vs 6: 3401/4096 sketches overlap, Jaccard=0.8303, ANI=99.54% (weight=339614929224) [SK1#1 vs Y12#1]
+[wfmash::auto-identity] Group 4 vs 7: 3454/4096 sketches overlap, Jaccard=0.8433, ANI=99.58% (weight=339709299144) [SK1#1 vs YPS128#1]
+[wfmash::auto-identity] Group 5 vs 1: 3441/4096 sketches overlap, Jaccard=0.8401, ANI=99.57% (weight=317993635616) [UWOPS034614#1 vs DBVPG6044#1]
+[wfmash::auto-identity] Group 5 vs 2: 3332/4096 sketches overlap, Jaccard=0.8135, ANI=99.48% (weight=320514254528) [UWOPS034614#1 vs DBVPG6765#1]
+[wfmash::auto-identity] Group 5 vs 3: 3360/4096 sketches overlap, Jaccard=0.8203, ANI=99.51% (weight=324019559664) [UWOPS034614#1 vs S288C#1]
+[wfmash::auto-identity] Group 5 vs 4: 3358/4096 sketches overlap, Jaccard=0.8198, ANI=99.50% (weight=327753809904) [UWOPS034614#1 vs SK1#1]
+[wfmash::auto-identity] Group 5 vs 6: 3490/4096 sketches overlap, Jaccard=0.8521, ANI=99.60% (weight=319968564984) [UWOPS034614#1 vs Y12#1]
+[wfmash::auto-identity] Group 5 vs 7: 3554/4096 sketches overlap, Jaccard=0.8677, ANI=99.65% (weight=320057475704) [UWOPS034614#1 vs YPS128#1]
+[wfmash::auto-identity] Group 6 vs 1: 3468/4096 sketches overlap, Jaccard=0.8467, ANI=99.59% (weight=329501542896) [Y12#1 vs DBVPG6044#1]
+[wfmash::auto-identity] Group 6 vs 2: 3351/4096 sketches overlap, Jaccard=0.8181, ANI=99.50% (weight=332113380768) [Y12#1 vs DBVPG6765#1]
+[wfmash::auto-identity] Group 6 vs 3: 3465/4096 sketches overlap, Jaccard=0.8459, ANI=99.59% (weight=335745539784) [Y12#1 vs S288C#1]
+[wfmash::auto-identity] Group 6 vs 4: 3401/4096 sketches overlap, Jaccard=0.8303, ANI=99.54% (weight=339614929224) [Y12#1 vs SK1#1]
+[wfmash::auto-identity] Group 6 vs 5: 3490/4096 sketches overlap, Jaccard=0.8521, ANI=99.60% (weight=319968564984) [Y12#1 vs UWOPS034614#1]
+[wfmash::auto-identity] Group 6 vs 7: 3599/4096 sketches overlap, Jaccard=0.8787, ANI=99.68% (weight=331640071524) [Y12#1 vs YPS128#1]
+[wfmash::auto-identity] Group 7 vs 1: 3499/4096 sketches overlap, Jaccard=0.8542, ANI=99.61% (weight=329593102576) [YPS128#1 vs DBVPG6044#1]
+[wfmash::auto-identity] Group 7 vs 2: 3431/4096 sketches overlap, Jaccard=0.8376, ANI=99.56% (weight=332205666208) [YPS128#1 vs DBVPG6765#1]
+[wfmash::auto-identity] Group 7 vs 3: 3464/4096 sketches overlap, Jaccard=0.8457, ANI=99.59% (weight=335838834504) [YPS128#1 vs S288C#1]
+[wfmash::auto-identity] Group 7 vs 4: 3454/4096 sketches overlap, Jaccard=0.8433, ANI=99.58% (weight=339709299144) [YPS128#1 vs SK1#1]
+[wfmash::auto-identity] Group 7 vs 5: 3554/4096 sketches overlap, Jaccard=0.8677, ANI=99.65% (weight=320057475704) [YPS128#1 vs UWOPS034614#1]
+[wfmash::auto-identity] Group 7 vs 6: 3599/4096 sketches overlap, Jaccard=0.8787, ANI=99.68% (weight=331640071524) [YPS128#1 vs Y12#1]
+[wfmash::auto-identity] Performed 42 group comparisons (skipped 7 self-comparisons)
+[wfmash::auto-identity] ANI distribution: min=99.45%, 25th percentile=99.50%, median=99.57%, 75th percentile=99.60%, max=99.87%
+[wfmash::auto-identity] Selected ani25 (25th percentile) = 99.50%, adjusted by -5.00% to 94.50%
+[wfmash] Updated sketch size from 78 to 30 based on estimated identity
+[wfmash] Using estimated identity cutoff: 94.50%
+[wfmash] MashMap v3.5.0
+[wfmash] Final parameters: identity=94.5%, sketchSize=30, minimumHits=5, windowLength=1000, kmerSize=15
+[wfmash::mashmap] 7 queries (4029392bp) in 7 groups (≈575627bp/group)
+[wfmash::mashmap] 7 targets (4029392bp) in 7 groups (≈575627bp/group)
+[wfmash::mashmap] Processing 1 target subsets (≈4029392bp/subset)
+[wfmash::mashmap] Processing subset 1/1 (mapping)
+[wfmash::mashmap] indexing [0.0% complete, 0/100 units, 0s elapsed]
+[wfmash::mashmap] indexing [100.0% complete, 100/100 units, 0s elapsed]
+[wfmash::mashmap] building [0.0% complete, 0/241809 units, 0s elapsed]
+[wfmash::mashmap] building finishing...
+[wfmash::mashmap] building [100.0% complete, 241809/241809 units, 0s elapsed]
+[wfmash::mashmap] building completed.
+[wfmash::mashmap] Processed 7 sequences (0 skipped, 4029392 total bp), 27526 unique hashes, 236687 windows
+[wfmash::mashmap] Filtered 5122/241809 k-mers occurring > 48 times (target: 0.02%)
+[wfmash::mashmap] reference index computed in 0.2s
+[wfmash::mashmap] mapping  [0.0% complete, 0/4029392 units, 0s elapsed]
+[wfmash::mashmap] mapping  [90.6% complete, 3650965/4029392 units, 0s elapsed]
+[wfmash::mashmap] mapping  finishing...
+[wfmash::mashmap] mapping  [100.0% complete, 4029392/4029392 units, 0s elapsed]
+[wfmash::mashmap] mapping  completed.
+[wfmash::mashmap] Mapping phase complete (including scaffold filtering)
+[wfmash::mashmap] Subset processing complete, results saved to: /dev/stdout
+[wfmash::mashmap] Mapped query in 0.4s, results saved to: /dev/stdout
